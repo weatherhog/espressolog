@@ -85,7 +85,8 @@ void setup() {
 
   // Mounted now so a filesystem problem is visible from stage 0, even
   // though nothing is written to it before stage 3.
-  if (!LittleFS.begin(true /* format on first use */)) {
+  // 4th arg: our partition is labeled "littlefs", not the wrapper's default "spiffs"
+  if (!LittleFS.begin(true /* format on first use */, "/littlefs", 10, "littlefs")) {
     Serial.println("# LittleFS: MOUNT FAILED");
   } else {
     Serial.printf("# LittleFS: %u/%u KB used\n",

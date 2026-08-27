@@ -91,10 +91,15 @@ three.
 
 ### Board: ESP32-S3-DevKitC-1 clone, N16R8
 
-16 MB quad flash + 8 MB octal PSRAM. Two consequences:
+16 MB quad flash + 8 MB octal PSRAM. Three consequences:
 
 - PlatformIO needs `memory_type = qio_opi`. Getting this wrong boot-loops.
 - **GPIO35/36/37 are unavailable** (octal PSRAM uses them internally).
+- **Partition table entries must stay below 0x800000.** The die is genuinely
+  16 MB (esptool reads/writes distinct data above 8 MB, no address wrap), but
+  any partition beyond 8 MB makes this clone's Macronix chip boot-loop
+  silently (RTC_SW_SYS_RST before any output) on arduino-espressif32 2.0.17.
+  Bisected empirically 2026-08-27; only the first 8 MB is usable by firmware.
 
 PSRAM is unused by this workload. It's present because that's the cheap
 commodity module, not because we need it.

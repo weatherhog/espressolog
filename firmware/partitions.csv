@@ -1,0 +1,20 @@
+# 16 MB flash layout.
+#
+# Two 4 MB app slots so OTA is available from the start — once this thing
+# is glued behind the machine you will not want to reach the USB port.
+#
+# 7.5 MB of LittleFS at ~3.5 KB per shot is roughly 2000 shots of spool.
+# At three or four shots a day that is over a year of the server being
+# down before anything is lost, which is the point: the spool must be so
+# oversized that "did the upload work" is never a question you think about.
+#
+# offset, size in hex. Sizes must be 0x1000-aligned; app partitions
+# must be 0x10000-aligned.
+#
+# Name,     Type, SubType,  Offset,   Size,     Flags
+nvs,        data, nvs,      0x9000,   0x5000,
+otadata,    data, ota,      0xe000,   0x2000,
+app0,       app,  ota_0,    0x10000,  0x400000,
+app1,       app,  ota_1,    0x410000, 0x400000,
+littlefs,   data, spiffs,   0x810000, 0x780000,
+coredump,   data, coredump, 0xF90000, 0x10000,

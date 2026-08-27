@@ -1,0 +1,23 @@
+# PlatformIO
+firmware/.pio/
+firmware/.vscode/
+firmware/include/secrets.h
+
+# Go
+server/espressolog
+server/*.db
+server/*.db-shm
+server/*.db-wal
+
+# Node
+web/node_modules/
+web/dist/
+web/.vite/
+
+# Python
+analysis/.ipynb_checkpoints/
+analysis/__pycache__/
+analysis/.venv/
+
+.DS_Store
+*.log

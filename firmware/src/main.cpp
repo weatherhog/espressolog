@@ -1,19 +1,22 @@
-// Espresso shot logger — Phase 0a, stages 0–3.
-// BLE scale in, shot detection, completed records spooled to LittleFS.
-// No network yet (stage 4), no machine contact (ever, in phase 0).
+// Espresso shot logger — Phase 0a, stages 0–4.
+// BLE scale in, shot detection, records spooled to LittleFS, uploaded over
+// HTTP with delete-on-confirm. No machine contact (ever, in phase 0).
 
 #include <Arduino.h>
 #include <LittleFS.h>
+#include <Preferences.h>
 #include "scale.h"
 #include "detector.h"
 #include "spool.h"
+#include "net.h"
 
-const char* FIRMWARE_VERSION = "0.3.0-stage3";
+const char* FIRMWARE_VERSION = "0.4.0-stage4";
 const char* DETECTOR_VERSION = "0a.1";
 
 static ScaleManager scales;
 static ShotDetector detector;
 static Spool spool;
+static Net net;
 static QueueHandle_t sample_queue;
 static bool raw_stream = true;
 static bool spool_ok = false;
@@ -92,7 +95,7 @@ static void handleCommand(String line, Stream& out) {
   String arg = sp < 0 ? "" : line.substring(sp + 1);
 
   if (cmd == "help" || cmd == "h") {
-    out.println("# status|s  tare|t  raw|r  verbose|v  ls  dump <file>  rm <file>  fake  reboot");
+    out.println("# status|s  tare|t  raw|r  verbose|v  ls  dump <file>  rm <file>  fake  net  set <ssid|pass|endpoint> <val>  reboot");
   } else if (cmd == "status" || cmd == "s") {
     out.printf("# yield scale: state=%d mac=%s | detector=%s flow=%ld mg/s | spool=%u pending | heap=%lu\n",
                (int)scales.slotState(ScaleRole::YIELD),
@@ -119,6 +122,24 @@ static void handleCommand(String line, Stream& out) {
     out.printf("# rm %s: %s\n", arg.c_str(), spool.remove(arg) ? "ok" : "failed");
   } else if (cmd == "fake") {
     spoolFakeShot(out);
+  } else if (cmd == "net") {
+    net.status(out);
+  } else if (cmd == "set") {
+    int sp2 = arg.indexOf(' ');
+    String key = sp2 < 0 ? arg : arg.substring(0, sp2);
+    String val = sp2 < 0 ? "" : arg.substring(sp2 + 1);
+    const char* nvs_key = key == "ssid" ? "wifi_ssid"
+                        : key == "pass" ? "wifi_pass"
+                        : key == "endpoint" ? "endpoint" : nullptr;
+    if (!nvs_key || val.isEmpty()) {
+      out.println("# usage: set <ssid|pass|endpoint> <value>");
+    } else {
+      Preferences p;
+      p.begin("espl", false);
+      p.putString(nvs_key, val);
+      p.end();
+      out.printf("# %s saved to NVS — 'reboot' to apply\n", nvs_key);
+    }
   } else if (cmd == "reboot") {
     out.println("# rebooting");
     out.flush();
@@ -164,6 +185,7 @@ void setup() {
 
   sample_queue = xQueueCreate(64, sizeof(ScaleSample));
   scales.begin(sample_queue);
+  net.begin(&spool);
   Serial.println("# scanning for Bookoo… ('help' for commands)");
 }
 
@@ -184,6 +206,9 @@ void loop() {
   }
 
   scales.tick(millis());
+  // Network (and its flash reads) only while nothing is brewing.
+  ShotState st = detector.state();
+  net.tick(millis(), st == ShotState::IDLE || st == ShotState::ARMED);
   pollSerial(Serial);
   pollSerial(Serial0);
   delay(5);   // ~10 Hz data; nothing here needs a tighter spin

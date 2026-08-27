@@ -3,6 +3,8 @@
 #include <esp_random.h>
 #include <esp_rom_crc.h>
 #include <string.h>
+#include <time.h>
+#include <sys/time.h>
 
 extern const char* FIRMWARE_VERSION;
 extern const char* DETECTOR_VERSION;
@@ -51,10 +53,21 @@ String Spool::writeShot(const ShotResult& r, const String& scale_mac) {
   h.header_len = sizeof(h);
   h.boot_id = boot_id;
   h.seq = seq++;
-  h.started_at_unix_ms = 0;   // SNTP arrives in stage 4
   h.started_at_millis = r.started_at_ms;
-  h.tz_offset_min = 0;
-  h.time_valid = 0;
+  // Wall clock, if SNTP has synced this boot. The shot started in the past,
+  // so anchor: now_unix − (millis-now − millis-at-start).
+  struct timeval tv;
+  gettimeofday(&tv, nullptr);
+  if (tv.tv_sec > 1600000000) {
+    uint64_t now_ms = (uint64_t)tv.tv_sec * 1000 + tv.tv_usec / 1000;
+    h.started_at_unix_ms = now_ms - (millis() - r.started_at_ms);
+    h.time_valid = 1;
+    struct tm g;
+    time_t t = tv.tv_sec;
+    gmtime_r(&t, &g);
+    g.tm_isdst = -1;
+    h.tz_offset_min = (int16_t)((t - mktime(&g)) / 60);
+  }
   h.scale_role = 0;
   macToBytes(scale_mac, h.scale_mac);
   h.flags = (r.fault ? SPOOL_FLAG_FAULT : 0) | (r.truncated ? SPOOL_FLAG_TRUNCATED : 0);

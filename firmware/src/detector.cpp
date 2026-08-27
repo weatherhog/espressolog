@@ -85,7 +85,9 @@ bool ShotDetector::finishShot() {
 void ShotDetector::finishFault() {
   res.fault = true;
   res.valid = false;
-  res.yield_final_mg = last_w;
+  // The last samples are the cup leaving the scale; the pre-lift maximum is
+  // the honest yield (learned from real shot #2, 2026-08-27).
+  res.yield_final_mg = running_max;
   res.sample_count = buf_count;
   res.samples = buf;
   resetToIdle();

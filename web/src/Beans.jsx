@@ -13,8 +13,15 @@ function BeanForm({ bean, onDone, onCancel }) {
     roaster: bean?.roaster ?? "",
     name: bean?.name ?? "",
     origin: bean?.origin ?? "",
-    roast_date: bean?.roast_date ?? "",
+    region: bean?.region ?? "",
+    producer: bean?.producer ?? "",
+    varietal: bean?.varietal ?? "",
+    altitude: bean?.altitude ?? "",
     process: bean?.process ?? "",
+    roast_level: bean?.roast_level ?? "",
+    roast_date: bean?.roast_date ?? "",
+    bag_size_g: bean?.bag_size_g ?? "",
+    url: bean?.url ?? "",
     portion_target_g: bean?.portion_target_g ?? "",
     dose_count: bean?.dose_count ?? "",
     notes: bean?.notes ?? "",
@@ -48,8 +55,15 @@ function BeanForm({ bean, onDone, onCancel }) {
         roaster: f.roaster,
         name: f.name,
         origin: f.origin || null,
-        roast_date: f.roast_date || null,
+        region: f.region || null,
+        producer: f.producer || null,
+        varietal: f.varietal || null,
+        altitude: f.altitude || null,
         process: f.process || null,
+        roast_level: f.roast_level || null,
+        roast_date: f.roast_date || null,
+        bag_size_g: f.bag_size_g === "" ? null : +f.bag_size_g,
+        url: f.url || null,
         portion_target_g: f.portion_target_g === "" ? null : +f.portion_target_g,
         dose_count: f.dose_count === "" ? null : +f.dose_count,
         notes: f.notes || null,
@@ -73,13 +87,34 @@ function BeanForm({ bean, onDone, onCancel }) {
       <Eyebrow>{bean ? `Edit — ${bean.roaster} ${bean.name}` : "New bag"}</Eyebrow>
       {input("roaster", "Roaster *")}
       {input("name", "Name *")}
-      {input("origin", "Origin")}
-      {input("roast_date", "Roast date", "date")}
-      {input("process", "Process (washed / natural / …)")}
+      {input("origin", "Origin — e.g. Brazil, Guatemala")}
+      {input("region", "Region — e.g. Cerrado Mineiro / Huehuetenango")}
+      {input("producer", "Producer")}
+      {input("varietal", "Variety — e.g. Mundo Novo, Red Catuai, Bourbon")}
       <div style={{ display: "flex", gap: 10 }}>
+        {input("altitude", "Altitude — e.g. 1300m")}
+        {input("process", "Processing — washed / natural")}
+      </div>
+      <div style={{ display: "flex", gap: 10 }}>
+        <select value={f.roast_level} onChange={(e) => setF({ ...f, roast_level: e.target.value })}
+          style={{
+            flex: 1, padding: 10, fontFamily: SANS, fontSize: 14,
+            color: f.roast_level ? T.ink : T.inkSoft, background: T.paper,
+            border: `1px solid ${T.hair}`, borderRadius: 2, outline: "none",
+          }}>
+          <option value="">Roast level…</option>
+          {["light", "medium-light", "medium", "medium-dark", "dark"].map((l) => (
+            <option key={l} value={l}>{l}</option>
+          ))}
+        </select>
+        {input("roast_date", "Roast date", "date")}
+      </div>
+      <div style={{ display: "flex", gap: 10 }}>
+        {input("bag_size_g", "Bag g", "number")}
         {input("portion_target_g", "Portion g", "number")}
         {input("dose_count", "Doses", "number")}
       </div>
+      {input("url", "URL")}
       {input("notes", "Notes")}
       {check("frozen", "PORTIONED INTO THE FREEZER")}
       {check("finished", "BAG FINISHED")}
@@ -120,9 +155,26 @@ function BeanCard({ bean, active, dosesUsed, onSelect, onEdit }) {
           }}>Edit</button>
         </div>
       </div>
-      <div style={{ marginTop: 8, fontFamily: SANS, fontSize: 19, color: T.ink }}>{bean.name}</div>
-      <div style={{ marginTop: 4, fontFamily: MONO, fontSize: 11, color: T.inkSoft }}>
-        {[bean.origin, bean.process, bean.roast_level].filter(Boolean).join(" · ") || "—"}
+      <div style={{ marginTop: 8, fontFamily: SANS, fontSize: 19, color: T.ink }}>
+        {bean.url
+          ? <a href={bean.url} target="_blank" rel="noreferrer" style={{ color: T.ink, textDecorationColor: T.hair }}>{bean.name}</a>
+          : bean.name}
+      </div>
+      <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "auto 1fr", columnGap: 10, rowGap: 3 }}>
+        {[
+          ["Origin", bean.origin],
+          ["Region", bean.region],
+          ["Producer", bean.producer],
+          ["Variety", bean.varietal],
+          ["Altitude", bean.altitude],
+          ["Processing", bean.process],
+          ["Roast", bean.roast_level],
+        ].filter(([, v]) => v).map(([k, v]) => (
+          <div key={k} style={{ display: "contents" }}>
+            <span style={{ fontFamily: MONO, fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: T.inkSoft, paddingTop: 1 }}>{k}</span>
+            <span style={{ fontFamily: SANS, fontSize: 12.5, color: T.ink }}>{v}</span>
+          </div>
+        ))}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 20 }}>
         <Readout value={dosesLeft ?? "—"} label="Doses left" size={22} />

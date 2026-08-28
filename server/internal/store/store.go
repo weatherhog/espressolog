@@ -283,7 +283,7 @@ var tastingFields = map[string]bool{
 
 var beanFields = map[string]bool{
 	"roaster": true, "name": true, "origin": true, "region": true, "producer": true,
-	"varietal": true, "process": true, "roast_level": true, "roast_date": true,
+	"varietal": true, "altitude": true, "process": true, "roast_level": true, "roast_date": true,
 	"bag_size_g": true, "price_cents": true, "currency": true, "opened_at": true,
 	"frozen_at": true, "dose_count": true, "portion_target_g": true,
 	"finished_at": true, "url": true, "notes": true,

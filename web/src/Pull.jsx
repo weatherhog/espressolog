@@ -4,12 +4,18 @@ import { Eyebrow, Readout, Panel } from "./components.jsx";
 import { fetchCurve } from "./api.js";
 
 // Target box: yield range × time range the trace should exit through.
-// Two variables, one glance. (Editable targets come later; these bracket
-// the current ~36 g / ~27 s recipe.)
-const TARGET_YIELD = [34, 38];   // g
-const TARGET_TIME = [22, 32];    // s
+// Two variables, one glance. Ranges are editable and live in localStorage —
+// they're a per-screen aiming aid, not data (the shot records what happened).
+const DEFAULT_TARGETS = { y0: 34, y1: 38, t0: 22, t1: 32 };
 
-function LiveChart({ curve, ghost, running }) {
+export function loadTargets() {
+  try { return { ...DEFAULT_TARGETS, ...JSON.parse(localStorage.getItem("pullTargets")) }; }
+  catch { return { ...DEFAULT_TARGETS }; }
+}
+
+function LiveChart({ curve, ghost, running, targets }) {
+  const TARGET_YIELD = [targets.y0, targets.y1];
+  const TARGET_TIME = [targets.t0, targets.t1];
   const CW = 760, CH = 400, PAD = { l: 46, r: 16, t: 16, b: 34 };
   const lastT = curve.length ? curve[curve.length - 1].t : 0;
   const lastW = curve.length ? curve[curve.length - 1].w : 0;
@@ -75,6 +81,12 @@ export default function Pull({ shots, beans, activeBeanId, onIngested }) {
   const [wsUp, setWsUp] = useState(false);
   const [ghost, setGhost] = useState(null);
   const [lastEvent, setLastEvent] = useState(null);
+  const [targets, setTargetsState] = useState(loadTargets);
+  const setTarget = (key, val) => {
+    const next = { ...targets, [key]: val };
+    setTargetsState(next);
+    try { localStorage.setItem("pullTargets", JSON.stringify(next)); } catch {}
+  };
 
   // Live buffers in refs: 10 Hz frames shouldn't churn React state objects.
   const live = useRef({
@@ -156,7 +168,7 @@ export default function Pull({ shots, beans, activeBeanId, onIngested }) {
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
       <Panel style={{ flex: "1 1 480px", minWidth: 0, padding: 10, ...paperBg }}>
-        <LiveChart curve={L.curve} ghost={ghost} running={L.capturing} />
+        <LiveChart curve={L.curve} ghost={ghost} running={L.capturing} targets={targets} />
       </Panel>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 16, flex: "0 1 260px" }}>
@@ -180,6 +192,27 @@ export default function Pull({ shots, beans, activeBeanId, onIngested }) {
               {doseFresh ? `● grinder scale · ${(L.dose_mg / 1000).toFixed(1)} g` : "○ grinder scale quiet"}
             </div>
             {lastEvent && <div style={{ color: T.flow }}>{lastEvent}</div>}
+          </div>
+        </Panel>
+
+        <Panel style={{ padding: 16 }}>
+          <Eyebrow>Target</Eyebrow>
+          <div style={{ display: "grid", gridTemplateColumns: "auto 1fr auto 1fr", gap: 8, alignItems: "center", marginTop: 10 }}>
+            {[["y0", "yield"], ["y1", "to"], ["t0", "time"], ["t1", "to"]].map(([key, label]) => (
+              <div key={key} style={{ display: "contents" }}>
+                <span style={{ fontFamily: MONO, fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: T.inkSoft }}>{label}</span>
+                <input type="number" step={key.startsWith("y") ? 0.5 : 1} value={targets[key]}
+                  onChange={(e) => setTarget(key, +e.target.value)}
+                  style={{
+                    width: "100%", padding: "6px 8px", fontFamily: MONO, fontSize: 13,
+                    fontVariantNumeric: "tabular-nums", color: T.ink, background: T.paper,
+                    border: `1px solid ${T.hair}`, borderRadius: 2, outline: "none",
+                  }} />
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: 6, fontFamily: MONO, fontSize: 9.5, color: T.inkSoft, letterSpacing: "0.06em" }}>
+            G × SECONDS — the box the trace should exit through
           </div>
         </Panel>
 

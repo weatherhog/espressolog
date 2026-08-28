@@ -1,0 +1,8 @@
+# espressolog: TLS via Lets Encrypt DNS-01 (Cloudflare) — nothing exposed
+# to the internet; the cert is fetched by DNS proof alone.
+espresso.example.com {
+	tls {
+		dns cloudflare {env.CF_API_TOKEN}
+	}
+	reverse_proxy 127.0.0.1:8080
+}

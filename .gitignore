@@ -25,3 +25,5 @@ firmware/test/host/detector_test
 firmware/test/host/replay
 server/espressolog-server
 espressolog-server-linux
+server/internal/web/dist/*
+!server/internal/web/dist/.keep

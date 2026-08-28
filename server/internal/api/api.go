@@ -13,6 +13,7 @@ import (
 
 	"espressolog/internal/record"
 	"espressolog/internal/store"
+	"espressolog/internal/web"
 )
 
 const maxRecordBytes = 64 << 10 // header + 2048 samples is ~20 KB; 64 KB is generous
@@ -29,6 +30,7 @@ func New(st *store.Store) http.Handler {
 		}
 		w.Write([]byte("ok\n"))
 	})
+	mux.Handle("/", web.Handler())
 	return mux
 }
 

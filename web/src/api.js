@@ -29,6 +29,7 @@ async function send(method, path, body) {
 }
 
 export const patchShot = (id, fields) => send("PATCH", `/api/v1/shots/${id}`, fields);
+export const deleteShot = (id) => send("DELETE", `/api/v1/shots/${id}`);
 export const postTasting = (id, fields) => send("POST", `/api/v1/shots/${id}/tasting`, fields);
 export const postBean = (fields) => send("POST", "/api/v1/beans", fields);
 export const patchBean = (id, fields) => send("PATCH", `/api/v1/beans/${id}`, fields);

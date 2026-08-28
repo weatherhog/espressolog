@@ -8,8 +8,10 @@ import { patchShot, postTasting } from "./api.js";
 // most recent shot that has them, because they only change when you change
 // the machine. Never a tax paid while holding a portafilter.
 export default function Capture({ shots, beans, activeBeanId, onSaved }) {
+  // Pending = never captured at all. A tasting row, even one saved without
+  // a rating, counts as captured — otherwise saving twice was invited.
   const pending = useMemo(
-    () => (shots || []).find((s) => !s.excluded && s.overall == null),
+    () => (shots || []).find((s) => !s.excluded && s.tasting_id == null),
     [shots]
   );
   const previous = useMemo(

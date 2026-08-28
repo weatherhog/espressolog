@@ -462,6 +462,20 @@ func (s *Store) InsertBean(fields map[string]any) (int64, error) {
 	return r.LastInsertId()
 }
 
+// DeleteShot removes a shot with its samples and tastings (schema cascades).
+// The raw device record in ingest_record survives with shot_id nulled —
+// deleting an interpretation never deletes the measurement.
+func (s *Store) DeleteShot(id int64) error {
+	res, err := s.db.Exec(`DELETE FROM shot WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 // UpdateBean patches whitelisted bean columns (bean has no updated_at).
 func (s *Store) UpdateBean(id int64, fields map[string]any) error {
 	cols, vals := filterFields(fields, beanFields)

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { T, MONO, SANS, paperBg, SERIES } from "./tokens.js";
 import { Eyebrow, Readout, Panel, Tag } from "./components.jsx";
 import { Spark, Overlay } from "./Chart.jsx";
-import { fetchShots, fetchCurve, fetchBeans, health } from "./api.js";
+import { fetchShots, fetchCurve, fetchBeans, deleteShot, health } from "./api.js";
 import Capture from "./Capture.jsx";
 import Beans from "./Beans.jsx";
 import Pull from "./Pull.jsx";
@@ -15,15 +15,15 @@ function fmtDate(iso) {
   };
 }
 
-function ShotRow({ shot, curve, selected, tone, onClick }) {
+function ShotRow({ shot, curve, selected, tone, onClick, onDelete }) {
   const { day, time } = fmtDate(shot.started_at);
   const excluded = !!shot.excluded;
   return (
-    <button onClick={onClick} style={{
+    <div onClick={onClick} role="button" style={{
       width: "100%", display: "flex", alignItems: "center", gap: 20,
       padding: "14px 18px", textAlign: "left", cursor: "pointer",
       background: selected ? T.paper : "transparent",
-      border: "none", borderTop: `1px solid ${T.hair}`,
+      borderTop: `1px solid ${T.hair}`,
       opacity: excluded ? 0.45 : 1,
     }}>
       <div style={{ width: 66, flexShrink: 0 }}>
@@ -44,7 +44,15 @@ function ShotRow({ shot, curve, selected, tone, onClick }) {
         {excluded && <Tag tone={T.alert}>{(shot.exclude_reason || "excluded").split(":")[0]}</Tag>}
         {shot.detector_version && <Tag>{shot.detector_version}</Tag>}
       </div>
-    </button>
+      <button
+        onClick={(e) => { e.stopPropagation(); onDelete(); }}
+        title="Delete shot (the raw device record is kept)"
+        style={{
+          flexShrink: 0, width: 28, height: 28, borderRadius: 2, cursor: "pointer",
+          fontFamily: MONO, fontSize: 13, lineHeight: 1,
+          background: "transparent", color: T.inkSoft, border: `1px solid ${T.hair}`,
+        }}>×</button>
+    </div>
   );
 }
 
@@ -146,7 +154,7 @@ export default function App() {
             borderBottom: `2px solid ${tab === k ? T.trace : "transparent"}`, marginBottom: -1,
           }}>
             {label}
-            {k === "capture" && (shots || []).some((s) => !s.excluded && s.overall == null) &&
+            {k === "capture" && (shots || []).some((s) => !s.excluded && s.tasting_id == null) &&
               <span style={{ color: T.alert }}> ●</span>}
           </button>
         ))}
@@ -157,7 +165,7 @@ export default function App() {
       )}
       {tab === "capture" && (
         <Capture
-          key={(shots || []).find((s) => !s.excluded && s.overall == null)?.id ?? "none"}
+          key={(shots || []).find((s) => !s.excluded && s.tasting_id == null)?.id ?? "none"}
           shots={shots} beans={beans} activeBeanId={activeBeanId}
           onSaved={() => { refresh(); setTab("shots"); }} />
       )}
@@ -181,7 +189,18 @@ export default function App() {
           {visible.map((s) => (
             <ShotRow key={s.id} shot={s} curve={curves[s.id]}
               selected={selected.some((x) => x.id === s.id)}
-              tone={toneOf(s.id)} onClick={() => toggle(s.id)} />
+              tone={toneOf(s.id)} onClick={() => toggle(s.id)}
+              onDelete={async () => {
+                const d = new Date(s.started_at).toLocaleString();
+                if (!window.confirm(`Delete shot #${s.id} (${d}, ${s.yield_final_g ?? "?"} g)?\nThe raw device record stays archived.`)) return;
+                try {
+                  await deleteShot(s.id);
+                  setSelected((sel) => sel.filter((x) => x.id !== s.id));
+                  refresh();
+                } catch (e) {
+                  setError(String(e));
+                }
+              }} />
           ))}
           {shots && visible.length === 0 && (
             <div style={{ padding: 32, fontFamily: SANS, fontSize: 14, color: T.inkSoft }}>

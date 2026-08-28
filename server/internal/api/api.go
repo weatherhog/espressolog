@@ -28,6 +28,7 @@ func New(st *store.Store, hub *live.Hub) http.Handler {
 	mux.HandleFunc("GET /api/v1/shots", listShots(st))
 	mux.HandleFunc("GET /api/v1/shots/{id}", getShot(st))
 	mux.HandleFunc("PATCH /api/v1/shots/{id}", patchShot(st))
+	mux.HandleFunc("DELETE /api/v1/shots/{id}", deleteShot(st))
 	mux.HandleFunc("POST /api/v1/shots/{id}/tasting", postTasting(st))
 	mux.HandleFunc("GET /api/v1/beans", listBeans(st))
 	mux.HandleFunc("POST /api/v1/beans", postBean(st))
@@ -169,6 +170,25 @@ func patchShot(st *store.Store) http.HandlerFunc {
 			http.Error(w, err.Error(), code)
 			return
 		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func deleteShot(st *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		if err := st.DeleteShot(id); err != nil {
+			code := http.StatusInternalServerError
+			if err == sql.ErrNoRows {
+				code = http.StatusNotFound
+			}
+			http.Error(w, err.Error(), code)
+			return
+		}
+		log.Printf("shot %d deleted (raw record kept in ingest_record)", id)
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

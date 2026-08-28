@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { T, MONO, SANS } from "./tokens.js";
 import { Eyebrow, Readout, Panel } from "./components.jsx";
 import { postBean, patchBean } from "./api.js";
@@ -33,6 +33,33 @@ function BeanForm({ bean, prefill, all, onDone, onCancel }) {
   });
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+
+  // On a NEW bag, a typed roaster+name matching an existing bean fills the
+  // still-empty fields from it — once per matched bean, and never over
+  // something the user already typed. Editing never auto-fills.
+  const appliedFrom = useRef(prefill?.id ?? null);
+  useEffect(() => {
+    if (bean) return;
+    const match = (all || []).find(
+      (b) => b.roaster?.toLowerCase() === f.roaster.trim().toLowerCase()
+          && b.name?.toLowerCase() === f.name.trim().toLowerCase()
+    );
+    if (!match || appliedFrom.current === match.id) return;
+    appliedFrom.current = match.id;
+    setF((prev) => ({
+      ...prev,
+      origin: prev.origin || match.origin || "",
+      region: prev.region || match.region || "",
+      producer: prev.producer || match.producer || "",
+      varietal: prev.varietal || match.varietal || "",
+      altitude: prev.altitude || match.altitude || "",
+      process: prev.process || match.process || "",
+      roast_level: prev.roast_level || match.roast_level || "",
+      bag_size_g: prev.bag_size_g === "" ? match.bag_size_g ?? "" : prev.bag_size_g,
+      url: prev.url || match.url || "",
+      portion_target_g: prev.portion_target_g === "" ? match.portion_target_g ?? "" : prev.portion_target_g,
+    }));
+  }, [f.roaster, f.name, all, bean]);
 
   // Autocomplete from what's already in the database. Names narrow to the
   // typed roaster once one matches.
@@ -242,7 +269,7 @@ export default function Beans({ beans, shots, activeBeanId, setActiveBeanId, onC
         )
       )}
       {adding ? (
-        <BeanForm prefill={adding.prefill} all={beans}
+        <BeanForm key={adding.prefill?.id ?? "blank"} prefill={adding.prefill} all={beans}
           onDone={done} onCancel={() => setAdding(null)} />
       ) : (
         <Panel style={{ padding: 20, display: "flex", alignItems: "center", justifyContent: "center", minHeight: 120 }}>

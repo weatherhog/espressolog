@@ -7,22 +7,25 @@ const daysSince = (iso) => (iso ? Math.round((Date.now() - new Date(iso)) / 864e
 const today = () => new Date().toISOString().slice(0, 10);
 
 // One form for both "new bag" and "edit bag". On edit, every field is sent
-// (nulls included) so clearing a value actually clears it.
-function BeanForm({ bean, onDone, onCancel }) {
+// (nulls included) so clearing a value actually clears it. `prefill` seeds a
+// NEW bag from an existing bean (the re-buy workflow: same coffee, new
+// roast date); `all` feeds the autocomplete datalists.
+function BeanForm({ bean, prefill, all, onDone, onCancel }) {
+  const seed = bean ?? prefill;
   const [f, setF] = useState({
-    roaster: bean?.roaster ?? "",
-    name: bean?.name ?? "",
-    origin: bean?.origin ?? "",
-    region: bean?.region ?? "",
-    producer: bean?.producer ?? "",
-    varietal: bean?.varietal ?? "",
-    altitude: bean?.altitude ?? "",
-    process: bean?.process ?? "",
-    roast_level: bean?.roast_level ?? "",
-    roast_date: bean?.roast_date ?? "",
-    bag_size_g: bean?.bag_size_g ?? "",
-    url: bean?.url ?? "",
-    portion_target_g: bean?.portion_target_g ?? "",
+    roaster: seed?.roaster ?? "",
+    name: seed?.name ?? "",
+    origin: seed?.origin ?? "",
+    region: seed?.region ?? "",
+    producer: seed?.producer ?? "",
+    varietal: seed?.varietal ?? "",
+    altitude: seed?.altitude ?? "",
+    process: seed?.process ?? "",
+    roast_level: seed?.roast_level ?? "",
+    roast_date: bean?.roast_date ?? "",           // never inherited: a new bag has its own roast
+    bag_size_g: seed?.bag_size_g ?? "",
+    url: seed?.url ?? "",
+    portion_target_g: seed?.portion_target_g ?? "",
     dose_count: bean?.dose_count ?? "",
     notes: bean?.notes ?? "",
     frozen: !!bean?.frozen_at,
@@ -31,8 +34,21 @@ function BeanForm({ bean, onDone, onCancel }) {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
 
+  // Autocomplete from what's already in the database. Names narrow to the
+  // typed roaster once one matches.
+  const uniq = (vals) => [...new Set(vals.filter(Boolean))];
+  const lists = {
+    roaster: uniq((all || []).map((b) => b.roaster)),
+    name: uniq((all || []).filter((b) => !f.roaster || b.roaster === f.roaster).map((b) => b.name)),
+    origin: uniq((all || []).map((b) => b.origin)),
+    process: uniq((all || []).map((b) => b.process)),
+    varietal: uniq((all || []).map((b) => b.varietal)),
+    producer: uniq((all || []).map((b) => b.producer)),
+  };
+
   const input = (key, placeholder, type = "text") => (
     <input type={type} value={f[key]} placeholder={placeholder}
+      list={lists[key] ? `dl-${key}` : undefined}
       onChange={(e) => setF({ ...f, [key]: e.target.value })}
       style={{
         width: "100%", padding: 10, fontFamily: SANS, fontSize: 14, color: T.ink,
@@ -84,7 +100,12 @@ function BeanForm({ bean, onDone, onCancel }) {
 
   return (
     <Panel style={{ padding: 20, display: "flex", flexDirection: "column", gap: 10 }}>
-      <Eyebrow>{bean ? `Edit — ${bean.roaster} ${bean.name}` : "New bag"}</Eyebrow>
+      <Eyebrow>{bean ? `Edit — ${bean.roaster} ${bean.name}` : prefill ? `New bag — same as ${prefill.name}` : "New bag"}</Eyebrow>
+      {Object.entries(lists).map(([k, vals]) => (
+        <datalist id={`dl-${k}`} key={k}>
+          {vals.map((v) => <option key={v} value={v} />)}
+        </datalist>
+      ))}
       {input("roaster", "Roaster *")}
       {input("name", "Name *")}
       {input("origin", "Origin — e.g. Brazil, Guatemala")}
@@ -134,7 +155,7 @@ function BeanForm({ bean, onDone, onCancel }) {
   );
 }
 
-function BeanCard({ bean, active, dosesUsed, onSelect, onEdit }) {
+function BeanCard({ bean, active, dosesUsed, onSelect, onEdit, onDuplicate }) {
   const offRoast = daysSince(bean.roast_date);
   const dosesLeft = bean.dose_count != null ? bean.dose_count - dosesUsed : null;
   return (
@@ -146,8 +167,13 @@ function BeanCard({ bean, active, dosesUsed, onSelect, onEdit }) {
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <Eyebrow>{bean.roaster}</Eyebrow>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           {bean.frozen_at && <Eyebrow style={{ color: T.trace }}>❄ frozen</Eyebrow>}
+          <button onClick={onDuplicate} title="New bag of this coffee" style={{
+            fontFamily: MONO, fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase",
+            background: "transparent", color: T.inkSoft, border: `1px solid ${T.hair}`,
+            borderRadius: 2, padding: "3px 8px", cursor: "pointer",
+          }}>Same again</button>
           <button onClick={onEdit} style={{
             fontFamily: MONO, fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase",
             background: "transparent", color: T.inkSoft, border: `1px solid ${T.hair}`,
@@ -195,30 +221,32 @@ function BeanCard({ bean, active, dosesUsed, onSelect, onEdit }) {
 }
 
 export default function Beans({ beans, shots, activeBeanId, setActiveBeanId, onChanged }) {
-  const [editing, setEditing] = useState(null);   // bean id | "new" | null
+  const [editing, setEditing] = useState(null);   // bean id | null
+  const [adding, setAdding] = useState(null);     // false-y | {prefill: bean|null}
   const dosesUsed = (beanId) =>
     (shots || []).filter((s) => s.bean_id === beanId && !s.excluded).length;
+  const done = () => { setEditing(null); setAdding(null); onChanged(); };
 
   return (
     <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
       {(beans || []).map((b) =>
         editing === b.id ? (
-          <BeanForm key={b.id} bean={b}
-            onDone={() => { setEditing(null); onChanged(); }}
-            onCancel={() => setEditing(null)} />
+          <BeanForm key={b.id} bean={b} all={beans}
+            onDone={done} onCancel={() => setEditing(null)} />
         ) : (
           <BeanCard key={b.id} bean={b} active={b.id === activeBeanId}
             dosesUsed={dosesUsed(b.id)}
             onSelect={() => setActiveBeanId(b.id)}
-            onEdit={() => setEditing(b.id)} />
+            onEdit={() => setEditing(b.id)}
+            onDuplicate={() => setAdding({ prefill: b })} />
         )
       )}
-      {editing === "new" ? (
-        <BeanForm onDone={() => { setEditing(null); onChanged(); }}
-          onCancel={() => setEditing(null)} />
+      {adding ? (
+        <BeanForm prefill={adding.prefill} all={beans}
+          onDone={done} onCancel={() => setAdding(null)} />
       ) : (
         <Panel style={{ padding: 20, display: "flex", alignItems: "center", justifyContent: "center", minHeight: 120 }}>
-          <button onClick={() => setEditing("new")} style={{
+          <button onClick={() => setAdding({ prefill: null })} style={{
             padding: "14px 28px", fontFamily: MONO, fontSize: 12, letterSpacing: "0.14em",
             textTransform: "uppercase", background: "transparent", color: T.ink,
             border: `1px dashed ${T.inkSoft}`, borderRadius: 2, cursor: "pointer",

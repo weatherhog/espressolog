@@ -209,14 +209,51 @@ export default function App() {
           )}
         </Panel>
 
-        <Panel style={{ flex: "1 1 400px", padding: 10, minWidth: 0, ...paperBg }}>
-          <Eyebrow style={{ padding: 8 }}>
-            {overlaySeries.length
-              ? `Overlay — ${overlaySeries.length} selected${overlaySeries.length === 1 ? " · flow in olive" : ""}`
-              : "Tap shots to overlay their curves"}
-          </Eyebrow>
-          <Overlay series={overlaySeries} />
-        </Panel>
+        <div style={{ flex: "1 1 400px", minWidth: 0, display: "flex", flexDirection: "column", gap: 12 }}>
+          <Panel style={{ padding: 10, ...paperBg }}>
+            <Eyebrow style={{ padding: 8 }}>
+              {overlaySeries.length
+                ? `Overlay — ${overlaySeries.length} selected${overlaySeries.length === 1 ? " · flow in olive" : ""}`
+                : "Tap shots to overlay their curves"}
+            </Eyebrow>
+            <Overlay series={overlaySeries} />
+          </Panel>
+          {selected.map(({ id, tone }) => {
+            const s = (shots || []).find((x) => x.id === id);
+            if (!s) return null;
+            const facts = [
+              ["Bean", s.bean_name ? `${s.roaster} ${s.bean_name}` : null],
+              ["Grind", s.grind_dial?.toFixed(1)],
+              ["Dose", s.dose_ground_g != null ? `${s.dose_ground_g.toFixed(1)} g${s.dose_source === "measured" ? " ·scale" : ""}` : null],
+              ["Preinf", s.preinfusion_s != null ? `${s.preinfusion_s} s` : null],
+              ["Temp", s.brew_temp_c != null ? `${s.brew_temp_c} °C` : null],
+              ["Ratio", s.ratio ? `1:${s.ratio.toFixed(2)}` : null],
+              ["Settle", s.settle_offset_g != null ? `+${s.settle_offset_g.toFixed(1)} g` : null],
+              ["Rating", s.overall != null ? `${s.overall}/10` : null],
+              ["Balance", s.balance],
+            ].filter(([, v]) => v != null);
+            return (
+              <Panel key={id} style={{ padding: "14px 16px", borderLeft: `3px solid ${tone}` }}>
+                <Eyebrow>Shot #{s.id} · {new Date(s.started_at).toLocaleString()}</Eyebrow>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 14px", marginTop: 8 }}>
+                  {facts.map(([k, v]) => (
+                    <span key={k} style={{ fontFamily: MONO, fontSize: 11.5, color: T.ink }}>
+                      <span style={{ color: T.inkSoft }}>{k}·</span>{v}
+                    </span>
+                  ))}
+                </div>
+                {s.taste_notes && (
+                  <div style={{ marginTop: 8, fontFamily: SANS, fontSize: 13.5, color: T.ink, lineHeight: 1.5 }}>
+                    “{s.taste_notes}”
+                  </div>
+                )}
+                {s.notes && (
+                  <div style={{ marginTop: 4, fontFamily: SANS, fontSize: 12, color: T.inkSoft }}>{s.notes}</div>
+                )}
+              </Panel>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

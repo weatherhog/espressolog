@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"espressolog/internal/live"
 	"espressolog/internal/record"
 	"espressolog/internal/store"
 	"espressolog/internal/web"
@@ -19,9 +20,11 @@ import (
 
 const maxRecordBytes = 64 << 10 // header + 2048 samples is ~20 KB; 64 KB is generous
 
-func New(st *store.Store) http.Handler {
+func New(st *store.Store, hub *live.Hub) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/v1/ingest", ingest(st))
+	mux.HandleFunc("POST /api/v1/ingest", ingest(st, hub))
+	mux.HandleFunc("GET /api/v1/live", hub.BrowserHandler())
+	mux.HandleFunc("GET /api/v1/live/device", hub.DeviceHandler())
 	mux.HandleFunc("GET /api/v1/shots", listShots(st))
 	mux.HandleFunc("GET /api/v1/shots/{id}", getShot(st))
 	mux.HandleFunc("PATCH /api/v1/shots/{id}", patchShot(st))
@@ -40,7 +43,7 @@ func New(st *store.Store) http.Handler {
 	return mux
 }
 
-func ingest(st *store.Store) http.HandlerFunc {
+func ingest(st *store.Store, hub *live.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		raw, err := io.ReadAll(io.LimitReader(r.Body, maxRecordBytes+1))
 		if err != nil {
@@ -81,6 +84,10 @@ func ingest(st *store.Store) http.HandlerFunc {
 			deviceID, rec.Header.BootID, rec.Header.Seq, rec.Header.RecordType,
 			res.ShotID, res.WeighingID, rec.Header.SampleCount,
 			float64(rec.Header.YieldFinalMg)/1000)
+		// Let open browsers refresh instead of waiting for the next poll.
+		note, _ := json.Marshal(map[string]any{"ev": "ingested", "type": rec.Header.RecordType,
+			"shot_id": res.ShotID, "weighing_id": res.WeighingID})
+		hub.Broadcast(note)
 		w.WriteHeader(http.StatusCreated)
 	}
 }

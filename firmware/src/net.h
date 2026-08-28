@@ -15,6 +15,12 @@ public:
   bool timeValid() const;
   void status(Stream& out);
 
+  // Live stream: fire-and-forget frames over WebSocket to the server's fan-
+  // out. Drops silently when disconnected — nothing may ever depend on it;
+  // the spool is the record, this is only the picture on the wall.
+  void sendLive(const char* json);
+  bool liveUp() const;
+
 private:
   Spool* spool = nullptr;
   String endpoint;

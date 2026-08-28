@@ -2,6 +2,7 @@
 #include "spool.h"
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <WebSocketsClient.h>
 #include <LittleFS.h>
 #include <Preferences.h>
 #include <time.h>
@@ -11,6 +12,25 @@
 #endif
 
 static Preferences net_prefs;
+static WebSocketsClient ws;
+static bool ws_up = false;
+
+// Pull "espressolog.lan" and 8080 out of "http://espressolog.lan:8080".
+static bool parseEndpoint(const String& url, String& host, uint16_t& port) {
+  String s = url;
+  if (s.startsWith("http://")) s = s.substring(7);
+  else if (s.startsWith("https://")) return false;   // ESP side stays plain HTTP/WS
+  int slash = s.indexOf('/');
+  if (slash >= 0) s = s.substring(0, slash);
+  int colon = s.indexOf(':');
+  port = 80;
+  if (colon >= 0) {
+    port = (uint16_t)s.substring(colon + 1).toInt();
+    s = s.substring(0, colon);
+  }
+  host = s;
+  return !host.isEmpty();
+}
 
 void Net::begin(Spool* sp) {
   spool = sp;
@@ -38,14 +58,35 @@ void Net::begin(Spool* sp) {
   WiFi.setAutoReconnect(true);
   WiFi.begin(ssid.c_str(), pass.c_str());
   Serial.printf("# net: connecting to '%s', uploads -> %s\n", ssid.c_str(), endpoint.c_str());
+
+  String host;
+  uint16_t port;
+  if (parseEndpoint(endpoint, host, port)) {
+    ws.begin(host, port, "/api/v1/live/device");
+    ws.setReconnectInterval(5000);
+    ws.onEvent([](WStype_t type, uint8_t*, size_t) {
+      if (type == WStype_CONNECTED) { ws_up = true; Serial.println("# net: live stream connected"); }
+      else if (type == WStype_DISCONNECTED) ws_up = false;
+    });
+  }
 }
 
 bool Net::wifiUp() const { return WiFi.status() == WL_CONNECTED; }
 
 bool Net::timeValid() const { return time(nullptr) > 1600000000; }
 
+void Net::sendLive(const char* json) {
+  if (ws_up) ws.sendTXT(json);
+}
+
+bool Net::liveUp() const { return ws_up; }
+
 void Net::tick(uint32_t now, bool detector_quiet) {
-  if (!have_creds || !detector_quiet) return;
+  if (!have_creds) return;
+  // The live socket runs always — streaming during the pour is its purpose,
+  // and it's radio-only, no flash. Everything below stays gated on quiet.
+  ws.loop();
+  if (!detector_quiet) return;
 
   if (wifiUp() && !tz_configured) {
     // Berlin with DST rules; tz_offset_min in spool headers derives from this.
@@ -125,10 +166,11 @@ bool Net::tryUploadOldest() {
 }
 
 void Net::status(Stream& out) {
-  out.printf("# net: wifi=%s ip=%s rssi=%d time=%s endpoint=%s\n",
+  out.printf("# net: wifi=%s ip=%s rssi=%d time=%s live=%s endpoint=%s\n",
              wifiUp() ? "up" : "down",
              wifiUp() ? WiFi.localIP().toString().c_str() : "-",
              wifiUp() ? WiFi.RSSI() : 0,
              timeValid() ? "synced" : "not synced",
+             ws_up ? "connected" : "down",
              endpoint.c_str());
 }

@@ -10,7 +10,7 @@
 #include "spool.h"
 #include "net.h"
 
-const char* FIRMWARE_VERSION = "0.5.0-stage5";
+const char* FIRMWARE_VERSION = "0.6.0-stage6";
 const char* DETECTOR_VERSION = "0a.2";
 
 static ScaleManager scales;
@@ -224,6 +224,7 @@ void loop() {
     bool shot_active = detector.state() == ShotState::POURING
                     || detector.state() == ShotState::SETTLING;
 
+    char frame[96];
     if (smp.role == (uint8_t)ScaleRole::YIELD) {
       ShotState before = detector.state();
       bool complete = detector.feed(smp.t_ms, smp.weight_mg);
@@ -234,11 +235,24 @@ void loop() {
       if (detector.state() != before && !complete) {
         Serial.printf("# state %s -> %s\n", stateName(before), stateName(detector.state()));
       }
-      if (complete) handleShotComplete(detector.result());
+      snprintf(frame, sizeof(frame), "{\"r\":0,\"t\":%lu,\"w\":%ld,\"s\":\"%s\"}",
+               (unsigned long)smp.t_ms, (long)smp.weight_mg, stateName(detector.state()));
+      net.sendLive(frame);
+      if (complete) {
+        handleShotComplete(detector.result());
+        snprintf(frame, sizeof(frame), "{\"ev\":\"shot\",\"valid\":%d,\"fault\":%d}",
+                 detector.result().valid, detector.result().fault);
+        net.sendLive(frame);
+      }
       shot_active = detector.state() == ShotState::POURING
                  || detector.state() == ShotState::SETTLING;
-    } else if (raw_stream) {
-      Serial.printf("%lu,%ld,DOSE\n", (unsigned long)smp.t_ms, (long)smp.weight_mg);
+    } else {
+      if (raw_stream) {
+        Serial.printf("%lu,%ld,DOSE\n", (unsigned long)smp.t_ms, (long)smp.weight_mg);
+      }
+      snprintf(frame, sizeof(frame), "{\"r\":1,\"t\":%lu,\"w\":%ld}",
+               (unsigned long)smp.t_ms, (long)smp.weight_mg);
+      net.sendLive(frame);
     }
 
     // Every stable reading on any scale becomes an anonymous weighing —

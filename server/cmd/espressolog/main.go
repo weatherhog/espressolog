@@ -10,6 +10,7 @@ import (
 
 	espressolog "espressolog"
 	"espressolog/internal/api"
+	"espressolog/internal/live"
 	"espressolog/internal/store"
 )
 
@@ -25,10 +26,11 @@ func main() {
 	defer st.Close()
 
 	srv := &http.Server{
-		Addr:         *addr,
-		Handler:      api.New(st),
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
+		Addr:    *addr,
+		Handler: api.New(st, live.New()),
+		// Header timeout only: Read/WriteTimeout would put deadlines on the
+		// long-lived live WebSockets. Regular handlers finish in milliseconds.
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 	log.Printf("espressolog listening on %s, db %s", *addr, *dbPath)
 	log.Fatal(srv.ListenAndServe())

@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { T, MONO, SANS, paperBg, SERIES } from "./tokens.js";
 import { Eyebrow, Readout, Panel, Tag } from "./components.jsx";
 import { Spark, Overlay } from "./Chart.jsx";
 import { fetchShots, fetchCurve, fetchBeans, health } from "./api.js";
 import Capture from "./Capture.jsx";
 import Beans from "./Beans.jsx";
+import Pull from "./Pull.jsx";
 
 function fmtDate(iso) {
   const d = new Date(iso);
@@ -52,7 +53,7 @@ function loadActiveBean() {
 }
 
 export default function App() {
-  const [tab, setTab] = useState("shots");
+  const [tab, setTab] = useState("pull");
   const [shots, setShots] = useState(null);
   const [beans, setBeans] = useState(null);
   const [error, setError] = useState(null);
@@ -67,10 +68,10 @@ export default function App() {
     try { localStorage.setItem("activeBeanId", JSON.stringify(id)); } catch {}
   };
 
-  const refresh = () => {
+  const refresh = useCallback(() => {
     fetchShots().then(setShots).catch((e) => setError(String(e)));
     fetchBeans().then(setBeans).catch(() => {});
-  };
+  }, []);
 
   useEffect(() => {
     refresh();
@@ -137,7 +138,7 @@ export default function App() {
       )}
 
       <div style={{ display: "flex", gap: 2, marginBottom: 18, borderBottom: `1px solid ${T.hair}` }}>
-        {[["shots", "Shots"], ["capture", "Capture"], ["beans", "Beans"]].map(([k, label]) => (
+        {[["pull", "Pull"], ["shots", "Shots"], ["capture", "Capture"], ["beans", "Beans"]].map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)} style={{
             padding: "12px 20px", fontFamily: MONO, fontSize: 11, letterSpacing: "0.14em",
             textTransform: "uppercase", background: "transparent", border: "none",
@@ -151,6 +152,9 @@ export default function App() {
         ))}
       </div>
 
+      {tab === "pull" && (
+        <Pull shots={shots} beans={beans} activeBeanId={activeBeanId} onIngested={refresh} />
+      )}
       {tab === "capture" && (
         <Capture
           key={(shots || []).find((s) => !s.excluded && s.overall == null)?.id ?? "none"}

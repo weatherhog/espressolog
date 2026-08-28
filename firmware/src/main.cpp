@@ -10,16 +10,24 @@
 #include "spool.h"
 #include "net.h"
 
-const char* FIRMWARE_VERSION = "0.4.1-stage4";
+const char* FIRMWARE_VERSION = "0.5.0-stage5";
 const char* DETECTOR_VERSION = "0a.2";
 
 static ScaleManager scales;
 static ShotDetector detector;
+static WeighingDetector weighing[2];   // per role: yield, dose
 static Spool spool;
 static Net net;
 static QueueHandle_t sample_queue;
 static bool raw_stream = true;
 static bool spool_ok = false;
+
+// Weighings can complete on the dose scale while the yield scale is
+// mid-pour; finished events wait here and reach flash only when no shot is
+// in progress — invariant 2 holds globally, not per-scale.
+struct PendingWeighing { uint8_t role; WeighingDetector::Event ev; };
+static PendingWeighing pending_w[8];
+static size_t pending_w_n = 0;
 
 static const char* stateName(ShotState s) {
   switch (s) {
@@ -95,15 +103,15 @@ static void handleCommand(String line, Stream& out) {
   String arg = sp < 0 ? "" : line.substring(sp + 1);
 
   if (cmd == "help" || cmd == "h") {
-    out.println("# status|s  tare|t  raw|r  verbose|v  ls  dump <file>  rm <file>  fake  net  set <ssid|pass|endpoint> <val>  reboot");
+    out.println("# status|s  tare|t  raw|r  verbose|v  ls  dump <file>  rm <file>  fake  net  scales  assign <yield|dose> <mac|last>  set <ssid|pass|endpoint> <val>  reboot");
   } else if (cmd == "status" || cmd == "s") {
-    out.printf("# yield scale: state=%d mac=%s | detector=%s flow=%ld mg/s | spool=%u pending | heap=%lu\n",
-               (int)scales.slotState(ScaleRole::YIELD),
-               scales.slotMac(ScaleRole::YIELD).c_str(),
-               stateName(detector.state()),
-               (long)detector.flowNowMgps(),
-               (unsigned)spool.pendingCount(),
-               (unsigned long)ESP.getFreeHeap());
+    out.printf("# yield: state=%d mac=%s | dose: state=%d mac=%s\n",
+               (int)scales.slotState(ScaleRole::YIELD), scales.slotMac(ScaleRole::YIELD).c_str(),
+               (int)scales.slotState(ScaleRole::DOSE),
+               scales.slotMac(ScaleRole::DOSE).isEmpty() ? "(unbound)" : scales.slotMac(ScaleRole::DOSE).c_str());
+    out.printf("# detector=%s flow=%ld mg/s | spool=%u pending | heap=%lu\n",
+               stateName(detector.state()), (long)detector.flowNowMgps(),
+               (unsigned)spool.pendingCount(), (unsigned long)ESP.getFreeHeap());
   } else if (cmd == "tare" || cmd == "t") {
     out.printf("# tare: %s\n", scales.tare(ScaleRole::YIELD) ? "sent" : "not connected");
   } else if (cmd == "raw" || cmd == "r") {
@@ -124,6 +132,17 @@ static void handleCommand(String line, Stream& out) {
     spoolFakeShot(out);
   } else if (cmd == "net") {
     net.status(out);
+  } else if (cmd == "scales") {
+    scales.listDiscovered(out);
+  } else if (cmd == "assign") {
+    int sp2 = arg.indexOf(' ');
+    String which = sp2 < 0 ? arg : arg.substring(0, sp2);
+    String mac = sp2 < 0 ? "" : arg.substring(sp2 + 1);
+    if ((which != "yield" && which != "dose") || mac.isEmpty()) {
+      out.println("# usage: assign <yield|dose> <mac|last>");
+    } else {
+      scales.assign(which == "yield" ? ScaleRole::YIELD : ScaleRole::DOSE, mac, out);
+    }
   } else if (cmd == "set") {
     int sp2 = arg.indexOf(' ');
     String key = sp2 < 0 ? arg : arg.substring(0, sp2);
@@ -189,26 +208,62 @@ void setup() {
   Serial.println("# scanning for Bookoo… ('help' for commands)");
 }
 
+static void queueWeighing(uint8_t role, const WeighingDetector::Event& ev) {
+  Serial.printf("# weighing[%s]: %ld mg stable %lu ms\n",
+                role == 0 ? "yield" : "dose", (long)ev.grams_mg, (unsigned long)ev.stable_ms);
+  if (pending_w_n >= sizeof(pending_w) / sizeof(pending_w[0])) {
+    Serial.println("# weighing queue full — event dropped");
+    return;
+  }
+  pending_w[pending_w_n++] = { role, ev };
+}
+
 void loop() {
   ScaleSample smp;
   while (xQueueReceive(sample_queue, &smp, 0) == pdTRUE) {
-    if (smp.role != (uint8_t)ScaleRole::YIELD) continue;   // dose scale: stage 5
-    ShotState before = detector.state();
-    bool complete = detector.feed(smp.t_ms, smp.weight_mg);
-    if (raw_stream) {
-      Serial.printf("%lu,%ld,%s\n", (unsigned long)smp.t_ms,
-                    (long)smp.weight_mg, stateName(detector.state()));
+    bool shot_active = detector.state() == ShotState::POURING
+                    || detector.state() == ShotState::SETTLING;
+
+    if (smp.role == (uint8_t)ScaleRole::YIELD) {
+      ShotState before = detector.state();
+      bool complete = detector.feed(smp.t_ms, smp.weight_mg);
+      if (raw_stream) {
+        Serial.printf("%lu,%ld,%s\n", (unsigned long)smp.t_ms,
+                      (long)smp.weight_mg, stateName(detector.state()));
+      }
+      if (detector.state() != before && !complete) {
+        Serial.printf("# state %s -> %s\n", stateName(before), stateName(detector.state()));
+      }
+      if (complete) handleShotComplete(detector.result());
+      shot_active = detector.state() == ShotState::POURING
+                 || detector.state() == ShotState::SETTLING;
+    } else if (raw_stream) {
+      Serial.printf("%lu,%ld,DOSE\n", (unsigned long)smp.t_ms, (long)smp.weight_mg);
     }
-    if (detector.state() != before && !complete) {
-      Serial.printf("# state %s -> %s\n", stateName(before), stateName(detector.state()));
+
+    // Every stable reading on any scale becomes an anonymous weighing —
+    // attribution is the server's job when a shot closes.
+    if (weighing[smp.role].feed(smp.t_ms, smp.weight_mg, shot_active)) {
+      queueWeighing(smp.role, weighing[smp.role].event());
     }
-    if (complete) handleShotComplete(detector.result());
+  }
+
+  ShotState st = detector.state();
+  bool quiet = st == ShotState::IDLE || st == ShotState::ARMED;
+
+  if (quiet && spool_ok) {
+    while (pending_w_n > 0) {
+      pending_w_n--;
+      String path = spool.writeWeighing(pending_w[pending_w_n].role,
+                                        pending_w[pending_w_n].ev,
+                                        scales.slotMac((ScaleRole)pending_w[pending_w_n].role));
+      if (path.length()) Serial.printf("# spooled %s\n", path.c_str());
+    }
   }
 
   scales.tick(millis());
   // Network (and its flash reads) only while nothing is brewing.
-  ShotState st = detector.state();
-  net.tick(millis(), st == ShotState::IDLE || st == ShotState::ARMED);
+  net.tick(millis(), quiet);
   pollSerial(Serial);
   pollSerial(Serial0);
   delay(5);   // ~10 Hz data; nothing here needs a tighter spin

@@ -28,13 +28,16 @@ void ScaleManager::begin(QueueHandle_t out_queue) {
   slots[0].role = ScaleRole::YIELD;
   slots[0].enabled = true;
   slots[1].role = ScaleRole::DOSE;
-  slots[1].enabled = false;   // stage 5
 
   prefs.begin("espl", false);
   for (Slot& s : slots) {
     s.bound_mac = prefs.getString(nvsKey(s.role), "");
     s.bound_mac.toLowerCase();
   }
+  // The dose slot only runs once deliberately bound ('assign dose <mac>' or
+  // secrets.h) — auto-binding the *second* scale would be a guess about
+  // which physical scale plays which role.
+  slots[1].enabled = !slots[1].bound_mac.isEmpty();
 #ifdef SCALE_YIELD_MAC
   if (slots[0].bound_mac.isEmpty()) {
     slots[0].bound_mac = SCALE_YIELD_MAC;
@@ -47,6 +50,7 @@ void ScaleManager::begin(QueueHandle_t out_queue) {
     slots[1].bound_mac = SCALE_DOSE_MAC;
     slots[1].bound_mac.toLowerCase();
     prefs.putString(nvsKey(ScaleRole::DOSE), slots[1].bound_mac);
+    slots[1].enabled = true;
   }
 #endif
 
@@ -173,6 +177,53 @@ ScaleManager::SlotState ScaleManager::slotState(ScaleRole role) const {
 
 String ScaleManager::slotMac(ScaleRole role) const {
   return slots[(uint8_t)role].bound_mac;
+}
+
+void ScaleManager::listDiscovered(Stream& out) {
+  auto discovered = scanner->getDiscoveredScales();
+  if (discovered.empty()) {
+    out.printf("# no Bookoos discovered%s\n",
+               scanner->isScanRunning() ? " yet (scanning)" : " (scan idle — all bound slots connected)");
+    return;
+  }
+  for (const auto& d : discovered) {
+    String mac = String(d.getAddress().toString().c_str());
+    mac.toLowerCase();
+    const char* role = "";
+    if (mac == slots[0].bound_mac) role = "  [yield]";
+    else if (mac == slots[1].bound_mac) role = "  [dose]";
+    out.printf("# %s  %s%s\n", mac.c_str(), d.getName().c_str(), role);
+  }
+}
+
+bool ScaleManager::assign(ScaleRole role, const String& mac_or_last, Stream& out) {
+  String mac = mac_or_last;
+  mac.toLowerCase();
+  if (mac == "last") {
+    auto discovered = scanner->getDiscoveredScales();
+    if (discovered.empty()) {
+      out.println("# nothing discovered to assign ('scales' lists candidates)");
+      return false;
+    }
+    mac = String(discovered.back().getAddress().toString().c_str());
+    mac.toLowerCase();
+  }
+  if (mac.length() != 17) {
+    out.printf("# not a MAC: %s\n", mac.c_str());
+    return false;
+  }
+  Slot& s = slots[(uint8_t)role];
+  if (s.dev) dropConnection(s, millis(), "reassigned");
+  s.bound_mac = mac;
+  s.enabled = true;
+  s.state = SlotState::SCANNING;
+  s.next_retry_ms = 0;
+  s.backoff_ms = BACKOFF_MIN_MS;
+  prefs.putString(nvsKey(role), mac);
+  updateScanState();
+  out.printf("# %s scale bound to %s (persisted)\n",
+             role == ScaleRole::YIELD ? "yield" : "dose", mac.c_str());
+  return true;
 }
 
 bool ScaleManager::tare(ScaleRole role) {

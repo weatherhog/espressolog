@@ -38,6 +38,54 @@ struct ShotResult {
 // consumer latency can never distort the curve and dt is never assumed
 // uniform. feed() returns true when a completed ShotResult is available
 // (including rejects and faults — the caller decides their disposition).
+// Anonymous stable-weight events, per CLAUDE.md's weighing attribution: the
+// UI never asks "are you about to weigh a dose?" — every stable reading is
+// recorded blind and a closing shot claims the last one retroactively on
+// the server. Runs per scale, both roles: one scale doing both jobs must
+// work (a flat battery degrades the data, never the workflow).
+//
+// An episode emits once: either when stability breaks (dose lifted off) or
+// at a 30 s cap (parked cup — capping means the event exists even if the
+// scale then sleeps). More weight landing later starts a new episode; the
+// last event wins at attribution, earlier ones get superseded there.
+// The 12–24 g dose plausibility window is applied at attribution time, not
+// here — the schema wants everything the scale actually saw.
+class WeighingDetector {
+public:
+  static constexpr int32_t  STABLE_FLOW_MGPS = 50;    // |dw/dt| < 0.05 g/s
+  static constexpr uint32_t STABLE_HOLD_MS   = 1500;
+  static constexpr uint32_t STABLE_CAP_MS    = 30000;
+  static constexpr int32_t  MIN_WEIGHT_MG    = 5000;
+  static constexpr uint32_t FLOW_WINDOW_MS   = 700;
+
+  struct Event {
+    uint32_t started_at_ms;  // millis() when stability began
+    int32_t  grams_mg;       // mean over the stable span
+    uint32_t stable_ms;
+  };
+
+  // shot_active: a shot is POURING/SETTLING anywhere in the system.
+  // Returns true when an event completed; read it via event().
+  bool feed(uint32_t t_ms, int32_t weight_mg, bool shot_active);
+  const Event& event() const { return ev; }
+
+private:
+  struct RingEntry { uint32_t t; int32_t w; };
+  static constexpr size_t RING_N = 16;
+
+  RingEntry ring[RING_N] = {};
+  size_t ring_head = 0, ring_count = 0;
+
+  uint32_t stable_since = 0;   // 0 = not stable
+  int64_t  sum_mg = 0;
+  uint32_t n = 0;
+  bool     emitted = false;
+  Event    ev = {};
+
+  int32_t computeFlow(uint32_t t, int32_t w) const;
+  bool emit(uint32_t now);
+};
+
 class ShotDetector {
 public:
   static constexpr size_t   MAX_SAMPLES     = 2048;   // >3 min @ 10 Hz, 20 KB SRAM

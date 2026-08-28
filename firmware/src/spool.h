@@ -53,8 +53,9 @@ typedef struct __attribute__((packed)) {
 class Spool {
 public:
   bool begin();
-  // Returns the written path, or "" on refusal/failure.
+  // Both return the written path, or "" on refusal/failure.
   String writeShot(const ShotResult& r, const String& scale_mac);
+  String writeWeighing(uint8_t role, const WeighingDetector::Event& ev, const String& scale_mac);
   bool remove(const String& name);
   void list(Stream& out);
   bool dump(const String& name, Stream& out);   // header summary + sample CSV
@@ -66,4 +67,7 @@ private:
   uint32_t boot_id = 0;
   uint32_t seq = 0;
   bool macToBytes(const String& mac, uint8_t out[6]);
+  void fillCommon(spool_header_t& h, uint8_t record_type, uint32_t started_at_ms,
+                  uint8_t role, const String& scale_mac);
+  String writeFile(char kind, const spool_header_t& h, const sample_t* samples);
 };

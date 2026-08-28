@@ -20,6 +20,92 @@ func openTestStore(t *testing.T) *Store {
 	return st
 }
 
+// weighingRecord builds a type-2 record the way the firmware would emit it.
+func weighingRecord(seq uint32, gramsMg int32, at time.Time) *record.Record {
+	return &record.Record{Header: record.Header{
+		Magic: record.Magic, FormatVersion: record.FormatVersion,
+		RecordType: record.TypeWeighing, BootID: 0x1111, Seq: seq,
+		StartedAtUnixMs: uint64(at.UnixMilli()), TimeValid: 1,
+		ScaleRole: 1, GramsMg: gramsMg, StableMs: 3000,
+	}}
+}
+
+func TestDoseAttribution(t *testing.T) {
+	raw, err := os.ReadFile("../record/testdata/shot-fw040-timevalid.bin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	shotRec, err := record.Decode(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shotAt := time.UnixMilli(int64(shotRec.Header.StartedAtUnixMs))
+
+	st := openTestStore(t)
+	dev := "aa:bb:cc:dd:ee:03"
+
+	// Two dose-plausible weighings (re-placed cup) and one implausible one
+	// (the 36 g yield cup) before the shot.
+	if _, err := st.Ingest(dev, weighingRecord(1, 18000, shotAt.Add(-3*time.Minute)), []byte{2}, shotAt); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Ingest(dev, weighingRecord(2, 18100, shotAt.Add(-2*time.Minute)), []byte{2}, shotAt); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Ingest(dev, weighingRecord(3, 36500, shotAt.Add(-1*time.Minute)), []byte{2}, shotAt); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := st.Ingest(dev, shotRec, raw, shotAt.Add(30*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	shot, _, err := st.Shot(res.ShotID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The LAST plausible weighing wins; the 36.5 g one is out of window.
+	if got := shot["dose_ground_g"]; got != 18.1 {
+		t.Errorf("dose_ground_g = %v, want 18.1", got)
+	}
+	if got := shot["dose_source"]; got != "measured" {
+		t.Errorf("dose_source = %v", got)
+	}
+	rows, _ := st.queryJSON(`SELECT id, shot_id, superseded, attributed_by FROM weighing ORDER BY id`)
+	if rows[0]["superseded"].(int64) != 1 || rows[0]["shot_id"] != nil {
+		t.Errorf("earlier weighing not superseded: %+v", rows[0])
+	}
+	if rows[1]["shot_id"] == nil || rows[1]["attributed_by"] != "auto" {
+		t.Errorf("winning weighing not attributed: %+v", rows[1])
+	}
+	if rows[2]["shot_id"] != nil || rows[2]["superseded"].(int64) != 0 {
+		t.Errorf("implausible weighing touched: %+v", rows[2])
+	}
+}
+
+func TestDoseAttributionOutOfOrder(t *testing.T) {
+	raw, _ := os.ReadFile("../record/testdata/shot-fw040-timevalid.bin")
+	shotRec, _ := record.Decode(raw)
+	shotAt := time.UnixMilli(int64(shotRec.Header.StartedAtUnixMs))
+
+	st := openTestStore(t)
+	dev := "aa:bb:cc:dd:ee:03"
+
+	// Shot arrives first (upload reorder), then its weighing.
+	res, err := st.Ingest(dev, shotRec, raw, shotAt.Add(30*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Ingest(dev, weighingRecord(9, 17800, shotAt.Add(-2*time.Minute)), []byte{2}, shotAt); err != nil {
+		t.Fatal(err)
+	}
+	shot, _, _ := st.Shot(res.ShotID)
+	if got := shot["dose_ground_g"]; got != 17.8 {
+		t.Errorf("late weighing not attributed: dose = %v", got)
+	}
+}
+
 func TestIngestRealRecord(t *testing.T) {
 	raw, err := os.ReadFile("../record/testdata/shot-fw040-timevalid.bin")
 	if err != nil {

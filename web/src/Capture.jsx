@@ -17,10 +17,12 @@ export default function Capture({ shots, beans, activeBeanId, onSaved }) {
     [shots, pending]
   );
 
-  const [grind, setGrind] = useState(previous?.grind_dial ?? 2.4);
-  const [dose, setDose] = useState(previous?.dose_ground_g ?? 18.0);
-  const [preinf, setPreinf] = useState(previous?.preinfusion_s ?? 0);
-  const [temp, setTemp] = useState(previous?.brew_temp_c ?? 93);
+  // The dose prefers the shot's own value — stage 5 attributes it from the
+  // grinder scale automatically, so it's usually already right.
+  const [grind, setGrind] = useState(pending?.grind_dial ?? previous?.grind_dial ?? 2.4);
+  const [dose, setDose] = useState(pending?.dose_ground_g ?? previous?.dose_ground_g ?? 18.0);
+  const [preinf, setPreinf] = useState(pending?.preinfusion_s ?? previous?.preinfusion_s ?? 0);
+  const [temp, setTemp] = useState(pending?.brew_temp_c ?? previous?.brew_temp_c ?? 93);
   const [balance, setBalance] = useState(null);
   const [rating, setRating] = useState(null);
   const [notes, setNotes] = useState("");
@@ -47,13 +49,16 @@ export default function Capture({ shots, beans, activeBeanId, onSaved }) {
       if (discard) {
         await patchShot(pending.id, { excluded: 1, exclude_reason: "discarded at capture" });
       } else {
-        await patchShot(pending.id, {
+        const patch = {
           bean_id: activeBeanId ?? null,
           grind_dial: grind,
-          dose_ground_g: dose,
           preinfusion_s: preinf,
           brew_temp_c: temp,
-        });
+        };
+        // Only send the dose when the user actually corrected it — an
+        // untouched scale-attributed value must keep dose_source='measured'.
+        if (dose !== pending.dose_ground_g) patch.dose_ground_g = dose;
+        await patchShot(pending.id, patch);
         const tasting = { notes: notes || null };
         if (balance) tasting.balance = balance;
         if (rating) tasting.overall = rating;
@@ -86,8 +91,12 @@ export default function Capture({ shots, beans, activeBeanId, onSaved }) {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 20, marginTop: 16 }}>
           <div><Eyebrow style={{ marginBottom: 8 }}>Grind</Eyebrow>
             <Stepper value={grind} onChange={setGrind} step={0.1} /></div>
-          <div><Eyebrow style={{ marginBottom: 8 }}>Dose</Eyebrow>
-            <Stepper value={dose} onChange={setDose} step={0.1} unit="g" /></div>
+          <div>
+            <Eyebrow style={{ marginBottom: 8 }}>
+              Dose{pending.dose_source === "measured" && <span style={{ color: T.flow }}> · from scale</span>}
+            </Eyebrow>
+            <Stepper value={dose} onChange={setDose} step={0.1} unit="g" />
+          </div>
           <div><Eyebrow style={{ marginBottom: 8 }}>Preinfusion</Eyebrow>
             <Stepper value={preinf} onChange={setPreinf} step={0.5} unit="s" /></div>
           <div><Eyebrow style={{ marginBottom: 8 }}>Brew temp</Eyebrow>

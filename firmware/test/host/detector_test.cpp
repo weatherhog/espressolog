@@ -125,6 +125,72 @@ int main() {
   assert(det.state() == ShotState::IDLE);
   printf("parked object OK (disarmed)\n");
 
+  // ---- WeighingDetector ----------------------------------------------------
+
+  // Scenario W1: the dose workflow — cup on grinder scale, grounds land,
+  // stabilizes at 18.1 g, lifted off. One event, emitted at the lift.
+  {
+    WeighingDetector wd;
+    WeighingDetector::Event got{};
+    int events = 0;
+    uint32_t t = 500000;
+    auto step = [&](double g, bool shot = false) {
+      if (wd.feed(t, (long long)(g * 1000), shot)) { got = wd.event(); events++; }
+      t += 100;
+    };
+    for (int i = 0; i < 20; i++) step(0.0);                    // empty scale
+    for (int i = 0; i < 30; i++) step(i * 0.6);                // grinding: rising
+    for (int i = 0; i < 40; i++) step(18.1);                   // stable 4 s
+    for (int i = 0; i < 5; i++) step(0.0);                     // lifted off
+    assert(events == 1);
+    assert(got.grams_mg > 17500 && got.grams_mg < 18500);
+    assert(got.stable_ms >= 3000);
+    printf("weighing dose OK (%d mg over %u ms)\n", got.grams_mg, got.stable_ms);
+  }
+
+  // Scenario W2: parked past the cap emits exactly once, no second event on
+  // the eventual lift.
+  {
+    WeighingDetector wd;
+    int events = 0;
+    uint32_t t = 600000;
+    for (int i = 0; i < 400; i++, t += 100)                    // 40 s parked at 18 g
+      if (wd.feed(t, 18000, false)) events++;
+    assert(events == 1);
+    for (int i = 0; i < 10; i++, t += 100)                     // lifted
+      if (wd.feed(t, 0, false)) events++;
+    assert(events == 1);
+    printf("weighing parked-cap OK\n");
+  }
+
+  // Scenario W3: a shot in progress suppresses weighing events entirely
+  // (the yield scale mid-pour must not produce phantom weighings).
+  {
+    WeighingDetector wd;
+    int events = 0;
+    uint32_t t = 700000;
+    for (int i = 0; i < 100; i++, t += 100)
+      if (wd.feed(t, 20000, true)) events++;
+    assert(events == 0);
+    printf("weighing shot-suppression OK\n");
+  }
+
+  // Scenario W4: re-placing the cup produces one event per placement — the
+  // attribution rule "last one wins" needs them all.
+  {
+    WeighingDetector wd;
+    int events = 0;
+    uint32_t t = 800000;
+    auto hold = [&](double g, int samples) {
+      for (int i = 0; i < samples; i++, t += 100)
+        if (wd.feed(t, (long long)(g * 1000), false)) events++;
+    };
+    hold(18.1, 30); hold(0, 5);      // first placement, lifted
+    hold(18.3, 30); hold(0, 5);      // nudged and re-placed
+    assert(events == 2);
+    printf("weighing re-place OK (%d events)\n", events);
+  }
+
   printf("all scenarios passed\n");
   return 0;
 }

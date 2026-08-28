@@ -38,6 +38,53 @@ bool Spool::macToBytes(const String& mac, uint8_t out[6]) {
   return true;
 }
 
+void Spool::fillCommon(spool_header_t& h, uint8_t record_type, uint32_t started_at_ms,
+                       uint8_t role, const String& scale_mac) {
+  h.magic = 0x4C505345;
+  h.format_version = 1;
+  h.record_type = record_type;
+  h.header_len = sizeof(h);
+  h.boot_id = boot_id;
+  h.seq = seq++;
+  h.started_at_millis = started_at_ms;
+  // Wall clock, if SNTP has synced this boot. The event started in the past,
+  // so anchor: now_unix − (millis-now − millis-at-start).
+  struct timeval tv;
+  gettimeofday(&tv, nullptr);
+  if (tv.tv_sec > 1600000000) {
+    uint64_t now_ms = (uint64_t)tv.tv_sec * 1000 + tv.tv_usec / 1000;
+    h.started_at_unix_ms = now_ms - (millis() - started_at_ms);
+    h.time_valid = 1;
+    struct tm g;
+    time_t t = tv.tv_sec;
+    gmtime_r(&t, &g);
+    g.tm_isdst = -1;
+    h.tz_offset_min = (int16_t)((t - mktime(&g)) / 60);
+  }
+  h.scale_role = role;
+  macToBytes(scale_mac, h.scale_mac);
+  strlcpy(h.detector_version, DETECTOR_VERSION, sizeof(h.detector_version));
+  strlcpy(h.firmware_version, FIRMWARE_VERSION, sizeof(h.firmware_version));
+}
+
+String Spool::writeFile(char kind, const spool_header_t& h, const sample_t* samples) {
+  char name[48];
+  snprintf(name, sizeof(name), "%s/%c-%08lx-%04lu.bin", DIR, kind,
+           (unsigned long)h.boot_id, (unsigned long)h.seq);
+  File f = LittleFS.open(name, "w");
+  if (!f) { Serial.printf("# spool: open failed: %s\n", name); return ""; }
+  size_t want = sizeof(h) + (size_t)h.sample_count * sizeof(sample_t);
+  size_t ok = f.write((const uint8_t*)&h, sizeof(h));
+  if (h.sample_count) ok += f.write((const uint8_t*)samples, (size_t)h.sample_count * sizeof(sample_t));
+  f.close();
+  if (ok != want) {
+    Serial.printf("# spool: short write, removing %s\n", name);
+    LittleFS.remove(name);
+    return "";
+  }
+  return String(name);
+}
+
 String Spool::writeShot(const ShotResult& r, const String& scale_mac) {
   if (nearlyFull()) {
     // Refusing is deliberate: dropping the oldest silently is also losing a
@@ -47,32 +94,8 @@ String Spool::writeShot(const ShotResult& r, const String& scale_mac) {
   }
 
   spool_header_t h = {};
-  h.magic = 0x4C505345;
-  h.format_version = 1;
-  h.record_type = 1;
-  h.header_len = sizeof(h);
-  h.boot_id = boot_id;
-  h.seq = seq++;
-  h.started_at_millis = r.started_at_ms;
-  // Wall clock, if SNTP has synced this boot. The shot started in the past,
-  // so anchor: now_unix − (millis-now − millis-at-start).
-  struct timeval tv;
-  gettimeofday(&tv, nullptr);
-  if (tv.tv_sec > 1600000000) {
-    uint64_t now_ms = (uint64_t)tv.tv_sec * 1000 + tv.tv_usec / 1000;
-    h.started_at_unix_ms = now_ms - (millis() - r.started_at_ms);
-    h.time_valid = 1;
-    struct tm g;
-    time_t t = tv.tv_sec;
-    gmtime_r(&t, &g);
-    g.tm_isdst = -1;
-    h.tz_offset_min = (int16_t)((t - mktime(&g)) / 60);
-  }
-  h.scale_role = 0;
-  macToBytes(scale_mac, h.scale_mac);
+  fillCommon(h, 1, r.started_at_ms, 0, scale_mac);
   h.flags = (r.fault ? SPOOL_FLAG_FAULT : 0) | (r.truncated ? SPOOL_FLAG_TRUNCATED : 0);
-  strlcpy(h.detector_version, DETECTOR_VERSION, sizeof(h.detector_version));
-  strlcpy(h.firmware_version, FIRMWARE_VERSION, sizeof(h.firmware_version));
   h.stop_ms = r.stop_ms;
   h.yield_at_stop_mg = r.yield_at_stop_mg;
   h.yield_final_mg = r.yield_final_mg;
@@ -88,20 +111,24 @@ String Spool::writeShot(const ShotResult& r, const String& scale_mac) {
   crc = esp_rom_crc32_le(crc, (const uint8_t*)r.samples, (size_t)r.sample_count * sizeof(sample_t));
   h.crc32 = crc;
 
-  char name[48];
-  snprintf(name, sizeof(name), "%s/s-%08lx-%04lu.bin", DIR,
-           (unsigned long)boot_id, (unsigned long)h.seq);
-  File f = LittleFS.open(name, "w");
-  if (!f) { Serial.printf("# spool: open failed: %s\n", name); return ""; }
-  size_t ok = f.write((const uint8_t*)&h, sizeof(h));
-  ok += f.write((const uint8_t*)r.samples, (size_t)r.sample_count * sizeof(sample_t));
-  f.close();
-  if (ok != sizeof(h) + (size_t)r.sample_count * sizeof(sample_t)) {
-    Serial.printf("# spool: short write, removing %s\n", name);
-    LittleFS.remove(name);
+  return writeFile('s', h, r.samples);
+}
+
+String Spool::writeWeighing(uint8_t role, const WeighingDetector::Event& ev, const String& scale_mac) {
+  if (nearlyFull()) {
+    Serial.println("# SPOOL >90% FULL — weighing NOT written.");
     return "";
   }
-  return String(name);
+  spool_header_t h = {};
+  fillCommon(h, 2, ev.started_at_ms, role, scale_mac);
+  h.grams_mg = ev.grams_mg;
+  h.stable_ms = ev.stable_ms;
+  h.sample_count = 0;
+
+  h.crc32 = 0;
+  h.crc32 = esp_rom_crc32_le(0, (const uint8_t*)&h, sizeof(h));
+
+  return writeFile('w', h, nullptr);
 }
 
 bool Spool::remove(const String& name) {

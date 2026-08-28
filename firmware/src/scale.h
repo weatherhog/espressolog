@@ -38,6 +38,12 @@ public:
   String slotMac(ScaleRole role) const;
   void setVerbose(bool on) { verbose = on; }
 
+  // CLI support: list Bookoos the scanner currently sees, and bind a role
+  // to a MAC ("last" = most recently discovered). Binding persists to NVS
+  // and enables the slot immediately.
+  void listDiscovered(Stream& out);
+  bool assign(ScaleRole role, const String& mac_or_last, Stream& out);
+
 private:
   struct Slot {
     ScaleRole role;

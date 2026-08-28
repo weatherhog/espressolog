@@ -128,8 +128,14 @@ func (s *Store) Ingest(deviceID string, r *record.Record, raw []byte, receivedAt
 	switch h.RecordType {
 	case record.TypeShot:
 		res.ShotID, err = insertShot(tx, h, r.Samples, scaleID, startedAt, now)
+		if err == nil {
+			err = attributeDoseToShot(tx, res.ShotID, startedAt)
+		}
 	case record.TypeWeighing:
 		res.WeighingID, err = insertWeighing(tx, h, scaleID, startedAt)
+		if err == nil {
+			err = attributeWeighingToLaterShot(tx, res.WeighingID, mg(h.GramsMg), startedAt)
+		}
 	default:
 		err = fmt.Errorf("unknown record type %d", h.RecordType)
 	}
@@ -262,6 +268,89 @@ func insertWeighing(tx *sql.Tx, h *record.Header, scaleID any, observedAt time.T
 }
 
 func mg(v int32) float64 { return float64(v) / 1000.0 }
+
+// --- retroactive dose attribution --------------------------------------------
+// The UI never declares intent before a weighing; instead, when a shot
+// closes, the last unattributed dose-plausible weighing before it becomes
+// its dose. Earlier candidates in the window stay as superseded rows — when
+// a dose looks wrong you want to see what the scale actually saw. The
+// 12–24 g plausibility window lives here, not in the firmware.
+
+const (
+	doseWindow = 4 * time.Hour // a dose ground longer ago than this is stale
+	doseMinG   = 12.0
+	doseMaxG   = 24.0
+)
+
+func attributeDoseToShot(tx *sql.Tx, shotID int64, startedAt time.Time) error {
+	started := startedAt.UTC().Format(time.RFC3339)
+	cutoff := startedAt.Add(-doseWindow).UTC().Format(time.RFC3339)
+
+	var wID int64
+	var grams float64
+	var observed string
+	err := tx.QueryRow(`
+		SELECT id, grams, observed_at FROM weighing
+		WHERE shot_id IS NULL AND superseded = 0
+		  AND grams BETWEEN ? AND ?
+		  AND observed_at <= ? AND observed_at > ?
+		ORDER BY observed_at DESC LIMIT 1`,
+		doseMinG, doseMaxG, started, cutoff).Scan(&wID, &grams, &observed)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return applyAttribution(tx, shotID, wID, grams, observed, cutoff)
+}
+
+// Out-of-order arrival: a weighing whose shot was ingested first (upload
+// retries can reorder) claims the first still-doseless shot after it.
+func attributeWeighingToLaterShot(tx *sql.Tx, weighingID int64, grams float64, observedAt time.Time) error {
+	if grams < doseMinG || grams > doseMaxG {
+		return nil
+	}
+	observed := observedAt.UTC().Format(time.RFC3339)
+	horizon := observedAt.Add(doseWindow).UTC().Format(time.RFC3339)
+
+	var shotID int64
+	err := tx.QueryRow(`
+		SELECT id FROM shot
+		WHERE dose_ground_g IS NULL
+		  AND started_at >= ? AND started_at < ?
+		ORDER BY started_at ASC LIMIT 1`,
+		observed, horizon).Scan(&shotID)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	cutoff := observedAt.Add(-doseWindow).UTC().Format(time.RFC3339)
+	return applyAttribution(tx, shotID, weighingID, grams, observed, cutoff)
+}
+
+func applyAttribution(tx *sql.Tx, shotID, weighingID int64, grams float64, observed, cutoff string) error {
+	if _, err := tx.Exec(`UPDATE weighing SET shot_id=?, role='dose_ground', attributed_by='auto' WHERE id=?`,
+		shotID, weighingID); err != nil {
+		return err
+	}
+	// Earlier unclaimed candidates in the window were re-placings — the last
+	// one won. Keep them, marked.
+	if _, err := tx.Exec(`
+		UPDATE weighing SET superseded = 1
+		WHERE shot_id IS NULL AND superseded = 0
+		  AND grams BETWEEN ? AND ?
+		  AND observed_at < ? AND observed_at > ?`,
+		doseMinG, doseMaxG, observed, cutoff); err != nil {
+		return err
+	}
+	// Never clobber a dose the user already entered by hand.
+	_, err := tx.Exec(`UPDATE shot SET dose_ground_g=?, dose_source='measured' WHERE id=? AND dose_ground_g IS NULL`,
+		grams, shotID)
+	return err
+}
 
 // --- capture writes ---------------------------------------------------------
 // User-entered fields arrive as JSON objects; only whitelisted columns pass.

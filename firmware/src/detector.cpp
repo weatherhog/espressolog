@@ -2,6 +2,67 @@
 #include <string.h>
 #include <limits.h>
 
+// ---- WeighingDetector -------------------------------------------------------
+
+int32_t WeighingDetector::computeFlow(uint32_t t, int32_t w) const {
+  if (ring_count < 2) return 0;
+  uint32_t target = t - FLOW_WINDOW_MS;
+  const RingEntry* best = nullptr;
+  for (size_t i = 0; i < ring_count; i++) {
+    const RingEntry& e = ring[(ring_head + RING_N - 1 - i) % RING_N];
+    best = &e;
+    if ((int32_t)(e.t - target) <= 0) break;
+  }
+  uint32_t dt = t - best->t;
+  if (dt == 0) return 0;
+  return (int32_t)(((int64_t)(w - best->w) * 1000) / (int64_t)dt);
+}
+
+bool WeighingDetector::emit(uint32_t now) {
+  if (emitted || n == 0 || now - stable_since < STABLE_HOLD_MS) return false;
+  ev.started_at_ms = stable_since;
+  ev.grams_mg = (int32_t)(sum_mg / n);
+  ev.stable_ms = now - stable_since;
+  emitted = true;
+  return true;
+}
+
+bool WeighingDetector::feed(uint32_t t, int32_t w, bool shot_active) {
+  int32_t flow = computeFlow(t, w);
+  ring[ring_head] = { t, w };
+  ring_head = (ring_head + 1) % RING_N;
+  if (ring_count < RING_N) ring_count++;
+
+  bool stable = !shot_active && w > MIN_WEIGHT_MG
+                && flow < STABLE_FLOW_MGPS && flow > -STABLE_FLOW_MGPS;
+
+  if (!stable) {
+    // Episode over. If it lasted long enough and hasn't emitted (the usual
+    // case: the dose was lifted off), this is the moment the event exists.
+    bool fired = emit(t);
+    stable_since = 0;
+    sum_mg = 0;
+    n = 0;
+    emitted = false;
+    return fired;
+  }
+
+  if (stable_since == 0) {
+    stable_since = t;
+    sum_mg = 0;
+    n = 0;
+    emitted = false;
+  }
+  sum_mg += w;
+  n++;
+  // Parked longer than the cap: emit now so the record exists even if the
+  // scale sleeps mid-episode; the emitted flag stops a second event.
+  if (!emitted && t - stable_since >= STABLE_CAP_MS) return emit(t);
+  return false;
+}
+
+// ---- ShotDetector -----------------------------------------------------------
+
 void ShotDetector::ringPush(uint32_t t, int32_t w) {
   ring[ring_head] = { t, w };
   ring_head = (ring_head + 1) % RING_N;

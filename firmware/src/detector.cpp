@@ -88,6 +88,12 @@ int32_t ShotDetector::computeFlow(uint32_t t, int32_t w) const {
 void ShotDetector::appendSample(uint32_t t, int32_t w) {
   uint32_t rel = t - t0;
   if (rel > UINT16_MAX || buf_count >= MAX_SAMPLES) return;  // final weight still tracked via last_w
+  // BLE can deliver a burst of notifications stamped in the same
+  // millisecond; t_ms is the record's key, so the later reading wins.
+  if (buf_count > 0 && buf[buf_count - 1].t_ms == (uint16_t)rel) {
+    buf[buf_count - 1].weight_mg = w;
+    return;
+  }
   buf[buf_count++] = { (uint16_t)rel, w, 0, INT16_MIN };
 }
 

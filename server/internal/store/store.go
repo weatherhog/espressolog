@@ -240,7 +240,10 @@ func insertShot(tx *sql.Tx, h *record.Header, samples []record.Sample, scaleID a
 	// Format v1 predates the flowmeter (0d): its inlet_pulses bytes are a
 	// placeholder 0, not a measurement, so they land as NULL. temp_dc
 	// INT16_MIN likewise means "no reading".
-	stmt, err := tx.Prepare(`INSERT INTO shot_sample (shot_id, t_ms, weight_mg, inlet_pulses, temp_dc) VALUES (?,?,?,NULL,?)`)
+	// OR REPLACE: BLE notifications can arrive in a same-millisecond burst,
+	// producing two samples with equal t_ms — the later reading wins rather
+	// than failing the whole ingest (the raw record keeps both regardless).
+	stmt, err := tx.Prepare(`INSERT OR REPLACE INTO shot_sample (shot_id, t_ms, weight_mg, inlet_pulses, temp_dc) VALUES (?,?,?,NULL,?)`)
 	if err != nil {
 		return 0, err
 	}

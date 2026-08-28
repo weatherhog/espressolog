@@ -106,6 +106,23 @@ func TestDoseAttributionOutOfOrder(t *testing.T) {
 	}
 }
 
+// BLE bursts can stamp two samples with the same millisecond — the ingest
+// must survive that (last reading wins), not 500 the whole record.
+func TestIngestDuplicateSampleTimestamps(t *testing.T) {
+	raw, _ := os.ReadFile("../record/testdata/shot-fw040-timevalid.bin")
+	rec, _ := record.Decode(raw)
+	rec.Samples[10].TMs = rec.Samples[9].TMs // same-ms burst
+	st := openTestStore(t)
+	res, err := st.Ingest("aa:bb:cc:dd:ee:03", rec, raw, time.Now())
+	if err != nil {
+		t.Fatalf("duplicate t_ms failed the ingest: %v", err)
+	}
+	_, samples, _ := st.Shot(res.ShotID)
+	if len(samples) != len(rec.Samples)-1 {
+		t.Errorf("samples = %d, want %d (one collapsed)", len(samples), len(rec.Samples)-1)
+	}
+}
+
 func TestIngestRealRecord(t *testing.T) {
 	raw, err := os.ReadFile("../record/testdata/shot-fw040-timevalid.bin")
 	if err != nil {

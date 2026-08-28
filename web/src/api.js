@@ -18,6 +18,26 @@ export async function fetchCurve(id) {
   return curve;
 }
 
+async function send(method, path, body) {
+  const r = await fetch(path, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(`${method} ${path}: ${r.status} ${await r.text()}`);
+  return r.status === 204 ? null : r.json();
+}
+
+export const patchShot = (id, fields) => send("PATCH", `/api/v1/shots/${id}`, fields);
+export const postTasting = (id, fields) => send("POST", `/api/v1/shots/${id}/tasting`, fields);
+export const postBean = (fields) => send("POST", "/api/v1/beans", fields);
+
+export async function fetchBeans() {
+  const r = await fetch("/api/v1/beans");
+  if (!r.ok) throw new Error(`beans: ${r.status}`);
+  return r.json();
+}
+
 export async function health() {
   try {
     const r = await fetch("/healthz");

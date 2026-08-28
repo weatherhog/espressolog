@@ -3,6 +3,7 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
 	"io"
 	"log"
@@ -23,6 +24,10 @@ func New(st *store.Store) http.Handler {
 	mux.HandleFunc("POST /api/v1/ingest", ingest(st))
 	mux.HandleFunc("GET /api/v1/shots", listShots(st))
 	mux.HandleFunc("GET /api/v1/shots/{id}", getShot(st))
+	mux.HandleFunc("PATCH /api/v1/shots/{id}", patchShot(st))
+	mux.HandleFunc("POST /api/v1/shots/{id}/tasting", postTasting(st))
+	mux.HandleFunc("GET /api/v1/beans", listBeans(st))
+	mux.HandleFunc("POST /api/v1/beans", postBean(st))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := st.Healthy(); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -117,6 +122,95 @@ func getShot(st *store.Store) http.HandlerFunc {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{"shot": shot, "samples": samples})
+	}
+}
+
+func readJSONBody(w http.ResponseWriter, r *http.Request) (map[string]any, bool) {
+	var fields map[string]any
+	if err := json.NewDecoder(io.LimitReader(r.Body, 64<<10)).Decode(&fields); err != nil {
+		http.Error(w, "bad json: "+err.Error(), http.StatusBadRequest)
+		return nil, false
+	}
+	return fields, true
+}
+
+func pathID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "bad id", http.StatusBadRequest)
+		return 0, false
+	}
+	return id, true
+}
+
+func patchShot(st *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		fields, ok := readJSONBody(w, r)
+		if !ok {
+			return
+		}
+		if err := st.UpdateShot(id, fields); err != nil {
+			code := http.StatusInternalServerError
+			if err == sql.ErrNoRows {
+				code = http.StatusNotFound
+			}
+			http.Error(w, err.Error(), code)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func postTasting(st *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		fields, ok := readJSONBody(w, r)
+		if !ok {
+			return
+		}
+		tid, err := st.InsertTasting(id, fields)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]any{"id": tid})
+	}
+}
+
+func listBeans(st *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		rows, err := st.Beans()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSONRows(w, rows)
+	}
+}
+
+func postBean(st *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		fields, ok := readJSONBody(w, r)
+		if !ok {
+			return
+		}
+		id, err := st.InsertBean(fields)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]any{"id": id})
 	}
 }
 

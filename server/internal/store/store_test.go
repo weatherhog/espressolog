@@ -72,13 +72,20 @@ func TestIngestRealRecord(t *testing.T) {
 		t.Errorf("placeholders not NULLed: %+v", samples[0])
 	}
 
-	// The scale self-registered from its BLE MAC.
-	rows, err := st.queryJSON(`SELECT kind, ble_address FROM equipment`)
+	// The scale self-registered from its BLE MAC (alongside the machine and
+	// grinder that migration 003 seeds).
+	rows, err := st.queryJSON(`SELECT kind, ble_address FROM equipment WHERE kind='scale'`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(rows) != 1 || rows[0]["ble_address"] != "aa:bb:cc:dd:ee:01" {
-		t.Errorf("equipment = %+v", rows)
+		t.Errorf("scale equipment = %+v", rows)
+	}
+
+	// Ingested shots pick up the seeded machine/grinder/epoch defaults.
+	if shot["machine_id"] == nil || shot["grinder_id"] == nil || shot["grind_epoch_id"] == nil {
+		t.Errorf("default context not attached: machine=%v grinder=%v epoch=%v",
+			shot["machine_id"], shot["grinder_id"], shot["grind_epoch_id"])
 	}
 
 	// Same scale again must not create a second equipment row.
@@ -86,7 +93,7 @@ func TestIngestRealRecord(t *testing.T) {
 	if _, err := st.Ingest("aa:bb:cc:dd:ee:03", rec, raw, now); err != nil {
 		t.Fatal(err)
 	}
-	rows, _ = st.queryJSON(`SELECT COUNT(*) AS n FROM equipment`)
+	rows, _ = st.queryJSON(`SELECT COUNT(*) AS n FROM equipment WHERE kind='scale'`)
 	if rows[0]["n"].(int64) != 1 {
 		t.Errorf("scale registered twice")
 	}

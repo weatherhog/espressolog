@@ -178,6 +178,24 @@ func ensureScale(tx *sql.Tx, mac string) (any, error) {
 	return id, nil
 }
 
+// defaultContext resolves the machine, grinder and its most recent grind
+// epoch (seeded by migration 003) so ingested shots reference them from the
+// start. Any of these may be nil on an unseeded database — that degrades the
+// row, never fails the ingest.
+func defaultContext(tx *sql.Tx) (machineID, grinderID, epochID any) {
+	var id int64
+	if tx.QueryRow(`SELECT id FROM equipment WHERE kind='machine' ORDER BY id LIMIT 1`).Scan(&id) == nil {
+		machineID = id
+	}
+	if tx.QueryRow(`SELECT id FROM equipment WHERE kind='grinder' ORDER BY id LIMIT 1`).Scan(&id) == nil {
+		grinderID = id
+		if tx.QueryRow(`SELECT id FROM grind_epoch WHERE grinder_id=? ORDER BY started_at DESC, id DESC LIMIT 1`, id).Scan(&id) == nil {
+			epochID = id
+		}
+	}
+	return
+}
+
 func insertShot(tx *sql.Tx, h *record.Header, samples []record.Sample, scaleID any, startedAt time.Time, now string) (int64, error) {
 	var stoppedBy, excludeReason any
 	excluded := 0
@@ -186,17 +204,20 @@ func insertShot(tx *sql.Tx, h *record.Header, samples []record.Sample, scaleID a
 		excluded = 1
 		excludeReason = "fault: cup removed mid-pour"
 	}
+	machineID, grinderID, epochID := defaultContext(tx)
 
 	r, err := tx.Exec(`
 		INSERT INTO shot (
 			started_at, tz_offset_min, scale_id,
+			machine_id, grinder_id, grind_epoch_id,
 			stop_ms, stopped_by,
 			yield_at_stop_g, yield_final_g, settle_offset_g,
 			peak_flow_gps, mean_flow_gps, flow_win_start_ms, flow_win_end_ms,
 			detector_version, firmware_version,
 			excluded, exclude_reason, created_at
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		startedAt.Format(time.RFC3339), h.TzOffsetMin, scaleID,
+		machineID, grinderID, epochID,
 		h.StopMs, stoppedBy,
 		mg(h.YieldAtStopMg), mg(h.YieldFinalMg), mg(h.SettleOffsetMg),
 		mg(h.PeakFlowMgps), mg(h.MeanFlowMgps), h.FlowWinStartMs, h.FlowWinEndMs,
@@ -241,6 +262,116 @@ func insertWeighing(tx *sql.Tx, h *record.Header, scaleID any, observedAt time.T
 }
 
 func mg(v int32) float64 { return float64(v) / 1000.0 }
+
+// --- capture writes ---------------------------------------------------------
+// User-entered fields arrive as JSON objects; only whitelisted columns pass.
+// Measured fields (yield, flow, timings) are never writable this way — the
+// device is the authority on those.
+
+var shotUserFields = map[string]bool{
+	"bean_id": true, "grind_dial": true, "dose_ground_g": true, "dose_in_g": true,
+	"preinfusion_s": true, "brew_temp_c": true, "target_yield_g": true, "target_time_s": true,
+	"prep_deviation": true, "notes": true, "excluded": true, "exclude_reason": true,
+	"from_frozen": true, "purge_g": true,
+}
+
+var tastingFields = map[string]bool{
+	"overall": true, "balance": true, "acidity": true, "sweetness": true,
+	"bitterness": true, "body": true, "defects": true, "descriptors": true,
+	"notes": true, "drink": true,
+}
+
+var beanFields = map[string]bool{
+	"roaster": true, "name": true, "origin": true, "region": true, "producer": true,
+	"varietal": true, "process": true, "roast_level": true, "roast_date": true,
+	"bag_size_g": true, "price_cents": true, "currency": true, "opened_at": true,
+	"frozen_at": true, "dose_count": true, "portion_target_g": true,
+	"finished_at": true, "url": true, "notes": true,
+}
+
+func filterFields(fields map[string]any, allowed map[string]bool) (cols []string, vals []any) {
+	for k, v := range fields {
+		if allowed[k] {
+			cols = append(cols, k)
+			vals = append(vals, v)
+		}
+	}
+	return
+}
+
+// UpdateShot patches user-entered columns on one shot. A manual dose entry
+// also stamps dose_source so analysis can tell it from a weighed one.
+func (s *Store) UpdateShot(id int64, fields map[string]any) error {
+	cols, vals := filterFields(fields, shotUserFields)
+	if _, ok := fields["dose_ground_g"]; ok {
+		cols = append(cols, "dose_source")
+		vals = append(vals, "manual")
+	}
+	if len(cols) == 0 {
+		return fmt.Errorf("no updatable fields in request")
+	}
+	set := ""
+	for i, c := range cols {
+		if i > 0 {
+			set += ", "
+		}
+		set += c + " = ?"
+	}
+	vals = append(vals, time.Now().UTC().Format(time.RFC3339), id)
+	res, err := s.db.Exec("UPDATE shot SET "+set+", updated_at = ? WHERE id = ?", vals...)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// InsertTasting adds a tasting row for a shot. Separate row on purpose: a
+// missing tasting is visibly different from a bad shot.
+func (s *Store) InsertTasting(shotID int64, fields map[string]any) (int64, error) {
+	cols, vals := filterFields(fields, tastingFields)
+	q := "INSERT INTO tasting (shot_id, tasted_at"
+	placeholders := "?, ?"
+	args := []any{shotID, time.Now().UTC().Format(time.RFC3339)}
+	for i, c := range cols {
+		q += ", " + c
+		placeholders += ", ?"
+		args = append(args, vals[i])
+	}
+	r, err := s.db.Exec(q+") VALUES ("+placeholders+")", args...)
+	if err != nil {
+		return 0, err
+	}
+	return r.LastInsertId()
+}
+
+func (s *Store) Beans() ([]map[string]any, error) {
+	return s.queryJSON(`SELECT * FROM bean ORDER BY finished_at IS NOT NULL, roast_date DESC, id DESC`)
+}
+
+func (s *Store) InsertBean(fields map[string]any) (int64, error) {
+	cols, vals := filterFields(fields, beanFields)
+	if fields["roaster"] == nil || fields["name"] == nil {
+		return 0, fmt.Errorf("roaster and name are required")
+	}
+	q := "INSERT INTO bean ("
+	placeholders := ""
+	for i, c := range cols {
+		if i > 0 {
+			q += ", "
+			placeholders += ", "
+		}
+		q += c
+		placeholders += "?"
+	}
+	r, err := s.db.Exec(q+") VALUES ("+placeholders+")", vals...)
+	if err != nil {
+		return 0, err
+	}
+	return r.LastInsertId()
+}
 
 // --- read side -------------------------------------------------------------
 

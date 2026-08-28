@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { T, MONO, SANS, paperBg, SERIES } from "./tokens.js";
 import { Eyebrow, Readout, Panel, Tag } from "./components.jsx";
 import { Spark, Overlay } from "./Chart.jsx";
-import { fetchShots, fetchCurve, health } from "./api.js";
+import { fetchShots, fetchCurve, fetchBeans, health } from "./api.js";
+import Capture from "./Capture.jsx";
+import Beans from "./Beans.jsx";
 
 function fmtDate(iso) {
   const d = new Date(iso);
@@ -45,18 +47,38 @@ function ShotRow({ shot, curve, selected, tone, onClick }) {
   );
 }
 
+function loadActiveBean() {
+  try { return JSON.parse(localStorage.getItem("activeBeanId")) ?? null; } catch { return null; }
+}
+
 export default function App() {
+  const [tab, setTab] = useState("shots");
   const [shots, setShots] = useState(null);
+  const [beans, setBeans] = useState(null);
   const [error, setError] = useState(null);
   const [curves, setCurves] = useState({});      // id -> [{t,w}]
   const [selected, setSelected] = useState([]);  // [{id, tone}]
   const [showExcluded, setShowExcluded] = useState(false);
   const [up, setUp] = useState(null);
+  const [activeBeanId, setActiveBeanIdState] = useState(loadActiveBean);
+
+  const setActiveBeanId = (id) => {
+    setActiveBeanIdState(id);
+    try { localStorage.setItem("activeBeanId", JSON.stringify(id)); } catch {}
+  };
+
+  const refresh = () => {
+    fetchShots().then(setShots).catch((e) => setError(String(e)));
+    fetchBeans().then(setBeans).catch(() => {});
+  };
 
   useEffect(() => {
-    fetchShots().then(setShots).catch((e) => setError(String(e)));
+    refresh();
     health().then(setUp);
-    const t = setInterval(() => health().then(setUp), 30000);
+    const t = setInterval(() => {
+      health().then(setUp);
+      refresh();   // new shots appear on their own; the device pushes when it pushes
+    }, 30000);
     return () => clearInterval(t);
   }, []);
 
@@ -114,7 +136,33 @@ export default function App() {
         </Panel>
       )}
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
+      <div style={{ display: "flex", gap: 2, marginBottom: 18, borderBottom: `1px solid ${T.hair}` }}>
+        {[["shots", "Shots"], ["capture", "Capture"], ["beans", "Beans"]].map(([k, label]) => (
+          <button key={k} onClick={() => setTab(k)} style={{
+            padding: "12px 20px", fontFamily: MONO, fontSize: 11, letterSpacing: "0.14em",
+            textTransform: "uppercase", background: "transparent", border: "none",
+            cursor: "pointer", color: tab === k ? T.ink : T.inkSoft,
+            borderBottom: `2px solid ${tab === k ? T.trace : "transparent"}`, marginBottom: -1,
+          }}>
+            {label}
+            {k === "capture" && (shots || []).some((s) => !s.excluded && s.overall == null) &&
+              <span style={{ color: T.alert }}> ●</span>}
+          </button>
+        ))}
+      </div>
+
+      {tab === "capture" && (
+        <Capture
+          key={(shots || []).find((s) => !s.excluded && s.overall == null)?.id ?? "none"}
+          shots={shots} beans={beans} activeBeanId={activeBeanId}
+          onSaved={() => { refresh(); setTab("shots"); }} />
+      )}
+      {tab === "beans" && (
+        <Beans beans={beans} shots={shots} activeBeanId={activeBeanId}
+          setActiveBeanId={setActiveBeanId} onChanged={refresh} />
+      )}
+
+      <div style={{ display: tab === "shots" ? "flex" : "none", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
         <Panel style={{ flex: "1 1 460px", overflow: "hidden", minWidth: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 18px" }}>
             <Eyebrow>{shots ? `${visible.length} shots` : "loading…"}</Eyebrow>

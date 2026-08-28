@@ -10,8 +10,8 @@
 #include "spool.h"
 #include "net.h"
 
-const char* FIRMWARE_VERSION = "0.4.0-stage4";
-const char* DETECTOR_VERSION = "0a.1";
+const char* FIRMWARE_VERSION = "0.4.1-stage4";
+const char* DETECTOR_VERSION = "0a.2";
 
 static ScaleManager scales;
 static ShotDetector detector;

@@ -52,6 +52,12 @@ public:
   static constexpr int32_t  FAULT_DROP_MG   = 5000;
   static constexpr uint32_t FLOW_WINDOW_MS  = 700;
   static constexpr uint32_t MAX_SHOT_MS     = 60000;  // force-stop before uint16 t_ms wraps
+  // ARMED-state discrimination (detector 0a.2, learned from real shots):
+  // a cup landing arrives as one huge sample step; first drips arrive as a
+  // slow positive creep; a parked object is non-zero but flat.
+  static constexpr int32_t  PLACEMENT_STEP_MG = 5000;  // per-sample jump = placement
+  static constexpr int32_t  PARKED_FLOW_MGPS  = 50;
+  static constexpr uint32_t PARKED_HOLD_MS    = 2000;
 
   bool feed(uint32_t t_ms, int32_t weight_mg);
   ShotState state() const { return st; }
@@ -73,6 +79,7 @@ private:
   uint16_t buf_count = 0;
   uint32_t t0 = 0;               // millis() of shot start
   uint32_t pour_cand_since = 0;  // 0 = no candidate
+  uint32_t parked_since = 0;     // 0 = not parked
   uint32_t stop_cand_at = 0;     // 0 = no candidate
   int32_t  stop_cand_w = 0;
   uint32_t settle_until = 0;

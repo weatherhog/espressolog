@@ -21,3 +21,6 @@ analysis/.venv/
 
 .DS_Store
 *.log
+firmware/test/host/detector_test
+firmware/test/host/replay
+server/espressolog-server

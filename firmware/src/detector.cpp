@@ -97,12 +97,14 @@ void ShotDetector::resetToIdle() {
   st = ShotState::IDLE;
   ring_count = 0;   // a stale pre-pour history must not arm the next shot
   pour_cand_since = 0;
+  parked_since = 0;
   stop_cand_at = 0;
 }
 
 bool ShotDetector::feed(uint32_t t, int32_t w) {
   flow_now = computeFlow(t, w);
   ringPush(t, w);
+  int32_t prev_w = last_w;
   last_w = w;
 
   switch (st) {
@@ -121,7 +123,22 @@ bool ShotDetector::feed(uint32_t t, int32_t w) {
     }
 
     case ShotState::ARMED: {
+      // A mass arriving in one sample is a cup being placed, not espresso —
+      // re-arming then requires a fresh tare, which is the workflow anyway.
+      if (w - prev_w > PLACEMENT_STEP_MG) {
+        st = ShotState::IDLE;
+        pour_cand_since = 0;
+        parked_since = 0;
+        break;
+      }
+      if (w < -ARM_BAND_MG) {  // cup lifted off a tared scale
+        st = ShotState::IDLE;
+        pour_cand_since = 0;
+        parked_since = 0;
+        break;
+      }
       if (flow_now > POUR_FLOW_MGPS) {
+        parked_since = 0;
         if (pour_cand_since == 0) pour_cand_since = t;
         if (t - pour_cand_since >= POUR_HOLD_MS) {
           // The current sample is already in the ring, so the replay in
@@ -130,9 +147,18 @@ bool ShotDetector::feed(uint32_t t, int32_t w) {
         }
       } else {
         pour_cand_since = 0;
-        // Disarm if weight leaves the zero band without a pour developing
-        // (cup lifted, drift) — otherwise ARMED would wedge.
-        if (w < -ARM_BAND_MG || w > ARM_BAND_MG) st = ShotState::IDLE;
+        // A slow positive creep is first drips — stay armed (this is what
+        // lost a real shot on 2026-08-28). Only a *parked* mass disarms:
+        // above the band but flat for a while.
+        if (w > ARM_BAND_MG && flow_now < PARKED_FLOW_MGPS && flow_now > -PARKED_FLOW_MGPS) {
+          if (parked_since == 0) parked_since = t;
+          if (t - parked_since >= PARKED_HOLD_MS) {
+            st = ShotState::IDLE;
+            parked_since = 0;
+          }
+        } else {
+          parked_since = 0;
+        }
       }
       break;
     }

@@ -373,6 +373,30 @@ func (s *Store) InsertBean(fields map[string]any) (int64, error) {
 	return r.LastInsertId()
 }
 
+// UpdateBean patches whitelisted bean columns (bean has no updated_at).
+func (s *Store) UpdateBean(id int64, fields map[string]any) error {
+	cols, vals := filterFields(fields, beanFields)
+	if len(cols) == 0 {
+		return fmt.Errorf("no updatable fields in request")
+	}
+	set := ""
+	for i, c := range cols {
+		if i > 0 {
+			set += ", "
+		}
+		set += c + " = ?"
+	}
+	vals = append(vals, id)
+	res, err := s.db.Exec("UPDATE bean SET "+set+" WHERE id = ?", vals...)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 // --- read side -------------------------------------------------------------
 
 // Shots returns recent rows from v_shot as generic JSON objects — the view

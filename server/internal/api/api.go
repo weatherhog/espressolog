@@ -28,6 +28,7 @@ func New(st *store.Store) http.Handler {
 	mux.HandleFunc("POST /api/v1/shots/{id}/tasting", postTasting(st))
 	mux.HandleFunc("GET /api/v1/beans", listBeans(st))
 	mux.HandleFunc("POST /api/v1/beans", postBean(st))
+	mux.HandleFunc("PATCH /api/v1/beans/{id}", patchBean(st))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := st.Healthy(); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -211,6 +212,28 @@ func postBean(st *store.Store) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]any{"id": id})
+	}
+}
+
+func patchBean(st *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		fields, ok := readJSONBody(w, r)
+		if !ok {
+			return
+		}
+		if err := st.UpdateBean(id, fields); err != nil {
+			code := http.StatusInternalServerError
+			if err == sql.ErrNoRows {
+				code = http.StatusNotFound
+			}
+			http.Error(w, err.Error(), code)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 

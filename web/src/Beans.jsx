@@ -1,11 +1,105 @@
 import { useState } from "react";
 import { T, MONO, SANS } from "./tokens.js";
 import { Eyebrow, Readout, Panel } from "./components.jsx";
-import { postBean } from "./api.js";
+import { postBean, patchBean } from "./api.js";
 
 const daysSince = (iso) => (iso ? Math.round((Date.now() - new Date(iso)) / 864e5) : null);
+const today = () => new Date().toISOString().slice(0, 10);
 
-function BeanCard({ bean, active, dosesUsed, onSelect }) {
+// One form for both "new bag" and "edit bag". On edit, every field is sent
+// (nulls included) so clearing a value actually clears it.
+function BeanForm({ bean, onDone, onCancel }) {
+  const [f, setF] = useState({
+    roaster: bean?.roaster ?? "",
+    name: bean?.name ?? "",
+    origin: bean?.origin ?? "",
+    roast_date: bean?.roast_date ?? "",
+    process: bean?.process ?? "",
+    portion_target_g: bean?.portion_target_g ?? "",
+    dose_count: bean?.dose_count ?? "",
+    notes: bean?.notes ?? "",
+    frozen: !!bean?.frozen_at,
+    finished: !!bean?.finished_at,
+  });
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const input = (key, placeholder, type = "text") => (
+    <input type={type} value={f[key]} placeholder={placeholder}
+      onChange={(e) => setF({ ...f, [key]: e.target.value })}
+      style={{
+        width: "100%", padding: 10, fontFamily: SANS, fontSize: 14, color: T.ink,
+        background: T.paper, border: `1px solid ${T.hair}`, borderRadius: 2, outline: "none",
+      }} />
+  );
+
+  const check = (key, label) => (
+    <label style={{ fontFamily: MONO, fontSize: 11, color: T.inkSoft, display: "flex", gap: 8, alignItems: "center" }}>
+      <input type="checkbox" checked={f[key]} onChange={(e) => setF({ ...f, [key]: e.target.checked })} />
+      {label}
+    </label>
+  );
+
+  const submit = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      const body = {
+        roaster: f.roaster,
+        name: f.name,
+        origin: f.origin || null,
+        roast_date: f.roast_date || null,
+        process: f.process || null,
+        portion_target_g: f.portion_target_g === "" ? null : +f.portion_target_g,
+        dose_count: f.dose_count === "" ? null : +f.dose_count,
+        notes: f.notes || null,
+        // keep an existing date when the box stays ticked; stamp today when
+        // it turns on; clear when it turns off
+        frozen_at: f.frozen ? (bean?.frozen_at ?? today()) : null,
+        finished_at: f.finished ? (bean?.finished_at ?? today()) : null,
+      };
+      if (bean) await patchBean(bean.id, body);
+      else await postBean(body);
+      onDone();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Panel style={{ padding: 20, display: "flex", flexDirection: "column", gap: 10 }}>
+      <Eyebrow>{bean ? `Edit — ${bean.roaster} ${bean.name}` : "New bag"}</Eyebrow>
+      {input("roaster", "Roaster *")}
+      {input("name", "Name *")}
+      {input("origin", "Origin")}
+      {input("roast_date", "Roast date", "date")}
+      {input("process", "Process (washed / natural / …)")}
+      <div style={{ display: "flex", gap: 10 }}>
+        {input("portion_target_g", "Portion g", "number")}
+        {input("dose_count", "Doses", "number")}
+      </div>
+      {input("notes", "Notes")}
+      {check("frozen", "PORTIONED INTO THE FREEZER")}
+      {check("finished", "BAG FINISHED")}
+      {error && <div style={{ fontFamily: MONO, fontSize: 11, color: T.alert }}>{error}</div>}
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={submit} disabled={busy || !f.roaster || !f.name} style={{
+          flex: 1, padding: "12px 0", fontFamily: MONO, fontSize: 12, letterSpacing: "0.14em",
+          textTransform: "uppercase", background: T.ink, color: T.paper, border: "none",
+          borderRadius: 2, cursor: "pointer", opacity: busy || !f.roaster || !f.name ? 0.4 : 1,
+        }}>Save</button>
+        <button onClick={onCancel} style={{
+          padding: "12px 18px", fontFamily: MONO, fontSize: 12, background: "transparent",
+          color: T.inkSoft, border: `1px solid ${T.hair}`, borderRadius: 2, cursor: "pointer",
+        }}>Cancel</button>
+      </div>
+    </Panel>
+  );
+}
+
+function BeanCard({ bean, active, dosesUsed, onSelect, onEdit }) {
   const offRoast = daysSince(bean.roast_date);
   const dosesLeft = bean.dose_count != null ? bean.dose_count - dosesUsed : null;
   return (
@@ -17,7 +111,14 @@ function BeanCard({ bean, active, dosesUsed, onSelect }) {
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <Eyebrow>{bean.roaster}</Eyebrow>
-        {bean.frozen_at && <Eyebrow style={{ color: T.trace }}>❄ frozen</Eyebrow>}
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          {bean.frozen_at && <Eyebrow style={{ color: T.trace }}>❄ frozen</Eyebrow>}
+          <button onClick={onEdit} style={{
+            fontFamily: MONO, fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase",
+            background: "transparent", color: T.inkSoft, border: `1px solid ${T.hair}`,
+            borderRadius: 2, padding: "3px 8px", cursor: "pointer",
+          }}>Edit</button>
+        </div>
       </div>
       <div style={{ marginTop: 8, fontFamily: SANS, fontSize: 19, color: T.ink }}>{bean.name}</div>
       <div style={{ marginTop: 4, fontFamily: MONO, fontSize: 11, color: T.inkSoft }}>
@@ -41,92 +142,37 @@ function BeanCard({ bean, active, dosesUsed, onSelect }) {
   );
 }
 
-function AddBean({ onAdded }) {
-  const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ roaster: "", name: "", roast_date: "", process: "", portion_target_g: "", dose_count: "", frozen: false });
-  const [error, setError] = useState(null);
-
-  const input = (key, placeholder, type = "text") => (
-    <input type={type} value={f[key]} placeholder={placeholder}
-      onChange={(e) => setF({ ...f, [key]: e.target.value })}
-      style={{
-        width: "100%", padding: 10, fontFamily: SANS, fontSize: 14, color: T.ink,
-        background: T.paper, border: `1px solid ${T.hair}`, borderRadius: 2, outline: "none",
-      }} />
-  );
-
-  const submit = async () => {
-    setError(null);
-    try {
-      const body = { roaster: f.roaster, name: f.name };
-      if (f.roast_date) body.roast_date = f.roast_date;
-      if (f.process) body.process = f.process;
-      if (f.portion_target_g) body.portion_target_g = +f.portion_target_g;
-      if (f.dose_count) body.dose_count = +f.dose_count;
-      if (f.frozen) body.frozen_at = new Date().toISOString().slice(0, 10);
-      await postBean(body);
-      setF({ roaster: "", name: "", roast_date: "", process: "", portion_target_g: "", dose_count: "", frozen: false });
-      setOpen(false);
-      onAdded();
-    } catch (e) {
-      setError(String(e));
-    }
-  };
-
-  if (!open) {
-    return (
-      <Panel style={{ padding: 20, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <button onClick={() => setOpen(true)} style={{
-          padding: "14px 28px", fontFamily: MONO, fontSize: 12, letterSpacing: "0.14em",
-          textTransform: "uppercase", background: "transparent", color: T.ink,
-          border: `1px dashed ${T.inkSoft}`, borderRadius: 2, cursor: "pointer",
-        }}>+ New bag</button>
-      </Panel>
-    );
-  }
-
-  return (
-    <Panel style={{ padding: 20, display: "flex", flexDirection: "column", gap: 10 }}>
-      <Eyebrow>New bag</Eyebrow>
-      {input("roaster", "Roaster *")}
-      {input("name", "Name *")}
-      {input("roast_date", "Roast date", "date")}
-      {input("process", "Process (washed / natural / …)")}
-      <div style={{ display: "flex", gap: 10 }}>
-        {input("portion_target_g", "Portion g", "number")}
-        {input("dose_count", "Doses", "number")}
-      </div>
-      <label style={{ fontFamily: MONO, fontSize: 11, color: T.inkSoft, display: "flex", gap: 8, alignItems: "center" }}>
-        <input type="checkbox" checked={f.frozen} onChange={(e) => setF({ ...f, frozen: e.target.checked })} />
-        PORTIONED INTO THE FREEZER TODAY
-      </label>
-      {error && <div style={{ fontFamily: MONO, fontSize: 11, color: T.alert }}>{error}</div>}
-      <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={submit} disabled={!f.roaster || !f.name} style={{
-          flex: 1, padding: "12px 0", fontFamily: MONO, fontSize: 12, letterSpacing: "0.14em",
-          textTransform: "uppercase", background: T.ink, color: T.paper, border: "none",
-          borderRadius: 2, cursor: "pointer", opacity: !f.roaster || !f.name ? 0.4 : 1,
-        }}>Save</button>
-        <button onClick={() => setOpen(false)} style={{
-          padding: "12px 18px", fontFamily: MONO, fontSize: 12, background: "transparent",
-          color: T.inkSoft, border: `1px solid ${T.hair}`, borderRadius: 2, cursor: "pointer",
-        }}>Cancel</button>
-      </div>
-    </Panel>
-  );
-}
-
 export default function Beans({ beans, shots, activeBeanId, setActiveBeanId, onChanged }) {
+  const [editing, setEditing] = useState(null);   // bean id | "new" | null
   const dosesUsed = (beanId) =>
     (shots || []).filter((s) => s.bean_id === beanId && !s.excluded).length;
+
   return (
     <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
-      {(beans || []).map((b) => (
-        <BeanCard key={b.id} bean={b} active={b.id === activeBeanId}
-          dosesUsed={dosesUsed(b.id)}
-          onSelect={() => setActiveBeanId(b.id)} />
-      ))}
-      <AddBean onAdded={onChanged} />
+      {(beans || []).map((b) =>
+        editing === b.id ? (
+          <BeanForm key={b.id} bean={b}
+            onDone={() => { setEditing(null); onChanged(); }}
+            onCancel={() => setEditing(null)} />
+        ) : (
+          <BeanCard key={b.id} bean={b} active={b.id === activeBeanId}
+            dosesUsed={dosesUsed(b.id)}
+            onSelect={() => setActiveBeanId(b.id)}
+            onEdit={() => setEditing(b.id)} />
+        )
+      )}
+      {editing === "new" ? (
+        <BeanForm onDone={() => { setEditing(null); onChanged(); }}
+          onCancel={() => setEditing(null)} />
+      ) : (
+        <Panel style={{ padding: 20, display: "flex", alignItems: "center", justifyContent: "center", minHeight: 120 }}>
+          <button onClick={() => setEditing("new")} style={{
+            padding: "14px 28px", fontFamily: MONO, fontSize: 12, letterSpacing: "0.14em",
+            textTransform: "uppercase", background: "transparent", color: T.ink,
+            border: `1px dashed ${T.inkSoft}`, borderRadius: 2, cursor: "pointer",
+          }}>+ New bag</button>
+        </Panel>
+      )}
     </div>
   );
 }

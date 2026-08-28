@@ -24,3 +24,4 @@ analysis/.venv/
 firmware/test/host/detector_test
 firmware/test/host/replay
 server/espressolog-server
+espressolog-server-linux

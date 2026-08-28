@@ -1,0 +1,23 @@
+# Espressolog service unit. Installed to /etc/systemd/system/ by
+# `make deploy` (see server/Makefile).
+#
+# DynamicUser + StateDirectory: no user management, and the database lives
+# in /var/lib/espressolog owned by the transient user. Everything else on
+# the filesystem is read-only to the service.
+[Unit]
+Description=espressolog shot logger
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/espressolog-server -addr :8080 -db /var/lib/espressolog/espressolog.db
+DynamicUser=yes
+StateDirectory=espressolog
+ProtectSystem=strict
+ProtectHome=yes
+NoNewPrivileges=yes
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

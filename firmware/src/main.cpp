@@ -10,8 +10,8 @@
 #include "spool.h"
 #include "net.h"
 
-const char* FIRMWARE_VERSION = "0.6.0-stage6";
-const char* DETECTOR_VERSION = "0a.2";
+const char* FIRMWARE_VERSION = "0.6.1";
+const char* DETECTOR_VERSION = "0a.3";
 
 static ScaleManager scales;
 static ShotDetector detector;
@@ -208,6 +208,34 @@ void setup() {
   Serial.println("# scanning for Bookoo… ('help' for commands)");
 }
 
+// Headless status glance: the DevKit's onboard RGB LED shows whether a shot
+// would be captured right now. Off = cup scale not connected; amber = idle
+// (settling toward a baseline); green = armed; blue = shot in progress.
+// Dim on purpose — it lives in a kitchen. Boards with the LED on a
+// different pin than the variant defines simply stay dark; nothing depends
+// on it.
+static void updateLed() {
+#ifdef RGB_BUILTIN
+  static uint8_t last = 255;
+  uint8_t mode;
+  if (!scales.connected(ScaleRole::YIELD)) mode = 0;
+  else switch (detector.state()) {
+    case ShotState::ARMED:   mode = 2; break;
+    case ShotState::POURING:
+    case ShotState::SETTLING: mode = 3; break;
+    default:                 mode = 1; break;
+  }
+  if (mode == last) return;
+  last = mode;
+  switch (mode) {
+    case 0: neopixelWrite(RGB_BUILTIN, 0, 0, 0); break;
+    case 1: neopixelWrite(RGB_BUILTIN, 12, 6, 0); break;   // amber: idle
+    case 2: neopixelWrite(RGB_BUILTIN, 0, 14, 0); break;   // green: armed
+    case 3: neopixelWrite(RGB_BUILTIN, 0, 4, 16); break;   // blue: pouring
+  }
+#endif
+}
+
 static void queueWeighing(uint8_t role, const WeighingDetector::Event& ev) {
   Serial.printf("# weighing[%s]: %ld mg stable %lu ms\n",
                 role == 0 ? "yield" : "dose", (long)ev.grams_mg, (unsigned long)ev.stable_ms);
@@ -278,6 +306,7 @@ void loop() {
   scales.tick(millis());
   // Network (and its flash reads) only while nothing is brewing.
   net.tick(millis(), quiet);
+  updateLed();
   pollSerial(Serial);
   pollSerial(Serial0);
   delay(5);   // ~10 Hz data; nothing here needs a tighter spin

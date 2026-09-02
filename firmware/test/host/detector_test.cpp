@@ -103,7 +103,8 @@ int main() {
   printf("slow-drip shot OK (final=%d mg)\n", r->yield_final_mg);
 
   // Scenario 5 (fault noise, both real sessions): a 411 g cup landing in
-  // one sample must disarm quietly, never spool a fault.
+  // one sample must never produce a record. Under 0a.3 it re-arms on the
+  // new mass a second later — which is the desired behavior.
   for (int i = 0; i < 30; i++, t += 100) feed(t, 0.0, nullptr);
   assert(det.state() == ShotState::ARMED);
   done = false;
@@ -111,19 +112,42 @@ int main() {
     done = feed(t, i < 3 ? 0.0 : 411.8, &r);   // lands between samples 2 and 3
   }
   assert(!done);
-  assert(det.state() == ShotState::IDLE);
-  printf("cup placement OK (disarmed, no record)\n");
+  assert(det.state() == ShotState::ARMED);   // re-armed at the 411.8 g baseline
+  printf("cup placement OK (no record, re-armed at new baseline)\n");
 
-  // Scenario 6: a parked object (spoon, 20 g) placed gently must disarm
-  // after ~2 s of sitting flat, not wedge ARMED forever.
-  for (int i = 0; i < 30; i++, t += 100) feed(t, 0.0, nullptr);
-  assert(det.state() == ShotState::ARMED);
-  for (int i = 0; i < 80; i++, t += 100) {
-    double s = i / 10.0;
-    feed(t, s < 4.0 ? s * 0.25 : 1.0, nullptr);  // slow 0.25 g/s to 1 g, then parked
+  // Scenario 6 (0a.3): slow drift away from the baseline that then parks
+  // becomes the new baseline — armed throughout, never a phantom pour.
+  {
+    // continue from the 411.8 baseline of scenario 5
+    for (int i = 0; i < 80; i++, t += 100) {
+      double s = i / 10.0;
+      done = feed(t, 411.8 + (s < 4.0 ? s * 0.25 : 1.0), &r);  // +0.25 g/s to +1 g, parks
+      assert(!done);
+    }
+    assert(det.state() == ShotState::ARMED);
+    printf("parked drift OK (re-baselined, armed)\n");
   }
-  assert(det.state() == ShotState::IDLE);
-  printf("parked object OK (disarmed)\n");
+
+  // Scenario 7 (the 2026-09-02 lost shot): back-to-back shots with NO tare.
+  // Drink #1 (37.3 g) leaves, cup #2 (51.2 g) lands un-tared, the pour goes
+  // on top of it — must record, relative to the cup's own baseline.
+  for (int i = 0; i < 30; i++, t += 100) feed(t, 37.3, nullptr);   // drink resting
+  assert(det.state() == ShotState::ARMED);
+  for (int i = 0; i < 8; i++, t += 100) feed(t, -180.0, nullptr);  // drink lifted (scale far negative)
+  for (int i = 0; i < 25; i++, t += 100) feed(t, 51.2, nullptr);   // cup #2, never tared
+  assert(det.state() == ShotState::ARMED);
+  done = false;
+  for (int i = 0; i < 500 && !done; i++, t += 100) {
+    double s = i / 10.0;
+    double w;
+    if (s < 6.0)       w = 51.2 + s * 0.12;                 // slow drips
+    else if (s < 24.0) w = 51.9 + (s - 6.0) * 2.0;         // 2 g/s pour
+    else               w = 87.9 + (s < 26 ? (s - 24) * 0.04 : 0.08);  // settle creep
+    done = feed(t, w, &r);
+  }
+  assert(done && r->valid && !r->fault);
+  assert(r->yield_final_mg > 35500 && r->yield_final_mg < 38000);  // relative, not 88 g
+  printf("un-tared cup swap OK (final=%d mg relative)\n", r->yield_final_mg);
 
   // ---- WeighingDetector ----------------------------------------------------
 

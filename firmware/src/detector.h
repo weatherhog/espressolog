@@ -38,6 +38,12 @@ struct ShotResult {
 // consumer latency can never distort the curve and dt is never assumed
 // uniform. feed() returns true when a completed ShotResult is available
 // (including rejects and faults — the caller decides their disposition).
+//
+// 0a.3: arms on ANY stable weight, not just zero — the stable value becomes
+// the baseline and the curve is recorded relative to it. Taring stopped
+// being load-bearing after two real shots were lost to a skipped tare
+// (2026-08-28 and 2026-09-02); a tare is just a baseline the scale applied
+// for you, and detection never needed the absolute value.
 // Anonymous stable-weight events, per CLAUDE.md's weighing attribution: the
 // UI never asks "are you about to weigh a dose?" — every stable reading is
 // recorded blind and a closing shot claims the last one retroactively on
@@ -100,12 +106,17 @@ public:
   static constexpr int32_t  FAULT_DROP_MG   = 5000;
   static constexpr uint32_t FLOW_WINDOW_MS  = 700;
   static constexpr uint32_t MAX_SHOT_MS     = 60000;  // force-stop before uint16 t_ms wraps
-  // ARMED-state discrimination (detector 0a.2, learned from real shots):
-  // a cup landing arrives as one huge sample step; first drips arrive as a
-  // slow positive creep; a parked object is non-zero but flat.
-  static constexpr int32_t  PLACEMENT_STEP_MG = 5000;  // per-sample jump = placement
+  // ARMED-state discrimination (0a.2/0a.3, learned from real shots):
+  // a cup landing/lifting arrives as one huge sample step; first drips
+  // arrive as a slow positive creep; a parked mass drifting from the
+  // baseline is a new baseline, not a shot.
+  static constexpr int32_t  PLACEMENT_STEP_MG = 5000;  // per-sample jump = cup moved
   static constexpr int32_t  PARKED_FLOW_MGPS  = 50;
   static constexpr uint32_t PARKED_HOLD_MS    = 2000;
+
+  // The armed baseline (mg, absolute scale reading). Meaningful in ARMED
+  // and during a shot; recorded weights are relative to it.
+  int32_t baselineMg() const { return baseline; }
 
   bool feed(uint32_t t_ms, int32_t weight_mg);
   ShotState state() const { return st; }
@@ -126,8 +137,9 @@ private:
   sample_t buf[MAX_SAMPLES];
   uint16_t buf_count = 0;
   uint32_t t0 = 0;               // millis() of shot start
+  int32_t  baseline = 0;         // absolute reading the curve is relative to
   uint32_t pour_cand_since = 0;  // 0 = no candidate
-  uint32_t parked_since = 0;     // 0 = not parked
+  uint32_t parked_since = 0;     // 0 = not parked at a new value
   uint32_t stop_cand_at = 0;     // 0 = no candidate
   int32_t  stop_cand_w = 0;
   uint32_t settle_until = 0;

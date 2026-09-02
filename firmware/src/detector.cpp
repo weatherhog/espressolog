@@ -103,12 +103,14 @@ void ShotDetector::beginPour(uint32_t crossing_t) {
   buf_count = 0;
   running_max = 0;
   stop_cand_at = 0;
-  // Backdate: replay the pre-history ring from the flow crossing onward.
+  // Backdate: replay the pre-history ring from the flow crossing onward,
+  // relative to the armed baseline.
   for (size_t i = 0; i < ring_count; i++) {
     const RingEntry& e = ring[(ring_head + RING_N - ring_count + i) % RING_N];
     if ((int32_t)(e.t - t0) < 0) continue;
-    appendSample(e.t, e.w);
-    if (e.w > running_max) running_max = e.w;
+    int32_t rel = e.w - baseline;
+    appendSample(e.t, rel);
+    if (rel > running_max) running_max = rel;
   }
   res = {};
   res.started_at_ms = t0;
@@ -124,7 +126,7 @@ void ShotDetector::enterSettling(uint32_t t, int32_t w_at_stop, uint32_t stop_t,
 }
 
 bool ShotDetector::finishShot() {
-  res.yield_final_mg = last_w;
+  res.yield_final_mg = last_w - baseline;
   res.settle_offset_mg = res.yield_final_mg - res.yield_at_stop_mg;
   res.fault = false;
   res.valid = res.yield_final_mg >= REJECT_MIN_MG;
@@ -176,29 +178,31 @@ bool ShotDetector::feed(uint32_t t, int32_t w) {
 
   switch (st) {
     case ShotState::IDLE: {
-      // ARMED: every sample in the last 1 s within ±0.5 g of zero (tared
-      // with the cup on), and the ring actually spans that second.
-      if (w < -ARM_BAND_MG || w > ARM_BAND_MG) break;
-      bool spans = false, all_in_band = true;
+      // ARMED (0a.3): stable at ANY value for 1 s. The mean over that
+      // second becomes the baseline the curve is measured against — a tare
+      // is just a baseline the scale applied for you.
+      bool spans = false, flat = true;
+      int64_t sum = 0;
+      uint32_t n = 0;
       for (size_t i = 0; i < ring_count; i++) {
         const RingEntry& e = ring[(ring_head + RING_N - 1 - i) % RING_N];
         if (t - e.t >= ARM_HOLD_MS) { spans = true; break; }
-        if (e.w < -ARM_BAND_MG || e.w > ARM_BAND_MG) { all_in_band = false; break; }
+        if (e.w > w + ARM_BAND_MG || e.w < w - ARM_BAND_MG) { flat = false; break; }
+        sum += e.w;
+        n++;
       }
-      if (spans && all_in_band) st = ShotState::ARMED;
+      if (spans && flat && n > 0) {
+        baseline = (int32_t)(sum / n);
+        st = ShotState::ARMED;
+      }
       break;
     }
 
     case ShotState::ARMED: {
-      // A mass arriving in one sample is a cup being placed, not espresso —
-      // re-arming then requires a fresh tare, which is the workflow anyway.
-      if (w - prev_w > PLACEMENT_STEP_MG) {
-        st = ShotState::IDLE;
-        pour_cand_since = 0;
-        parked_since = 0;
-        break;
-      }
-      if (w < -ARM_BAND_MG) {  // cup lifted off a tared scale
+      // A step in either direction within one sample is a cup being moved,
+      // not espresso — go IDLE and re-arm on the new stable value ~1 s
+      // later (that re-arm IS the un-tared cup-swap workflow working).
+      if (w - prev_w > PLACEMENT_STEP_MG || prev_w - w > PLACEMENT_STEP_MG) {
         st = ShotState::IDLE;
         pour_cand_since = 0;
         parked_since = 0;
@@ -214,13 +218,15 @@ bool ShotDetector::feed(uint32_t t, int32_t w) {
         }
       } else {
         pour_cand_since = 0;
-        // A slow positive creep is first drips — stay armed (this is what
-        // lost a real shot on 2026-08-28). Only a *parked* mass disarms:
-        // above the band but flat for a while.
-        if (w > ARM_BAND_MG && flow_now < PARKED_FLOW_MGPS && flow_now > -PARKED_FLOW_MGPS) {
+        // A slow positive creep is first drips — stay armed on the same
+        // baseline. A mass sitting flat AWAY from the baseline is the new
+        // reality (drift, gentle re-place): adopt it as the baseline.
+        int32_t dev = w - baseline;
+        if ((dev > ARM_BAND_MG || dev < -ARM_BAND_MG)
+            && flow_now < PARKED_FLOW_MGPS && flow_now > -PARKED_FLOW_MGPS) {
           if (parked_since == 0) parked_since = t;
           if (t - parked_since >= PARKED_HOLD_MS) {
-            st = ShotState::IDLE;
+            baseline = w;
             parked_since = 0;
           }
         } else {
@@ -231,16 +237,17 @@ bool ShotDetector::feed(uint32_t t, int32_t w) {
     }
 
     case ShotState::POURING: {
-      appendSample(t, w);
-      if (w > running_max) running_max = w;
+      int32_t rel = w - baseline;
+      appendSample(t, rel);
+      if (rel > running_max) running_max = rel;
       if (flow_now > res.peak_flow_mgps) res.peak_flow_mgps = flow_now;
 
-      if (running_max - w > FAULT_DROP_MG) {  // cup removed
+      if (running_max - rel > FAULT_DROP_MG) {  // cup removed
         finishFault();
         return true;
       }
       if (flow_now < STOP_FLOW_MGPS) {
-        if (stop_cand_at == 0) { stop_cand_at = t; stop_cand_w = w; }
+        if (stop_cand_at == 0) { stop_cand_at = t; stop_cand_w = rel; }
         if (t - stop_cand_at >= STOP_HOLD_MS) {
           enterSettling(t, stop_cand_w, stop_cand_at, false);
         }
@@ -249,13 +256,13 @@ bool ShotDetector::feed(uint32_t t, int32_t w) {
       }
       if (st == ShotState::POURING && t - t0 >= MAX_SHOT_MS) {
         // Not an espresso anymore; stop before uint16 t_ms can wrap.
-        enterSettling(t, w, t, true);
+        enterSettling(t, rel, t, true);
       }
       break;
     }
 
     case ShotState::SETTLING: {
-      appendSample(t, w);
+      appendSample(t, w - baseline);
       if ((int32_t)(t - settle_until) >= 0) return finishShot();
       break;
     }

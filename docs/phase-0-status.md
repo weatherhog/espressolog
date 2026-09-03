@@ -44,10 +44,15 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    shot time and mean flow on the fixed recipe. That number is the Phase-3
    deadband and the go/no-go on closed-loop control. CLAUDE.md: the most
    important milestone and the one that gets skipped.
-2. **0b — display bus** (trigger: logic analyser arrives; ordered: USB-C
-   FX2LP clone + hook clips + resistor kit ~€30). Photograph everything,
-   then PulseView on J5 during heat-up; hunt the byte that tracks the
-   displayed temperature. Abandon cheaply if opaque.
+2. **0b — display bus** — PARTS ORDERED 2026-09-03 (WeAct LogicAnalyzerV1
+   FX2LP + 10x micro test hooks + resistor kit w/ 220k). When they
+   arrive: photograph internals first, then PulseView on J5 during
+   heat-up; hunt the byte that tracks the displayed temperature.
+   Abandon cheaply if opaque. Divider for 0c: two 220k in series
+   (5V->2.5V), not the old 100k/200k. Firmware readout via SWD
+   deliberately NOT pursued (RDP1 likely blocks it + brick risk);
+   keep as opaque-protocol fallback only, read-only, never erase.
+
 3. **0c — switch sensing** (after 0b's machine-open session identified the
    J2/J4/J5 connector types → order JST pigtails + 30 AWG wire then).
    100 K/200 K divider on PB5/PB6, gives real shot boundaries and

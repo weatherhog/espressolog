@@ -73,17 +73,38 @@ int main() {
   assert(done && !r->valid && !r->fault);
   printf("reject OK (final=%d mg)\n", r->yield_final_mg);
 
-  // Scenario 3: fault — cup lifted mid-pour.
+  // Scenario 3 (0a.4): cup lifted at the END of a pour is a normal stop, not
+  // a fault. Real regression: on 0a.3 this excluded 3 real shots (2026-09-03).
   for (int i = 0; i < 30; i++, t += 100) feed(t, 0.0, nullptr);
   assert(det.state() == ShotState::ARMED);
   done = false;
-  for (int i = 0; i < 200 && !done; i++, t += 100) {
+  for (int i = 0; i < 400 && !done; i++, t += 100) {
     double s = i / 10.0;
-    double w = s < 10.0 ? s * 2.0 : -5.0;  // 2 g/s then cup gone
+    double w;
+    if (s < 18.0) w = s * 2.0;          // 2 g/s pour to 36 g
+    else          w = -180.0;           // cup lifted off the scale, held off
     done = feed(t, w, &r);
   }
-  assert(done && r->fault && !r->valid);
-  printf("fault OK\n");
+  assert(done && r->valid && !r->fault);
+  assert(r->yield_final_mg > 34000 && r->yield_final_mg < 37000);  // peak, not the lift
+  printf("end-lift finalizes valid (%d mg)\n", r->yield_final_mg);
+
+  // Scenario 3b: a momentary bump/dip (<2 s) must NOT end the shot.
+  for (int i = 0; i < 30; i++, t += 100) feed(t, 0.0, nullptr);
+  assert(det.state() == ShotState::ARMED);
+  done = false;
+  for (int i = 0; i < 400 && !done; i++, t += 100) {
+    double s = i / 10.0;
+    double w;
+    if (s < 10.0)      w = s * 2.0;                 // pour to 20 g
+    else if (s < 11.0) w = 6.0;                     // 1 s dip (bumped) — must recover
+    else if (s < 24.0) w = 20.0 + (s - 11.0) * 1.4; // resumes to ~38 g
+    else               w = 38.2;                     // settles, cup stays
+    done = feed(t, w, &r);
+  }
+  assert(done && r->valid && !r->fault);
+  assert(r->yield_final_mg > 37000);   // full shot, the bump didn't truncate it
+  printf("bump-during-pour ignored (%d mg)\n", r->yield_final_mg);
 
   // Scenario 4 (real shot lost 2026-08-28): slow pre-infusion drips crossed
   // the arming band below the pour threshold — must STAY ARMED, then record

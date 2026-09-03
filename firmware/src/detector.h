@@ -103,7 +103,8 @@ public:
   static constexpr uint32_t STOP_HOLD_MS    = 1500;
   static constexpr uint32_t SETTLE_MS       = 5000;
   static constexpr int32_t  REJECT_MIN_MG   = 5000;
-  static constexpr int32_t  FAULT_DROP_MG   = 5000;
+  static constexpr int32_t  LIFT_DROP_MG    = 5000;   // cup this far below peak = being lifted
+  static constexpr uint32_t LIFT_HOLD_MS    = 2000;   // sustained this long = really lifted, not a bump
   static constexpr uint32_t FLOW_WINDOW_MS  = 700;
   static constexpr uint32_t MAX_SHOT_MS     = 60000;  // force-stop before uint16 t_ms wraps
   // ARMED-state discrimination (0a.2/0a.3, learned from real shots):
@@ -141,6 +142,8 @@ private:
   uint32_t pour_cand_since = 0;  // 0 = no candidate
   uint32_t parked_since = 0;     // 0 = not parked at a new value
   uint32_t stop_cand_at = 0;     // 0 = no candidate
+  uint32_t lift_since = 0;       // 0 = not currently dropped below peak
+  uint16_t lift_buf = 0;         // buf_count at the moment the drop began
   int32_t  stop_cand_w = 0;
   uint32_t settle_until = 0;
   int32_t  running_max = 0;
@@ -152,6 +155,7 @@ private:
   void beginPour(uint32_t crossing_t);
   void enterSettling(uint32_t t, int32_t w_at_stop, uint32_t stop_t, bool truncated);
   bool finishShot();
-  void finishFault();
+  bool finalizeLifted();   // cup removed → finalize at the peak weight
+  void computeFlowWindow();
   void resetToIdle();
 };

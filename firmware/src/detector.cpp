@@ -125,16 +125,9 @@ void ShotDetector::enterSettling(uint32_t t, int32_t w_at_stop, uint32_t stop_t,
   settle_until = t + SETTLE_MS;
 }
 
-bool ShotDetector::finishShot() {
-  res.yield_final_mg = last_w - baseline;
-  res.settle_offset_mg = res.yield_final_mg - res.yield_at_stop_mg;
-  res.fault = false;
-  res.valid = res.yield_final_mg >= REJECT_MIN_MG;
-  res.sample_count = buf_count;
-  res.samples = buf;
-
-  // Mean flow over the stable window: 5 g out .. 80 % of final, which skips
-  // the first-drop lag and the tail-off.
+// Mean flow over the stable window: 5 g out .. 80 % of final, which skips
+// the first-drop lag and the tail-off. Reads res.yield_final_mg and buf.
+void ShotDetector::computeFlowWindow() {
   int32_t w80 = (int32_t)(((int64_t)res.yield_final_mg * 8) / 10);
   const sample_t *s1 = nullptr, *s2 = nullptr;
   for (uint16_t i = 0; i < buf_count; i++) {
@@ -147,19 +140,39 @@ bool ShotDetector::finishShot() {
     res.mean_flow_mgps = (int32_t)(((int64_t)(s2->weight_mg - s1->weight_mg) * 1000)
                                    / (s2->t_ms - s1->t_ms));
   }
+}
+
+// Normal completion: the cup stayed on through settling, so last_w is the
+// settled weight (drips included) — the most accurate yield.
+bool ShotDetector::finishShot() {
+  res.yield_final_mg = last_w - baseline;
+  res.settle_offset_mg = res.yield_final_mg - res.yield_at_stop_mg;
+  res.fault = false;
+  res.valid = res.yield_final_mg >= REJECT_MIN_MG;
+  res.sample_count = buf_count;
+  res.samples = buf;
+  computeFlowWindow();
   resetToIdle();
   return true;
 }
 
-void ShotDetector::finishFault() {
-  res.fault = true;
-  res.valid = false;
-  // The last samples are the cup leaving the scale; the pre-lift maximum is
-  // the honest yield (learned from real shot #2, 2026-08-27).
+// The cup was lifted (sustained drop below the peak). Lifting after a pour
+// is normal — not a fault — so this finalizes a real shot at the peak
+// weight. Only a lift with almost nothing in the cup (an aborted/channelled
+// pour) is a reject. buf_count is expected to be trimmed to the pre-lift
+// samples by the caller.
+bool ShotDetector::finalizeLifted() {
   res.yield_final_mg = running_max;
+  res.yield_at_stop_mg = running_max;
+  res.settle_offset_mg = 0;   // no settle measured — cup left early
+  res.stop_ms = buf_count > 0 ? buf[buf_count - 1].t_ms : 0;
+  res.fault = false;
+  res.valid = running_max >= REJECT_MIN_MG;
   res.sample_count = buf_count;
   res.samples = buf;
+  computeFlowWindow();
   resetToIdle();
+  return true;
 }
 
 void ShotDetector::resetToIdle() {
@@ -168,6 +181,7 @@ void ShotDetector::resetToIdle() {
   pour_cand_since = 0;
   parked_since = 0;
   stop_cand_at = 0;
+  lift_since = 0;
 }
 
 bool ShotDetector::feed(uint32_t t, int32_t w) {
@@ -242,17 +256,29 @@ bool ShotDetector::feed(uint32_t t, int32_t w) {
       if (rel > running_max) running_max = rel;
       if (flow_now > res.peak_flow_mgps) res.peak_flow_mgps = flow_now;
 
-      if (running_max - rel > FAULT_DROP_MG) {  // cup removed
-        finishFault();
-        return true;
-      }
-      if (flow_now < STOP_FLOW_MGPS) {
-        if (stop_cand_at == 0) { stop_cand_at = t; stop_cand_w = rel; }
-        if (t - stop_cand_at >= STOP_HOLD_MS) {
-          enterSettling(t, stop_cand_w, stop_cand_at, false);
+      if (running_max - rel > LIFT_DROP_MG) {
+        // Dropped well below the peak. A brief dip is a bump; a sustained
+        // one for LIFT_HOLD_MS is the cup being taken — finalize the shot at
+        // the peak (lifting after a pour is normal, not a fault).
+        stop_cand_at = 0;
+        if (lift_since == 0) {
+          lift_since = t;
+          lift_buf = buf_count > 0 ? buf_count - 1 : 0;  // exclude the dropping sample
+        }
+        if (t - lift_since >= LIFT_HOLD_MS) {
+          buf_count = lift_buf;   // trim the descending lift transition
+          return finalizeLifted();
         }
       } else {
-        stop_cand_at = 0;
+        lift_since = 0;
+        if (flow_now < STOP_FLOW_MGPS) {
+          if (stop_cand_at == 0) { stop_cand_at = t; stop_cand_w = rel; }
+          if (t - stop_cand_at >= STOP_HOLD_MS) {
+            enterSettling(t, stop_cand_w, stop_cand_at, false);
+          }
+        } else {
+          stop_cand_at = 0;
+        }
       }
       if (st == ShotState::POURING && t - t0 >= MAX_SHOT_MS) {
         // Not an espresso anymore; stop before uint16 t_ms can wrap.
@@ -262,7 +288,12 @@ bool ShotDetector::feed(uint32_t t, int32_t w) {
     }
 
     case ShotState::SETTLING: {
-      appendSample(t, w - baseline);
+      int32_t rel = w - baseline;
+      if (rel > running_max) running_max = rel;   // late drips
+      // The pour already ended (stop confirmed). If the cup is lifted during
+      // settling, just finalize now at the peak — no need to wait it out.
+      if (running_max - rel > LIFT_DROP_MG) return finalizeLifted();
+      appendSample(t, rel);
       if ((int32_t)(t - settle_until) >= 0) return finishShot();
       break;
     }

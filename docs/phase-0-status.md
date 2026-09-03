@@ -7,7 +7,7 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
 
 | Piece | Where | State |
 |---|---|---|
-| Firmware 0.6.1, detector 0a.3 | ESP32-S3 on a USB charger by the machine | both Bookoos bound: yield `aa:bb:cc:dd:ee:01`, dose `aa:bb:cc:dd:ee:02` |
+| Firmware 0.6.2, detector 0a.4 | ESP32-S3 on a USB charger by the machine | both Bookoos bound: yield `aa:bb:cc:dd:ee:01`, dose `aa:bb:cc:dd:ee:02` |
 | Go server + SQLite + PWA | Proxmox LXC `espressolog`, Debian 13, `espressolog.lan` (DHCP-reserved) | systemd `espressolog.service`, db at `/var/lib/espressolog/espressolog.db` |
 | HTTPS | Caddy on the same LXC, `https://espresso.example.com` | Let's Encrypt via Cloudflare DNS-01; CF token in `/etc/caddy/env` |
 | DNS | AdGuard Home rewrite `espresso.example.com → espressolog.lan` | resolution is LAN-only; no public A record (challenge TXT only) |
@@ -15,8 +15,8 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
 
 ## What works end-to-end (all verified with real shots)
 
-- Shot detection (0a.3 baseline arming, no tare required; slow-drip
-  tolerant, placement/parked handling), spool to flash, upload with delete-on-confirm, idempotent
+- Shot detection (0a.4: baseline arming — no tare; cup-lift ends the shot
+  — no 7 s wait; slow-drip tolerant, bump-tolerant), spool to flash, upload with delete-on-confirm, idempotent
   ingest, automatic **dose attribution** from the grinder scale
   (first production shot: 37.4 g / 24.4 s, dose 18.2 g `measured`)
 - Live pull screen (ghost trace, editable target box), shots list with
@@ -33,7 +33,8 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
 3. Cup on the drip-tray scale; one second of stillness arms the detector
    (0a.3 arms on ANY stable weight — taring is optional, nice for the
    display only). Board LED: green = armed, blue = recording.
-4. Pull the shot; **leave the cup ~7 s after the last drips**.
+4. Pull the shot; lift the cup whenever it's done (0a.4 ends the shot on
+   a ~2 s cup lift — no need to wait; a quick bump is ignored).
 5. Tasting notes on the Capture tab (4 taps). Everything else is automatic.
 
 ## Next milestones, in order

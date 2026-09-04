@@ -45,6 +45,7 @@ typedef struct __attribute__((packed)) {
 
 #define SPOOL_FLAG_FAULT     0x01
 #define SPOOL_FLAG_TRUNCATED 0x02
+#define SPOOL_FLAG_REJECT    0x04   // detected but <5 g: kept for visibility, excluded server-side
 
 // LittleFS spool: one file per record under /spool, written only when no
 // shot is in progress (invariant 2), deleted only on confirmed upload

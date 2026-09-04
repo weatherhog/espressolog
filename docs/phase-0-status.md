@@ -1,4 +1,4 @@
-# Phase 0 status — as of 2026-09-02
+# Phase 0 status — as of 2026-09-04
 
 Phase 0a (scale logging, stages 0–6) is **complete and in production**.
 This file is the resume point: read it (and CLAUDE.md) before continuing.
@@ -7,7 +7,7 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
 
 | Piece | Where | State |
 |---|---|---|
-| Firmware 0.6.2, detector 0a.4 | ESP32-S3 on a USB charger by the machine | both Bookoos bound: yield `aa:bb:cc:dd:ee:01`, dose `aa:bb:cc:dd:ee:02` |
+| Firmware 0.6.3, detector 0a.5 | ESP32-S3 on a USB charger by the machine | both Bookoos bound: yield `aa:bb:cc:dd:ee:01`, dose `aa:bb:cc:dd:ee:02` |
 | Go server + SQLite + PWA | Proxmox LXC `espressolog`, Debian 13, `espressolog.lan` (DHCP-reserved) | systemd `espressolog.service`, db at `/var/lib/espressolog/espressolog.db` |
 | HTTPS | Caddy on the same LXC, `https://espresso.example.com` | Let's Encrypt via Cloudflare DNS-01; CF token in `/etc/caddy/env` |
 | DNS | AdGuard Home rewrite `espresso.example.com → espressolog.lan` | resolution is LAN-only; no public A record (challenge TXT only) |
@@ -15,8 +15,9 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
 
 ## What works end-to-end (all verified with real shots)
 
-- Shot detection (0a.4: baseline arming — no tare; cup-lift ends the shot
-  — no 7 s wait; slow-drip tolerant, bump-tolerant), spool to flash, upload with delete-on-confirm, idempotent
+- Shot detection (0a.5: baseline arming — no tare; pour detected even
+  without stillness; noise-robust stop (flat 0.3 g/2 s); cup-lift ends
+  the shot — no 7 s wait; bump-tolerant; rejects uploaded flagged), spool to flash, upload with delete-on-confirm, idempotent
   ingest, automatic **dose attribution** from the grinder scale
   (first production shot: 37.4 g / 24.4 s, dose 18.2 g `measured`)
 - Live pull screen (ghost trace, editable target box), shots list with
@@ -25,6 +26,9 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
   (raw record always survives in `ingest_record`)
 - Failure paths proven live: server outage → spool+backoff → self-delivery;
   duplicate uploads deduped; same-ms BLE samples collapsed
+- **Forensics:** the server journals every live frame to
+  `/var/lib/espressolog/live/YYYY-MM-DD.ndjson` (~1 MB/day). A missed or
+  odd shot is replayable: extract `t,w` for the window → `firmware/test/host/replay`.
 
 ## Daily workflow (the only rules)
 

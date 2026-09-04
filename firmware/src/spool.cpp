@@ -95,7 +95,8 @@ String Spool::writeShot(const ShotResult& r, const String& scale_mac) {
 
   spool_header_t h = {};
   fillCommon(h, 1, r.started_at_ms, 0, scale_mac);
-  h.flags = (r.fault ? SPOOL_FLAG_FAULT : 0) | (r.truncated ? SPOOL_FLAG_TRUNCATED : 0);
+  h.flags = (r.fault ? SPOOL_FLAG_FAULT : 0) | (r.truncated ? SPOOL_FLAG_TRUNCATED : 0)
+          | ((!r.valid && !r.fault) ? SPOOL_FLAG_REJECT : 0);
   h.stop_ms = r.stop_ms;
   h.yield_at_stop_mg = r.yield_at_stop_mg;
   h.yield_final_mg = r.yield_final_mg;

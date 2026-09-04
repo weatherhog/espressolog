@@ -19,6 +19,7 @@ const (
 
 	FlagFault     = 0x01
 	FlagTruncated = 0x02
+	FlagReject    = 0x04 // detected but <5 g; stored for visibility, excluded
 
 	headerLen = 109
 	sampleLen = 10
@@ -91,6 +92,7 @@ func (h *Header) ScaleMacString() string {
 
 func (h *Header) Fault() bool     { return h.Flags&FlagFault != 0 }
 func (h *Header) Truncated() bool { return h.Flags&FlagTruncated != 0 }
+func (h *Header) Reject() bool    { return h.Flags&FlagReject != 0 }
 
 // Decode parses and validates one complete record. The CRC is computed the
 // way the firmware does: header with the crc field zeroed, then the samples.

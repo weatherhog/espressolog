@@ -236,6 +236,48 @@ int main() {
     printf("weighing re-place OK (%d events)\n", events);
   }
 
+  // Scenario 8 (shot 19, 2026-09-04): the pour ends and the cup SITS with
+  // real Bookoo jitter (±0.15 g). The stop must confirm within a few seconds
+  // of the plateau, not wait for the lift 13 s later.
+  for (int i = 0; i < 30; i++, t += 100) feed(t, 0.0, nullptr);
+  assert(det.state() == ShotState::ARMED);
+  done = false;
+  {
+    uint32_t pour_start = t;
+    int jit = 0;
+    for (int i = 0; i < 500 && !done; i++, t += 100) {
+      double s = i / 10.0;
+      double w;
+      if (s < 20.0)      w = s * 2.0;                                  // pour to 40 g
+      else               w = 40.0 + ((jit++ % 3) - 1) * 0.15;         // flat + jitter
+      done = feed(t, w, &r);
+    }
+    assert(done && r->valid);
+    // stop must land near the plateau start (20 s), NOT at the end of sitting
+    assert(r->stop_ms > 18000 && r->stop_ms < 24000);
+    (void)pour_start;
+    printf("noisy plateau stop OK (stop_ms=%u, final=%d mg)\n", r->stop_ms, r->yield_final_mg);
+  }
+
+  // Scenario 9 (missing shot B hypothesis, 2026-09-04): cup down and the
+  // switch hit immediately — no second of stillness, so ARMED never happens.
+  // The pour must still be detected from IDLE with the pre-rise baseline.
+  for (int i = 0; i < 30; i++, t += 100) feed(t, 0.0, nullptr);   // empty scale, armed at 0
+  for (int i = 0; i < 3; i++, t += 100) feed(t, 210.0, nullptr);   // cup lands: step → IDLE
+  assert(det.state() == ShotState::IDLE);
+  done = false;
+  for (int i = 0; i < 500 && !done; i++, t += 100) {
+    double s = i / 10.0;
+    double w;
+    if (s < 18.0)      w = 210.0 + s * 2.0;     // pour starts within 0.3 s of placement
+    else if (s < 24.0) w = 246.0;               // flat
+    else               w = -5.0;                // lifted
+    done = feed(t, w, &r);
+  }
+  assert(done && r->valid);
+  assert(r->yield_final_mg > 34000 && r->yield_final_mg < 38000);  // ~36 g relative to the 210 g cup
+  printf("cup-down-and-go from IDLE OK (final=%d mg)\n", r->yield_final_mg);
+
   printf("all scenarios passed\n");
   return 0;
 }

@@ -10,8 +10,8 @@
 #include "spool.h"
 #include "net.h"
 
-const char* FIRMWARE_VERSION = "0.6.2";
-const char* DETECTOR_VERSION = "0a.4";
+const char* FIRMWARE_VERSION = "0.6.3";
+const char* DETECTOR_VERSION = "0a.5";
 
 static ScaleManager scales;
 static ShotDetector detector;
@@ -54,17 +54,15 @@ static void printShotSummary(const ShotResult& r) {
 
 static void handleShotComplete(const ShotResult& r) {
   printShotSummary(r);
-  // Valid shots and faults are spooled (a fault still holds a curve worth
-  // keeping); rejects (<5 g) are noise by definition and only logged.
-  if (r.valid || r.fault) {
-    if (!spool_ok) {
-      Serial.println("# spool unavailable — record NOT persisted");
-    } else {
-      String path = spool.writeShot(r, scales.slotMac(ScaleRole::YIELD));
-      if (path.length()) Serial.printf("# spooled %s\n", path.c_str());
-    }
+  // Everything the detector finishes is spooled — including rejects (<5 g),
+  // flagged so the server excludes them. A missed second shot on 2026-09-04
+  // was undiagnosable because a possible reject left no trace; a few bytes
+  // of flash per false trigger buys that visibility.
+  if (!spool_ok) {
+    Serial.println("# spool unavailable — record NOT persisted");
   } else {
-    Serial.println("# rejected (<5 g) — not spooled");
+    String path = spool.writeShot(r, scales.slotMac(ScaleRole::YIELD));
+    if (path.length()) Serial.printf("# spooled %s%s\n", path.c_str(), r.valid ? "" : " (reject)");
   }
   Serial.println("# ---- end shot ----");
 }

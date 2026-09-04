@@ -6,6 +6,7 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"path/filepath"
 	"time"
 
 	espressolog "espressolog"
@@ -25,9 +26,11 @@ func main() {
 	}
 	defer st.Close()
 
+	// Raw-stream journal lives next to the database (StateDirectory on the LXC).
+	liveDir := filepath.Join(filepath.Dir(*dbPath), "live")
 	srv := &http.Server{
 		Addr:    *addr,
-		Handler: api.New(st, live.New()),
+		Handler: api.New(st, live.New(liveDir)),
 		// Header timeout only: Read/WriteTimeout would put deadlines on the
 		// long-lived live WebSockets. Regular handlers finish in milliseconds.
 		ReadHeaderTimeout: 10 * time.Second,

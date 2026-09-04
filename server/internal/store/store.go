@@ -209,6 +209,9 @@ func insertShot(tx *sql.Tx, h *record.Header, samples []record.Sample, scaleID a
 		stoppedBy = "fault"
 		excluded = 1
 		excludeReason = "fault: cup removed mid-pour"
+	} else if h.Reject() {
+		excluded = 1
+		excludeReason = "reject: under 5 g"
 	}
 	machineID, grinderID, epochID := defaultContext(tx)
 

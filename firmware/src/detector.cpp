@@ -85,6 +85,54 @@ int32_t ShotDetector::computeFlow(uint32_t t, int32_t w) const {
   return (int32_t)(((int64_t)(w - best->w) * 1000) / (int64_t)dt);
 }
 
+bool ShotDetector::ringAt(uint32_t target_t, uint32_t& t_out, int32_t& w_out) const {
+  if (ring_count == 0) return false;
+  const RingEntry* best = nullptr;
+  for (size_t i = 0; i < ring_count; i++) {
+    const RingEntry& e = ring[(ring_head + RING_N - 1 - i) % RING_N];
+    best = &e;
+    if ((int32_t)(e.t - target_t) <= 0) break;
+  }
+  t_out = best->t;
+  w_out = best->w;
+  return true;
+}
+
+// Pour onset, shared by IDLE and ARMED: flow > 0.3 g/s sustained 300 ms,
+// with a step guard (a >5 g single-sample jump is a cup being moved, not a
+// pour). From ARMED the baseline is the armed one; from IDLE — the cup was
+// set down and the shot started before a second of stillness passed — the
+// baseline is the weight ~1 s before the flow crossing (0a.5: arming is a
+// nicety, never a precondition — a missed shot costs more than a rough zero).
+bool ShotDetector::tryPourOnset(uint32_t t, int32_t w, int32_t prev_w, bool armed) {
+  (void)w; (void)prev_w;
+  // A cup being set down is a huge step that stays inside the 700 ms flow
+  // window for 700 ms after the sample it landed on — reading as a "pour" of
+  // hundreds of g/s. No onset until the step has aged out of the window.
+  if (last_step_at != 0 && t - last_step_at < FLOW_WINDOW_MS + 200) {
+    pour_cand_since = 0;
+    return false;
+  }
+  if (flow_now > POUR_FLOW_MGPS) {
+    if (pour_cand_since == 0) pour_cand_since = t;
+    if (t - pour_cand_since >= POUR_HOLD_MS) {
+      if (!armed) {
+        // Baseline: the weight ~1 s before the crossing — but never from
+        // before the cup landed, or the cup's own mass becomes "yield".
+        uint32_t target = pour_cand_since - 1000;
+        if (last_step_at != 0 && (int32_t)(target - last_step_at) < 0) target = last_step_at;
+        uint32_t bt; int32_t bw;
+        if (ringAt(target, bt, bw)) baseline = bw;
+      }
+      beginPour(pour_cand_since);   // current sample is already in the ring
+      return true;
+    }
+  } else {
+    pour_cand_since = 0;
+  }
+  return false;
+}
+
 void ShotDetector::appendSample(uint32_t t, int32_t w) {
   uint32_t rel = t - t0;
   if (rel > UINT16_MAX || buf_count >= MAX_SAMPLES) return;  // final weight still tracked via last_w
@@ -102,7 +150,7 @@ void ShotDetector::beginPour(uint32_t crossing_t) {
   t0 = crossing_t;
   buf_count = 0;
   running_max = 0;
-  stop_cand_at = 0;
+  lift_since = 0;
   // Backdate: replay the pre-history ring from the flow crossing onward,
   // relative to the armed baseline.
   for (size_t i = 0; i < ring_count; i++) {
@@ -180,7 +228,6 @@ void ShotDetector::resetToIdle() {
   ring_count = 0;   // a stale pre-pour history must not arm the next shot
   pour_cand_since = 0;
   parked_since = 0;
-  stop_cand_at = 0;
   lift_since = 0;
 }
 
@@ -189,9 +236,15 @@ bool ShotDetector::feed(uint32_t t, int32_t w) {
   ringPush(t, w);
   int32_t prev_w = last_w;
   last_w = w;
+  if (w - prev_w > PLACEMENT_STEP_MG || prev_w - w > PLACEMENT_STEP_MG) last_step_at = t;
 
   switch (st) {
     case ShotState::IDLE: {
+      // A pour can begin straight from IDLE (0a.5): if the cup went down
+      // and the switch was hit before a second of stillness, the shot is
+      // still detected — with the pre-rise weight as its baseline.
+      if (tryPourOnset(t, w, prev_w, false)) break;
+
       // ARMED (0a.3): stable at ANY value for 1 s. The mean over that
       // second becomes the baseline the curve is measured against — a tare
       // is just a baseline the scale applied for you.
@@ -222,30 +275,22 @@ bool ShotDetector::feed(uint32_t t, int32_t w) {
         parked_since = 0;
         break;
       }
-      if (flow_now > POUR_FLOW_MGPS) {
-        parked_since = 0;
-        if (pour_cand_since == 0) pour_cand_since = t;
-        if (t - pour_cand_since >= POUR_HOLD_MS) {
-          // The current sample is already in the ring, so the replay in
-          // beginPour picks it up too.
-          beginPour(pour_cand_since);
-        }
-      } else {
-        pour_cand_since = 0;
-        // A slow positive creep is first drips — stay armed on the same
-        // baseline. A mass sitting flat AWAY from the baseline is the new
-        // reality (drift, gentle re-place): adopt it as the baseline.
-        int32_t dev = w - baseline;
-        if ((dev > ARM_BAND_MG || dev < -ARM_BAND_MG)
-            && flow_now < PARKED_FLOW_MGPS && flow_now > -PARKED_FLOW_MGPS) {
-          if (parked_since == 0) parked_since = t;
-          if (t - parked_since >= PARKED_HOLD_MS) {
-            baseline = w;
-            parked_since = 0;
-          }
-        } else {
+      if (tryPourOnset(t, w, prev_w, true)) { parked_since = 0; break; }
+      if (flow_now > POUR_FLOW_MGPS) { parked_since = 0; break; }  // candidate building
+
+      // A slow positive creep is first drips — stay armed on the same
+      // baseline. A mass sitting flat AWAY from the baseline is the new
+      // reality (drift, gentle re-place): adopt it as the baseline.
+      int32_t dev = w - baseline;
+      if ((dev > ARM_BAND_MG || dev < -ARM_BAND_MG)
+          && flow_now < PARKED_FLOW_MGPS && flow_now > -PARKED_FLOW_MGPS) {
+        if (parked_since == 0) parked_since = t;
+        if (t - parked_since >= PARKED_HOLD_MS) {
+          baseline = w;
           parked_since = 0;
         }
+      } else {
+        parked_since = 0;
       }
       break;
     }
@@ -260,7 +305,6 @@ bool ShotDetector::feed(uint32_t t, int32_t w) {
         // Dropped well below the peak. A brief dip is a bump; a sustained
         // one for LIFT_HOLD_MS is the cup being taken — finalize the shot at
         // the peak (lifting after a pour is normal, not a fault).
-        stop_cand_at = 0;
         if (lift_since == 0) {
           lift_since = t;
           lift_buf = buf_count > 0 ? buf_count - 1 : 0;  // exclude the dropping sample
@@ -271,13 +315,29 @@ bool ShotDetector::feed(uint32_t t, int32_t w) {
         }
       } else {
         lift_since = 0;
-        if (flow_now < STOP_FLOW_MGPS) {
-          if (stop_cand_at == 0) { stop_cand_at = t; stop_cand_w = rel; }
-          if (t - stop_cand_at >= STOP_HOLD_MS) {
-            enterSettling(t, stop_cand_w, stop_cand_at, false);
+        uint32_t t_then; int32_t w_then;
+        if (running_max >= REJECT_MIN_MG) {
+          // Stop: weight flat (|Δ| < 0.3 g) over the last 2 s, once the shot
+          // has substance. Jitter-proof where "flow < 0.1 g/s" was not.
+          if (ringAt(t - STOP_WINDOW_MS, t_then, w_then) && t - t_then >= STOP_WINDOW_MS) {
+            int32_t delta = w - w_then;
+            if (delta < STOP_DELTA_MG && delta > -STOP_DELTA_MG) {
+              // The plateau began at t_then; that's the stop.
+              enterSettling(t, w_then - baseline, t_then, false);
+            }
           }
-        } else {
-          stop_cand_at = 0;
+        } else if (ringAt(t - ABORT_FLAT_MS, t_then, w_then) && t - t_then >= ABORT_FLAT_MS) {
+          // Never reached 5 g and flat for a long while: a false trigger.
+          int32_t delta = w - w_then;
+          if (delta < STOP_DELTA_MG && delta > -STOP_DELTA_MG) {
+            res.yield_final_mg = running_max;
+            res.fault = false;
+            res.valid = false;
+            res.sample_count = buf_count;
+            res.samples = buf;
+            resetToIdle();
+            return true;
+          }
         }
       }
       if (st == ShotState::POURING && t - t0 >= MAX_SHOT_MS) {

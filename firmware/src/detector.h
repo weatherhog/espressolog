@@ -99,8 +99,21 @@ public:
   static constexpr uint32_t ARM_HOLD_MS     = 1000;
   static constexpr int32_t  POUR_FLOW_MGPS  = 300;
   static constexpr uint32_t POUR_HOLD_MS    = 300;
-  static constexpr int32_t  STOP_FLOW_MGPS  = 100;
-  static constexpr uint32_t STOP_HOLD_MS    = 1500;
+  // Stop (0a.5): the weight is FLAT — within STOP_DELTA_MG over the last
+  // STOP_WINDOW_MS. Not "instantaneous flow < 0.1 g/s": the Bookoo's ±0.1 g
+  // jitter over the 700 ms flow window reads as ±0.2–0.8 g/s while the cup
+  // sits dead still, so that rule almost never confirmed (shot 19,
+  // 2026-09-04: 13 s of flat weight, stop never fired). A 2 s net delta
+  // averages the jitter out. Only checked once the shot has substance
+  // (running_max ≥ REJECT_MIN_MG) so a pre-infusion soak isn't a stop.
+  static constexpr uint32_t STOP_WINDOW_MS  = 2000;
+  static constexpr int32_t  STOP_DELTA_MG   = 300;
+  // Below REJECT_MIN_MG the stop rule doesn't apply (a pre-infusion soak is
+  // flat and sub-5 g). So a false trigger — a knock, a drip — needs its own
+  // exit or it would sit in POURING and swallow the next real shot into its
+  // record: flat for ABORT_FLAT_MS while still under 5 g → reject. Longer
+  // than any soak on this machine.
+  static constexpr uint32_t ABORT_FLAT_MS   = 8000;
   static constexpr uint32_t SETTLE_MS       = 5000;
   static constexpr int32_t  REJECT_MIN_MG   = 5000;
   static constexpr int32_t  LIFT_DROP_MG    = 5000;   // cup this far below peak = being lifted
@@ -126,7 +139,7 @@ public:
 
 private:
   struct RingEntry { uint32_t t; int32_t w; };
-  static constexpr size_t RING_N = 64;   // ~6 s of pre-history @ 10 Hz
+  static constexpr size_t RING_N = 128;  // ~12 s @ 10 Hz: covers ABORT_FLAT_MS + backdating
 
   ShotState st = ShotState::IDLE;
   ShotResult res = {};
@@ -141,16 +154,19 @@ private:
   int32_t  baseline = 0;         // absolute reading the curve is relative to
   uint32_t pour_cand_since = 0;  // 0 = no candidate
   uint32_t parked_since = 0;     // 0 = not parked at a new value
-  uint32_t stop_cand_at = 0;     // 0 = no candidate
   uint32_t lift_since = 0;       // 0 = not currently dropped below peak
   uint16_t lift_buf = 0;         // buf_count at the moment the drop began
-  int32_t  stop_cand_w = 0;
+  uint32_t last_step_at = 0;     // last >5 g single-sample step (cup moved); 0 = none
   uint32_t settle_until = 0;
   int32_t  running_max = 0;
   int32_t  last_w = 0;
 
   void ringPush(uint32_t t, int32_t w);
   int32_t computeFlow(uint32_t t, int32_t w) const;
+  // Newest ring sample at or before target_t (oldest if none is that old).
+  bool ringAt(uint32_t target_t, uint32_t& t_out, int32_t& w_out) const;
+  // Shared ARMED/IDLE pour-onset logic. Returns true when a pour began.
+  bool tryPourOnset(uint32_t t, int32_t w, int32_t prev_w, bool armed);
   void appendSample(uint32_t t, int32_t w);
   void beginPour(uint32_t crossing_t);
   void enterSettling(uint32_t t, int32_t w_at_stop, uint32_t stop_t, bool truncated);

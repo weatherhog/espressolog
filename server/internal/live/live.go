@@ -5,8 +5,11 @@ package live
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -16,10 +19,52 @@ import (
 type Hub struct {
 	mu      sync.Mutex
 	clients map[chan []byte]bool
+
+	// Raw-stream journal: every device frame appended to <logDir>/YYYY-MM-DD.ndjson
+	// with a server timestamp. The scales only stream while awake (~30 min a
+	// day), so this is ~1 MB/day — and it turns "a shot went missing, why?"
+	// from guesswork into a replay (firmware/test/host/replay). Best-effort:
+	// a journal write failure never touches the live fan-out.
+	logDir  string
+	logDay  string
+	logFile *os.File
 }
 
-func New() *Hub {
-	return &Hub{clients: make(map[chan []byte]bool)}
+// New creates a hub. logDir "" disables the raw-stream journal.
+func New(logDir string) *Hub {
+	if logDir != "" {
+		if err := os.MkdirAll(logDir, 0o755); err != nil {
+			log.Printf("live: journal disabled, cannot create %s: %v", logDir, err)
+			logDir = ""
+		}
+	}
+	return &Hub{clients: make(map[chan []byte]bool), logDir: logDir}
+}
+
+// journal appends one device frame; rotates the file at the day boundary.
+func (h *Hub) journal(frame []byte) {
+	if h.logDir == "" {
+		return
+	}
+	now := time.Now()
+	day := now.Format("2006-01-02")
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.logFile == nil || day != h.logDay {
+		if h.logFile != nil {
+			h.logFile.Close()
+		}
+		f, err := os.OpenFile(filepath.Join(h.logDir, day+".ndjson"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+		if err != nil {
+			log.Printf("live: journal open failed: %v", err)
+			h.logFile = nil
+			return
+		}
+		h.logFile = f
+		h.logDay = day
+	}
+	// {"ts":<unix ms>,"f":<frame>} — frame is already JSON from the device.
+	fmt.Fprintf(h.logFile, "{\"ts\":%d,\"f\":%s}\n", now.UnixMilli(), frame)
 }
 
 // Broadcast sends one frame to every connected browser. Slow clients get
@@ -67,6 +112,7 @@ func (h *Hub) DeviceHandler() http.HandlerFunc {
 				log.Printf("live: device disconnected: %v", err)
 				return
 			}
+			h.journal(data)
 			h.Broadcast(data)
 		}
 	}

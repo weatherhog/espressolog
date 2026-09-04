@@ -296,6 +296,16 @@ bool ShotDetector::feed(uint32_t t, int32_t w) {
     }
 
     case ShotState::POURING: {
+      // A single-sample step while almost nothing is out yet is the user
+      // taring (or nudging) the cup during pre-infusion — the real workflow:
+      // cup preheated with water, emptied and set down as the machine is
+      // already running, tared as the first drips fall. Not a lift: shift
+      // the baseline by the step so the curve stays continuous. (A genuine
+      // early abort still ends via the flat-abort rule.)
+      if (running_max < REJECT_MIN_MG
+          && (w - prev_w > PLACEMENT_STEP_MG || prev_w - w > PLACEMENT_STEP_MG)) {
+        baseline += (w - prev_w);
+      }
       int32_t rel = w - baseline;
       appendSample(t, rel);
       if (rel > running_max) running_max = rel;

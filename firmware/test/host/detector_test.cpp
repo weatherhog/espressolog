@@ -278,6 +278,33 @@ int main() {
   assert(r->yield_final_mg > 34000 && r->yield_final_mg < 38000);  // ~36 g relative to the 210 g cup
   printf("cup-down-and-go from IDLE OK (final=%d mg)\n", r->yield_final_mg);
 
+  // Scenario 10 (the real workflow): cup preheated, machine already
+  // running. Cup lands during pre-infusion, drips begin, THEN the user
+  // tares (-cup step while ~1.5 g is out). Must be one continuous shot —
+  // no reject, no restart, yield relative to the tare.
+  for (int i = 0; i < 30; i++, t += 100) feed(t, 0.0, nullptr);
+  done = false;
+  {
+    int records = 0;
+    for (int i = 0; i < 600 && !done; i++, t += 100) {
+      double s = i / 10.0;
+      double w;
+      if (s < 0.3)        w = 0.0;
+      else if (s < 2.0)   w = 205.0;                    // cup lands (empty, wet)
+      else if (s < 3.5)   w = 205.0 + (s - 2.0) * 1.0;  // drips start: 0..1.5 g
+      else if (s < 24.0)  w = (s - 3.5) * 1.8 + 1.5 - 1.5;  // TARED at 3.5 s: reads from 0, pour 1.8 g/s
+      else if (s < 30.0)  w = 36.9;                     // flat
+      else                w = -205.0;                   // lifted
+      if (feed(t, w, &r)) { records++; done = r->valid; }
+    }
+    assert(done && r->valid);
+    assert(records == 1);                               // no reject split off
+    // True yield = 1.5 g pre-tare drips + 36.9 g after = 38.4 g. The scale's
+    // display forgot the first 1.5 g when tared; the rebased baseline didn't.
+    assert(r->yield_final_mg > 37500 && r->yield_final_mg < 39500);
+    printf("tare-during-drips OK (1 record, final=%d mg incl. pre-tare drips)\n", r->yield_final_mg);
+  }
+
   printf("all scenarios passed\n");
   return 0;
 }

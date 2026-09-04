@@ -7,7 +7,7 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
 
 | Piece | Where | State |
 |---|---|---|
-| Firmware 0.6.3, detector 0a.5 | ESP32-S3 on a USB charger by the machine | both Bookoos bound: yield `aa:bb:cc:dd:ee:01`, dose `aa:bb:cc:dd:ee:02` |
+| Firmware 0.6.4, detector 0a.6 | ESP32-S3 on a USB charger by the machine | both Bookoos bound: yield `aa:bb:cc:dd:ee:01`, dose `aa:bb:cc:dd:ee:02` |
 | Go server + SQLite + PWA | Proxmox LXC `espressolog`, Debian 13, `espressolog.lan` (DHCP-reserved) | systemd `espressolog.service`, db at `/var/lib/espressolog/espressolog.db` |
 | HTTPS | Caddy on the same LXC, `https://espresso.example.com` | Let's Encrypt via Cloudflare DNS-01; CF token in `/etc/caddy/env` |
 | DNS | AdGuard Home rewrite `espresso.example.com → espressolog.lan` | resolution is LAN-only; no public A record (challenge TXT only) |
@@ -34,9 +34,12 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
 
 1. Wake the scales (they sleep ~9 min idle; reconnect is automatic).
 2. Weigh the dose on the grinder scale, lift it off — that's the weighing.
-3. Cup on the drip-tray scale; one second of stillness arms the detector
-   (0a.3 arms on ANY stable weight — taring is optional, nice for the
-   display only). Board LED: green = armed, blue = recording.
+3. Cup on the drip-tray scale whenever — Lucas's actual workflow: cup
+   preheated with water, portafilter in, machine started, cup emptied and
+   set down DURING pre-infusion, then tared as the first drips fall. All
+   of that is fine (0a.5/0a.6): no stillness needed, the tare is a rebase,
+   pre-tare drips stay in the yield (logged yield reads ~1–2 g above the
+   scale display). Board LED: blue = recording.
 4. Pull the shot; lift the cup whenever it's done (0a.4 ends the shot on
    a ~2 s cup lift — no need to wait; a quick bump is ignored).
 5. Tasting notes on the Capture tab (4 taps). Everything else is automatic.

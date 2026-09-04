@@ -58,11 +58,17 @@ struct ShotResult {
 // here — the schema wants everything the scale actually saw.
 class WeighingDetector {
 public:
-  static constexpr int32_t  STABLE_FLOW_MGPS = 50;    // |dw/dt| < 0.05 g/s
-  static constexpr uint32_t STABLE_HOLD_MS   = 1500;
+  // Stability is judged per sample (|Δ| ≤ STEP_MG — Bookoo jitter flips
+  // ±0.1 g between samples, i.e. 0.2 g steps) plus a span range check
+  // (max−min ≤ RANGE_MG), so a cup landing costs no settle window and a
+  // grinder filling the cup (~1 g/s) breaks the range within 0.4 s. A dose
+  // cup needs ~1.1 s on the scale. (The old flow-window rule needed 2.2 s;
+  // Lucas's dose cup sits for ~2.0 s — shot 20's dose was missed by 0.2 s.)
+  static constexpr int32_t  STEP_MG          = 250;
+  static constexpr int32_t  RANGE_MG         = 300;
+  static constexpr uint32_t STABLE_HOLD_MS   = 1000;
   static constexpr uint32_t STABLE_CAP_MS    = 30000;
   static constexpr int32_t  MIN_WEIGHT_MG    = 5000;
-  static constexpr uint32_t FLOW_WINDOW_MS   = 700;
 
   struct Event {
     uint32_t started_at_ms;  // millis() when stability began
@@ -76,19 +82,15 @@ public:
   const Event& event() const { return ev; }
 
 private:
-  struct RingEntry { uint32_t t; int32_t w; };
-  static constexpr size_t RING_N = 16;
-
-  RingEntry ring[RING_N] = {};
-  size_t ring_head = 0, ring_count = 0;
-
   uint32_t stable_since = 0;   // 0 = not stable
   int64_t  sum_mg = 0;
   uint32_t n = 0;
+  int32_t  span_min = 0, span_max = 0;
+  int32_t  prev_w = 0;
+  bool     have_prev = false;
   bool     emitted = false;
   Event    ev = {};
 
-  int32_t computeFlow(uint32_t t, int32_t w) const;
   bool emit(uint32_t now);
 };
 

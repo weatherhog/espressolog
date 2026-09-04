@@ -4,20 +4,6 @@
 
 // ---- WeighingDetector -------------------------------------------------------
 
-int32_t WeighingDetector::computeFlow(uint32_t t, int32_t w) const {
-  if (ring_count < 2) return 0;
-  uint32_t target = t - FLOW_WINDOW_MS;
-  const RingEntry* best = nullptr;
-  for (size_t i = 0; i < ring_count; i++) {
-    const RingEntry& e = ring[(ring_head + RING_N - 1 - i) % RING_N];
-    best = &e;
-    if ((int32_t)(e.t - target) <= 0) break;
-  }
-  uint32_t dt = t - best->t;
-  if (dt == 0) return 0;
-  return (int32_t)(((int64_t)(w - best->w) * 1000) / (int64_t)dt);
-}
-
 bool WeighingDetector::emit(uint32_t now) {
   if (emitted || n == 0 || now - stable_since < STABLE_HOLD_MS) return false;
   ev.started_at_ms = stable_since;
@@ -28,13 +14,14 @@ bool WeighingDetector::emit(uint32_t now) {
 }
 
 bool WeighingDetector::feed(uint32_t t, int32_t w, bool shot_active) {
-  int32_t flow = computeFlow(t, w);
-  ring[ring_head] = { t, w };
-  ring_head = (ring_head + 1) % RING_N;
-  if (ring_count < RING_N) ring_count++;
-
-  bool stable = !shot_active && w > MIN_WEIGHT_MG
-                && flow < STABLE_FLOW_MGPS && flow > -STABLE_FLOW_MGPS;
+  int32_t d = have_prev ? w - prev_w : 0;
+  int32_t nmin = stable_since ? (w < span_min ? w : span_min) : w;
+  int32_t nmax = stable_since ? (w > span_max ? w : span_max) : w;
+  bool stable = have_prev && !shot_active && w > MIN_WEIGHT_MG
+                && d <= STEP_MG && d >= -STEP_MG
+                && nmax - nmin <= RANGE_MG;
+  prev_w = w;
+  have_prev = true;
 
   if (!stable) {
     // Episode over. If it lasted long enough and hasn't emitted (the usual
@@ -53,6 +40,8 @@ bool WeighingDetector::feed(uint32_t t, int32_t w, bool shot_active) {
     n = 0;
     emitted = false;
   }
+  span_min = nmin;
+  span_max = nmax;
   sum_mg += w;
   n++;
   // Parked longer than the cap: emit now so the record exists even if the

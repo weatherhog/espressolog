@@ -7,7 +7,7 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
 
 | Piece | Where | State |
 |---|---|---|
-| Firmware 0.6.4, detector 0a.6 | ESP32-S3 on a USB charger by the machine | both Bookoos bound: yield `aa:bb:cc:dd:ee:01`, dose `aa:bb:cc:dd:ee:02` |
+| Firmware 0.6.5 (flash pending), detector 0a.6 | ESP32-S3 on a USB charger by the machine | both Bookoos bound: yield `aa:bb:cc:dd:ee:01`, dose `aa:bb:cc:dd:ee:02` |
 | Go server + SQLite + PWA | Proxmox LXC `espressolog`, Debian 13, `espressolog.lan` (DHCP-reserved) | systemd `espressolog.service`, db at `/var/lib/espressolog/espressolog.db` |
 | HTTPS | Caddy on the same LXC, `https://espresso.example.com` | Let's Encrypt via Cloudflare DNS-01; CF token in `/etc/caddy/env` |
 | DNS | AdGuard Home rewrite `espresso.example.com → espressolog.lan` | resolution is LAN-only; no public A record (challenge TXT only) |
@@ -33,7 +33,8 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
 ## Daily workflow (the only rules)
 
 1. Wake the scales (they sleep ~9 min idle; reconnect is automatic).
-2. Weigh the dose on the grinder scale, lift it off — that's the weighing.
+2. Weigh the dose on the grinder scale, lift it off — that's the weighing
+   (needs ~1.1 s on the scale since fw 0.6.5; was 2.2 s and missed a dose).
 3. Cup on the drip-tray scale whenever — Lucas's actual workflow: cup
    preheated with water, portafilter in, machine started, cup emptied and
    set down DURING pre-infusion, then tared as the first drips fall. All

@@ -193,6 +193,39 @@ int main() {
     printf("weighing dose OK (%d mg over %u ms)\n", got.grams_mg, got.stable_ms);
   }
 
+  // Scenario W1b (shot 20's missed dose, 2026-09-04): the dose cup sits for
+  // only ~1.3 s. Must emit — Lucas works fast.
+  {
+    WeighingDetector wd;
+    int events = 0;
+    uint32_t t = 550000;
+    auto step = [&](double g) { if (wd.feed(t, (long long)(g * 1000), false)) events++; t += 100; };
+    for (int i = 0; i < 10; i++) step(-256.7);   // scale tared with cup, cup off
+    step(18.1);                                   // cup+grounds lands
+    for (int i = 0; i < 12; i++) step(18.1 + ((i % 2) ? 0.1 : -0.1));  // 1.2 s of jitter
+    step(25.2); step(-539.3);                     // nudged, then everything off
+    assert(events == 1);
+    printf("weighing short-sit OK (%d event in 1.3 s)\n", events);
+  }
+
+  // Scenario W1c: grinding INTO the cup on the scale (~1 g/s) must not read
+  // as a stable weighing while it's still filling.
+  {
+    WeighingDetector wd;
+    int events = 0;
+    uint32_t t = 560000;
+    for (int i = 0; i < 40; i++, t += 100)
+      if (wd.feed(t, 100 * i, false)) events++;     // 0 → 4 g at 1 g/s
+    for (int i = 0; i < 160; i++, t += 100)
+      if (wd.feed(t, 4000 + 100 * i, false)) events++;  // 4 → 20 g at 1 g/s
+    assert(events == 0);
+    for (int i = 0; i < 15; i++, t += 100)
+      if (wd.feed(t, 20000, false)) events++;       // done, sits 1.5 s
+    if (wd.feed(t, -200000, false)) events++;       // lifted
+    assert(events == 1);
+    printf("weighing grind-in-place OK (no event while filling, 1 after)\n");
+  }
+
   // Scenario W2: parked past the cap emits exactly once, no second event on
   // the eventual lift.
   {

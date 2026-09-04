@@ -10,7 +10,7 @@
 #include "spool.h"
 #include "net.h"
 
-const char* FIRMWARE_VERSION = "0.6.4";
+const char* FIRMWARE_VERSION = "0.6.5";
 const char* DETECTOR_VERSION = "0a.6";
 
 static ScaleManager scales;

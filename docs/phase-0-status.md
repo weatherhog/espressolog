@@ -1,4 +1,4 @@
-# Phase 0 status — as of 2026-09-04
+# Phase 0 status — as of 2026-09-15
 
 Phase 0a (scale logging, stages 0–6) is **complete and in production**.
 This file is the resume point: read it (and CLAUDE.md) before continuing.
@@ -52,12 +52,22 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    shot time and mean flow on the fixed recipe. That number is the Phase-3
    deadband and the go/no-go on closed-loop control. CLAUDE.md: the most
    important milestone and the one that gets skipped.
-2. **0b — display bus** — PARTS ORDERED 2026-09-03 (WeAct LogicAnalyzerV1
-   FX2LP + 10x micro test hooks + resistor kit w/ 220k). When they
-   arrive: photograph internals first, then PulseView on J5 during
-   heat-up; hunt the byte that tracks the displayed temperature.
-   Abandon cheaply if opaque. Divider for 0c: two 220k in series
-   (5V->2.5V), not the old 100k/200k. Firmware readout via SWD
+2. **0b — display bus** — PARTS ARRIVED, BENCH TOOLING READY 2026-09-15
+   (WeAct LogicAnalyzerV1 FX2LP + 10x micro test hooks + resistor kit
+   w/ 220k). The analyser is verified end-to-end against nothing but
+   mains hum: it enumerates as `fx2lafw` (USB 1d50:608c) with the
+   firmware already in EEPROM (no upload needed), sustains 24 MHz on all
+   8 channels without overruns, and a finger on a D0 jumper reads back
+   50.1 Hz — so the input stage, the channel mapping and the timebase are
+   all good. Note it breaks out only GND + D0..D7: there is no VCC pin to
+   test against, hence the hum trick. Next: photograph internals first,
+   then PulseView on J5 during heat-up; hunt the byte that tracks the
+   displayed temperature. Abandon cheaply if opaque.
+   Host tooling: `sigrok-cli` from Homebrew, plus PulseView built from
+   source by `tools/build-pulseview-macos.sh` (there is no Homebrew
+   PulseView, and it needs the sigrok git stack — the script explains why).
+   Divider for 0c: two 220k in series (5V->2.5V), not the old
+   100k/200k. Firmware readout via SWD
    deliberately NOT pursued (RDP1 likely blocks it + brick risk);
    keep as opaque-protocol fallback only, read-only, never erase.
 

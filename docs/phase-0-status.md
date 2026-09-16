@@ -53,14 +53,32 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    deadband and the go/no-go on closed-loop control. CLAUDE.md: the most
    important milestone and the one that gets skipped.
 2. **0b — display bus** — PARTS ARRIVED, BENCH TOOLING READY 2026-09-15
-   (WeAct LogicAnalyzerV1 FX2LP + 10x micro test hooks + resistor kit
-   w/ 220k). The analyser is verified end-to-end against nothing but
+   (SeenGreat SG-NANO-DLA-A rev 1.2 — what a generic "8 channel, CY7C68013A,
+   sigrok PulseView, 24 MHz" listing shipped as. Those listings are
+   interchangeable on paper and are NOT interchangeable in the input stage:
+   WeAct's LogicAnalyzerV1 buffers with a 74LVC541 and is genuinely 5 V
+   tolerant, this one does not — see below. Always read the buffer part
+   number off the board before probing anything above 3.3 V.
+   Plus 10x micro test hooks + resistor kit w/ 220k).
+   The analyser is verified end-to-end against nothing but
    mains hum: it enumerates as `fx2lafw` (USB 1d50:608c) with the
    firmware already in EEPROM (no upload needed), sustains 24 MHz on all
    8 channels without overruns, and a finger on a D0 jumper reads back
    50.1 Hz — so the input stage, the channel mapping and the timebase are
    all good. Note it breaks out only GND + D0..D7: there is no VCC pin to
-   test against, hence the hum trick. Next: photograph internals first,
+   test against, hence the hum trick.
+   **NOT 5 V TOLERANT, despite the shop listing claiming 0-5.5 V.**
+   SeenGreat's schematic (SG-NANO-DLA-A-V1.1.pdf): each channel is a bare
+   100 R series resistor (RN2/RN4) into a **74HC245PW powered from 3.3 V**,
+   no pull-downs, nothing else. HC has input clamp diodes to VCC, so 5 V in
+   conducts ~10 mA through the 100 R and clamps the probed line to ~3.9 V.
+   The chip survives (abs max +-20 mA) but it DISTURBS THE BUS. On J5's
+   4.7 K pull-ups to +5 V that sag leaves only ~0.4 V of VIH margin at the
+   display. If J5 measures 5 V, condition it: 10 K/22 K divider per line
+   (tap 3.0 V, bus high 4.36 V, ~900 kHz bandwidth) or a 74LVC245/541
+   buffer at 3.3 V. NOT the 220 K resistors - those are for 0c's slow
+   switch lines; at 220 K the RC with probe capacitance smears every edge.
+   Next: photograph internals first,
    then PulseView on J5 during heat-up; hunt the byte that tracks the
    displayed temperature. Abandon cheaply if opaque.
    Host tooling: `sigrok-cli` from Homebrew, plus PulseView built from

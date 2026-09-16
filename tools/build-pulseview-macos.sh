@@ -24,7 +24,7 @@
 # independent: `brew upgrade` cannot break PulseView and vice versa.
 #
 # Verified 2026-09-15 on macOS 26 (Tahoe) / M-series, Qt 6.11.2,
-# python@3.14, against the WeAct LogicAnalyzerV1 (FX2LP, USB 1d50:608c).
+# python@3.14, against a SeenGreat SG-NANO-DLA-A (FX2LP, USB 1d50:608c).
 
 set -euo pipefail
 

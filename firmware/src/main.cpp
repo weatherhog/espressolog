@@ -9,8 +9,10 @@
 #include "detector.h"
 #include "spool.h"
 #include "net.h"
+#include "display.h"
+#include <driver/gpio.h>
 
-const char* FIRMWARE_VERSION = "0.6.5";
+const char* FIRMWARE_VERSION = "0.7.0";
 const char* DETECTOR_VERSION = "0a.6";
 
 static ScaleManager scales;
@@ -28,6 +30,95 @@ static bool spool_ok = false;
 struct PendingWeighing { uint8_t role; WeighingDetector::Event ev; };
 static PendingWeighing pending_w[8];
 static size_t pending_w_n = 0;
+
+// ---------------------------------------------------------------- display bus
+// Milestone 0b: the machine's own front display, tapped read-only at J5.
+// Protocol and bit offsets are in display.h; the probe point is in CLAUDE.md.
+// Idle it carries boiler temperature; during a brew it carries the machine's
+// own shot timer, which is a truer pump-on/pump-off boundary than a scale can
+// infer.
+//
+// OFF BY DEFAULT, enabled with `display on` (persisted in NVS). An
+// unconnected input floats and would fire this ISR on mains hum at 100 Hz
+// forever, so the interrupt is only attached once the tap is actually wired.
+//
+// Level conditioning — the bus is 5 V and these pins are NOT 5 V tolerant:
+//
+//     J5 line --[ 8.2K ]--+-- GPIO
+//                         +--[ 15K ]-- GND
+//
+// Safe whichever way the line is driven: 3.23 V at the pin if push-pull,
+// 2.69 V if open-drain through the board's 4.7K pull-ups (VIH is 2.48 V), and
+// the machine's own high never falls below 4.16 V against a display needing
+// 3.5 V. Do NOT enable an internal pull-down — 45K in parallel with the 15K
+// leg drops the open-drain case to 2.33 V and the pin stops reading high.
+static constexpr uint8_t DISPLAY_CLK_PIN  = 4;
+static constexpr uint8_t DISPLAY_DATA_PIN = 5;
+
+static DisplayBus display_bus;
+static bool display_on = false;
+
+// Same producer/consumer split as the BLE path: the ISR does nothing but
+// stamp and enqueue, loop() is the single consumer. A plain ring rather than
+// a FreeRTOS queue only because these edges arrive at ~10 kHz rather than the
+// scales' 10 Hz, and per-edge queue overhead at that rate is not worth it.
+// Framing is deliberately NOT done here — it lives in DisplayBus::feedEdge so
+// the logic that ships is the logic the host tests exercise, and so no flash
+// read can ever happen inside the ISR.
+struct DbusEdge { uint32_t t_us; uint8_t bit; };
+static constexpr uint16_t DBUS_RING = 512;      // ~50 ms of edges at 9.9 kHz
+static volatile DbusEdge dbus_ring[DBUS_RING];
+static volatile uint16_t dbus_head = 0, dbus_tail = 0;
+static volatile uint32_t dbus_dropped = 0;
+static uint32_t dbus_frames = 0;
+
+static void IRAM_ATTR dbusIsr() {
+  uint16_t h = dbus_head;
+  uint16_t nxt = (uint16_t)((h + 1) % DBUS_RING);
+  if (nxt == dbus_tail) { dbus_dropped++; return; }   // consumer stalled
+  dbus_ring[h].t_us = micros();
+  dbus_ring[h].bit  = gpio_get_level((gpio_num_t)DISPLAY_DATA_PIN) ? 1 : 0;
+  dbus_head = nxt;
+}
+
+static void displaySetEnabled(bool on) {
+  if (on == display_on) return;
+  if (on) {
+    pinMode(DISPLAY_CLK_PIN, INPUT);
+    pinMode(DISPLAY_DATA_PIN, INPUT);
+    dbus_head = dbus_tail = 0;
+    attachInterrupt(digitalPinToInterrupt(DISPLAY_CLK_PIN), dbusIsr, RISING);
+  } else {
+    detachInterrupt(digitalPinToInterrupt(DISPLAY_CLK_PIN));
+  }
+  display_on = on;
+}
+
+static void pollDisplay() {
+  if (!display_on) return;
+  while (dbus_tail != dbus_head) {
+    DbusEdge e = { dbus_ring[dbus_tail].t_us, dbus_ring[dbus_tail].bit };
+    dbus_tail = (uint16_t)((dbus_tail + 1) % DBUS_RING);
+    if (display_bus.feedEdge(e.t_us, e.bit)) dbus_frames++;
+  }
+  if (display_bus.poll(micros())) dbus_frames++;   // bus went quiet mid-frame
+}
+
+static void printDisplay(Stream& out) {
+  if (!display_on) {
+    out.println("# display bus off — 'display on' once the J5 tap is wired");
+    return;
+  }
+  const DisplayBus::Reading& r = display_bus.reading();
+  const char* mode = r.mode == DisplayBus::Mode::TEMPERATURE ? "temp"
+                   : r.mode == DisplayBus::Mode::TIMER       ? "timer" : "none";
+  out.printf("# display=[%s] mode=%s", r.text, mode);
+  if (r.mode == DisplayBus::Mode::TEMPERATURE) out.printf(" %d C", (int)r.temp_c);
+  else if (r.mode == DisplayBus::Mode::TIMER)  out.printf(" %u.%u s", r.timer_dl / 10, r.timer_dl % 10);
+  if (display_bus.stale(micros(), 2000000)) out.print(" (STALE)");
+  out.printf(" | frames=%lu dropped=%lu\n",
+             (unsigned long)dbus_frames, (unsigned long)dbus_dropped);
+}
 
 static const char* stateName(ShotState s) {
   switch (s) {
@@ -101,7 +192,7 @@ static void handleCommand(String line, Stream& out) {
   String arg = sp < 0 ? "" : line.substring(sp + 1);
 
   if (cmd == "help" || cmd == "h") {
-    out.println("# status|s  tare|t  raw|r  verbose|v  ls  dump <file>  rm <file>  fake  net  scales  assign <yield|dose> <mac|last>  set <ssid|pass|endpoint> <val>  reboot");
+    out.println("# status|s  tare|t  raw|r  verbose|v  display [on|off]  ls  dump <file>  rm <file>  fake  net  scales  assign <yield|dose> <mac|last>  set <ssid|pass|endpoint> <val>  reboot");
   } else if (cmd == "status" || cmd == "s") {
     out.printf("# yield: state=%d mac=%s | dose: state=%d mac=%s\n",
                (int)scales.slotState(ScaleRole::YIELD), scales.slotMac(ScaleRole::YIELD).c_str(),
@@ -110,6 +201,17 @@ static void handleCommand(String line, Stream& out) {
     out.printf("# detector=%s flow=%ld mg/s | spool=%u pending | heap=%lu\n",
                stateName(detector.state()), (long)detector.flowNowMgps(),
                (unsigned)spool.pendingCount(), (unsigned long)ESP.getFreeHeap());
+    if (display_on) printDisplay(out);
+  } else if (cmd == "display") {
+    if (arg == "on" || arg == "off") {
+      bool on = (arg == "on");
+      Preferences p;
+      p.begin("espl", false);
+      p.putBool("display", on);
+      p.end();
+      displaySetEnabled(on);
+    }
+    printDisplay(out);
   } else if (cmd == "tare" || cmd == "t") {
     out.printf("# tare: %s\n", scales.tare(ScaleRole::YIELD) ? "sent" : "not connected");
   } else if (cmd == "raw" || cmd == "r") {
@@ -203,6 +305,18 @@ void setup() {
   sample_queue = xQueueCreate(64, sizeof(ScaleSample));
   scales.begin(sample_queue);
   net.begin(&spool);
+
+  {
+    Preferences p;
+    p.begin("espl", true);
+    bool on = p.getBool("display", false);
+    p.end();
+    if (on) displaySetEnabled(true);
+    Serial.printf("# display bus %s (clk=GPIO%u data=GPIO%u)\n",
+                  on ? "on" : "off (see 'display on')",
+                  DISPLAY_CLK_PIN, DISPLAY_DATA_PIN);
+  }
+
   Serial.println("# scanning for Bookoo… ('help' for commands)");
 }
 
@@ -301,6 +415,7 @@ void loop() {
     }
   }
 
+  pollDisplay();
   scales.tick(millis());
   // Network (and its flash reads) only while nothing is brewing.
   net.tick(millis(), quiet);

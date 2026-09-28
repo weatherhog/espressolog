@@ -7,7 +7,7 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
 
 | Piece | Where | State |
 |---|---|---|
-| Firmware 0.6.5 (flash pending), detector 0a.6 | ESP32-S3 on a USB charger by the machine | both Bookoos bound: yield `aa:bb:cc:dd:ee:01`, dose `aa:bb:cc:dd:ee:02` |
+| Firmware 0.7.0 (built, FLASH PENDING), detector 0a.6 | ESP32-S3 on a USB charger by the machine | both Bookoos bound: yield `aa:bb:cc:dd:ee:01`, dose `aa:bb:cc:dd:ee:02`. 0.7.0 adds the display-bus reader, **off by default** — nothing changes until the tap is wired and `display on` is issued. |
 | Go server + SQLite + PWA | Proxmox LXC `espressolog`, Debian 13, `espressolog.lan` (DHCP-reserved) | systemd `espressolog.service`, db at `/var/lib/espressolog/espressolog.db` |
 | HTTPS | Caddy on the same LXC, `https://espresso.example.com` | Let's Encrypt via Cloudflare DNS-01; CF token in `/etc/caddy/env` |
 | DNS | AdGuard Home rewrite `espresso.example.com → espressolog.lan` | resolution is LAN-only; no public A record (challenge TXT only) |
@@ -94,11 +94,48 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    of what **0c** was for. Reassess 0c's priority before ordering its
    parts.
 
-3. **0c — switch sensing** (after 0b's machine-open session identified the
+3. **0e — temperature / display bus into the log — IN PROGRESS.**
+   Firmware 0.7.0 reads the bus: `firmware/src/display.{h,cpp}` is pure
+   logic in the ShotDetector mould (no I/O, no clock of its own), an ISR
+   stamps clock edges into a ring and `loop()` is the single consumer, so
+   framing is done by the same `feedEdge()` the host tests exercise and no
+   flash read can happen in the ISR. `firmware/test/host/display_test.cpp`
+   runs 8 scenarios against **real recorded frames** from
+   `analysis/captures/`, not synthetic bit patterns.
+
+   **Wiring (not yet built).** Two GPIOs, one divider per line, because the
+   bus is 5 V and the ESP32 is not 5 V tolerant:
+
+   ```
+   J5 signal --[ 8.2K ]--+-- GPIO4  (clock)
+                         +--[ 15K ]-- GND
+   J5 signal --[ 8.2K ]--+-- GPIO5  (data)
+                         +--[ 15K ]-- GND
+   J5 ground ------------------- ESP32 GND
+   ```
+
+   Safe either way the line is driven: 3.23 V at the pin if push-pull,
+   2.69 V if open-drain via the board's 4.7K pull-ups (VIH 2.48 V), and the
+   machine's own high never drops below 4.16 V against a display needing
+   3.5 V. **Do not enable an internal pull-down** — 45K across the 15K leg
+   drops the open-drain case to 2.33 V and the pin stops reading high.
+   The four stubs soldered to J5 for the 0b capture are still there, so
+   this is a clip-on job.
+
+   Then `display on` (persisted in NVS) and check `status`.
+
+   **Still to do after that:** decide what gets stored. `sample_t` already
+   reserves `temp_dc`, and the shot timer is a truer boundary than the
+   scale's plateau — but temperature is *not* readable during a brew
+   (the display is showing the timer), so brew-temperature telemetry is
+   not available from this source. Re-run `analysis/0f-noise-floor.ipynb`
+   once the timer is logged; the shot-time figure may shrink.
+
+4. **0c — switch sensing** (after 0b's machine-open session identified the
    J2/J4/J5 connector types → order JST pigtails + 30 AWG wire then).
    100 K/200 K divider on PB5/PB6, gives real shot boundaries and
    `first_drip_ms`.
-4. **0d — flowmeter**, **0e — temperature** (if 0b cracked it), per
+5. **0d — flowmeter**, **0e — temperature** (if 0b cracked it), per
    docs/phase-0-plan.md.
 
 ## Known quirks (details in the auto-memory notes)

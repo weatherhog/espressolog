@@ -4,18 +4,25 @@
 #   make replay  — reads a serial capture (t_ms,weight_mg[,state]) on stdin,
 #                  replays it through the detector, prints completed records.
 #                  This recovered a live shot on 2026-08-28.
+#
+# DisplayBus is pure logic too, and its test frames are real ones recorded
+# off the machine (analysis/captures/), not synthetic bit patterns.
 CXX ?= clang++
 CXXFLAGS = -std=c++17 -Wall
 
-test: detector_test
+test: detector_test display_test
 	./detector_test
+	./display_test
 
 detector_test: detector_test.cpp ../../src/detector.cpp ../../src/detector.h
 	$(CXX) $(CXXFLAGS) -o $@ detector_test.cpp ../../src/detector.cpp
+
+display_test: display_test.cpp ../../src/display.cpp ../../src/display.h
+	$(CXX) $(CXXFLAGS) -o $@ display_test.cpp ../../src/display.cpp
 
 replay: replay.cpp ../../src/detector.cpp ../../src/detector.h
 	$(CXX) $(CXXFLAGS) -o $@ replay.cpp ../../src/detector.cpp
 
 clean:
-	rm -f detector_test replay
+	rm -f detector_test display_test replay
 .PHONY: test clean

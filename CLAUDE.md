@@ -82,11 +82,31 @@ traced schematic in `techdregs/Ascaso_Dream_PID_Electronics`:
 | 1 | VSS | ground — the pad with thermal-relief spokes into the copper pour |
 | 2 | `ESD1` | signal, via U26. One of the two we decode. |
 | 3 | `ESD4` | signal, via U26 and R24. The other one. |
-| 4 | `Disp-P4` | third signal — idle high, never moved in 3 s of capture. Purpose unknown. |
+| 4 | `Disp-P4` | third signal — **bidirectional**, see below. Idle high; never moved in 3 s of capture. |
 
 **There is no +5 V on J5** — it is ground plus three signals. A constant-high
 line on a logic analyser looks exactly like a supply rail, which is how it
 got mislabelled first time round.
+
+**`Disp-P4` is bidirectional — never drive it.** It reaches the MCU (net
+`P16`) through a two-transistor pair: `P16` → R30 (100 R) → Q11
+(PDTC143ET) → R31 (2.2 K) → Q10 → R32 (100 K) → the pin. One transistor
+lets the MCU pull the line low, the other lets it sense the line being
+pulled low from the display end. That topology only exists when both ends
+talk on one wire.
+
+**Working hypothesis (untested):** the display module carries two buttons
+and reports them on this line — `ESD1`/`ESD4` are the MCU driving the
+display, `Disp-P4` is the display answering. If true it is worth logging,
+because those buttons set the PID temperature and a setpoint change is
+exactly the event that silently invalidates an 0f noise-floor run.
+**To test:** capture while pressing each display button; a simple level, a
+serial burst, or nothing are all informative.
+
+This is the one J5 line where a careless connection could actuate the
+machine, which hard invariant 1 forbids. The 8.2 K / 15 K divider is
+high-impedance and receive-only, so it is safe as specified — but do not
+replace it with anything that can source current.
 
 Two traps, both of which cost time on 2026-09-28:
 - **Ground is pin 1, the spoked pad.** The square-pad-is-pin-1 convention

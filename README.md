@@ -64,6 +64,13 @@ Hardware-specific and not packaged for reuse, but nothing is hidden:
   `firmware/src/main.cpp` are chosen to be safe whether the bus is driven
   push-pull or open-drain. There is mains inside this machine.
 
+## Licence
+
+[MIT](LICENSE). Take the display-bus decoder and use it.
+
+`firmware/lib/remote_scales/` keeps its own MIT licence and copyright
+(© 2023 kstam) — see that directory's `LICENSE` and `VENDORED.md`.
+
 ## Credits
 
 The reverse-engineered mainboard schematic comes from

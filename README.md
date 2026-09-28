@@ -5,9 +5,13 @@ Mignon Single Dose** grinder. An ESP32-S3 reads two Bluetooth scales, detects
 shots from the weight curve alone, spools them to flash, and uploads them to a
 small Go service that stores them in SQLite and serves a PWA.
 
+![Shot log with three curves overlaid](docs/images/shots.png)
+
 Currently **Phase 0: logging only**. Nothing actuates the machine — every tap is
 high-impedance and read-only. That is a hard invariant, not a stage we are
 waiting to leave.
+
+A visual tour is in [docs/overview.md](docs/overview.md).
 
 ## Two results worth reading even if you don't own this machine
 

@@ -52,42 +52,30 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    shot time and mean flow on the fixed recipe. That number is the Phase-3
    deadband and the go/no-go on closed-loop control. CLAUDE.md: the most
    important milestone and the one that gets skipped.
-2. **0b — display bus** — PARTS ARRIVED, BENCH TOOLING READY 2026-09-15
-   (SeenGreat SG-NANO-DLA-A rev 1.2 — what a generic "8 channel, CY7C68013A,
-   sigrok PulseView, 24 MHz" listing shipped as. Those listings are
-   interchangeable on paper and are NOT interchangeable in the input stage:
-   WeAct's LogicAnalyzerV1 buffers with a 74LVC541 and is genuinely 5 V
-   tolerant, this one does not — see below. Always read the buffer part
-   number off the board before probing anything above 3.3 V.
-   Plus 10x micro test hooks + resistor kit w/ 220k).
-   The analyser is verified end-to-end against nothing but
-   mains hum: it enumerates as `fx2lafw` (USB 1d50:608c) with the
-   firmware already in EEPROM (no upload needed), sustains 24 MHz on all
-   8 channels without overruns, and a finger on a D0 jumper reads back
-   50.1 Hz — so the input stage, the channel mapping and the timebase are
-   all good. Note it breaks out only GND + D0..D7: there is no VCC pin to
-   test against, hence the hum trick.
-   **NOT 5 V TOLERANT, despite the shop listing claiming 0-5.5 V.**
-   SeenGreat's schematic (SG-NANO-DLA-A-V1.1.pdf): each channel is a bare
-   100 R series resistor (RN2/RN4) into a **74HC245PW powered from 3.3 V**,
-   no pull-downs, nothing else. HC has input clamp diodes to VCC, so 5 V in
-   conducts ~10 mA through the 100 R and clamps the probed line to ~3.9 V.
-   The chip survives (abs max +-20 mA) but it DISTURBS THE BUS. On J5's
-   4.7 K pull-ups to +5 V that sag leaves only ~0.4 V of VIH margin at the
-   display. If J5 measures 5 V, condition it: 10 K/22 K divider per line
-   (tap 3.0 V, bus high 4.36 V, ~900 kHz bandwidth) or a 74LVC245/541
-   buffer at 3.3 V. NOT the 220 K resistors - those are for 0c's slow
-   switch lines; at 220 K the RC with probe capacitance smears every edge.
-   Next: photograph internals first,
-   then PulseView on J5 during heat-up; hunt the byte that tracks the
-   displayed temperature. Abandon cheaply if opaque.
-   Host tooling: `sigrok-cli` from Homebrew, plus PulseView built from
-   source by `tools/build-pulseview-macos.sh` (there is no Homebrew
-   PulseView, and it needs the sigrok git stack — the script explains why).
-   Divider for 0c: two 220k in series (5V->2.5V), not the old
-   100k/200k. Firmware readout via SWD
-   deliberately NOT pursued (RDP1 likely blocks it + brick risk);
-   keep as opaque-protocol fallback only, read-only, never erase.
+2. **0b — display bus — DONE 2026-09-28.** The bus is decoded and the
+   display is readable from the wire. Protocol, probe point and bit
+   offsets are in CLAUDE.md; the decoder is `tools/decode-display-bus.py`
+   and the raw captures are in `analysis/captures/`. Validation: the
+   decoded shot timer ran `001`→`169` over 16.892 s of capture time
+   against a displayed 16.9 s — 8 ms of agreement — and the static
+   capture rendered ` 95` in all 2267 frames, matching the display.
+   Kit that worked: SeenGreat SG-NANO-DLA-A + `sigrok-cli`, four wire
+   stubs soldered to the J5 pads, 8.2 K in series per channel and 1.5 K
+   in the ground lead (no multimeter needed — see the note below).
+   **The stubs are still soldered in**, so re-probing is a clip-on job.
+
+   Two things that cost time and should not cost it twice: the pad with
+   thermal-relief spokes into the copper pour is ground *regardless* of
+   wire colour, and sigrok's `i2c` decoder will produce confident garbage
+   (endless writes to address 0x00) on what is actually plain synchronous
+   serial.
+
+   Consequence for the roadmap: idle, the display shows boiler
+   temperature — that is **0e** essentially solved, pending firmware to
+   decode it live. During a brew it switches to a tenths-of-a-second shot
+   timer, which is the machine's own pump-on/pump-off boundary and much
+   of what **0c** was for. Reassess 0c's priority before ordering its
+   parts.
 
 3. **0c — switch sensing** (after 0b's machine-open session identified the
    J2/J4/J5 connector types → order JST pigtails + 30 AWG wire then).

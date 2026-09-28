@@ -70,11 +70,38 @@ actuator that can hold the line will silently reprogram the machine. Phase 1
 must use a hardware one-shot (74HC123 or NE555, ~120 ms) so firmware can
 *trigger* but never *hold*.
 
-**Display bus (unconfirmed):** PB7/PB8/PB9 cluster with two 4.7 K pull-ups
-to +5 V and two 100 R series resistors, routed via the ESDA6V1SC6 (U26) as
-nets `ESD1`/`ESD4` to display connector J5. Either hardware I²C on PB8/PB9
-or a bit-banged two-wire link on PB7/PB8. Probe at **J5**, not at MCU pins.
-If decodable, it carries boiler temperature.
+**Display bus — DECODED 2026-09-28 (0b done).** Captures and the decoder
+are in the repo: `analysis/captures/2026-09-28-display-bus-*.sr`,
+`tools/decode-display-bus.py`. Read those before touching this again.
+
+Probe at **J5** on the main control board, 4 pins. The pad with
+thermal-relief spokes into the copper pour is **GND** — the wire colours
+are meaningless (the harness is red/black/red/black because it was cut
+from two 2-wire reels, and ground is on a red one). One pad is +5 V, two
+are signals, both idled high by the 4.7 K pull-ups as the traced
+schematic predicted.
+
+It is **not I²C.** Plain synchronous serial: clock ~9.9 kHz (high 36 µs,
+low 65.5 µs), data sampled on the **rising** edge and stable across a whole
+clock period. Frames repeat every ~41 ms in two lengths, 133 and 67 bits,
+separated by >1 ms of clock idle; only the 133-bit frames carry digits.
+Beware: sigrok's `i2c` decoder happily "decodes" this as endless writes to
+address 0x00 — that output is the symptom of a wrong guess, not a result.
+
+Three 7-segment digit fields, MSB = segment a, order abcdefg:
+
+| Field | Bits in the 133-bit frame |
+|---|---|
+| hundreds / leading (blank when idle) | `[106:113]` |
+| tens | `[115:122]` |
+| units | `[124:131]` |
+
+**Idle: the display shows boiler temperature in °C.** During a brew the
+machine takes the display over for a **shot timer in tenths of a second**
+(counts `001`→`169` for a 16.9 s pull), so temperature is *not* readable
+mid-shot. That timer is a gift though: it is the machine's own pump-on to
+pump-off measurement, which is exactly the signal 0c switch sensing was
+meant to provide.
 
 ### Scales: 2 × Bookoo Themis (BLE)
 

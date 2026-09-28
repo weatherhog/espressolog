@@ -151,10 +151,31 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    gives 2.50 V against an ESP32-S3 VIH of 2.475 V — 2.60 V if the 3.3 V
    rail sits 5 % high — so a pressed button could read as not pressed.
 
-   Gives real shot boundaries and `first_drip_ms`. Reassess priority
-   first: 0b's display timer already carries the machine's own
-   pump-on/pump-off, so 0c may be redundant for boundaries and worth doing
-   only for the flush/clean events and `Water`/`Steam`.
+   Gives real shot boundaries and `first_drip_ms` — but that is the small
+   half. **J2 is the only actuation path on the machine**, so it is also
+   how a shot ever gets stopped automatically. 0b's display timer does make
+   0c redundant for *boundaries*; it does not make J2 redundant, and an
+   earlier note here wrongly implied it might.
+
+   Phase 1 stop-at-weight works by pulsing the 2Cup line when the scale
+   hits target. Two constraints from CLAUDE.md that shape the hardware:
+   there is **no fail-safe-open** (the board latches, so stopping needs an
+   active pulse, never an interrupter), and **anything that can hold the
+   line silently reprograms the machine** (hold >2 s rewrites that
+   direction's stored timer). Hence the mandated hardware one-shot — the
+   firmware must be physically incapable of holding.
+
+   **Feasibility, measured 2026-09-28** from `settle_offset_g` over the
+   same n=46 clean set: median overshoot after the stop is **+0.40 g**,
+   robust σ **0.15 g** (MAD × 1.4826), bulk 0.3–0.5 g. Trigger 0.4 g early
+   and you land inside ±0.3 g at 2σ — comfortably within a ±0.5 g target.
+   Note this is a *threshold trigger*, not a control loop, so the 12 %
+   flow noise floor from 0f does **not** gate it.
+
+   Two things to resolve before trusting that: eight of the 46 shots read
+   exactly 0.00 g offset (CLAUDE.md predicts the solenoid dump kills the
+   tail, but exactly-zero could equally be a detector artefact), and one
+   reads −1.70 g, which is not physical and means something moved.
 
    **Connector census** (from the traced schematic, so one order covers
    the rest of phase 0):

@@ -79,7 +79,10 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    Kit that worked: SeenGreat SG-NANO-DLA-A + `sigrok-cli`, four wire
    stubs soldered to the J5 pads, 8.2 K in series per channel and 1.5 K
    in the ground lead (no multimeter needed — see the note below).
-   **The stubs are still soldered in**, so re-probing is a clip-on job.
+   **The stubs were removed on 2026-09-28**, so any further capture needs a
+   tap rebuilt first — the in-line T-piece (Ascaso harness `I.4312`) is now
+   on the critical path for the `Disp-P4` button test, not just a tidiness
+   improvement.
 
    Three things that cost time and should not cost it twice: the pad with
    thermal-relief spokes into the copper pour is ground *regardless* of
@@ -128,8 +131,8 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    machine's own high never drops below 4.16 V against a display needing
    3.5 V. **Do not enable an internal pull-down** — 45K across the 15K leg
    drops the open-drain case to 2.33 V and the pin stops reading high.
-   The four stubs soldered to J5 for the 0b capture are still there, so
-   this is a clip-on job.
+   The stubs soldered to J5 for the 0b capture have since been removed, so
+   this needs the T-piece (or new stubs) before anything can be captured.
 
    Then `display on` (persisted in NVS) and check `status`.
 

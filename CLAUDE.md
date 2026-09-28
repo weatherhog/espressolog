@@ -235,9 +235,13 @@ contact. Most of the work, none of the risk. *This is where to start.*
 **0b — display bus.** Logic analyser on J5, offline reverse engineering.
 Parallel track, no code yet.
 
-**0c — switch sensing.** 100 K / 200 K divider on PB5 and PB6 into GPIO
-(17 µA load — an optocoupler's mA would drop ~1 V across the 1 K series
-network and could break the board's own threshold). Gives real shot
+**0c — switch sensing.** **150 K / 220 K** divider on PB5 and PB6 into GPIO
+(5 V → 2.97 V, 13.5 µA load — an optocoupler's mA would drop ~1 V across
+the 1 K series network and could break the board's own threshold). Do NOT
+use 220 K / 220 K: 2.50 V against an ESP32-S3 VIH of 2.475 V leaves 25 mV
+of margin, which supply tolerance alone consumes, and a pressed button
+would read as not pressed. The switch harness is **J2** (silkscreen
+`BOTONE`), 5 pins: +5 V, Steam, 1Cup, 2Cup, Water. Gives real shot
 boundaries, flush events, and a true `first_drip_ms`.
 
 **0d — flowmeter.** Tap PA8/PA9 (already 3.3 V logic) through 1 K series,

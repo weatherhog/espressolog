@@ -143,10 +143,29 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    not available from this source. Re-run `analysis/0f-noise-floor.ipynb`
    once the timer is logged; the shot-time figure may shrink.
 
-4. **0c — switch sensing** (after 0b's machine-open session identified the
-   J2/J4/J5 connector types → order JST pigtails + 30 AWG wire then).
-   100 K/200 K divider on PB5/PB6, gives real shot boundaries and
-   `first_drip_ms`.
+4. **0c — switch sensing.** The switch harness is **J2**, silkscreen
+   `BOTONE`, **5 pins**: +5 V, Steam, 1Cup, 2Cup, Water. Divider
+   **150 K / 220 K** into the GPIO (5 V → 2.97 V, 13.5 µA).
+
+   **NOT 220 K / 220 K**, which an earlier note here recommended: that
+   gives 2.50 V against an ESP32-S3 VIH of 2.475 V — 2.60 V if the 3.3 V
+   rail sits 5 % high — so a pressed button could read as not pressed.
+
+   Gives real shot boundaries and `first_drip_ms`. Reassess priority
+   first: 0b's display timer already carries the machine's own
+   pump-on/pump-off, so 0c may be redundant for boundaries and worth doing
+   only for the flush/clean events and `Water`/`Steam`.
+
+   **Connector census** (from the traced schematic, so one order covers
+   the rest of phase 0):
+
+   | Ref | Silkscreen | Pins | Carries |
+   |---|---|---|---|
+   | J5 | — | 4 | GND, `ESD1`, `ESD4`, `Disp-P4` |
+   | J2 | `BOTONE` | 5 | +5 V, Steam, 1Cup, 2Cup, Water |
+   | J4 | — | 3 | flowmeter `Flow-P1`/`P2` |
+   | J3 | — | 2 | NTC thermistor |
+   | J1 | — | 9 | **mains and loads — never touch** |
 5. **0d — flowmeter**, **0e — temperature** (if 0b cracked it), per
    docs/phase-0-plan.md.
 

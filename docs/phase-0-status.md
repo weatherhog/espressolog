@@ -165,17 +165,28 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    direction's stored timer). Hence the mandated hardware one-shot — the
    firmware must be physically incapable of holding.
 
-   **Feasibility, measured 2026-09-28** from `settle_offset_g` over the
-   same n=46 clean set: median overshoot after the stop is **+0.40 g**,
-   robust σ **0.15 g** (MAD × 1.4826), bulk 0.3–0.5 g. Trigger 0.4 g early
-   and you land inside ±0.3 g at 2σ — comfortably within a ±0.5 g target.
-   Note this is a *threshold trigger*, not a control loop, so the 12 %
-   flow noise floor from 0f does **not** gate it.
+   **Feasibility — measured, `analysis/overshoot.py`.** Overshoot after the
+   stop is most predictable at **+2 s: +0.20 g, σ 0.071 g** (n=38).
+   Trigger 0.2 g below target, read at +2 s, land inside **±0.14 g at 2σ**
+   — a third of a ±0.5 g tolerance. Stop-at-weight is viable.
+   It is a *threshold trigger*, not a control loop, so 0f's 12 % flow
+   noise floor does **not** gate it.
 
-   Two things to resolve before trusting that: eight of the 46 shots read
-   exactly 0.00 g offset (CLAUDE.md predicts the solenoid dump kills the
-   tail, but exactly-zero could equally be a detector artefact), and one
-   reads −1.70 g, which is not physical and means something moved.
+   Measured later the spread doubles (σ 0.12 at 5 s) because the Bookoo's
+   load cell drifts under a hot cup. **Consequence for the detector:**
+   `SETTLE_MS` is 5000 ms, squarely in the drift-contaminated region;
+   2500 ms would give a tighter `yield_final_g`. Not a casual change —
+   it redefines `yield_final_g` and breaks comparability with the existing
+   46 shots, so it needs a detector-version bump and a deliberate call.
+
+   The earlier note here (median +0.40 g over n=46) was computed on a
+   contaminated population and is superseded. **Seven of those 46 shots
+   have no samples after `stop_ms` at all** — the cup was lifted and the
+   detector finalised at the peak, so their `settle_offset_g = 0` is
+   structural, not measured. `overshoot.py` detects them by requiring a
+   ≥4 s tail rather than trusting the field. Shot 37 is also excluded:
+   a −3.10 g step then +2.00 g inside 180 ms (something knocked the cup)
+   followed by a slow lift the 5 g threshold never caught.
 
    **Connector census** (from the traced schematic, so one order covers
    the rest of phase 0):

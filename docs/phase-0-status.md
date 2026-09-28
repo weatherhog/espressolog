@@ -196,7 +196,7 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
 
    | Ref | Silkscreen | Pins | Carries |
    |---|---|---|---|
-   | J5 | — | 4 | GND, `ESD1`, `ESD4`, `Disp-P4` |
+   | J5 | — | 4 | GND, `ESD1`, `ESD4`, `Disp-P4` — **JST XH, `XHP-4`** (verified) |
    | J2 | `BOTONE` | 5 | +5 V, Steam, 1Cup, 2Cup, Water |
    | J4 | — | 3 | flowmeter `Flow-P1`/`P2` |
    | J3 | — | 2 | NTC thermistor |

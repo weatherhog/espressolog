@@ -74,8 +74,30 @@ must use a hardware one-shot (74HC123 or NE555, ~120 ms) so firmware can
 are in the repo: `analysis/captures/2026-09-28-display-bus-*.sr`,
 `tools/decode-display-bus.py`. Read those before touching this again.
 
-Probe at **J5** on the main control board, 4 pins. Its pinout, from the
-traced schematic in `techdregs/Ascaso_Dream_PID_Electronics`:
+Probe at **J5** on the main control board, 4 pins. **The connector is
+JST XH** — verified 2026-09-28 against the JST datasheet by measurement,
+not by eye:
+
+| Role | Part |
+|---|---|
+| Plug housing (on the machine harness) | `XHP-4` |
+| Crimp contact | `SXH-001T-P0.6` (AWG 28–22) |
+| Board header, top entry | `B4B-XH-A` |
+
+Measured 12.3 mm wide across the latches (spec 12.3; EHR-4 is 12.0),
+5.5 mm thick (spec 5.7; EH is 3.8 — the decisive one), pin span ~8 mm
+(spec 7.5). Friction latch with ribs, which EH does not have.
+
+**Sellers list these as "XH2.54". That is a misnomer — XH is 2.5 mm.**
+The listings are the right part; anything actually specified as Molex
+2.54 is not equivalent.
+
+J2 (`BOTONE`, 5 pins) and J4 (flowmeter, 3 pins) are almost certainly the
+same family — `XHP-5` / `XHP-3` — but that is inference from the board,
+not measured. Check before ordering for 0c/0d.
+
+Its pinout, from the traced schematic in
+`techdregs/Ascaso_Dream_PID_Electronics`:
 
 | J5 pin | Net | Notes |
 |---|---|---|

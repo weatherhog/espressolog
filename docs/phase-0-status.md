@@ -173,11 +173,14 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    noise floor does **not** gate it.
 
    Measured later the spread doubles (σ 0.12 at 5 s) because the Bookoo's
-   load cell drifts under a hot cup. **Consequence for the detector:**
-   `SETTLE_MS` is 5000 ms, squarely in the drift-contaminated region;
-   2500 ms would give a tighter `yield_final_g`. Not a casual change —
-   it redefines `yield_final_g` and breaks comparability with the existing
-   46 shots, so it needs a detector-version bump and a deliberate call.
+   load cell drifts under a hot cup.
+
+   **DECIDED 2026-09-28: `SETTLE_MS` stays at 5000 ms — don't relitigate.**
+   Shortening it to 2500 would tighten `yield_final_g` (σ 0.07 vs 0.12) but
+   redefines the field and breaks comparability across all 46 logged shots,
+   for a metric nobody is optimising. It costs nothing for stop-at-weight:
+   `SETTLE_MS` governs what is *logged*, while a Phase 1 controller reads
+   the scale at +2 s for its own trigger. The two are independent.
 
    The earlier note here (median +0.40 g over n=46) was computed on a
    contaminated population and is superseded. **Seven of those 46 shots

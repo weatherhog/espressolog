@@ -22,9 +22,12 @@ analysis/.venv/
 .DS_Store
 *.log
 firmware/test/host/detector_test
+firmware/test/host/display_test
 firmware/test/host/replay
 server/espressolog-server
 espressolog-server-linux
 server/internal/web/dist/*
 !server/internal/web/dist/.keep
 analysis/espressolog.db
+analysis/espressolog.db-shm
+analysis/espressolog.db-wal

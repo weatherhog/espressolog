@@ -47,11 +47,28 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
 
 ## Next milestones, in order
 
-1. **0f — noise floor** (trigger: ~30 shots, one recipe, changing nothing).
-   Build the first `analysis/` notebook against the SQLite file: std dev of
-   shot time and mean flow on the fixed recipe. That number is the Phase-3
-   deadband and the go/no-go on closed-loop control. CLAUDE.md: the most
-   important milestone and the one that gets skipped.
+1. **0f — noise floor — DONE 2026-09-28.** `analysis/0f-noise-floor.ipynb`
+   (run it against a fresh DB snapshot; the notebook says how to take one).
+
+   **σ = 0.21 g/s on mean flow (12.2 %) and 3.43 s on shot time (14.2 %)**,
+   over n=46: Moonwalker @ 7.9, one grind epoch, detector 0a.6 only, 46 of
+   78 recorded shots. Robust estimates agree (MAD × 1.4826), flow shows no
+   drift across five weeks, and bean age is not a confound
+   (corr = +0.13 over 16–39 days off roast).
+
+   Two filters carry most of the weight and should not be dropped when this
+   is re-run: pooling detector versions inflates σ for no physical reason
+   (0a.4 recorded a cup lift as the stop), and shots 25/26 were one pull the
+   detector split in two — now flagged `excluded` in the database.
+
+   **Read for Phase 3:** a controller resolving less than ~12 % is chasing
+   noise. But this bundles grind, distribution, tamp and puck with the
+   machine, so the achievable improvement is a fraction of it, not all of
+   it. And `total_s` is still first-drip-to-plateau rather than
+   pump-to-pump — 0b's display timer now offers the real boundary, so
+   **re-run the notebook once that timer is logged**: the flow figure should
+   stand, the time figure may shrink.
+
 2. **0b — display bus — DONE 2026-09-28.** The bus is decoded and the
    display is readable from the wire. Protocol, probe point and bit
    offsets are in CLAUDE.md; the decoder is `tools/decode-display-bus.py`

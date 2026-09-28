@@ -216,6 +216,13 @@ deviation of shot time and mean flow. That number is the noise floor, the
 Phase 3 deadband, and the honest go/no-go on closed-loop control. Do not
 skip this to get to the fun part.
 
+**MEASURED 2026-09-28** (`analysis/0f-noise-floor.ipynb`, n=46):
+**σ = 0.21 g/s on mean flow (12.2 %)**, σ = 3.43 s on shot time (14.2 %).
+Stratify before trusting any re-run — one bean, one grind epoch, one
+`detector_version`; pooling detector versions inflates σ for no physical
+reason. The figure bundles puck prep with the machine, so it is an upper
+bound on what control could fix, not a machine spec.
+
 ---
 
 ## Weighing attribution

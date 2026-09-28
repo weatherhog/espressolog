@@ -27,3 +27,4 @@ server/espressolog-server
 espressolog-server-linux
 server/internal/web/dist/*
 !server/internal/web/dist/.keep
+analysis/espressolog.db

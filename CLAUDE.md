@@ -74,12 +74,27 @@ must use a hardware one-shot (74HC123 or NE555, ~120 ms) so firmware can
 are in the repo: `analysis/captures/2026-09-28-display-bus-*.sr`,
 `tools/decode-display-bus.py`. Read those before touching this again.
 
-Probe at **J5** on the main control board, 4 pins. The pad with
-thermal-relief spokes into the copper pour is **GND** — the wire colours
-are meaningless (the harness is red/black/red/black because it was cut
-from two 2-wire reels, and ground is on a red one). One pad is +5 V, two
-are signals, both idled high by the 4.7 K pull-ups as the traced
-schematic predicted.
+Probe at **J5** on the main control board, 4 pins. Its pinout, from the
+traced schematic in `techdregs/Ascaso_Dream_PID_Electronics`:
+
+| J5 pin | Net | Notes |
+|---|---|---|
+| 1 | VSS | ground — the pad with thermal-relief spokes into the copper pour |
+| 2 | `ESD1` | signal, via U26. One of the two we decode. |
+| 3 | `ESD4` | signal, via U26 and R24. The other one. |
+| 4 | `Disp-P4` | third signal — idle high, never moved in 3 s of capture. Purpose unknown. |
+
+**There is no +5 V on J5** — it is ground plus three signals. A constant-high
+line on a logic analyser looks exactly like a supply rail, which is how it
+got mislabelled first time round.
+
+Two traps, both of which cost time on 2026-09-28:
+- **Ground is pin 1, the spoked pad.** The square-pad-is-pin-1 convention
+  does NOT hold on this board, and the wire colours say nothing either (the
+  harness is red/black/red/black because it was cut from two 2-wire reels,
+  and ground lands on a red one). Trust the thermal relief into the pour.
+- Both decoded signals idle high on the 4.7 K pull-ups, as the schematic
+  predicted.
 
 It is **not I²C.** Plain synchronous serial: clock ~9.9 kHz (high 36 µs,
 low 65.5 µs), data sampled on the **rising** edge and stable across a whole

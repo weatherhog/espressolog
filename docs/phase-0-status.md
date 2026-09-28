@@ -81,11 +81,20 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    in the ground lead (no multimeter needed — see the note below).
    **The stubs are still soldered in**, so re-probing is a clip-on job.
 
-   Two things that cost time and should not cost it twice: the pad with
+   Three things that cost time and should not cost it twice: the pad with
    thermal-relief spokes into the copper pour is ground *regardless* of
-   wire colour, and sigrok's `i2c` decoder will produce confident garbage
-   (endless writes to address 0x00) on what is actually plain synchronous
-   serial.
+   wire colour and regardless of which pad is square; sigrok's `i2c`
+   decoder will produce confident garbage (endless writes to address 0x00)
+   on what is actually plain synchronous serial; and J5 carries **no +5 V**
+   — it is ground plus three signals, so the constant-high channel is an
+   idle signal, not a supply (pinout now in CLAUDE.md, from the traced
+   schematic in `techdregs/Ascaso_Dream_PID_Electronics`).
+
+   Ascaso's own part number for the display harness is **`I.4312`**
+   (mainboard is `I.3957`, matching the board silkscreen). Buying that
+   spare is the cheapest route to an exact-fit mating connector for an
+   in-line T-tap — the repo's schematic uses generic KiCad symbols and
+   names no connector part.
 
    Consequence for the roadmap: idle, the display shows boiler
    temperature — that is **0e** essentially solved, pending firmware to

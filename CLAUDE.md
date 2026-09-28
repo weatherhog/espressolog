@@ -92,9 +92,20 @@ Measured 12.3 mm wide across the latches (spec 12.3; EHR-4 is 12.0),
 The listings are the right part; anything actually specified as Molex
 2.54 is not equivalent.
 
-J2 (`BOTONE`, 5 pins) and J4 (flowmeter, 3 pins) are almost certainly the
-same family — `XHP-5` / `XHP-3` — but that is inference from the board,
-not measured. Check before ordering for 0c/0d.
+**Every connector on this board is XH**, including J2 (`BOTONE`, 5 pins →
+`XHP-5` / `B5B-XH-A`) and J4 (flowmeter, 3 pins → `XHP-3` / `B3B-XH-A`).
+
+**The headers are moulded `H JST`, and that marking does NOT mean EH.**
+JST moulds it on XH headers too — it appears in the XH header drawing but
+not in any extractable text, so a text search of the datasheet will tell
+you the opposite. EH headers carry no such marking. The moulded number is
+the circuit count, so `3 H JST` is a `B3B-XH-A`.
+
+If a connector on this machine ever needs re-identifying, the one
+measurement that separates XH from EH — they share pitch, pin span and
+width to within 0.3 mm — is **depth**: plug 5.7 vs 3.8 mm, header shroud
+5.75 vs 3.8 mm. Nothing else discriminates, which is why identifying this
+from photographs failed repeatedly.
 
 Its pinout, from the traced schematic in
 `techdregs/Ascaso_Dream_PID_Electronics`:

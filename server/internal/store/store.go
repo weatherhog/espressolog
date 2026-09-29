@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"sort"
@@ -207,22 +208,33 @@ func defaultContext(tx *sql.Tx) (machineID, grinderID, epochID any) {
 // never a claim that a human confirmed them; bean_source records which.
 //
 //	bean  the loaded bag (bean.loaded_at, newest wins).
-//	grind carried forward from the last shot that had one, because the
-//	      grinder is physically still wherever it was last set. There is no
-//	      "current grind" to store — the last shot IS the record of it.
+//	grind carried forward from the last shot IN THE SAME GRIND EPOCH,
+//	      because the grinder is physically still wherever it was last set.
+//	      There is no "current grind" to store — the last shot IS the record
+//	      of it.
 //
-// Both may be nil: no bag loaded, or no shot has ever carried a grind. A nil
-// here must leave the column NULL rather than invent a value.
-func defaultRecipe(tx *sql.Tx) (beanID, grindDial any) {
+// The epoch scope is hard invariant 5, not tidiness: a dial reading is
+// relative to a zero point that moves whenever the burrs come out, so
+// carrying 7.9 across a burr change would assert a setting that never
+// existed. Across a boundary this degrades to NULL, which is the honest
+// answer — the first shot of a new epoch genuinely has no known dial until
+// someone says so.
+//
+// Both may be nil: no bag loaded, or no shot in this epoch has carried a
+// grind. A nil must leave the column NULL rather than invent a value.
+func defaultRecipe(tx *sql.Tx, epochID any) (beanID, grindDial any) {
 	var id int64
 	if tx.QueryRow(`SELECT id FROM bean WHERE loaded_at IS NOT NULL
 	                 ORDER BY loaded_at DESC, id DESC LIMIT 1`).Scan(&id) == nil {
 		beanID = id
 	}
-	var dial float64
-	if tx.QueryRow(`SELECT grind_dial FROM shot WHERE grind_dial IS NOT NULL
-	                 ORDER BY started_at DESC, id DESC LIMIT 1`).Scan(&dial) == nil {
-		grindDial = dial
+	if epochID != nil {
+		var dial float64
+		if tx.QueryRow(`SELECT grind_dial FROM shot
+		                 WHERE grind_dial IS NOT NULL AND grind_epoch_id = ?
+		                 ORDER BY started_at DESC, id DESC LIMIT 1`, epochID).Scan(&dial) == nil {
+			grindDial = dial
+		}
 	}
 	return
 }
@@ -239,7 +251,7 @@ func insertShot(tx *sql.Tx, h *record.Header, samples []record.Sample, scaleID a
 		excludeReason = "reject: under 5 g"
 	}
 	machineID, grinderID, epochID := defaultContext(tx)
-	beanID, grindDial := defaultRecipe(tx)
+	beanID, grindDial := defaultRecipe(tx, epochID)
 	// 'loaded' only if a bag actually was: an absent bean must stay NULL
 	// with no provenance rather than claim an attribution that never happened.
 	var beanSource any
@@ -438,6 +450,10 @@ func filterFields(fields map[string]any, allowed map[string]bool) (cols []string
 // Loading is a timestamp rather than a boolean so the newest wins and the
 // history of which bag was loaded when survives. Nothing is ever unloaded;
 // a bag stops being current when another is loaded.
+// ErrNotFound lets a handler distinguish "that row does not exist" from a
+// database failure, so a broken DB cannot masquerade as a 404.
+var ErrNotFound = errors.New("no such row")
+
 func (s *Store) LoadBean(id int64) error {
 	res, err := s.db.Exec(`UPDATE bean SET loaded_at = ? WHERE id = ?`,
 		time.Now().UTC().Format(time.RFC3339), id)
@@ -445,7 +461,7 @@ func (s *Store) LoadBean(id int64) error {
 		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		return fmt.Errorf("no such bean: %d", id)
+		return fmt.Errorf("%w: %d", ErrNotFound, id)
 	}
 	return nil
 }

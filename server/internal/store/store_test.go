@@ -216,6 +216,20 @@ func loadShotRecord(t *testing.T) (*record.Record, time.Time) {
 	return rec, time.UnixMilli(int64(rec.Header.StartedAtUnixMs))
 }
 
+// currentEpoch is the epoch defaultContext will pick. Derived rather than
+// assumed: migration 003 seeds the initial epoch with datetime('now'), which
+// is later than the golden record's timestamps, so "insert a newer epoch"
+// has to mean newer than THAT, not newer than the shot.
+func currentEpoch(t *testing.T, st *Store) int64 {
+	t.Helper()
+	var id int64
+	if err := st.db.QueryRow(`SELECT id FROM grind_epoch
+	                           ORDER BY started_at DESC, id DESC LIMIT 1`).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
 // The point of the loaded bag: a shot pulled and simply left alone must
 // still know its recipe. Before this, bean and grind arrived only if a human
 // opened the Capture screen, which made an untagged shot useless for
@@ -234,10 +248,11 @@ func TestIngestAttributesLoadedBean(t *testing.T) {
 	if err := st.LoadBean(beanID); err != nil {
 		t.Fatal(err)
 	}
-	// A grind only exists if some earlier shot carried one; seed that.
+	// A grind only exists if an earlier shot in THIS epoch carried one.
 	if _, err := st.db.Exec(
-		`INSERT INTO shot (started_at, grind_dial, created_at) VALUES (?, 7.9, ?)`,
-		at.Add(-time.Hour).Format(time.RFC3339), at.Format(time.RFC3339)); err != nil {
+		`INSERT INTO shot (started_at, grind_dial, grind_epoch_id, created_at) VALUES (?,7.9,?,?)`,
+		at.Add(-time.Hour).Format(time.RFC3339), currentEpoch(t, st),
+		at.Format(time.RFC3339)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -326,10 +341,15 @@ func TestUpdateShotBeanMarksUser(t *testing.T) {
 	}
 }
 
-// Loading another bag moves the hopper. Newest loaded_at wins, and nothing
-// is ever "unloaded" — a bag stops being current when another is loaded.
+// Loading another bag moves the hopper. Asserted through Ingest rather than
+// by re-running defaultRecipe's query in the test body: a test that restates
+// the implementation cannot fail when the implementation changes, which is
+// the one job it has here.
 func TestLoadBeanNewestWins(t *testing.T) {
 	st := openTestStore(t)
+	rec, at := loadShotRecord(t)
+	raw, _ := os.ReadFile("../record/testdata/shot-fw040-timevalid.bin")
+
 	var a, b int64
 	st.db.QueryRow(`INSERT INTO bean (roaster,name) VALUES ('R','A') RETURNING id`).Scan(&a)
 	st.db.QueryRow(`INSERT INTO bean (roaster,name) VALUES ('R','B') RETURNING id`).Scan(&b)
@@ -337,18 +357,64 @@ func TestLoadBeanNewestWins(t *testing.T) {
 	if err := st.LoadBean(a); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(1100 * time.Millisecond) // loaded_at has second resolution
+	// loaded_at is second-resolution, so the tiebreak is on id — which is
+	// exactly the case the UI has to agree with the server about.
 	if err := st.LoadBean(b); err != nil {
 		t.Fatal(err)
 	}
 
-	var current int64
-	st.db.QueryRow(`SELECT id FROM bean WHERE loaded_at IS NOT NULL
-	                 ORDER BY loaded_at DESC, id DESC LIMIT 1`).Scan(&current)
-	if current != b {
-		t.Errorf("loaded bag = %d, want %d (the most recently loaded)", current, b)
+	res, err := st.Ingest("aa:bb:cc:dd:ee:03", rec, raw, at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got int64
+	if err := st.db.QueryRow(`SELECT bean_id FROM shot WHERE id=?`, res.ShotID).Scan(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got != b {
+		t.Errorf("ingest attributed bean %d, want %d (the most recently loaded)", got, b)
 	}
 	if err := st.LoadBean(9999); err == nil {
 		t.Error("loading a nonexistent bean should fail")
+	}
+}
+
+// Hard invariant 5: a dial reading is relative to a zero point that moves
+// when the burrs come out, so it must not be carried across a grind epoch.
+// NULL is the honest answer for the first shot of a new epoch.
+func TestGrindDoesNotCrossEpoch(t *testing.T) {
+	st := openTestStore(t)
+	rec, at := loadShotRecord(t)
+	raw, _ := os.ReadFile("../record/testdata/shot-fw040-timevalid.bin")
+
+	var grinder int64
+	if err := st.db.QueryRow(`SELECT id FROM equipment WHERE kind='grinder' ORDER BY id LIMIT 1`).
+		Scan(&grinder); err != nil {
+		t.Fatal(err)
+	}
+	// A shot carrying a dial, in the epoch about to be superseded.
+	if _, err := st.db.Exec(
+		`INSERT INTO shot (started_at, grind_dial, grind_epoch_id, created_at) VALUES (?,7.9,?,?)`,
+		at.Add(-time.Hour).Format(time.RFC3339), currentEpoch(t, st),
+		at.Format(time.RFC3339)); err != nil {
+		t.Fatal(err)
+	}
+	// Burrs come out. Dated past the seeded epoch so defaultContext picks it.
+	if _, err := st.db.Exec(
+		`INSERT INTO grind_epoch (grinder_id, started_at, reason)
+		 VALUES (?, datetime('now','+1 day'), 'burr_clean')`, grinder); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := st.Ingest("aa:bb:cc:dd:ee:03", rec, raw, at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var dial any
+	if err := st.db.QueryRow(`SELECT grind_dial FROM shot WHERE id=?`, res.ShotID).Scan(&dial); err != nil {
+		t.Fatal(err)
+	}
+	if dial != nil {
+		t.Errorf("grind_dial = %v across an epoch boundary, want NULL", dial)
 	}
 }

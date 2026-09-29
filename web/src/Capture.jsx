@@ -52,11 +52,20 @@ export default function Capture({ shots, beans, activeBeanId, onSaved }) {
         await patchShot(pending.id, { excluded: 1, exclude_reason: "discarded at capture" });
       } else {
         const patch = {
-          bean_id: activeBeanId ?? null,
           grind_dial: grind,
           preinfusion_s: preinf,
           brew_temp_c: temp,
         };
+        // Only send the bean when a bag is actually loaded, and only when it
+        // differs from what ingest already attributed. Sending it
+        // unconditionally did two bad things: with no bag loaded it sent
+        // null and ERASED a bean the server had correctly inferred, and when
+        // it matched it promoted bean_source 'loaded' -> 'user', claiming a
+        // human confirmed a field this screen does not even show. Same
+        // treatment dose_ground_g gets below, for the same reason.
+        if (activeBeanId != null && activeBeanId !== pending.bean_id) {
+          patch.bean_id = activeBeanId;
+        }
         // Only send the dose when the user actually corrected it — an
         // untouched scale-attributed value must keep dose_source='measured'.
         if (dose !== pending.dose_ground_g) patch.dose_ground_g = dose;

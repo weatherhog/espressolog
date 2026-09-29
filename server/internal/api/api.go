@@ -5,6 +5,7 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -247,13 +248,19 @@ func postBean(st *store.Store) http.HandlerFunc {
 // that follows, which is what lets a shot be pulled and simply left alone.
 func loadBean(st *store.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-		if err != nil {
-			http.Error(w, "bad id", http.StatusBadRequest)
+		id, ok := pathID(w, r)
+		if !ok {
 			return
 		}
 		if err := st.LoadBean(id); err != nil {
-			http.Error(w, err.Error(), http.StatusNotFound)
+			// Only a genuinely missing row is a 404. Mapping every error
+			// here would let a broken database report itself as "no such
+			// bean", which is the wrong thing to go debugging.
+			code := http.StatusInternalServerError
+			if errors.Is(err, store.ErrNotFound) {
+				code = http.StatusNotFound
+			}
+			http.Error(w, err.Error(), code)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)

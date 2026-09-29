@@ -65,7 +65,12 @@ function ShotRow({ shot, curve, selected, tone, onClick, onDelete }) {
 function loadedBeanId(beans) {
   const loaded = (beans || []).filter((b) => b.loaded_at);
   if (!loaded.length) return null;
-  loaded.sort((a, b) => (a.loaded_at < b.loaded_at ? 1 : -1));
+  // Tiebreak on id exactly as the server does (ORDER BY loaded_at DESC,
+  // id DESC). loaded_at has second resolution, so two loads in the same
+  // second would otherwise let the UI and the server disagree about which
+  // bag is in the hopper.
+  loaded.sort((a, b) =>
+    a.loaded_at === b.loaded_at ? b.id - a.id : (a.loaded_at < b.loaded_at ? 1 : -1));
   return loaded[0].id;
 }
 
@@ -175,7 +180,13 @@ export default function App() {
       )}
       {tab === "beans" && (
         <Beans beans={beans} shots={shots} activeBeanId={activeBeanId}
-          setActiveBeanId={async (id) => { await loadBean(id); refresh(); }}
+          setActiveBeanId={async (id) => {
+            // Without this the button fails silently on an unhandled
+            // rejection, and the hopper is the one piece of state every
+            // later shot inherits.
+            try { await loadBean(id); refresh(); }
+            catch (e) { setError(`could not load that bag: ${e}`); }
+          }}
           onChanged={refresh} />
       )}
 

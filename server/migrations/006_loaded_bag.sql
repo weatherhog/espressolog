@@ -15,7 +15,10 @@
 -- incoming shot, exactly as it already stamps the grind epoch.
 ALTER TABLE bean ADD COLUMN loaded_at TEXT;
 
--- How bean_id — and the grind_dial carried forward alongside it — got there:
+-- How bean_id got there. This describes the BEAN only: a user correcting
+-- just the grind does not touch it, so it must not be read as provenance
+-- for grind_dial. If the dial ever needs its own, add grind_source rather
+-- than stretching this one.
 --
 --   loaded    attributed at ingest from the loaded bag. A good default, and
 --             wrong only if a bag was swapped without pressing Load.
@@ -31,3 +34,17 @@ ALTER TABLE shot ADD COLUMN bean_source TEXT
 
 -- Every bean already on a shot got there through the Capture screen.
 UPDATE shot SET bean_source = 'user' WHERE bean_id IS NOT NULL;
+
+-- Seed the hopper from history rather than leaving it empty. Without this a
+-- fresh deploy attributes nothing until somebody presses Load — which is the
+-- state this migration exists to abolish — and worse, an empty hopper meant
+-- the Capture screen sent bean_id:null and ERASED beans that ingest had
+-- correctly inferred. The bag on the most recent tagged shot is the best
+-- evidence available of what is physically in the grinder.
+UPDATE bean SET loaded_at = (
+  SELECT MAX(started_at) FROM shot WHERE shot.bean_id = bean.id
+)
+WHERE id = (
+  SELECT bean_id FROM shot WHERE bean_id IS NOT NULL
+   ORDER BY started_at DESC, id DESC LIMIT 1
+);

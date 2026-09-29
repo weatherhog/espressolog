@@ -440,20 +440,18 @@ func filterFields(fields map[string]any, allowed map[string]bool) (cols []string
 	return
 }
 
-// UpdateShot patches user-entered columns on one shot. A manual dose entry
-// also stamps dose_source so analysis can tell it from a weighed one.
-// LoadBean records which bag is in the hopper. Ingest reads this to
-// attribute every subsequent shot, so it is the one tap that replaces
-// tagging every shot individually — and it is pressed when you open a bag,
-// not while holding a portafilter.
-//
-// Loading is a timestamp rather than a boolean so the newest wins and the
-// history of which bag was loaded when survives. Nothing is ever unloaded;
-// a bag stops being current when another is loaded.
 // ErrNotFound lets a handler distinguish "that row does not exist" from a
 // database failure, so a broken DB cannot masquerade as a 404.
 var ErrNotFound = errors.New("no such row")
 
+// LoadBean records which bag is in the hopper. Ingest reads this to attribute
+// every subsequent shot, so it is the one tap that replaces tagging every
+// shot individually — and it is pressed when you open a bag, not while
+// holding a portafilter.
+//
+// Loading is a timestamp rather than a boolean so the newest wins and the
+// history of which bag was loaded when survives. Nothing is ever unloaded;
+// a bag stops being current when another is loaded.
 func (s *Store) LoadBean(id int64) error {
 	res, err := s.db.Exec(`UPDATE bean SET loaded_at = ? WHERE id = ?`,
 		time.Now().UTC().Format(time.RFC3339), id)
@@ -466,6 +464,9 @@ func (s *Store) LoadBean(id int64) error {
 	return nil
 }
 
+// UpdateShot patches user-entered columns on one shot. A manual dose entry
+// also stamps dose_source, and naming a bean stamps bean_source, so an
+// analysis can always tell a human's value from an inferred one.
 func (s *Store) UpdateShot(id int64, fields map[string]any) error {
 	cols, vals := filterFields(fields, shotUserFields)
 	if _, ok := fields["dose_ground_g"]; ok {

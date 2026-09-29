@@ -223,8 +223,14 @@ func loadShotRecord(t *testing.T) (*record.Record, time.Time) {
 func currentEpoch(t *testing.T, st *Store) int64 {
 	t.Helper()
 	var id int64
-	if err := st.db.QueryRow(`SELECT id FROM grind_epoch
-	                           ORDER BY started_at DESC, id DESC LIMIT 1`).Scan(&id); err != nil {
+	// Scoped to the first grinder by id, mirroring defaultContext. Equivalent
+	// today because migration 003 seeds exactly one grinder, but a helper
+	// that derives from a different query than production would drift
+	// silently the moment a second one appeared.
+	if err := st.db.QueryRow(`SELECT e.id FROM grind_epoch e
+	                           WHERE e.grinder_id = (SELECT id FROM equipment
+	                                                  WHERE kind='grinder' ORDER BY id LIMIT 1)
+	                           ORDER BY e.started_at DESC, e.id DESC LIMIT 1`).Scan(&id); err != nil {
 		t.Fatal(err)
 	}
 	return id
@@ -288,6 +294,13 @@ func TestIngestWithNoLoadedBeanLeavesNull(t *testing.T) {
 	st := openTestStore(t)
 	rec, at := loadShotRecord(t)
 	raw, _ := os.ReadFile("../record/testdata/shot-fw040-timevalid.bin")
+
+	// A bean that exists but was never loaded. Without this the test passes
+	// even if the WHERE loaded_at IS NOT NULL filter is dropped entirely,
+	// because there would be no bean row to wrongly attribute.
+	if _, err := st.db.Exec(`INSERT INTO bean (roaster,name) VALUES ('R','never loaded')`); err != nil {
+		t.Fatal(err)
+	}
 
 	res, err := st.Ingest("aa:bb:cc:dd:ee:03", rec, raw, at)
 	if err != nil {
@@ -357,9 +370,14 @@ func TestLoadBeanNewestWins(t *testing.T) {
 	if err := st.LoadBean(a); err != nil {
 		t.Fatal(err)
 	}
-	// loaded_at is second-resolution, so the tiebreak is on id — which is
-	// exactly the case the UI has to agree with the server about.
 	if err := st.LoadBean(b); err != nil {
+		t.Fatal(err)
+	}
+	// Both LoadBean calls land in the same second, so without this the id
+	// tiebreak alone decides the result and the loaded_at ordering is never
+	// exercised — the query could be ORDER BY loaded_at ASC and still pass.
+	// Age bean b's load so the timestamps genuinely differ, then a is newest.
+	if _, err := st.db.Exec(`UPDATE bean SET loaded_at='2020-01-01T00:00:00Z' WHERE id=?`, b); err != nil {
 		t.Fatal(err)
 	}
 
@@ -371,8 +389,8 @@ func TestLoadBeanNewestWins(t *testing.T) {
 	if err := st.db.QueryRow(`SELECT bean_id FROM shot WHERE id=?`, res.ShotID).Scan(&got); err != nil {
 		t.Fatal(err)
 	}
-	if got != b {
-		t.Errorf("ingest attributed bean %d, want %d (the most recently loaded)", got, b)
+	if got != a {
+		t.Errorf("ingest attributed bean %d, want %d (the most recently loaded)", got, a)
 	}
 	if err := st.LoadBean(9999); err == nil {
 		t.Error("loading a nonexistent bean should fail")

@@ -42,7 +42,10 @@ export default function Capture({ shots, beans, activeBeanId, onSaved }) {
     );
   }
 
-  const bean = beans?.find((b) => b.id === activeBeanId);
+  // The bean this SHOT was pulled on, falling back to the hopper only when
+  // the shot has none. Showing the currently-loaded bag for an older pending
+  // shot would display a coffee that was never in the basket.
+  const bean = beans?.find((b) => b.id === (pending?.bean_id ?? activeBeanId));
 
   const save = async (discard) => {
     setBusy(true);
@@ -56,16 +59,15 @@ export default function Capture({ shots, beans, activeBeanId, onSaved }) {
           preinfusion_s: preinf,
           brew_temp_c: temp,
         };
-        // Only send the bean when a bag is actually loaded, and only when it
-        // differs from what ingest already attributed. Sending it
-        // unconditionally did two bad things: with no bag loaded it sent
-        // null and ERASED a bean the server had correctly inferred, and when
-        // it matched it promoted bean_source 'loaded' -> 'user', claiming a
-        // human confirmed a field this screen does not even show. Same
-        // treatment dose_ground_g gets below, for the same reason.
-        if (activeBeanId != null && activeBeanId !== pending.bean_id) {
-          patch.bean_id = activeBeanId;
-        }
+        // The bean is deliberately NOT sent. Ingest already attributed the
+        // loaded bag, and this screen has no bean picker — so anything sent
+        // from here is the hopper's opinion, not a human's. Sending it did
+        // three wrong things in turn: with no bag loaded it sent null and
+        // ERASED a correct inference; when it matched it promoted
+        // bean_source 'loaded' -> 'user', claiming a confirmation nobody
+        // made; and on a shot pulled before a bag change it would overwrite
+        // the bag actually used with whatever is loaded now. A shot ingested
+        // before any bag was loaded simply keeps no bean, which is honest.
         // Only send the dose when the user actually corrected it — an
         // untouched scale-attributed value must keep dose_source='measured'.
         if (dose !== pending.dose_ground_g) patch.dose_ground_g = dose;

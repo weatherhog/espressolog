@@ -15,7 +15,13 @@
 #                    compiler and never touch the Arduino toolchain, so
 #                    nothing else would catch a break there.
 #   web            — catches a PWA that no longer builds, which would
-#                    otherwise only surface at `make deploy`.
+#                    otherwise only surface at `make deploy`, and lints the
+#                    React. The lint is here because `vite build` is blind to
+#                    the class of bug that actually broke this app: a hook
+#                    declared below an early return compiles, bundles and
+#                    deploys, then throws at runtime the first time the hook
+#                    count changes. Four review rounds missed one. eslint
+#                    finds it in 300 ms.
 
 name: CI
 
@@ -89,7 +95,7 @@ jobs:
         working-directory: firmware
 
   web:
-    name: web (vite build)
+    name: web (lint + build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -99,6 +105,10 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
+        working-directory: web
+      # Lint before build: a hooks violation is the failure worth reporting,
+      # and a broken build would otherwise mask it.
+      - run: npm run lint
         working-directory: web
       - run: npm run build
         working-directory: web

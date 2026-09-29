@@ -1,3 +1,16 @@
+/* eslint-disable react-hooks/refs -- The live buffer is a ref read during
+   render, on purpose: frames land at 10 Hz and allocating a fresh curve array
+   per frame is the cost this screen exists to avoid. forceRender guarantees a
+   render per mutation, so the rendered output does track the ref, and without
+   the React Compiler nothing memoizes a subtree past a state change.
+   Two things would break it, and neither reports an error anywhere:
+     - React.memo on LiveChart. It is handed the SAME array identity every
+       frame (curve is mutated in place), so a memo would freeze the trace at
+       two renders per shot. This is one line away and the 1 Hz idle clock
+       below is exactly the observation that tempts someone into it. Don't:
+       the geometry pass costs ~0.1 ms.
+     - babel-plugin-react-compiler in vite.config.js, which would reach the
+       same conclusion on its own. */
 import { useEffect, useRef, useState } from "react";
 import { T, MONO, SANS, paperBg } from "./tokens.js";
 import { Eyebrow, Readout, Panel } from "./components.jsx";
@@ -8,7 +21,7 @@ import { fetchCurve } from "./api.js";
 // they're a per-screen aiming aid, not data (the shot records what happened).
 const DEFAULT_TARGETS = { y0: 34, y1: 38, t0: 22, t1: 32 };
 
-export function loadTargets() {
+function loadTargets() {
   try { return { ...DEFAULT_TARGETS, ...JSON.parse(localStorage.getItem("pullTargets")) }; }
   catch { return { ...DEFAULT_TARGETS }; }
 }
@@ -85,8 +98,29 @@ export default function Pull({ shots, beans, activeBeanId, onIngested }) {
   const setTarget = (key, val) => {
     const next = { ...targets, [key]: val };
     setTargetsState(next);
-    try { localStorage.setItem("pullTargets", JSON.stringify(next)); } catch {}
+    // Private mode denies localStorage. Targets then live for this session
+    // only, which is a fine outcome for an aiming aid.
+    try { localStorage.setItem("pullTargets", JSON.stringify(next)); } catch { /* not persisted */ }
   };
+
+  // A 1 Hz clock, in state. The freshness dots further down are a function of
+  // "how long since the last frame", and once both scales go quiet NOTHING
+  // else re-renders this screen — so computing them from Date.now() during
+  // render froze them on their last value. The cup scale sleeps after ~9 min
+  // and the panel went on claiming "● cup scale · IDLE" until you switched
+  // tabs. A clock that ticks is what makes a timeout observable. 1 Hz against
+  // a 3 s threshold: the dot goes out somewhere between 3 and 4 seconds after
+  // the last frame, which is as much precision as a status dot deserves.
+  const [nowTs, setNowTs] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowTs(Date.now()), 1000);
+    // The target is a tablet, and iPadOS freezes setInterval on screen lock.
+    // Without this the dots read whatever they read a minute ago for the
+    // first second after wake, which is the moment you are looking at them.
+    const wake = () => { if (!document.hidden) setNowTs(Date.now()); };
+    document.addEventListener("visibilitychange", wake);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", wake); };
+  }, []);
 
   // Live buffers in refs: 10 Hz frames shouldn't churn React state objects.
   const live = useRef({
@@ -100,6 +134,10 @@ export default function Pull({ shots, beans, activeBeanId, onIngested }) {
     const candidates = (shots || []).filter((s) => !s.excluded);
     const g = candidates.find((s) => s.bean_id === activeBeanId) || candidates[0];
     if (g) fetchCurve(g.id).then(setGhost).catch(() => {});
+    // Reached only when there is no non-excluded shot at all — first run,
+    // still loading, or the last one was just excluded. A bean with no shots
+    // of its own still gets a ghost, via the candidates[0] fallback above.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     else setGhost(null);
   }, [shots, activeBeanId]);
 
@@ -154,9 +192,8 @@ export default function Pull({ shots, beans, activeBeanId, onIngested }) {
   }, [onIngested]);
 
   const L = live.current;
-  const now = Date.now();
-  const yieldFresh = now - L.lastYieldAt < 3000;
-  const doseFresh = now - L.lastDoseAt < 5000;
+  const yieldFresh = nowTs - L.lastYieldAt < 3000;
+  const doseFresh = nowTs - L.lastDoseAt < 5000;
   const bean = (beans || []).find((b) => b.id === activeBeanId);
   const flow = (() => {
     const c = L.curve;
@@ -168,6 +205,8 @@ export default function Pull({ shots, beans, activeBeanId, onIngested }) {
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
       <Panel style={{ flex: "1 1 480px", minWidth: 0, padding: 10, ...paperBg }}>
+        {/* curve is the same array every frame, mutated in place — see the
+            top of this file. Do not memoize this component. */}
         <LiveChart curve={L.curve} ghost={ghost} running={L.capturing} targets={targets} />
       </Panel>
 

@@ -85,6 +85,10 @@ export default function App() {
   const [up, setUp] = useState(null);
   const activeBeanId = loadedBeanId(beans);
 
+  // The empty dep array is load-bearing: this is passed to Pull as
+  // onIngested, and Pull's WebSocket effect is keyed on it. Give this a
+  // dependency and the socket tears down and reconnects on every App render,
+  // which drops live frames mid-shot.
   const refresh = useCallback(() => {
     fetchShots().then(setShots).catch((e) => setError(String(e)));
     fetchBeans().then(setBeans).catch(() => {});
@@ -98,7 +102,7 @@ export default function App() {
       refresh();   // new shots appear on their own; the device pushes when it pushes
     }, 30000);
     return () => clearInterval(t);
-  }, []);
+  }, [refresh]);
 
   // sparklines load lazily, oldest request wins are fine — shots are immutable
   useEffect(() => {
@@ -174,6 +178,11 @@ export default function App() {
       )}
       {tab === "capture" && (
         <Capture
+          // LOAD-BEARING, not a reconciliation hint. This is the same
+          // predicate Capture uses for `pending`, so a different shot
+          // becoming pending remounts the screen and re-seeds every field
+          // from it. Drop the key and one shot's grind, dose, temperature
+          // and bean choice bleed onto the next.
           key={(shots || []).find((s) => !s.excluded && s.tasting_id == null)?.id ?? "none"}
           shots={shots} beans={beans}
           onSaved={() => { refresh(); setTab("shots"); }} />

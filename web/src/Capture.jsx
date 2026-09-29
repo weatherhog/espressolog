@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { T, MONO, SANS } from "./tokens.js";
 import { Eyebrow, Readout, Panel, Chip, Stepper } from "./components.jsx";
 import { patchShot, postTasting } from "./api.js";
@@ -33,8 +33,13 @@ export default function Capture({ shots, beans, onSaved }) {
   // undefined = leave whatever ingest attributed; null = deliberately clear;
   // a number = set. Three states, because "no change" and "clear it" are
   // different intentions and collapsing them made the clear option dead.
+  // Nothing resets this on a new shot, and nothing needs to: App keys this
+  // component on the same predicate `pending` uses, so a different pending
+  // shot remounts the whole screen and every useState above re-seeds from
+  // the new shot. An effect resetting beanPick alone used to sit here; it
+  // could only ever fire on mount, and it hid the fact that grind/dose/temp
+  // depend on that key for the same thing.
   const [beanPick, setBeanPick] = useState(undefined);
-  useEffect(() => { setBeanPick(undefined); }, [pending?.id]);
 
   // EVERY hook must sit above this early return. React counts hooks per
   // render, so declaring one below it changes the count the moment a shot

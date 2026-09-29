@@ -189,14 +189,23 @@ func ensureScale(tx *sql.Tx, mac string) (any, error) {
 // epoch (seeded by migration 003) so ingested shots reference them from the
 // start. Any of these may be nil on an unseeded database — that degrades the
 // row, never fails the ingest.
-func defaultContext(tx *sql.Tx) (machineID, grinderID, epochID any) {
+// startedAt bounds the epoch for the same reason it bounds the recipe: a
+// replayed shot must be filed under the epoch in force when it was PULLED.
+// Without it a shot recovered after a burr change lands in the epoch created
+// after it happened — wrong under invariant 5, since v_dialin groups on
+// grind_epoch_id, and it then sends defaultRecipe hunting the wrong epoch for
+// a dial. This was the last "as of now" query on the ingest path.
+func defaultContext(tx *sql.Tx, startedAt time.Time) (machineID, grinderID, epochID any) {
+	at := startedAt.UTC().Format(time.RFC3339)
 	var id int64
 	if tx.QueryRow(`SELECT id FROM equipment WHERE kind='machine' ORDER BY id LIMIT 1`).Scan(&id) == nil {
 		machineID = id
 	}
 	if tx.QueryRow(`SELECT id FROM equipment WHERE kind='grinder' ORDER BY id LIMIT 1`).Scan(&id) == nil {
 		grinderID = id
-		if tx.QueryRow(`SELECT id FROM grind_epoch WHERE grinder_id=? ORDER BY started_at DESC, id DESC LIMIT 1`, id).Scan(&id) == nil {
+		if tx.QueryRow(`SELECT id FROM grind_epoch
+		                 WHERE grinder_id=? AND started_at <= ?
+		                 ORDER BY started_at DESC, id DESC LIMIT 1`, id, at).Scan(&id) == nil {
 			epochID = id
 		}
 	}
@@ -261,7 +270,7 @@ func insertShot(tx *sql.Tx, h *record.Header, samples []record.Sample, scaleID a
 		excluded = 1
 		excludeReason = "reject: under 5 g"
 	}
-	machineID, grinderID, epochID := defaultContext(tx)
+	machineID, grinderID, epochID := defaultContext(tx, startedAt)
 	beanID, grindDial := defaultRecipe(tx, epochID, startedAt)
 	// 'loaded' only if a bag actually was: an absent bean must stay NULL
 	// with no provenance rather than claim an attribution that never happened.

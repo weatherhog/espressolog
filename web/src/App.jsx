@@ -175,7 +175,7 @@ export default function App() {
       {tab === "capture" && (
         <Capture
           key={(shots || []).find((s) => !s.excluded && s.tasting_id == null)?.id ?? "none"}
-          shots={shots} beans={beans} activeBeanId={activeBeanId}
+          shots={shots} beans={beans}
           onSaved={() => { refresh(); setTab("shots"); }} />
       )}
       {tab === "beans" && (

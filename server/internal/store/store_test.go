@@ -429,10 +429,13 @@ func TestGrindDoesNotCrossEpoch(t *testing.T) {
 		at.UTC().Format(time.RFC3339)); err != nil {
 		t.Fatal(err)
 	}
-	// Burrs come out. Dated past the seeded epoch so defaultContext picks it.
+	// Burrs come out BETWEEN the two shots. The epoch lookup is bounded by
+	// shot time, so an epoch dated after this shot would (correctly) not
+	// apply to it — the boundary has to fall inside the interval to be the
+	// boundary this test is about.
 	if _, err := st.db.Exec(
-		`INSERT INTO grind_epoch (grinder_id, started_at, reason)
-		 VALUES (?, datetime('now','+1 day'), 'burr_clean')`, grinder); err != nil {
+		`INSERT INTO grind_epoch (grinder_id, started_at, reason) VALUES (?,?,'burr_clean')`,
+		grinder, at.Add(-30*time.Minute).UTC().Format(time.RFC3339)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -479,6 +482,20 @@ func TestIngestDoesNotInheritFromTheFuture(t *testing.T) {
 		at.UTC().Format(time.RFC3339)); err != nil {
 		t.Fatal(err)
 	}
+	epochThen := currentEpoch(t, st)
+	// And a burr change that happened AFTER this shot was pulled. Filing the
+	// shot under it would be wrong twice over: wrong epoch under invariant 5,
+	// and it sends the dial lookup hunting an epoch the shot was never in.
+	var grinder int64
+	if err := st.db.QueryRow(`SELECT id FROM equipment WHERE kind='grinder' ORDER BY id LIMIT 1`).
+		Scan(&grinder); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.db.Exec(
+		`INSERT INTO grind_epoch (grinder_id, started_at, reason) VALUES (?,?,'burr_clean')`,
+		grinder, at.Add(24*time.Hour).UTC().Format(time.RFC3339)); err != nil {
+		t.Fatal(err)
+	}
 
 	res, err := st.Ingest("aa:bb:cc:dd:ee:03", rec, raw, time.Now())
 	if err != nil {
@@ -495,5 +512,14 @@ func TestIngestDoesNotInheritFromTheFuture(t *testing.T) {
 	}
 	if gotDial != nil {
 		t.Errorf("grind_dial = %v, want NULL — 3.3 was set by a later shot", gotDial)
+	}
+	var gotEpoch int64
+	if err := st.db.QueryRow(`SELECT grind_epoch_id FROM shot WHERE id=?`, res.ShotID).
+		Scan(&gotEpoch); err != nil {
+		t.Fatal(err)
+	}
+	if gotEpoch != epochThen {
+		t.Errorf("filed under epoch %d, want %d — the one in force when it was pulled",
+			gotEpoch, epochThen)
 	}
 }

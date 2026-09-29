@@ -7,7 +7,7 @@ import { patchShot, postTasting } from "./api.js";
 // settings (grind, dose, preinfusion, temp) are sticky — seeded from the
 // most recent shot that has them, because they only change when you change
 // the machine. Never a tax paid while holding a portafilter.
-export default function Capture({ shots, beans, activeBeanId, onSaved }) {
+export default function Capture({ shots, beans, onSaved }) {
   // Pending = never captured at all. A tasting row, even one saved without
   // a rating, counts as captured — otherwise saving twice was invited.
   const pending = useMemo(
@@ -30,7 +30,19 @@ export default function Capture({ shots, beans, activeBeanId, onSaved }) {
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  // undefined = leave whatever ingest attributed; null = deliberately clear;
+  // a number = set. Three states, because "no change" and "clear it" are
+  // different intentions and collapsing them made the clear option dead.
+  const [beanPick, setBeanPick] = useState(undefined);
+  useEffect(() => { setBeanPick(undefined); }, [pending?.id]);
 
+  // EVERY hook must sit above this early return. React counts hooks per
+  // render, so declaring one below it changes the count the moment a shot
+  // arrives — "Rendered more hooks than during the previous render", and
+  // with no error boundary in this app the whole root unmounts. The empty
+  // state is the screen's advertised resting place, so this fires on the
+  // ordinary path: sit on Capture with nothing pending, pull a shot, the
+  // 30 s refresh delivers it, white screen.
   if (!pending) {
     return (
       <Panel style={{ padding: 40, textAlign: "center" }}>
@@ -47,11 +59,6 @@ export default function Capture({ shots, beans, activeBeanId, onSaved }) {
   // lie in the other direction: a shot ingested before any bag was loaded
   // would show today's bag while staying NULL in the database.
   const bean = beans?.find((b) => b.id === pending?.bean_id);
-
-  // null = "leave whatever ingest attributed". Only a deliberate change is
-  // ever written, so simply opening this screen never rewrites provenance.
-  const [beanPick, setBeanPick] = useState(null);
-  useEffect(() => { setBeanPick(null); }, [pending?.id]);
 
   const save = async (discard) => {
     setBusy(true);
@@ -73,7 +80,7 @@ export default function Capture({ shots, beans, activeBeanId, onSaved }) {
         // made; and on a shot pulled before a bag change it overwrote the
         // bag actually used. A deliberate pick is none of those things — it
         // is the only thing on this screen that earns bean_source='user'.
-        if (beanPick != null && beanPick !== pending.bean_id) patch.bean_id = beanPick;
+        if (beanPick !== undefined && beanPick !== pending.bean_id) patch.bean_id = beanPick;
         // Only send the dose when the user actually corrected it — an
         // untouched scale-attributed value must keep dose_source='measured'.
         if (dose !== pending.dose_ground_g) patch.dose_ground_g = dose;
@@ -125,12 +132,12 @@ export default function Capture({ shots, beans, activeBeanId, onSaved }) {
         <div style={{ marginTop: 24, paddingTop: 18, borderTop: `1px solid ${T.hair}` }}>
           <Eyebrow>Bean</Eyebrow>
           <select
-            value={beanPick ?? pending?.bean_id ?? ""}
+            value={(beanPick === undefined ? pending?.bean_id : beanPick) ?? ""}
             onChange={(e) => setBeanPick(e.target.value === "" ? null : Number(e.target.value))}
             style={{
               marginTop: 8, width: "100%", padding: "6px 4px",
               fontFamily: SANS, fontSize: 14,
-              color: bean || beanPick ? T.ink : T.inkSoft,
+              color: (beanPick === undefined ? bean : beanPick) ? T.ink : T.inkSoft,
               background: "transparent", border: `1px solid ${T.hair}`, borderRadius: 2,
             }}>
             <option value="">not recorded</option>

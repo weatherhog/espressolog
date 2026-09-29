@@ -1,5 +1,7 @@
 # espressolog
 
+[![CI](https://github.com/weatherhog/espressolog/actions/workflows/ci.yml/badge.svg)](https://github.com/weatherhog/espressolog/actions/workflows/ci.yml)
+
 Instrumentation for an **Ascaso Dream PID** espresso machine and a **Eureka
 Mignon Single Dose** grinder. An ESP32-S3 reads two Bluetooth scales, detects
 shots from the weight curve alone, spools them to flash, and uploads them to a

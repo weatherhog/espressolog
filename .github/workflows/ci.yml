@@ -1,0 +1,104 @@
+# Four jobs, all on standard GitHub-hosted runners so a public repo pays
+# nothing. Do NOT switch any of these to a larger runner: those are billed
+# even on public repositories.
+#
+# The point of each job:
+#   server         — the record/store tests pin the on-flash wire format
+#                    against real captured fixtures.
+#   firmware-logic — detector_test.cpp encodes every real-world shot loss as
+#                    a scenario. These are the tests that exist because a shot
+#                    was actually lost, and they are the reason not to lose it
+#                    twice. display_test.cpp does the same against real frames
+#                    recorded off the machine.
+#   firmware-build — the only check that the firmware still *compiles*. The
+#                    host tests build the pure-logic files with a host
+#                    compiler and never touch the Arduino toolchain, so
+#                    nothing else would catch a break there.
+#   web            — catches a PWA that no longer builds, which would
+#                    otherwise only surface at `make deploy`.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push makes an in-flight run irrelevant; don't leave it running.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server:
+    name: server (go test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          # Read the version from go.mod rather than pinning it here, so the
+          # two can never disagree.
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - run: go vet ./...
+        working-directory: server
+      - run: go test ./...
+        working-directory: server
+
+  firmware-logic:
+    name: firmware (host tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # ShotDetector and DisplayBus are pure logic with no Arduino
+      # dependencies, which is what makes them testable off-target at all.
+      - run: make test
+        working-directory: firmware/test/host
+
+  firmware-build:
+    name: firmware (pio run)
+    runs-on: ubuntu-latest
+    # A cold run fetches ~1 GB of toolchain. Free, but a hung job should not
+    # sit on a runner for the default six hours.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          # No pip cache here on purpose: setup-python's pip caching hashes a
+          # requirements.txt / pyproject.toml, and this repo has neither, so
+          # enabling it fails the step outright. PlatformIO's own toolchain
+          # cache below is the one that actually matters.
+      # The espressif32 toolchain is ~1 GB; without this cache every run
+      # re-downloads it. Cache storage is free for public repos.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio/.cache
+            ~/.platformio/packages
+            ~/.platformio/platforms
+          key: pio-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini') }}
+          restore-keys: pio-${{ runner.os }}-
+      - run: pip install --upgrade platformio
+      # secrets.h is gitignored and absent here. That is fine: both call
+      # sites guard it with __has_include, so the build must succeed without
+      # it — and this job is what proves that stays true.
+      - run: pio run
+        working-directory: firmware
+
+  web:
+    name: web (vite build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npm run build
+        working-directory: web

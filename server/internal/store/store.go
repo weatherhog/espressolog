@@ -202,6 +202,31 @@ func defaultContext(tx *sql.Tx) (machineID, grinderID, epochID any) {
 	return
 }
 
+// The recipe a shot was pulled on, inferred rather than asked for — the same
+// bargain as dose attribution. Both values are defaults a human can correct,
+// never a claim that a human confirmed them; bean_source records which.
+//
+//	bean  the loaded bag (bean.loaded_at, newest wins).
+//	grind carried forward from the last shot that had one, because the
+//	      grinder is physically still wherever it was last set. There is no
+//	      "current grind" to store — the last shot IS the record of it.
+//
+// Both may be nil: no bag loaded, or no shot has ever carried a grind. A nil
+// here must leave the column NULL rather than invent a value.
+func defaultRecipe(tx *sql.Tx) (beanID, grindDial any) {
+	var id int64
+	if tx.QueryRow(`SELECT id FROM bean WHERE loaded_at IS NOT NULL
+	                 ORDER BY loaded_at DESC, id DESC LIMIT 1`).Scan(&id) == nil {
+		beanID = id
+	}
+	var dial float64
+	if tx.QueryRow(`SELECT grind_dial FROM shot WHERE grind_dial IS NOT NULL
+	                 ORDER BY started_at DESC, id DESC LIMIT 1`).Scan(&dial) == nil {
+		grindDial = dial
+	}
+	return
+}
+
 func insertShot(tx *sql.Tx, h *record.Header, samples []record.Sample, scaleID any, startedAt time.Time, now string) (int64, error) {
 	var stoppedBy, excludeReason any
 	excluded := 0
@@ -214,19 +239,28 @@ func insertShot(tx *sql.Tx, h *record.Header, samples []record.Sample, scaleID a
 		excludeReason = "reject: under 5 g"
 	}
 	machineID, grinderID, epochID := defaultContext(tx)
+	beanID, grindDial := defaultRecipe(tx)
+	// 'loaded' only if a bag actually was: an absent bean must stay NULL
+	// with no provenance rather than claim an attribution that never happened.
+	var beanSource any
+	if beanID != nil {
+		beanSource = "loaded"
+	}
 
 	r, err := tx.Exec(`
 		INSERT INTO shot (
 			started_at, tz_offset_min, scale_id,
 			machine_id, grinder_id, grind_epoch_id,
+			bean_id, bean_source, grind_dial,
 			stop_ms, stopped_by,
 			yield_at_stop_g, yield_final_g, settle_offset_g,
 			peak_flow_gps, mean_flow_gps, flow_win_start_ms, flow_win_end_ms,
 			detector_version, firmware_version,
 			excluded, exclude_reason, created_at
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		startedAt.Format(time.RFC3339), h.TzOffsetMin, scaleID,
 		machineID, grinderID, epochID,
+		beanID, beanSource, grindDial,
 		h.StopMs, stoppedBy,
 		mg(h.YieldAtStopMg), mg(h.YieldFinalMg), mg(h.SettleOffsetMg),
 		mg(h.PeakFlowMgps), mg(h.MeanFlowMgps), h.FlowWinStartMs, h.FlowWinEndMs,
@@ -396,11 +430,46 @@ func filterFields(fields map[string]any, allowed map[string]bool) (cols []string
 
 // UpdateShot patches user-entered columns on one shot. A manual dose entry
 // also stamps dose_source so analysis can tell it from a weighed one.
+// LoadBean records which bag is in the hopper. Ingest reads this to
+// attribute every subsequent shot, so it is the one tap that replaces
+// tagging every shot individually — and it is pressed when you open a bag,
+// not while holding a portafilter.
+//
+// Loading is a timestamp rather than a boolean so the newest wins and the
+// history of which bag was loaded when survives. Nothing is ever unloaded;
+// a bag stops being current when another is loaded.
+func (s *Store) LoadBean(id int64) error {
+	res, err := s.db.Exec(`UPDATE bean SET loaded_at = ? WHERE id = ?`,
+		time.Now().UTC().Format(time.RFC3339), id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return fmt.Errorf("no such bean: %d", id)
+	}
+	return nil
+}
+
 func (s *Store) UpdateShot(id int64, fields map[string]any) error {
 	cols, vals := filterFields(fields, shotUserFields)
 	if _, ok := fields["dose_ground_g"]; ok {
 		cols = append(cols, "dose_source")
 		vals = append(vals, "manual")
+	}
+	// A human naming the bean outranks whatever was inferred at ingest, and
+	// the provenance has to move with it — otherwise a corrected shot still
+	// looks guessed, and an analysis filtering on 'user' would discard the
+	// one value it should trust most.
+	if v, ok := fields["bean_id"]; ok {
+		cols = append(cols, "bean_source")
+		if v == nil {
+			// Clearing the bean clears its provenance with it. Marking a
+			// NULL as 'user' would claim someone confirmed there was no
+			// bean, which is not what an empty field means.
+			vals = append(vals, nil)
+		} else {
+			vals = append(vals, "user")
+		}
 	}
 	if len(cols) == 0 {
 		return fmt.Errorf("no updatable fields in request")

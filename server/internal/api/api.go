@@ -33,6 +33,7 @@ func New(st *store.Store, hub *live.Hub) http.Handler {
 	mux.HandleFunc("GET /api/v1/beans", listBeans(st))
 	mux.HandleFunc("POST /api/v1/beans", postBean(st))
 	mux.HandleFunc("PATCH /api/v1/beans/{id}", patchBean(st))
+	mux.HandleFunc("POST /api/v1/beans/{id}/load", loadBean(st))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := st.Healthy(); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -239,6 +240,23 @@ func postBean(st *store.Store) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]any{"id": id})
+	}
+}
+
+// Marks a bag as the one in the hopper. Ingest attributes it to every shot
+// that follows, which is what lets a shot be pulled and simply left alone.
+func loadBean(st *store.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+		if err != nil {
+			http.Error(w, "bad id", http.StatusBadRequest)
+			return
+		}
+		if err := st.LoadBean(id); err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 

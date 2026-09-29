@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { T, MONO, SANS, paperBg, SERIES } from "./tokens.js";
 import { Eyebrow, Readout, Panel, Tag } from "./components.jsx";
 import { Spark, Overlay } from "./Chart.jsx";
-import { fetchShots, fetchCurve, fetchBeans, deleteShot, health } from "./api.js";
+import { fetchShots, fetchCurve, fetchBeans, deleteShot, health, loadBean } from "./api.js";
 import Capture from "./Capture.jsx";
 import Beans from "./Beans.jsx";
 import Pull from "./Pull.jsx";
@@ -56,8 +56,17 @@ function ShotRow({ shot, curve, selected, tone, onClick, onDelete }) {
   );
 }
 
-function loadActiveBean() {
-  try { return JSON.parse(localStorage.getItem("activeBeanId")) ?? null; } catch { return null; }
+// Which bag is in the hopper is SERVER state (bean.loaded_at), not a
+// per-browser preference. It used to live in localStorage, which meant the
+// server never learned it — so a shot could only get a bean if a human
+// opened the Capture screen, and opening the app on another device showed
+// an empty hopper. Ingest now attributes the loaded bag to every shot, so
+// this has to be the same answer everywhere.
+function loadedBeanId(beans) {
+  const loaded = (beans || []).filter((b) => b.loaded_at);
+  if (!loaded.length) return null;
+  loaded.sort((a, b) => (a.loaded_at < b.loaded_at ? 1 : -1));
+  return loaded[0].id;
 }
 
 export default function App() {
@@ -69,12 +78,7 @@ export default function App() {
   const [selected, setSelected] = useState([]);  // [{id, tone}]
   const [showExcluded, setShowExcluded] = useState(false);
   const [up, setUp] = useState(null);
-  const [activeBeanId, setActiveBeanIdState] = useState(loadActiveBean);
-
-  const setActiveBeanId = (id) => {
-    setActiveBeanIdState(id);
-    try { localStorage.setItem("activeBeanId", JSON.stringify(id)); } catch {}
-  };
+  const activeBeanId = loadedBeanId(beans);
 
   const refresh = useCallback(() => {
     fetchShots().then(setShots).catch((e) => setError(String(e)));
@@ -171,7 +175,8 @@ export default function App() {
       )}
       {tab === "beans" && (
         <Beans beans={beans} shots={shots} activeBeanId={activeBeanId}
-          setActiveBeanId={setActiveBeanId} onChanged={refresh} />
+          setActiveBeanId={async (id) => { await loadBean(id); refresh(); }}
+          onChanged={refresh} />
       )}
 
       <div style={{ display: tab === "shots" ? "flex" : "none", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>

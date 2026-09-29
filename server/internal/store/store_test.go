@@ -201,3 +201,154 @@ func TestIngestRealRecord(t *testing.T) {
 		t.Errorf("scale registered twice")
 	}
 }
+
+// loadShotRecord returns the golden shot record and the time it started.
+func loadShotRecord(t *testing.T) (*record.Record, time.Time) {
+	t.Helper()
+	raw, err := os.ReadFile("../record/testdata/shot-fw040-timevalid.bin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec, err := record.Decode(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return rec, time.UnixMilli(int64(rec.Header.StartedAtUnixMs))
+}
+
+// The point of the loaded bag: a shot pulled and simply left alone must
+// still know its recipe. Before this, bean and grind arrived only if a human
+// opened the Capture screen, which made an untagged shot useless for
+// analysis even though the system already knew what was in the hopper.
+func TestIngestAttributesLoadedBean(t *testing.T) {
+	st := openTestStore(t)
+	dev := "aa:bb:cc:dd:ee:03"
+	rec, at := loadShotRecord(t)
+	raw, _ := os.ReadFile("../record/testdata/shot-fw040-timevalid.bin")
+
+	var beanID int64
+	if err := st.db.QueryRow(
+		`INSERT INTO bean (roaster, name) VALUES ('R','B') RETURNING id`).Scan(&beanID); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.LoadBean(beanID); err != nil {
+		t.Fatal(err)
+	}
+	// A grind only exists if some earlier shot carried one; seed that.
+	if _, err := st.db.Exec(
+		`INSERT INTO shot (started_at, grind_dial, created_at) VALUES (?, 7.9, ?)`,
+		at.Add(-time.Hour).Format(time.RFC3339), at.Format(time.RFC3339)); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := st.Ingest(dev, rec, raw, at)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var gotBean int64
+	var gotSource string
+	var gotGrind float64
+	if err := st.db.QueryRow(
+		`SELECT bean_id, bean_source, grind_dial FROM shot WHERE id=?`, res.ShotID).
+		Scan(&gotBean, &gotSource, &gotGrind); err != nil {
+		t.Fatal(err)
+	}
+	if gotBean != beanID {
+		t.Errorf("bean_id = %d, want %d (the loaded bag)", gotBean, beanID)
+	}
+	if gotSource != "loaded" {
+		t.Errorf("bean_source = %q, want \"loaded\"", gotSource)
+	}
+	if gotGrind != 7.9 {
+		t.Errorf("grind_dial = %v, want 7.9 carried forward", gotGrind)
+	}
+}
+
+// With no bag loaded the columns must stay NULL. Inventing a bean would be
+// worse than leaving it blank: an analysis cannot tell a fabricated value
+// from a real one, and bean_source would be claiming an attribution that
+// never happened.
+func TestIngestWithNoLoadedBeanLeavesNull(t *testing.T) {
+	st := openTestStore(t)
+	rec, at := loadShotRecord(t)
+	raw, _ := os.ReadFile("../record/testdata/shot-fw040-timevalid.bin")
+
+	res, err := st.Ingest("aa:bb:cc:dd:ee:03", rec, raw, at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var beanID, source any
+	if err := st.db.QueryRow(
+		`SELECT bean_id, bean_source FROM shot WHERE id=?`, res.ShotID).Scan(&beanID, &source); err != nil {
+		t.Fatal(err)
+	}
+	if beanID != nil || source != nil {
+		t.Errorf("bean_id=%v bean_source=%v, want both NULL", beanID, source)
+	}
+}
+
+// A human naming the bean outranks the inference, and the provenance has to
+// move with it — otherwise a corrected shot still reads as guessed.
+func TestUpdateShotBeanMarksUser(t *testing.T) {
+	st := openTestStore(t)
+	rec, at := loadShotRecord(t)
+	raw, _ := os.ReadFile("../record/testdata/shot-fw040-timevalid.bin")
+
+	var beanID int64
+	st.db.QueryRow(`INSERT INTO bean (roaster, name) VALUES ('R','B') RETURNING id`).Scan(&beanID)
+	if err := st.LoadBean(beanID); err != nil {
+		t.Fatal(err)
+	}
+	res, err := st.Ingest("aa:bb:cc:dd:ee:03", rec, raw, at)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := st.UpdateShot(res.ShotID, map[string]any{"bean_id": beanID}); err != nil {
+		t.Fatal(err)
+	}
+	var source string
+	st.db.QueryRow(`SELECT bean_source FROM shot WHERE id=?`, res.ShotID).Scan(&source)
+	if source != "user" {
+		t.Errorf("after user edit bean_source = %q, want \"user\"", source)
+	}
+
+	// Clearing the bean clears the provenance: marking NULL as 'user' would
+	// claim someone confirmed there was no bean.
+	if err := st.UpdateShot(res.ShotID, map[string]any{"bean_id": nil}); err != nil {
+		t.Fatal(err)
+	}
+	var cleared any
+	st.db.QueryRow(`SELECT bean_source FROM shot WHERE id=?`, res.ShotID).Scan(&cleared)
+	if cleared != nil {
+		t.Errorf("after clearing the bean, bean_source = %v, want NULL", cleared)
+	}
+}
+
+// Loading another bag moves the hopper. Newest loaded_at wins, and nothing
+// is ever "unloaded" — a bag stops being current when another is loaded.
+func TestLoadBeanNewestWins(t *testing.T) {
+	st := openTestStore(t)
+	var a, b int64
+	st.db.QueryRow(`INSERT INTO bean (roaster,name) VALUES ('R','A') RETURNING id`).Scan(&a)
+	st.db.QueryRow(`INSERT INTO bean (roaster,name) VALUES ('R','B') RETURNING id`).Scan(&b)
+
+	if err := st.LoadBean(a); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(1100 * time.Millisecond) // loaded_at has second resolution
+	if err := st.LoadBean(b); err != nil {
+		t.Fatal(err)
+	}
+
+	var current int64
+	st.db.QueryRow(`SELECT id FROM bean WHERE loaded_at IS NOT NULL
+	                 ORDER BY loaded_at DESC, id DESC LIMIT 1`).Scan(&current)
+	if current != b {
+		t.Errorf("loaded bag = %d, want %d (the most recently loaded)", current, b)
+	}
+	if err := st.LoadBean(9999); err == nil {
+		t.Error("loading a nonexistent bean should fail")
+	}
+}

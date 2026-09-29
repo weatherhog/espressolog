@@ -33,6 +33,7 @@ export const deleteShot = (id) => send("DELETE", `/api/v1/shots/${id}`);
 export const postTasting = (id, fields) => send("POST", `/api/v1/shots/${id}/tasting`, fields);
 export const postBean = (fields) => send("POST", "/api/v1/beans", fields);
 export const patchBean = (id, fields) => send("PATCH", `/api/v1/beans/${id}`, fields);
+export const loadBean = (id) => send("POST", `/api/v1/beans/${id}/load`);
 
 export async function fetchBeans() {
   const r = await fetch("/api/v1/beans");

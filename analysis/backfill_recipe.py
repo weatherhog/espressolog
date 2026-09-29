@@ -14,10 +14,16 @@ New shots are attributed at ingest now; this is for the archive.
 THE RULE, and it is deliberately timid:
 
   A shot is backfilled only when the nearest tagged shot BEFORE it and the
-  nearest tagged shot AFTER it name the SAME bean. Two neighbours agreeing
-  is strong evidence the bag never changed in between. If they disagree, a
-  bag was swapped somewhere in the gap and we cannot tell which side this
-  shot fell on, so it is left alone.
+  nearest tagged shot AFTER it name the SAME bean, AND they are no more than
+  MAX_BRACKET_DAYS apart. Two neighbours agreeing is strong evidence the bag
+  never changed in between — but that evidence is time-dependent, and two
+  shots four months apart agreeing says nothing about the months between. If
+  they disagree, a bag was swapped somewhere in the gap and we cannot tell
+  which side this shot fell on, so it is left alone.
+
+  The DIAL is stricter still: it is written only when both neighbours agree
+  on it AND all three shots share a known grind_epoch. A single neighbour is
+  never enough for a dial, however close.
 
   At the ends of the timeline there is only one neighbour. That is used only
   within MAX_GAP_DAYS, because "the nearest tagged shot is three weeks away"
@@ -35,7 +41,8 @@ import sqlite3
 import sys
 import datetime as dt
 
-MAX_GAP_DAYS = 3
+MAX_GAP_DAYS = 3        # single neighbour: how far it may reach
+MAX_BRACKET_DAYS = 14   # two neighbours: how wide a gap they may vouch for
 
 
 def parse(ts):
@@ -55,8 +62,13 @@ def epoch_safe(grind, shot, *sources):
     """
     if grind is None:
         return None
+    # An unknown epoch is the case with the LEAST information, not a match.
+    # Python's None == None would otherwise let two unanchored shots vouch
+    # for each other, which is precisely the reading invariant 5 forbids.
+    if shot["grind_epoch_id"] is None:
+        return None
     for src in sources:
-        if src["grind_epoch_id"] != shot["grind_epoch_id"]:
+        if src["grind_epoch_id"] is None or src["grind_epoch_id"] != shot["grind_epoch_id"]:
             return None
     return grind
 
@@ -108,6 +120,10 @@ def main():
             # between them, and an invented dial is worse than a missing one:
             # v_dialin does not filter on bean_source, so a guess would flow
             # straight into the Phase-3 fit as if it were measured.
+            span = (parse(nxt["started_at"]) - parse(prev["started_at"])).total_seconds() / 86400
+            if span > MAX_BRACKET_DAYS:
+                skipped.append((s, f"neighbours agree but bracket {span:.0f} days"))
+                continue
             grind = prev["grind_dial"] if prev["grind_dial"] == nxt["grind_dial"] else None
             grind = epoch_safe(grind, s, prev, nxt)
         else:
@@ -116,7 +132,12 @@ def main():
             if gap > MAX_GAP_DAYS:
                 skipped.append((s, f"only one neighbour, {gap:.1f} days away"))
                 continue
-            grind = epoch_safe(src["grind_dial"], s, src)
+            # The bean gets the benefit of a single close neighbour; the dial
+            # does not. The two-neighbour path demands prev == nxt before
+            # writing a dial precisely because one reading is not evidence —
+            # that reasoning does not weaken just because the other neighbour
+            # is missing.
+            grind = None
         plans.append((s, src, grind))
 
     print(f"{len(shots)} shots, {len(tagged)} already tagged, "

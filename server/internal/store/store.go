@@ -222,17 +222,28 @@ func defaultContext(tx *sql.Tx) (machineID, grinderID, epochID any) {
 //
 // Both may be nil: no bag loaded, or no shot in this epoch has carried a
 // grind. A nil must leave the column NULL rather than invent a value.
-func defaultRecipe(tx *sql.Tx, epochID any) (beanID, grindDial any) {
+// startedAt bounds both queries: the recipe must be the one in force WHEN THE
+// SHOT WAS PULLED, not when the record happened to arrive. Those differ more
+// often than they look like they would — the firmware spools to flash and
+// uploads only on confirmed success, so a WiFi outage delivers a backlog
+// hours later, and the replay tool re-ingests archived curves long after the
+// fact. Unbounded, replaying an old capture after loading today's bag stamps
+// every recovered shot with today's coffee and marks it 'loaded', which reads
+// as authoritative.
+func defaultRecipe(tx *sql.Tx, epochID any, startedAt time.Time) (beanID, grindDial any) {
+	at := startedAt.UTC().Format(time.RFC3339)
 	var id int64
-	if tx.QueryRow(`SELECT id FROM bean WHERE loaded_at IS NOT NULL
-	                 ORDER BY loaded_at DESC, id DESC LIMIT 1`).Scan(&id) == nil {
+	if tx.QueryRow(`SELECT id FROM bean
+	                 WHERE loaded_at IS NOT NULL AND loaded_at <= ?
+	                 ORDER BY loaded_at DESC, id DESC LIMIT 1`, at).Scan(&id) == nil {
 		beanID = id
 	}
 	if epochID != nil {
 		var dial float64
 		if tx.QueryRow(`SELECT grind_dial FROM shot
 		                 WHERE grind_dial IS NOT NULL AND grind_epoch_id = ?
-		                 ORDER BY started_at DESC, id DESC LIMIT 1`, epochID).Scan(&dial) == nil {
+		                   AND started_at <= ?
+		                 ORDER BY started_at DESC, id DESC LIMIT 1`, epochID, at).Scan(&dial) == nil {
 			grindDial = dial
 		}
 	}
@@ -251,7 +262,7 @@ func insertShot(tx *sql.Tx, h *record.Header, samples []record.Sample, scaleID a
 		excludeReason = "reject: under 5 g"
 	}
 	machineID, grinderID, epochID := defaultContext(tx)
-	beanID, grindDial := defaultRecipe(tx, epochID)
+	beanID, grindDial := defaultRecipe(tx, epochID, startedAt)
 	// 'loaded' only if a bag actually was: an absent bean must stay NULL
 	// with no provenance rather than claim an attribution that never happened.
 	var beanSource any

@@ -254,11 +254,18 @@ func TestIngestAttributesLoadedBean(t *testing.T) {
 	if err := st.LoadBean(beanID); err != nil {
 		t.Fatal(err)
 	}
+	// LoadBean stamps now; the golden shot was pulled in August. Backdate so
+	// the bag was actually in the hopper when the shot happened — the recipe
+	// is bounded by the shot's own timestamp.
+	if _, err := st.db.Exec(`UPDATE bean SET loaded_at=? WHERE id=?`,
+		at.Add(-24*time.Hour).UTC().Format(time.RFC3339), beanID); err != nil {
+		t.Fatal(err)
+	}
 	// A grind only exists if an earlier shot in THIS epoch carried one.
 	if _, err := st.db.Exec(
 		`INSERT INTO shot (started_at, grind_dial, grind_epoch_id, created_at) VALUES (?,7.9,?,?)`,
-		at.Add(-time.Hour).Format(time.RFC3339), currentEpoch(t, st),
-		at.Format(time.RFC3339)); err != nil {
+		at.Add(-time.Hour).UTC().Format(time.RFC3339), currentEpoch(t, st),
+		at.UTC().Format(time.RFC3339)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -373,11 +380,16 @@ func TestLoadBeanNewestWins(t *testing.T) {
 	if err := st.LoadBean(b); err != nil {
 		t.Fatal(err)
 	}
-	// Both LoadBean calls land in the same second, so without this the id
-	// tiebreak alone decides the result and the loaded_at ordering is never
-	// exercised — the query could be ORDER BY loaded_at ASC and still pass.
-	// Age bean b's load so the timestamps genuinely differ, then a is newest.
-	if _, err := st.db.Exec(`UPDATE bean SET loaded_at='2020-01-01T00:00:00Z' WHERE id=?`, b); err != nil {
+	// Both LoadBean calls land in the same second, so without distinct
+	// timestamps the id tiebreak alone decides it and the loaded_at ordering
+	// is never exercised — ORDER BY loaded_at ASC would still pass. Both must
+	// also predate the shot, since the recipe is bounded by shot time.
+	if _, err := st.db.Exec(`UPDATE bean SET loaded_at=? WHERE id=?`,
+		at.Add(-48*time.Hour).UTC().Format(time.RFC3339), b); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.db.Exec(`UPDATE bean SET loaded_at=? WHERE id=?`,
+		at.Add(-24*time.Hour).UTC().Format(time.RFC3339), a); err != nil {
 		t.Fatal(err)
 	}
 
@@ -413,8 +425,8 @@ func TestGrindDoesNotCrossEpoch(t *testing.T) {
 	// A shot carrying a dial, in the epoch about to be superseded.
 	if _, err := st.db.Exec(
 		`INSERT INTO shot (started_at, grind_dial, grind_epoch_id, created_at) VALUES (?,7.9,?,?)`,
-		at.Add(-time.Hour).Format(time.RFC3339), currentEpoch(t, st),
-		at.Format(time.RFC3339)); err != nil {
+		at.Add(-time.Hour).UTC().Format(time.RFC3339), currentEpoch(t, st),
+		at.UTC().Format(time.RFC3339)); err != nil {
 		t.Fatal(err)
 	}
 	// Burrs come out. Dated past the seeded epoch so defaultContext picks it.
@@ -434,5 +446,54 @@ func TestGrindDoesNotCrossEpoch(t *testing.T) {
 	}
 	if dial != nil {
 		t.Errorf("grind_dial = %v across an epoch boundary, want NULL", dial)
+	}
+}
+
+// A spooled or replayed upload must inherit the recipe in force WHEN IT WAS
+// PULLED, not whatever is current when it finally arrives. The firmware
+// uploads only on confirmed success, so an outage delivers a backlog hours
+// later, and the replay tool re-ingests archived curves long after the fact.
+// Unbounded, replaying an archive after loading today's bag would stamp every
+// recovered shot with today's coffee and mark it 'loaded'.
+func TestIngestDoesNotInheritFromTheFuture(t *testing.T) {
+	st := openTestStore(t)
+	rec, at := loadShotRecord(t)
+	raw, _ := os.ReadFile("../record/testdata/shot-fw040-timevalid.bin")
+
+	var old, recent int64
+	st.db.QueryRow(`INSERT INTO bean (roaster,name) VALUES ('R','in the hopper then') RETURNING id`).Scan(&old)
+	st.db.QueryRow(`INSERT INTO bean (roaster,name) VALUES ('R','opened later') RETURNING id`).Scan(&recent)
+	if _, err := st.db.Exec(`UPDATE bean SET loaded_at=? WHERE id=?`,
+		at.Add(-48*time.Hour).UTC().Format(time.RFC3339), old); err != nil {
+		t.Fatal(err)
+	}
+	// A bag loaded AFTER this shot was pulled. It must not be attributed.
+	if _, err := st.db.Exec(`UPDATE bean SET loaded_at=? WHERE id=?`,
+		at.Add(48*time.Hour).UTC().Format(time.RFC3339), recent); err != nil {
+		t.Fatal(err)
+	}
+	// Likewise a dial set by a LATER shot in the same epoch.
+	if _, err := st.db.Exec(
+		`INSERT INTO shot (started_at, grind_dial, grind_epoch_id, created_at) VALUES (?,3.3,?,?)`,
+		at.Add(time.Hour).UTC().Format(time.RFC3339), currentEpoch(t, st),
+		at.UTC().Format(time.RFC3339)); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := st.Ingest("aa:bb:cc:dd:ee:03", rec, raw, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gotBean int64
+	var gotDial any
+	if err := st.db.QueryRow(`SELECT bean_id, grind_dial FROM shot WHERE id=?`, res.ShotID).
+		Scan(&gotBean, &gotDial); err != nil {
+		t.Fatal(err)
+	}
+	if gotBean != old {
+		t.Errorf("attributed bean %d, want %d — the bag loaded before the shot", gotBean, old)
+	}
+	if gotDial != nil {
+		t.Errorf("grind_dial = %v, want NULL — 3.3 was set by a later shot", gotDial)
 	}
 }

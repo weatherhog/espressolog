@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { T, MONO, SANS } from "./tokens.js";
 import { Eyebrow, Readout, Panel, Chip, Stepper } from "./components.jsx";
 import { patchShot, postTasting } from "./api.js";
@@ -42,10 +42,16 @@ export default function Capture({ shots, beans, activeBeanId, onSaved }) {
     );
   }
 
-  // The bean this SHOT was pulled on, falling back to the hopper only when
-  // the shot has none. Showing the currently-loaded bag for an older pending
-  // shot would display a coffee that was never in the basket.
-  const bean = beans?.find((b) => b.id === (pending?.bean_id ?? activeBeanId));
+  // The bean THIS SHOT was pulled on — no falling back to the hopper. The
+  // fallback rendered a coffee the save would not write, which is the same
+  // lie in the other direction: a shot ingested before any bag was loaded
+  // would show today's bag while staying NULL in the database.
+  const bean = beans?.find((b) => b.id === pending?.bean_id);
+
+  // null = "leave whatever ingest attributed". Only a deliberate change is
+  // ever written, so simply opening this screen never rewrites provenance.
+  const [beanPick, setBeanPick] = useState(null);
+  useEffect(() => { setBeanPick(null); }, [pending?.id]);
 
   const save = async (discard) => {
     setBusy(true);
@@ -59,15 +65,15 @@ export default function Capture({ shots, beans, activeBeanId, onSaved }) {
           preinfusion_s: preinf,
           brew_temp_c: temp,
         };
-        // The bean is deliberately NOT sent. Ingest already attributed the
-        // loaded bag, and this screen has no bean picker — so anything sent
-        // from here is the hopper's opinion, not a human's. Sending it did
-        // three wrong things in turn: with no bag loaded it sent null and
-        // ERASED a correct inference; when it matched it promoted
+        // Sent only when the user actually picked a bean, exactly as
+        // dose_ground_g is handled below. Sending the hopper's value
+        // unconditionally was wrong three ways: with no bag loaded it sent
+        // null and ERASED a correct inference; when it matched it promoted
         // bean_source 'loaded' -> 'user', claiming a confirmation nobody
-        // made; and on a shot pulled before a bag change it would overwrite
-        // the bag actually used with whatever is loaded now. A shot ingested
-        // before any bag was loaded simply keeps no bean, which is honest.
+        // made; and on a shot pulled before a bag change it overwrote the
+        // bag actually used. A deliberate pick is none of those things — it
+        // is the only thing on this screen that earns bean_source='user'.
+        if (beanPick != null && beanPick !== pending.bean_id) patch.bean_id = beanPick;
         // Only send the dose when the user actually corrected it — an
         // untouched scale-attributed value must keep dose_source='measured'.
         if (dose !== pending.dose_ground_g) patch.dose_ground_g = dose;
@@ -118,8 +124,24 @@ export default function Capture({ shots, beans, activeBeanId, onSaved }) {
 
         <div style={{ marginTop: 24, paddingTop: 18, borderTop: `1px solid ${T.hair}` }}>
           <Eyebrow>Bean</Eyebrow>
-          <div style={{ marginTop: 8, fontFamily: SANS, fontSize: 14, color: bean ? T.ink : T.inkSoft }}>
-            {bean ? `${bean.roaster} — ${bean.name}` : "none selected — pick one under Beans"}
+          <select
+            value={beanPick ?? pending?.bean_id ?? ""}
+            onChange={(e) => setBeanPick(e.target.value === "" ? null : Number(e.target.value))}
+            style={{
+              marginTop: 8, width: "100%", padding: "6px 4px",
+              fontFamily: SANS, fontSize: 14,
+              color: bean || beanPick ? T.ink : T.inkSoft,
+              background: "transparent", border: `1px solid ${T.hair}`, borderRadius: 2,
+            }}>
+            <option value="">not recorded</option>
+            {(beans || []).map((b) => (
+              <option key={b.id} value={b.id}>{b.roaster} — {b.name}</option>
+            ))}
+          </select>
+          <div style={{ marginTop: 6, fontFamily: MONO, fontSize: 9.5, color: T.inkSoft, letterSpacing: "0.06em" }}>
+            {pending?.bean_source === "loaded" ? "from the loaded bag — change only if wrong"
+              : pending?.bean_source === "user" ? "confirmed"
+              : "no bag was loaded when this was pulled"}
           </div>
         </div>
       </Panel>

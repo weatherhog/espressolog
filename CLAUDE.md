@@ -92,6 +92,14 @@ Measured 12.3 mm wide across the latches (spec 12.3; EHR-4 is 12.0),
 The listings are the right part; anything actually specified as Molex
 2.54 is not equivalent.
 
+Sellers also print **"JST EH"** in spec tables for parts that are plainly
+XH — seen 2026-09-30 on a LiPo balance extension whose own title said XH.
+What the part is *for* is better evidence than what the listing calls it:
+hobby LiPo balance ports are XH in all but a few outliers. **That
+particular lead is believed XH but has NOT been mated to J5 yet** — this
+paragraph is the reasoning, not a measurement. Verify by mating, not by
+reading, and do not promote this to a fact until something has seated.
+
 **Every connector on this board is XH**, including J2 (`BOTONE`, 5 pins →
 `XHP-5` / `B5B-XH-A`) and J4 (flowmeter, 3 pins → `XHP-3` / `B3B-XH-A`).
 

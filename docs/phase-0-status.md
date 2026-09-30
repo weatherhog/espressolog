@@ -80,7 +80,7 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    stubs soldered to the J5 pads, 8.2 K in series per channel and 1.5 K
    in the ground lead (no multimeter needed — see the note below).
    **The stubs were removed on 2026-09-28**, so any further capture needs a
-   tap rebuilt first — the in-line T-piece (Ascaso harness `I.4312`) is now
+   tap rebuilt first — the in-line T-piece (3S balance lead, see below) is now
    on the critical path for the `Disp-P4` button test, not just a tidiness
    improvement.
 
@@ -94,10 +94,13 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    schematic in `techdregs/Ascaso_Dream_PID_Electronics`).
 
    Ascaso's own part number for the display harness is **`I.4312`**
-   (mainboard is `I.3957`, matching the board silkscreen). Buying that
-   spare is the cheapest route to an exact-fit mating connector for an
-   in-line T-tap — the repo's schematic uses generic KiCad symbols and
-   names no connector part.
+   (mainboard is `I.3957`, matching the board silkscreen) — worth knowing,
+   but no longer the first choice for the T-tap. A **3S LiPo balance
+   extension lead** is male-to-female XH on cable, wired 1:1, and 4-pin,
+   so it drops straight in line at J5; `I.4312` is the fallback if a
+   generic connector turns out not to mate. See `docs/shopping-list.md`,
+   which is the buying document. (The repo's schematic uses generic KiCad
+   symbols and names no connector part, which is why this took measuring.)
 
    Consequence for the roadmap: idle, the display shows boiler
    temperature — that is **0e** essentially solved, pending firmware to

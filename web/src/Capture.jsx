@@ -117,8 +117,14 @@ export default function Capture({ shots, beans, justSaved, onSaved }) {
       setBalance(null); setRating(null); setNotes("");
       onSaved({ id: pending.id, discarded: discard });
     } catch (e) {
+      // Only re-enable on failure. On success the buttons stay disabled
+      // until refresh() delivers the next pending shot, which remounts this
+      // component and resets busy — because the shot is still on screen in
+      // the meantime and the tab switch that used to hide it is gone. If
+      // refresh never lands they stay disabled, which is the safe direction:
+      // a second press would write a second tasting row for a shot the
+      // banner already says is saved.
       setError(String(e));
-    } finally {
       setBusy(false);
     }
   };

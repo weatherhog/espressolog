@@ -40,8 +40,10 @@ does the T-piece *and* the run out of the machine with no splice.
 Two things to check on any such listing:
 
 - **"XH 2,54 mm" is the usual misnomer** — XH is 2.5 mm. A listing that
-  mentions LiPo balance leads is the right part regardless of the title,
-  because balance connectors *are* XH. Anything genuinely specified as
+  mentions LiPo balance leads is very likely the right part whatever the
+  title says, because balance connectors *are* XH — but the male ends on
+  those leads are aftermarket clones rather than genuine JST, so fit is
+  worth checking rather than assuming. Anything genuinely specified as
   Molex/Dupont 2.54 is not equivalent and will not mate.
 - **The kit is the female side only.** XH has no cable-mount male part at
   all; see the balance-lead note below.
@@ -95,11 +97,14 @@ this cannot be established from a product photo — the wires twist freely
 and the colours are the manufacturer's choice, not a standard. First job
 for the new multimeter:
 
-1. Hold both housings the same way up, latch facing you. Leftmost cavity
-   is pin 1 on both ends.
-2. Meter on continuity. Male pin 1 → female pin 1 must beep.
-3. Male pin 1 → female pins 2, 3, 4 must **not** beep.
-4. Repeat for each pin.
+1. Lay the lead flat on the bench with **both latches facing up**. Do not
+   turn either end over — "looking into the mating face" flips left and
+   right, which is how a correct lead reads as mirrored and a mirrored one
+   passes. Pin 1 is then the same side of both housings; call it the left.
+2. Meter on continuity. Left-most of one end → left-most of the other:
+   must beep.
+3. That same pin against the other end's remaining three: must **not** beep.
+4. Repeat for each position. You want a 1:1 map and nothing else.
 
 Any cross means a mirrored lead. In line at J5 that lands the board's
 ground on `Disp-P4` — the bidirectional line, and the one connection on
@@ -196,8 +201,9 @@ worth buying as dedicated bags so you are not down to your last two at
 | 1.5 kΩ | 10 | 0b analyser ground lead |
 | E12 assortment kit, 1/4 W | 1 | everything else |
 
-Two values are load-bearing and documented in CLAUDE.md — repeating them
-here because getting either wrong is silent:
+Two values are load-bearing — 0c is in CLAUDE.md, 0e is worked out in
+`docs/phase-0-status.md`. Repeated here because getting either wrong fails
+silently:
 
 - **0c must be 150 K / 220 K, never 220 K / 220 K.** 220/220 gives 2.50 V
   against an ESP32-S3 VIH of 2.475 V. Supply tolerance alone eats that

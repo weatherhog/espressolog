@@ -123,6 +123,15 @@ Its pinout, from the traced schematic in
 | 1 | VSS | ground — the pad with thermal-relief spokes into the copper pour |
 | 2 | `ESD1` | signal, via U26. One of the two we decode. |
 | 3 | `ESD4` | signal, via U26 and R24. The other one. |
+
+**Which of `ESD1`/`ESD4` is the clock was never written down.** The 0b
+captures name their channels `D0`–`D7` with no record of which probe sat
+on which pad, and the decoder just takes CSV column 0 as clock. Next time
+the analyser is on the bus, settle it and replace this paragraph: the
+clock is the metronome — uniform ~9.9 kHz, 36 µs high, 65.5 µs low — while
+the data line tracks the displayed number. A wrong guess is electrically
+harmless (identical dividers on both legs) but decodes nothing, so if a
+built tap is silent, swap the pair before suspecting anything else.
 | 4 | `Disp-P4` | third signal — **bidirectional**, see below. Idle high; never moved in 3 s of capture. |
 
 **There is no +5 V on J5** — it is ground plus three signals. A constant-high

@@ -129,6 +129,108 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    J5 ground ------------------- ESP32 GND
    ```
 
+   **Three wires leave the T-piece, not four:** `ESD1` (J5 pin 2), `ESD4`
+   (pin 3), `VSS` (pin 1, the spoked pad) for ground. **Pin 4 `Disp-P4` is
+   not tapped** — bidirectional, and the one line here that could actuate
+   the machine. The analyser may probe it for the button test; the
+   permanent install leaves it alone.
+
+   **WHICH OF `ESD1`/`ESD4` IS THE CLOCK IS NOT RECORDED.** CLAUDE.md says
+   only "one of the two we decode" and "the other one"; the 0b captures
+   are labelled `D0`–`D7` with no note of which probe sat on which pad, and
+   `tools/decode-display-bus.py` simply takes CSV column 0 as clock. The
+   mapping lived in whoever soldered the stubs, and the stubs were removed.
+
+   Settle it in ten seconds when the analyser goes back on: **the clock is
+   the metronome** — uniform ~9.9 kHz, 36 µs high, 65.5 µs low, unchanging.
+   The data line changes with the displayed number. Write the answer into
+   CLAUDE.md then.
+
+   Until then it is a coin flip, and a wrong guess is *electrically
+   harmless* — both legs are identical 8.2K/15K dividers — but silently
+   dead: `attachInterrupt(DISPLAY_CLK_PIN, ..., RISING)` would fire on data
+   edges and nothing would ever decode. **If the tap is built and nothing
+   decodes, swap the two signal wires at the box connector before
+   suspecting anything else.**
+
+   **Where each part physically sits:**
+
+   ```
+   inside the machine          |  cable out       |  project box, outside
+   ---------------------------------------------------------------------
+   J5 -[T-piece]- 8.2K inline  |  3 x 26 AWG      |  2 x 15K to GND
+        |                      |  silicone,       |  ESP32-S3 GPIO4/5/GND
+        +- machine harness     |  twisted pairs   |  USB charger (isolated)
+   ```
+
+   **Route this cable AWAY from the mains loom**, and twist each signal
+   with a ground return. Splitting the divider is right for fault
+   protection but it moves the design's lowest-margin node onto 50 cm of
+   unshielded wire: in the open-drain case the pin sits at 2.69 V against
+   a VIH of 2.48 V, so **210 mV of headroom**, on a node whose Thevenin
+   impedance is 8.2K ∥ 15K ≈ 5.3 kΩ. The machine's own loom carries the
+   heater line and a random-phase BTA204S triac; a capacitively coupled
+   commutation spike above 210 mV corrupts frames intermittently, which is
+   the worst kind of fault to chase. If it happens, ~470 pF from each GPIO
+   to GND at the box costs 5.3 kΩ × 470 pF = 2.5 µs against a 36 µs clock
+   high — settles in a fifth of the pulse, and puts the corner at 64 kHz,
+   well below triac spike content. Do not go much above 1 nF.
+
+   **The 8.2K series resistors go at the T-piece, not in the box.** Solder
+   each into the stripped window so the branch is
+   `[J5 conductor] - [8.2K] - [26 AWG out]`, heat-shrink over it. The
+   failure to design for is a conductor inside the tap cable chafing
+   through to the ground return running beside it in the same bundle, or
+   to another conductor at a crushed cable gland. With the resistor at the
+   far end that puts a J5 signal straight to ground — display stops, and
+   if anything upstream is driving push-pull it is driving into a short.
+   Disturbing the machine, which invariant 1 forbids.
+
+   With 8.2K at the source the same fault is current-bounded: under 0.6 mA
+   if the line is driven from 5 V, 0.39 mA if it is only held up by the
+   board's 4.7K pull-up. **Not a non-event though** — in the pull-up case
+   the J5 node becomes a divider and sags to 5 × 8.2/(4.7+8.2) = **3.18 V**
+   against the 3.5 V the display needs, so it may misread until the fault
+   is found. The point is that it is a soft fault instead of a short on the
+   bus. Series resistance belongs at the source because part of its job is
+   protecting what is upstream from everything downstream, and the same
+   8.2K also bounds clamp-diode current to ~0.5 mA if the ESP32 is
+   unpowered while the machine is on. The 15K shunts stay in the box,
+   where they are reworkable.
+
+   **Sharing ground is safe** because the machine's 5 V comes from an
+   isolated IRM-03-5 and the ESP32 runs from its own isolated supply —
+   neither is earth-referenced, so there is no loop. The realistic way to
+   break that is **not** the power supply but the **USB data cable**:
+   plugging the ESP32 into a laptop on a 3-pin adapter, or a dock, earths
+   its ground while the tap is connected. Low hazard, since the machine's
+   5 V is an isolated SMPS secondary, but it completes a loop straight
+   into the noise problem above — so reflash with the tap unplugged.
+   Note also that a Class II charger's Y-capacitor leaves the ESP32 ground
+   floating near half-mains with a small leakage current: "isolated" is
+   true, "quiet" is not.
+
+   **Cable-to-box connector: cut the 6S lead in half.** A balance extension
+   is complementary end to end by construction, so halving it gives a male
+   pigtail and a female pigtail that mate — you are re-joining the lead you
+   cut. Put the **female (socket) half on the machine side** so the pins
+   that can be live are shrouded. Use three conductors; cut the other four
+   back flush and heat-shrink them individually so they cannot bridge.
+   **The 5S is the practice piece** for the strip-and-solder — the pack has
+   one of each, so write the allocation down rather than rediscovering it
+   with a bag of cut leads.
+
+   **Size the box for three harnesses.** 0c adds J2 (two dividers, on PB5
+   and PB6 only — the other three pins of J2 need not reach the box) and
+   0d adds J4; they all land here. A box that fits only this one is a job
+   done twice.
+
+   More than convenience: **J2 carries no ground** (+5 V, Steam, 1Cup,
+   2Cup, Water), so 0c's dividers have to reference the ground that comes
+   back on J5's `VSS`. That makes this tap's ground conductor load-bearing
+   for 0c as well as 0e, and it is why one box is the right shape rather
+   than three.
+
    Safe either way the line is driven: 3.23 V at the pin if push-pull,
    2.69 V if open-drain via the board's 4.7K pull-ups (VIH 2.48 V), and the
    machine's own high never drops below 4.16 V against a display needing

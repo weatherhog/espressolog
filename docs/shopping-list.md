@@ -23,9 +23,11 @@ that *can* actuate are at the bottom, under "Deliberately not yet".
 T-piece is a strip-a-window-and-solder job, and if it goes wrong there is
 no second 4-pin lead in the bag.
 
-**Practise on the 5S or 6S.** Nothing on this machine is 6- or 7-pin, so
-those two are free practice with identical wire and insulation. Strip a
-window, solder a branch, heat-shrink it, and only then touch the 3S.
+**The 5S is the practice piece, the 6S is the box connector.** Nothing on
+this machine is 6- or 7-pin, so those two have no connector job — but they
+have one job each, and the pack holds one of them. Practise the
+strip-and-solder on the 5S; the 6S gets cut in half to make the
+cable-to-box plug pair (`docs/phase-0-status.md`). Only then touch the 3S.
 
 **Wire is 22 AWG silicone** (confirmed in the listing spec), so there is
 no PVC-to-silicone transition to engineer — the lead itself is rated for
@@ -124,8 +126,15 @@ count, so the obvious-looking 2S is a 3-pin and will not fit J5. The mixed
 5S/6S become practice pieces. (Bought; see section 1.)
 
 Build: plug in line, strip a window mid-cable, solder branch wires to the
-conductors you want, adhesive-lined heat-shrink over it. No rigid lump
-inside the machine, and unplugging returns the machine to stock.
+conductors you want, adhesive-lined heat-shrink over it. Unplugging
+returns the machine to stock.
+
+Note the window is **not** empty: the two 8.2 kΩ series resistors live in
+it, soldered inline, because series resistance has to be at the source to
+protect the machine from a fault further down the cable (reasoning in
+`docs/phase-0-status.md`). So allow for two resistor bodies, generous
+heat-shrink over them, and a cable tie for strain relief — this is the
+one part of the build that is inside the machine and not reworkable.
 
 **This makes the pre-crimped kit optional.** Nothing in that build needs a
 housing or a contact. Buy the kit only to make the tap ends themselves
@@ -214,7 +223,7 @@ leave the machine unable to run.
 | — fallback — Ascaso display harness `I.4312` (spare) | 1 | 10–20 |
 
 **Bought**, as part of the mixed pack in section 1 — one 3S, no spare.
-Practise the strip-and-solder on the 5S or 6S first.
+Practise on the 5S first; the 6S becomes the cable-to-box connector.
 
 A 3S balance extension, solder and heat-shrink is the whole T. Ascaso's own spare
 harness, **part `I.4312`** (mainboard is `I.3957`, matching the board
@@ -222,8 +231,10 @@ silkscreen), is the last fallback if anything about the generic connector
 turns out not to mate — cut it and both ends are guaranteed by
 construction. Worth knowing the part number exists; not worth buying first.
 
-Wire the T straight through and branch three taps: `ESD1` (clock), `ESD4`
-(data), ground. **Do not branch `Disp-P4` to anything that can source
+Wire the T straight through and branch three taps: `ESD1`, `ESD4` and
+ground. **Which of the two is the clock is not recorded anywhere** — see
+`docs/phase-0-status.md`; determine it with the analyser, or build it and
+swap the pair if nothing decodes. **Do not branch `Disp-P4` to anything that can source
 current** — it is bidirectional, and driving it is the one connection on
 J5 that could actuate the machine.
 
@@ -265,7 +276,7 @@ silently:
 | PTFE or fibreglass sleeving, 2–4 mm, 200 °C+ | 8 | Silicone wire is good to ~200 °C on its own, so this is for abrasion and for anything routed near the boiler or group. Ordinary PVC sleeving and standard heat-shrink are not. |
 | Heat-shrink assortment, **adhesive-lined** | 6 | Strain relief at the T-piece branches, and over the stripped window. Adhesive-lined or nothing — plain heat-shrink is not insulation on its own. |
 | Perfboard + pin headers | 6 | The dividers want to live on a board, not in mid-air |
-| Small ABS project box | 6 | ESP32 mounts **outside** the machine |
+| ABS project box, ~120 x 80 x 40 mm | 8 | ESP32 mounts **outside** the machine. Size it for **three** harnesses — 0c adds J2 (5 wires, 2 more dividers) and 0d adds J4, and they all land here. A box that fits only the display tap is a box bought twice. |
 | Cable gland or grommet | 3 | Where the harness leaves the case |
 | Nylon cable ties / adhesive tie mounts | 4 | Keep the tap away from the boiler and off moving parts |
 

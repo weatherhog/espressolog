@@ -139,6 +139,11 @@ Prices approximate, EUR.
 
 That's it. 0a needs no soldering and no contact with the machine.
 
+> **Superseded.** The parts tables below were written before the connectors
+> were identified and before the multimeter broke. Use
+> [`shopping-list.md`](shopping-list.md) for anything you are about to buy;
+> these are kept for the reasoning behind each choice.
+
 ### Order with it — milestone 0b
 
 | Item | Notes | ~€ |

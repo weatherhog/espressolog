@@ -7,7 +7,7 @@ import { patchShot, postTasting } from "./api.js";
 // settings (grind, dose, preinfusion, temp) are sticky — seeded from the
 // most recent shot that has them, because they only change when you change
 // the machine. Never a tax paid while holding a portafilter.
-export default function Capture({ shots, beans, onSaved }) {
+export default function Capture({ shots, beans, justSaved, onSaved }) {
   // Pending = never captured at all. A tasting row, even one saved without
   // a rating, counts as captured — otherwise saving twice was invited.
   const pending = useMemo(
@@ -41,6 +41,22 @@ export default function Capture({ shots, beans, onSaved }) {
   // depend on that key for the same thing.
   const [beanPick, setBeanPick] = useState(undefined);
 
+  // Saving used to jump to the Shots tab, which doubled as the "it worked"
+  // signal. Staying put is better — with several shots pending you can tag
+  // them one after another — but it means the confirmation has to be said
+  // out loud instead of implied by the screen changing.
+  const banner = justSaved && (
+    <div style={{
+      padding: "10px 14px", marginBottom: 16, fontFamily: MONO, fontSize: 11,
+      letterSpacing: "0.08em", color: justSaved.discarded ? T.inkSoft : T.flow,
+      border: `1px solid ${T.hair}`, borderRadius: 2,
+    }}>
+      {justSaved.discarded
+        ? `Shot #${justSaved.id} discarded`
+        : `Shot #${justSaved.id} saved ✓`}
+    </div>
+  );
+
   // EVERY hook must sit above this early return. React counts hooks per
   // render, so declaring one below it changes the count the moment a shot
   // arrives — "Rendered more hooks than during the previous render", and
@@ -50,12 +66,15 @@ export default function Capture({ shots, beans, onSaved }) {
   // 30 s refresh delivers it, white screen.
   if (!pending) {
     return (
+      <>
+      {banner}
       <Panel style={{ padding: 40, textAlign: "center" }}>
         <Eyebrow>No shot waiting</Eyebrow>
         <div style={{ marginTop: 12, fontFamily: SANS, fontSize: 15, color: T.ink }}>
           Pull a shot and it lands here for tasting notes.
         </div>
       </Panel>
+      </>
     );
   }
 
@@ -96,7 +115,7 @@ export default function Capture({ shots, beans, onSaved }) {
         await postTasting(pending.id, tasting);
       }
       setBalance(null); setRating(null); setNotes("");
-      onSaved();
+      onSaved({ id: pending.id, discarded: discard });
     } catch (e) {
       setError(String(e));
     } finally {
@@ -105,6 +124,8 @@ export default function Capture({ shots, beans, onSaved }) {
   };
 
   return (
+    <>
+    {banner}
     <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
       <Panel style={{ padding: 24, flex: "1 1 380px", minWidth: 0 }}>
         <Eyebrow>Measured — shot #{pending.id} · {new Date(pending.started_at).toLocaleString()}</Eyebrow>
@@ -205,5 +226,6 @@ export default function Capture({ shots, beans, onSaved }) {
         }}>Discard — channelled / test</button>
       </Panel>
     </div>
+    </>
   );
 }

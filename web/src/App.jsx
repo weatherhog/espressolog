@@ -83,6 +83,10 @@ export default function App() {
   const [selected, setSelected] = useState([]);  // [{id, tone}]
   const [showExcluded, setShowExcluded] = useState(false);
   const [up, setUp] = useState(null);
+  // What the last save did, so Capture can confirm it. This has to live here
+  // rather than in Capture: Capture is keyed on the pending shot, so saving
+  // one remounts it and any state it owned would go with it.
+  const [justSaved, setJustSaved] = useState(null);
   const activeBeanId = loadedBeanId(beans);
 
   // The empty dep array is load-bearing: this is passed to Pull as
@@ -103,6 +107,15 @@ export default function App() {
     }, 30000);
     return () => clearInterval(t);
   }, [refresh]);
+
+  // The confirmation is a flash, not a status. Left up it would still be
+  // sitting there next time you opened the tab, claiming a save you made
+  // twenty minutes ago.
+  useEffect(() => {
+    if (!justSaved) return;
+    const t = setTimeout(() => setJustSaved(null), 5000);
+    return () => clearTimeout(t);
+  }, [justSaved]);
 
   // sparklines load lazily, oldest request wins are fine — shots are immutable
   useEffect(() => {
@@ -184,8 +197,11 @@ export default function App() {
           // from it. Drop the key and one shot's grind, dose, temperature
           // and bean choice bleed onto the next.
           key={(shots || []).find((s) => !s.excluded && s.tasting_id == null)?.id ?? "none"}
-          shots={shots} beans={beans}
-          onSaved={() => { refresh(); setTab("shots"); }} />
+          shots={shots} beans={beans} justSaved={justSaved}
+          // Deliberately does NOT switch tabs. Jumping to Shots on every
+          // save cost a tab-switch back for the common case of tagging
+          // several pending shots in a row.
+          onSaved={(info) => { setJustSaved(info); refresh(); }} />
       )}
       {tab === "beans" && (
         <Beans beans={beans} shots={shots} activeBeanId={activeBeanId}

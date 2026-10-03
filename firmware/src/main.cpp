@@ -104,6 +104,18 @@ static void pollDisplay() {
   if (display_bus.poll(micros())) dbus_frames++;   // bus went quiet mid-frame
 }
 
+// What the machine contributes to a shot record (format v2). The logic
+// lives in machine_context.h so it can be host-tested — the first version
+// of this sat inline here, had no tests, and shipped two bugs a green
+// suite could not see: a previous shot's timer leaking into the next, and
+// setpoint_touched staying true for the whole boot.
+static MachineContextTracker machine_ctx;
+
+static void machineContextPoll() {
+  if (!display_on) return;
+  machine_ctx.onReading(display_bus.reading(), display_bus.setpointTouched());
+}
+
 static void printDisplay(Stream& out) {
   if (!display_on) {
     out.println("# display bus off — 'display on' once the J5 tap is wired");
@@ -162,7 +174,8 @@ static void handleShotComplete(const ShotResult& r) {
   if (!spool_ok) {
     Serial.println("# spool unavailable — record NOT persisted");
   } else {
-    String path = spool.writeShot(r, scales.slotMac(ScaleRole::YIELD));
+    String path = spool.writeShot(r, scales.slotMac(ScaleRole::YIELD),
+                                  machine_ctx.context());
     if (path.length()) Serial.printf("# spooled %s%s\n", path.c_str(), r.valid ? "" : " (reject)");
   }
   Serial.println("# ---- end shot ----");
@@ -378,6 +391,13 @@ void loop() {
     if (smp.role == (uint8_t)ScaleRole::YIELD) {
       ShotState before = detector.state();
       bool complete = detector.feed(smp.t_ms, smp.weight_mg);
+      if (before != ShotState::POURING && detector.state() == ShotState::POURING) {
+        machine_ctx.onPourStart(micros());
+        // The bus latch is per-boot; a new shot starts with a clean slate,
+        // otherwise one tweak at the start of a session condemns every
+        // shot after it.
+        display_bus.clearSetpointTouched();
+      }
       if (raw_stream) {
         Serial.printf("%lu,%ld,%s\n", (unsigned long)smp.t_ms,
                       (long)smp.weight_mg, stateName(detector.state()));
@@ -426,6 +446,7 @@ void loop() {
   }
 
   pollDisplay();
+  machineContextPoll();
   scales.tick(millis());
   // Network (and its flash reads) only while nothing is brewing.
   net.tick(millis(), quiet);

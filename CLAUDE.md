@@ -631,6 +631,22 @@ typedef struct __attribute__((packed)) {
 } sample_t;              // 10 bytes
 ```
 
+**Header format v2** (2026-10-03) added three machine-sourced facts, the
+first data in this system that neither a scale measured nor a human typed:
+`boiler_temp_start_dc`, `machine_timer_dl`, and a `SETPOINT_TOUCHED` flag
+bit. Header 109 → 113 bytes. **The server decodes v1 and v2 both** — v1
+records exist spooled and as fixtures, and losing one to a format bump
+would violate invariant 6. A v1 record reports the new fields as "the
+machine did not say", which is the same thing a v2 record written with the
+display bus off reports, so nothing downstream needs a version check.
+
+**`shot_sample.temp_dc` will be NULL for most of a shot and that is
+correct.** The machine takes the display over for its timer the moment the
+pump runs, so there is no boiler temperature to read during a brew. The
+useful value is the one from just before the pump started, which is why
+`boiler_temp_start_c` is a per-shot column rather than something derived
+from the samples.
+
 350 samples ≈ 3.5 KB per shot. One file per shot, header + samples.
 Config (WiFi, endpoint, flow calibration, current bean, grind epoch) in
 NVS, not the filesystem.

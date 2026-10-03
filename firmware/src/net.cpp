@@ -121,19 +121,29 @@ bool Net::tryUploadOldest() {
   File f = LittleFS.open(path, "r");
   if (!f) return false;
 
-  spool_header_t h;
-  if (f.read((uint8_t*)&h, sizeof(h)) != sizeof(h) || h.magic != 0x4C505345) {
+  // Validate from the prelude, NOT by reading sizeof(spool_header_t). A
+  // record written by an older firmware is shorter than the current struct
+  // and must still upload — the server decodes every version, and the file
+  // is POSTed verbatim either way.
+  spool_prelude_t p;
+  if (f.read((uint8_t*)&p, sizeof(p)) != sizeof(p) || p.magic != SPOOL_MAGIC ||
+      p.header_len < SPOOL_HEADER_LEN_V1 || f.size() < p.header_len) {
     f.close();
     Serial.printf("# net: %s is not a valid record, quarantining\n", path.c_str());
     LittleFS.mkdir("/spool/bad");
     LittleFS.rename(path, "/spool/bad/" + path.substring(path.lastIndexOf('/') + 1));
     return false;
   }
+  // boot_id and seq sit at offsets 8 and 12, below every field any format
+  // bump has inserted, so they are safe to read from any version.
+  uint32_t boot_id = 0, seq = 0;
+  f.seek(8);  f.read((uint8_t*)&boot_id, 4);
+  f.seek(12); f.read((uint8_t*)&seq, 4);
   f.seek(0);
 
   char record_id[32];
   snprintf(record_id, sizeof(record_id), "%08lx-%lu",
-           (unsigned long)h.boot_id, (unsigned long)h.seq);
+           (unsigned long)boot_id, (unsigned long)seq);
 
   HTTPClient http;
   http.setConnectTimeout(3000);

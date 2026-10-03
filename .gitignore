@@ -35,3 +35,4 @@ analysis/espressolog.db-wal
 # Review agents get their own worktrees under here; they are checkouts
 # of this repo, not content of it.
 .claude/worktrees/
+firmware/test/host/machine_context_test

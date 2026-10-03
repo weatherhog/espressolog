@@ -10,9 +10,10 @@
 CXX ?= clang++
 CXXFLAGS = -std=c++17 -Wall
 
-test: detector_test display_test
+test: detector_test display_test machine_context_test
 	./detector_test
 	./display_test
+	./machine_context_test
 
 detector_test: detector_test.cpp ../../src/detector.cpp ../../src/detector.h
 	$(CXX) $(CXXFLAGS) -o $@ detector_test.cpp ../../src/detector.cpp
@@ -20,9 +21,12 @@ detector_test: detector_test.cpp ../../src/detector.cpp ../../src/detector.h
 display_test: display_test.cpp ../../src/display.cpp ../../src/display.h
 	$(CXX) $(CXXFLAGS) -o $@ display_test.cpp ../../src/display.cpp
 
+machine_context_test: machine_context_test.cpp ../../src/machine_context.h ../../src/display.cpp ../../src/display.h
+	$(CXX) $(CXXFLAGS) -o $@ machine_context_test.cpp ../../src/display.cpp
+
 replay: replay.cpp ../../src/detector.cpp ../../src/detector.h
 	$(CXX) $(CXXFLAGS) -o $@ replay.cpp ../../src/detector.cpp
 
 clean:
-	rm -f detector_test display_test replay
+	rm -f detector_test display_test machine_context_test replay
 .PHONY: test clean

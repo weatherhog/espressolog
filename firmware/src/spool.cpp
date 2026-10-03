@@ -41,7 +41,7 @@ bool Spool::macToBytes(const String& mac, uint8_t out[6]) {
 void Spool::fillCommon(spool_header_t& h, uint8_t record_type, uint32_t started_at_ms,
                        uint8_t role, const String& scale_mac) {
   h.magic = 0x4C505345;
-  h.format_version = 1;
+  h.format_version = 2;
   h.record_type = record_type;
   h.header_len = sizeof(h);
   h.boot_id = boot_id;
@@ -85,7 +85,8 @@ String Spool::writeFile(char kind, const spool_header_t& h, const sample_t* samp
   return String(name);
 }
 
-String Spool::writeShot(const ShotResult& r, const String& scale_mac) {
+String Spool::writeShot(const ShotResult& r, const String& scale_mac,
+                        const MachineContext& mc) {
   if (nearlyFull()) {
     // Refusing is deliberate: dropping the oldest silently is also losing a
     // shot. ~90 % full means months of failed uploads — that needs a human.
@@ -96,7 +97,10 @@ String Spool::writeShot(const ShotResult& r, const String& scale_mac) {
   spool_header_t h = {};
   fillCommon(h, 1, r.started_at_ms, 0, scale_mac);
   h.flags = (r.fault ? SPOOL_FLAG_FAULT : 0) | (r.truncated ? SPOOL_FLAG_TRUNCATED : 0)
-          | ((!r.valid && !r.fault) ? SPOOL_FLAG_REJECT : 0);
+          | ((!r.valid && !r.fault) ? SPOOL_FLAG_REJECT : 0)
+          | (mc.setpoint_touched ? SPOOL_FLAG_SETPOINT_TOUCHED : 0);
+  h.boiler_temp_start_dc = mc.boiler_temp_start_dc;
+  h.machine_timer_dl     = mc.machine_timer_dl;
   h.stop_ms = r.stop_ms;
   h.yield_at_stop_mg = r.yield_at_stop_mg;
   h.yield_final_mg = r.yield_final_mg;
@@ -164,6 +168,24 @@ bool Spool::dump(const String& name, Stream& out) {
   String path = name.startsWith("/") ? name : String(DIR) + "/" + name;
   File f = LittleFS.open(path, "r");
   if (!f) { out.printf("# no such record: %s\n", path.c_str()); return false; }
+
+  spool_prelude_t p;
+  if (f.read((uint8_t*)&p, sizeof(p)) != sizeof(p) || p.magic != SPOOL_MAGIC) {
+    out.printf("# %s: not a record\n", path.c_str());
+    f.close(); return false;
+  }
+  if (p.header_len != SPOOL_HEADER_LEN_V2) {
+    // Refuse rather than misread. Parsing a v1 file with the v2 struct
+    // shifts every field past offset 95 and reports a CRC mismatch, which
+    // looks like corruption instead of a version difference — in exactly
+    // the tool you reach for when a record looks wrong.
+    out.printf("# %s: format v%u, header %u bytes — this firmware dumps v%u only.\n",
+               path.c_str(), (unsigned)p.format_version, (unsigned)p.header_len,
+               (unsigned)2);
+    out.println("# The record is intact and will upload; the server decodes every version.");
+    f.close(); return false;
+  }
+  f.seek(0);
 
   spool_header_t h;
   if (f.read((uint8_t*)&h, sizeof(h)) != sizeof(h) || h.magic != 0x4C505345) {

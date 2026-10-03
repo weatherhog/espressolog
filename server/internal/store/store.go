@@ -279,6 +279,22 @@ func insertShot(tx *sql.Tx, h *record.Header, samples []record.Sample, scaleID a
 		beanSource = "loaded"
 	}
 
+	// Format v2 (0e) carries what the machine's own display said. A v1
+	// record predates the display bus, and so does a v2 record written with
+	// the bus switched off — both leave these NULL, which is the difference
+	// between "no reading" and "zero".
+	var boilerTempC, machineTimerS, setpointTouched any
+	if c, ok := h.BoilerTempStartC(); ok {
+		boilerTempC = c
+	}
+	if h.MachineTimerDl > 0 {
+		machineTimerS = float64(h.MachineTimerDl) / 10.0
+	}
+	if h.FormatVersion >= 2 {
+		// Only meaningful once the firmware could latch it at all.
+		setpointTouched = boolToInt(h.SetpointTouched())
+	}
+
 	r, err := tx.Exec(`
 		INSERT INTO shot (
 			started_at, tz_offset_min, scale_id,
@@ -287,15 +303,17 @@ func insertShot(tx *sql.Tx, h *record.Header, samples []record.Sample, scaleID a
 			stop_ms, stopped_by,
 			yield_at_stop_g, yield_final_g, settle_offset_g,
 			peak_flow_gps, mean_flow_gps, flow_win_start_ms, flow_win_end_ms,
+			boiler_temp_start_c, machine_timer_s, setpoint_touched,
 			detector_version, firmware_version,
 			excluded, exclude_reason, created_at
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		startedAt.Format(time.RFC3339), h.TzOffsetMin, scaleID,
 		machineID, grinderID, epochID,
 		beanID, beanSource, grindDial,
 		h.StopMs, stoppedBy,
 		mg(h.YieldAtStopMg), mg(h.YieldFinalMg), mg(h.SettleOffsetMg),
 		mg(h.PeakFlowMgps), mg(h.MeanFlowMgps), h.FlowWinStartMs, h.FlowWinEndMs,
+		boilerTempC, machineTimerS, setpointTouched,
 		h.Detector(), h.Firmware(),
 		excluded, excludeReason, now)
 	if err != nil {
@@ -677,4 +695,11 @@ func MarshalJSONRows(rows []map[string]any) ([]byte, error) {
 		rows = []map[string]any{}
 	}
 	return json.Marshal(rows)
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }

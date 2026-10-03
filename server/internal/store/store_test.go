@@ -1,6 +1,10 @@
 package store
 
 import (
+	"bytes"
+	"database/sql"
+	"encoding/binary"
+	"hash/crc32"
 	"os"
 	"path/filepath"
 	"testing"
@@ -521,5 +525,129 @@ func TestIngestDoesNotInheritFromTheFuture(t *testing.T) {
 	if gotEpoch != epochThen {
 		t.Errorf("filed under epoch %d, want %d — the one in force when it was pulled",
 			gotEpoch, epochThen)
+	}
+}
+
+// v2BuildRecord assembles a format-2 record the way the firmware does.
+// Deliberately not a fixture file: the point is to exercise the machine
+// fields, and a hand-built record makes it obvious what is being claimed.
+func v2BuildRecord(t *testing.T, boilerDc int16, timerDl uint16, touched bool) ([]byte, *record.Record) {
+	t.Helper()
+	h := record.Header{
+		Magic: record.Magic, FormatVersion: 2, RecordType: record.TypeShot,
+		HeaderLen: 113, BootID: 0xfeed0001, Seq: 1,
+		StartedAtUnixMs: uint64(time.Now().UnixMilli()), TimeValid: 1,
+		StopMs: 21000, YieldAtStopMg: 35800, YieldFinalMg: 36000,
+		PeakFlowMgps: 2100, MeanFlowMgps: 1710,
+		FlowWinStartMs: 3000, FlowWinEndMs: 18000,
+		BoilerTempStartDc: boilerDc, MachineTimerDl: timerDl,
+		SampleCount: 1,
+	}
+	if touched {
+		h.Flags |= record.FlagSetpointTouched
+	}
+	copy(h.DetectorVersion[:], "0a.6")
+	copy(h.FirmwareVersion[:], "0.8.0")
+
+	var buf bytes.Buffer
+	if err := binary.Write(&buf, binary.LittleEndian, &h); err != nil {
+		t.Fatal(err)
+	}
+	if err := binary.Write(&buf, binary.LittleEndian, []record.Sample{
+		{TMs: 0, WeightMg: 0, InletPulses: 0, TempDc: record.TempNone},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	raw := buf.Bytes()
+	for i := 113 - 4; i < 113; i++ {
+		raw[i] = 0
+	}
+	binary.LittleEndian.PutUint32(raw[113-4:], crc32.ChecksumIEEE(raw))
+
+	rec, err := record.Decode(raw)
+	if err != nil {
+		t.Fatalf("built record does not decode: %v", err)
+	}
+	return raw, rec
+}
+
+// The machine's own facts have to survive the whole path: display bus ->
+// spool header -> HTTP -> shot row. This is the first data in the schema
+// that neither a scale measured nor a human typed.
+func TestIngestStoresMachineSignals(t *testing.T) {
+	raw, rec := v2BuildRecord(t, 952, 210, true)
+	st := openTestStore(t)
+
+	res, err := st.Ingest("aa:bb:cc:dd:ee:03", rec, raw, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var boiler, timer sql.NullFloat64
+	var touched sql.NullInt64
+	if err := st.db.QueryRow(
+		`SELECT boiler_temp_start_c, machine_timer_s, setpoint_touched FROM shot WHERE id = ?`,
+		res.ShotID).Scan(&boiler, &timer, &touched); err != nil {
+		t.Fatal(err)
+	}
+	if !boiler.Valid || boiler.Float64 != 95 {
+		t.Errorf("boiler_temp_start_c = %v, want 95", boiler)
+	}
+	if !timer.Valid || timer.Float64 != 21.0 {
+		t.Errorf("machine_timer_s = %v, want 21.0 (210 tenths)", timer)
+	}
+	if !touched.Valid || touched.Int64 != 1 {
+		t.Errorf("setpoint_touched = %v, want 1", touched)
+	}
+}
+
+// "The display bus was off" must read as NULL, not as zero degrees in a
+// zero-second shot. A v1 record says the same thing by predating 0e.
+func TestIngestLeavesMachineSignalsNullWhenUnavailable(t *testing.T) {
+	// v2 record, display bus off: firmware writes TempNone and 0.
+	raw, rec := v2BuildRecord(t, record.TempNone, 0, false)
+	st := openTestStore(t)
+	res, err := st.Ingest("aa:bb:cc:dd:ee:03", rec, raw, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var boiler, timer sql.NullFloat64
+	var touched sql.NullInt64
+	if err := st.db.QueryRow(
+		`SELECT boiler_temp_start_c, machine_timer_s, setpoint_touched FROM shot WHERE id = ?`,
+		res.ShotID).Scan(&boiler, &timer, &touched); err != nil {
+		t.Fatal(err)
+	}
+	if boiler.Valid {
+		t.Errorf("boiler_temp_start_c = %v, want NULL", boiler.Float64)
+	}
+	if timer.Valid {
+		t.Errorf("machine_timer_s = %v, want NULL", timer.Float64)
+	}
+	if !touched.Valid || touched.Int64 != 0 {
+		t.Errorf("setpoint_touched = %v, want 0 (v2 can say 'not touched')", touched)
+	}
+
+	// v1 record: predates the display bus entirely, so even the flag is
+	// unknown rather than false.
+	v1raw, err := os.ReadFile("../record/testdata/shot-fw040-timevalid.bin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	v1rec, err := record.Decode(v1raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res2, err := st.Ingest("aa:bb:cc:dd:ee:03", v1rec, v1raw, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.db.QueryRow(
+		`SELECT boiler_temp_start_c, machine_timer_s, setpoint_touched FROM shot WHERE id = ?`,
+		res2.ShotID).Scan(&boiler, &timer, &touched); err != nil {
+		t.Fatal(err)
+	}
+	if boiler.Valid || timer.Valid || touched.Valid {
+		t.Errorf("v1 record claims machine data: boiler=%v timer=%v touched=%v", boiler, timer, touched)
 	}
 }

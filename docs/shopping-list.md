@@ -36,10 +36,10 @@ silicone, but that is one joint in one material rather than a splice
 between two.
 
 **That listing calls the connector "JST EH" in its spec table while its own
-title says "JST-XH". Almost certainly XH — the spec row is boilerplate
-error.** The product is defined by what it mates, and hobby LiPo balance
-ports are XH in all but a few outliers. **Not yet confirmed by mating.**
-Recorded because XH/EH is the exact pair this project already lost two
+title says "JST-XH". The spec row was boilerplate error — **confirmed XH
+on arrival, 2026-10-01.** The product is defined by what it mates, and
+hobby LiPo balance ports are XH in all but a few outliers. Recorded
+because XH/EH is the exact pair this project already lost two
 evenings to: same pitch, same pin span, same width to 0.3 mm.
 
 **Seat it before soldering.** This is what turns the paragraph above into
@@ -231,12 +231,21 @@ silkscreen), is the last fallback if anything about the generic connector
 turns out not to mate — cut it and both ends are guaranteed by
 construction. Worth knowing the part number exists; not worth buying first.
 
-Wire the T straight through and branch three taps: `ESD1`, `ESD4` and
-ground. **Which of the two is the clock is not recorded anywhere** — see
-`docs/phase-0-status.md`; determine it with the analyser, or build it and
-swap the pair if nothing decodes. **Do not branch `Disp-P4` to anything that can source
-current** — it is bidirectional, and driving it is the one connection on
-J5 that could actuate the machine.
+Wire the T straight through and branch **all four** conductors: `ESD1`,
+`ESD4` and `Disp-P4` each through an 8.2 kΩ, ground directly. Ground gets
+no resistor — it is the reference both shunts return through. An 8.2 kΩ
+there lifts the ESP32 ground **~1.9 V** (1.85 V open-drain, 2.07 V
+push-pull) and cross-couples the channels, which breaks the divider
+outright.
+
+`Disp-P4` is branched but **terminated at nothing** — a labelled test
+point, pending the button test. Sensing it through a divider is safe;
+**driving** it is the one connection on J5 that could actuate the machine,
+and its pull-up strength is unrecorded, so it gets no load until measured.
+Full reasoning in `docs/phase-0-status.md`.
+
+**`ESD4` (pin 3) is the clock, `ESD1` (pin 2) the data** — settled
+2026-10-03, see CLAUDE.md.
 
 ---
 
@@ -248,8 +257,8 @@ worth buying as dedicated bags so you are not down to your last two at
 
 | Value | Qty | Where |
 |---|---|---|
-| 8.2 kΩ | 10 | 0e display divider, series leg (×2); 0b analyser tap (×3) |
-| 15 kΩ | 10 | 0e display divider, ground leg (×2) |
+| 8.2 kΩ | 10 | 0e T-piece, series leg (**×3** — `ESD1`, `ESD4`, `Disp-P4`); 0b analyser tap (×3). **Bought: 25.** |
+| 15 kΩ | 10 | 0e divider, ground leg, at the box (**×2** — `Disp-P4` stays unterminated) |
 | 150 kΩ | 10 | 0c switch divider, series leg — **already ordered** |
 | 220 kΩ | 10 | 0c switch divider, ground leg |
 | 1 kΩ | 10 | 0d flowmeter series protection (×2) |

@@ -129,29 +129,44 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    J5 ground ------------------- ESP32 GND
    ```
 
-   **Three wires leave the T-piece, not four:** `ESD1` (J5 pin 2), `ESD4`
-   (pin 3), `VSS` (pin 1, the spoked pad) for ground. **Pin 4 `Disp-P4` is
-   not tapped** — bidirectional, and the one line here that could actuate
-   the machine. The analyser may probe it for the button test; the
-   permanent install leaves it alone.
+   **All four conductors are branched, but only three are terminated.**
 
-   **WHICH OF `ESD1`/`ESD4` IS THE CLOCK IS NOT RECORDED.** CLAUDE.md says
-   only "one of the two we decode" and "the other one"; the 0b captures
-   are labelled `D0`–`D7` with no note of which probe sat on which pad, and
-   `tools/decode-display-bus.py` simply takes CSV column 0 as clock. The
-   mapping lived in whoever soldered the stubs, and the stubs were removed.
+   | J5 pin | Net | At the T-piece | At the box |
+   |---|---|---|---|
+   | 1 | `VSS` | branch, no resistor | ground |
+   | 2 | `ESD1` | 8.2K | 15K shunt -> GPIO4 |
+   | 3 | `ESD4` | 8.2K | 15K shunt -> GPIO5 |
+   | 4 | `Disp-P4` | 8.2K | **nothing — labelled test point** |
 
-   Settle it in ten seconds when the analyser goes back on: **the clock is
-   the metronome** — uniform ~9.9 kHz, 36 µs high, 65.5 µs low, unchanging.
-   The data line changes with the displayed number. Write the answer into
-   CLAUDE.md then.
+   An earlier draft left `Disp-P4` untapped as the cautious choice. It is
+   the opposite: this T-piece is on the critical path for the `Disp-P4`
+   button test, so a tap that omits it needs a *second* tap built into the
+   only 3S lead there is. Sensing the line through a divider is explicitly
+   safe per CLAUDE.md — the hazard is driving it.
 
-   Until then it is a coin flip, and a wrong guess is *electrically
-   harmless* — both legs are identical 8.2K/15K dividers — but silently
-   dead: `attachInterrupt(DISPLAY_CLK_PIN, ..., RISING)` would fire on data
-   edges and nothing would ever decode. **If the tap is built and nothing
-   decodes, swap the two signal wires at the box connector before
-   suspecting anything else.**
+   **Why it is branched but not terminated.** `ESD1`/`ESD4` idle on known
+   4.7K pull-ups, so a 23.2K divider leaves them at 4.16 V and still
+   reading high. **What pulls `Disp-P4` high is not recorded**, and the
+   schematic path to the MCU runs through R32 = 100K. If that pull-up is
+   weak, a 23.2K divider drags the line under 1 V and the MCU sees a button
+   held down permanently — not actuation, but a false signal fed into the
+   machine continuously, which invariant 1 still forbids. The 0b capture
+   only proves the line tolerates an analyser's near-infinite input
+   impedance; it says nothing about 23K.
+
+   **DONE 2026-10-03 — the test was run and `Disp-P4` is dead.** Zero edges
+   at 100.0000 % high across all three captures, 78 s in total, including
+   eleven deliberate button events. It is not the button line and not the
+   display answering; what it is for remains unknown. The branch stays an
+   unterminated test point: it costs nothing and there is nothing to
+   terminate it for.
+
+   **The buttons turned up in the 67-bit frames instead**, on the same two
+   wires — bits 49 and 58, active low. See CLAUDE.md for the mapping and
+   semantics. No extra GPIO, no divider on the bidirectional line.
+
+   **`ESD4` (pin 3) is the clock, `ESD1` (pin 2) the data** — also settled
+   2026-10-03, after being unrecorded since 0b.
 
    **Where each part physically sits:**
 
@@ -171,10 +186,20 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    impedance is 8.2K ∥ 15K ≈ 5.3 kΩ. The machine's own loom carries the
    heater line and a random-phase BTA204S triac; a capacitively coupled
    commutation spike above 210 mV corrupts frames intermittently, which is
-   the worst kind of fault to chase. If it happens, ~470 pF from each GPIO
-   to GND at the box costs 5.3 kΩ × 470 pF = 2.5 µs against a 36 µs clock
-   high — settles in a fifth of the pulse, and puts the corner at 64 kHz,
-   well below triac spike content. Do not go much above 1 nF.
+   the worst kind of fault to chase.
+
+   Two remedies if it happens, cheapest first. **Raise the shunt leg to
+   16.4K (2 × 8.2K in series)**: the pin then sits at 2.80 V instead of
+   2.69 V, so the margin goes 210 mV → 325 mV, loading is unchanged
+   (171 µA against 179 µA), and the push-pull worst case is 3.33 V, still
+   well under the 3.6 V absolute max. Only then reach for **~470 pF from
+   each GPIO to GND at the box**: 5.3 kΩ × 470 pF = 2.5 µs against a 36 µs
+   clock high, so it settles in a fifth of the pulse and puts the corner at
+   64 kHz, below triac spike content. Do not go much above 1 nF.
+
+   The internal-pull-down warning applies to both: with a 16.4K shunt the
+   45K pull-down drags the pin to 2.41 V, below VIH, exactly as it does
+   with 15K.
 
    **The 8.2K series resistors go at the T-piece, not in the box.** Solder
    each into the stripped window so the branch is
@@ -197,6 +222,13 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    8.2K also bounds clamp-diode current to ~0.5 mA if the ESP32 is
    unpowered while the machine is on. The 15K shunts stay in the box,
    where they are reworkable.
+
+   **Ground takes no series resistor.** It is the reference both shunts
+   return through, so an 8.2K there lifts the ESP32 ground ~1.9 V (1.85 V
+   open-drain, 2.07 V push-pull, solving the two parallel 23.2K branches
+   against the common 8.2K) and cross-couples the two channels. An earlier
+   draft said 3.5 V, computed from the no-lift current and ignoring that
+   the lift itself reduces that current.
 
    **Sharing ground is safe** because the machine's 5 V comes from an
    isolated IRM-03-5 and the ESP32 runs from its own isolated supply —
@@ -236,10 +268,34 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    machine's own high never drops below 4.16 V against a display needing
    3.5 V. **Do not enable an internal pull-down** — 45K across the 15K leg
    drops the open-drain case to 2.33 V and the pin stops reading high.
-   The stubs soldered to J5 for the 0b capture have since been removed, so
-   this needs the T-piece (or new stubs) before anything can be captured.
+   **The T-piece is built and verified** (2026-10-03). The machine runs
+   normally through it and the tap decodes the live display — 0 % corrupt
+   frames with the 15K shunts fitted, and it tracked the boiler from 45 °C
+   to 95 °C while warming.
 
    Then `display on` (persisted in NVS) and check `status`.
+
+   **Two firmware gaps, both found by the 2026-10-03 captures and NEITHER
+   fixed yet.** `display.{h,cpp}` predates knowing any of this.
+
+   1. **The power-on ` 88` will be logged as a boiler temperature.**
+      `decodeFrame()` reads a blank leading field as "two digits, which is
+      always a temperature" and sets `last.temp_c = 88`. For the first
+      ~1.7 s after the machine powers up that is wrong, and 88 is a
+      plausible enough value that nothing downstream will question it.
+      There is no guard in `display.cpp` and no case in
+      `display_test.cpp`.
+
+   2. **`PrG` frames are silently discarded.** `glyph()` returns 0 for
+      anything outside its 12-entry digit table and `decodeFrame()` then
+      drops the whole frame as garbled. So the one display state that
+      says "the brew temperature is being changed" — the event this whole
+      exercise was justified by — never reaches the firmware. The 67-bit
+      button frames are not parsed either, which is the same gap from the
+      other direction.
+
+   `analysis/captures/2026-10-03-display-bus-buttons-separated.sr` is the
+   fixture for both. Neither needs the bench.
 
    **Still to do after that:** decide what gets stored. `sample_t` already
    reserves `temp_dc`, and the shot timer is a truer boundary than the

@@ -3,7 +3,30 @@
 Decode the Ascaso Dream PID display bus (milestone 0b, cracked 2026-09-28).
 
 Usage:
-    sigrok-cli -i capture.sr -O csv | tools/decode-display-bus.py [samplerate]
+    sigrok-cli -i capture.sr -O csv | tools/decode-display-bus.py SAMPLERATE
+
+PASS THE SAMPLERATE. It defaults to 2e6, so a 1 MHz capture decodes with
+every timestamp at half its true value -- the readings are right and the
+times are silently wrong, which is worse than failing.
+
+    ... | tools/decode-display-bus.py 1e6
+
+To capture in the first place (SG-NANO-DLA-A / fx2lafw), with the T-piece
+dividers on D0/D1 and Disp-P4 on D2:
+
+    sigrok-cli -d fx2lafw --config samplerate=1m \
+               --channels D0,D1,D2 --samples 5M -o capture.sr
+
+Enable ONLY the channels in use. Unused inputs float and pick up 50 Hz
+mains hum that looks exactly like signal -- during 0b that got misread as
+miswiring. 1 MHz gives ~36 samples across a 36 us clock high, which is
+ample; 5M samples is ~5 s, or ~120 frames at 41 ms.
+
+Column 0 of the CSV is taken as the clock, and THE CLOCK IS ESD4 (J5 pin
+3); ESD1 (pin 2) is the data. Settled 2026-10-03. Capture ESD4 on the lower
+channel number and the CSV needs no rearranging; the 2026-10-03 files in
+analysis/captures/ were taken the other way round and need their first two
+columns swapped -- see that directory's README.
 
 Reads a two-column CSV (clock, data) on stdin and prints what the machine's
 front display was showing, with a timestamp for every change.
@@ -41,6 +64,17 @@ WHAT THE DISPLAY SHOWS
 """
 import sys
 
+# Letters the machine actually shows. The display is NOT digits-only: a
+# short press of button A puts it into programming mode, which renders
+# 'PrG' (measured 2026-10-03, analysis/captures/2026-10-03-*-buttons.sr).
+# Reporting those as '?' makes a normal display state look like frame
+# corruption, which is exactly how it was first misread.
+SEG_ALPHA = {
+    '1100111': 'P',   # a b e f g
+    '0000101': 'r',   # e g
+    '1011110': 'G',   # a c d e f
+}
+
 SEG = {
     '1111110': '0', '0110000': '1', '1101101': '2', '1111001': '3',
     '0110011': '4', '1011011': '5', '1011111': '6', '1110000': '7',
@@ -77,8 +111,18 @@ def frames_from_csv(stream, samplerate):
 
 
 def render(bits):
-    """Three 7-segment fields -> the string on the display ('?' = unknown glyph)."""
-    return ''.join(SEG.get(bits[o:o + 7], '?') for o in DIGIT_OFFSETS)
+    """Three 7-segment fields -> the string on the display.
+
+    An unknown glyph prints as <abcdefg> rather than '?', because the raw
+    segment pattern is what lets you work out what it was. 'PrG' took one
+    look at the bits; five identical '???' readings looked like noise.
+    """
+    out = []
+    for o in DIGIT_OFFSETS:
+        seg = bits[o:o + 7]
+        g = SEG.get(seg) or SEG_ALPHA.get(seg)
+        out.append(g if g else f'<{seg}>')
+    return ''.join(out)
 
 
 def main():

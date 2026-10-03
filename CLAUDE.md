@@ -95,10 +95,9 @@ The listings are the right part; anything actually specified as Molex
 Sellers also print **"JST EH"** in spec tables for parts that are plainly
 XH — seen 2026-09-30 on a LiPo balance extension whose own title said XH.
 What the part is *for* is better evidence than what the listing calls it:
-hobby LiPo balance ports are XH in all but a few outliers. **That
-particular lead is believed XH but has NOT been mated to J5 yet** — this
-paragraph is the reasoning, not a measurement. Verify by mating, not by
-reading, and do not promote this to a fact until something has seated.
+hobby LiPo balance ports are XH in all but a few outliers. **Confirmed
+2026-10-01 on the mixed balance-extension pack that arrived: XH, as the
+title said and the spec table denied.** Verify by mating, not by reading.
 
 **Every connector on this board is XH**, including J2 (`BOTONE`, 5 pins →
 `XHP-5` / `B5B-XH-A`) and J4 (flowmeter, 3 pins → `XHP-3` / `B3B-XH-A`).
@@ -123,16 +122,25 @@ Its pinout, from the traced schematic in
 | 1 | VSS | ground — the pad with thermal-relief spokes into the copper pour |
 | 2 | `ESD1` | signal, via U26. One of the two we decode. |
 | 3 | `ESD4` | signal, via U26 and R24. The other one. |
+| 4 | `Disp-P4` | third signal — **bidirectional**, see below. Idle high; never moved in 78 s of capture, including eleven button events. |
 
-**Which of `ESD1`/`ESD4` is the clock was never written down.** The 0b
-captures name their channels `D0`–`D7` with no record of which probe sat
-on which pad, and the decoder just takes CSV column 0 as clock. Next time
-the analyser is on the bus, settle it and replace this paragraph: the
-clock is the metronome — uniform ~9.9 kHz, 36 µs high, 65.5 µs low — while
-the data line tracks the displayed number. A wrong guess is electrically
-harmless (identical dividers on both legs) but decodes nothing, so if a
-built tap is silent, swap the pair before suspecting anything else.
-| 4 | `Disp-P4` | third signal — **bidirectional**, see below. Idle high; never moved in 3 s of capture. |
+**`ESD4` (pin 3) is the CLOCK. `ESD1` (pin 2) is the DATA.** Settled
+2026-10-03 off the T-piece, after being unrecorded since 0b. The
+discriminator is **the LOW period, not the high**: `ESD4`'s low took only
+**two** distinct values across 5 s (65 and 66 µs — 1 MHz quantisation of
+the documented 65.5 µs), against **31** for `ESD1`. Distinct *high* widths
+separate nothing, because inter-frame gaps give the clock about as many as
+the data line has (74 vs 92); an earlier draft of this paragraph offered
+that as the proof and it does not work.
+
+The conclusion stands on its own anyway: decoding with the pair the other
+way round yields **zero** frames of 120 bits or more — longest run 9 bits
+— against 363 clean 133-bit frames the right way round.
+
+Note `tools/decode-display-bus.py` reads **column 0 as the clock**, so a
+CSV captured as `D0=ESD1, D1=ESD4` must have its first two columns swapped
+before piping in. Capturing `ESD4` on the lower channel number avoids
+that.
 
 **There is no +5 V on J5** — it is ground plus three signals. A constant-high
 line on a logic analyser looks exactly like a supply rail, which is how it
@@ -145,13 +153,56 @@ lets the MCU pull the line low, the other lets it sense the line being
 pulled low from the display end. That topology only exists when both ends
 talk on one wire.
 
-**Working hypothesis (untested):** the display module carries two buttons
-and reports them on this line — `ESD1`/`ESD4` are the MCU driving the
-display, `Disp-P4` is the display answering. If true it is worth logging,
-because those buttons set the PID temperature and a setpoint change is
-exactly the event that silently invalidates an 0f noise-floor run.
-**To test:** capture while pressing each display button; a simple level, a
-serial burst, or nothing are all informative.
+**That hypothesis was WRONG — tested 2026-10-03 and disproven.** Across
+43 s of capture including six deliberate button events (two short presses,
+two ~2.7 s holds, then more), `Disp-P4` showed **zero edges** and sat at
+100.00 % high throughout. It is not the button line and it is not the
+display answering. What it actually does is still unknown.
+
+**The buttons are in the 67-bit frames instead** — the short frames this
+file previously wrote off as carrying nothing. Two bits, active low:
+
+| Bit | Button | Effect |
+|---|---|---|
+| 49 | LEFT | enters programming (`PrG`), then **decreases** |
+| 58 | RIGHT | **increases** |
+
+Only three distinct 67-bit payloads appear: neither bit low, bit 49 low,
+bit 58 low. Press and release timings matched the operator's account
+exactly in two separate sessions, so the **bit-to-button mapping is
+confirmed**.
+
+Semantics are from the **Ascaso Dream PID user manual**, not inference —
+two earlier drafts of this paragraph guessed and one of them guessed wrong:
+
+- **bit 49 = the LEFT button** (manual's #22). Pressing it enters
+  temperature programming: the display renders **`PrG`**. Further presses
+  **decrease** the setpoint.
+- **bit 58 = the RIGHT button** (#23). **Increases** the setpoint.
+- **Three seconds of inactivity** returns the display to normal.
+- **Both held ~3 s** opens the main `set up` menu — left scrolls
+  parameters, right shows the options under each. **Manual-only, not
+  observed**: no capture contains a payload with both bits low.
+
+This matches the captures: five short right-button presses alone did
+nothing, because programming mode had not been entered; five short left
+presses each rendered `PrG`; and in the first session, with the mode open,
+holding right ran 95 -> 120 in 41 ms steps and holding left brought it
+back.
+
+**`PrG` on the display means the brew temperature is being changed** —
+which is the event that silently invalidates an 0f noise-floor run, and
+the reason any of this is worth logging.
+
+**This costs nothing to log.** Same two wires, same two GPIOs, no divider
+on the bidirectional line, no extra pin — the short frames were already
+arriving and being discarded. `Disp-P4` can stay an unterminated test
+point.
+
+**Setpoint changes are detectable:** while adjusting, the display blanks
+**entirely** (all three fields zero) and comes back, at a measured 2.44 Hz
+— 0.204–0.210 s per half-cycle. That blink is the other signature of the
+same event.
 
 This is the one J5 line where a careless connection could actuate the
 machine, which hard invariant 1 forbids. The 8.2 K / 15 K divider is
@@ -160,9 +211,30 @@ replace it with anything that can source current.
 
 Two traps, both of which cost time on 2026-09-28:
 - **Ground is pin 1, the spoked pad.** The square-pad-is-pin-1 convention
-  does NOT hold on this board, and the wire colours say nothing either (the
-  harness is red/black/red/black because it was cut from two 2-wire reels,
-  and ground lands on a red one). Trust the thermal relief into the pour.
+  does NOT hold on this board. **The square pad is pin 4** (`Disp-P4`) —
+  established 2026-10-03: spokes at one end of J5, square at the other,
+  two plain pads between. So either end identifies the connector, and the
+  square one marks the line that must never be driven.
+
+  Wire colours say nothing — the harness is red/black/red/black because it
+  was cut from two 2-wire reels, and ground lands on a red one. Its order,
+  from the spoked pad: **red (1, VSS), black (2, ESD1), red (3, ESD4),
+  black (4, Disp-P4)**. Useful for orienting the harness once unplugged,
+  but only in combination with the pads — two of the four are red.
+
+  **A replacement lead has its own colours and they will not match.**
+  Derive the mapping instead: hold the lead's male end in the orientation
+  it plugs in, see which housing end lands on the spoked pad (that is
+  position 1), then meter position-to-conductor. Pin 1 is also the only one
+  with continuity to the ground pour, which is an independent check that
+  needs no convention at all.
+
+  **The T-piece lead built 2026-10-03** (3S balance extension, three black
+  and one red) maps **red → pin 4, `Disp-P4`**. The three blacks follow by
+  position counting away from red: furthest from red is pin 1 `VSS`, then
+  pin 2 `ESD1`, then pin 3 `ESD4` adjacent to red. Convenient accident
+  worth keeping if this is ever rebuilt: **the one visually distinct
+  conductor is the one that must never be driven.**
 - Both decoded signals idle high on the 4.7 K pull-ups, as the schematic
   predicted.
 
@@ -180,6 +252,19 @@ Three 7-segment digit fields, MSB = segment a, order abcdefg:
 | hundreds / leading (blank when idle) | `[106:113]` |
 | tens | `[115:122]` |
 | units | `[124:131]` |
+
+**At power-on the display reads ` 88` for ~1.7 s.** Measured 2026-10-03 in
+`analysis/captures/2026-10-03-display-bus-95c-poweron.sr`: 32 consecutive
+frames from 0.0221 s to 1.7341 s, then ` 95` at 1.8088 s. Both active digit
+fields are `1111111`; **the leading field is `0000000`, i.e. blank** — so
+this is not a full lamp test, which would read `888`. What it actually is
+has not been established; a 7 °C single-frame jump to the real reading is
+good evidence it is not a thermometer value.
+
+Two consequences. **Firmware must not log an early ` 88` as a boiler
+temperature** — `display.cpp` currently would, see docs/phase-0-status.md.
+And an analysis that counts these as corrupt frames invents a noise problem
+that is not there, which is exactly what happened the first time.
 
 **Idle: the display shows boiler temperature in °C.** During a brew the
 machine takes the display over for a **shot timer in tenths of a second**

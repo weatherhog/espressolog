@@ -12,7 +12,7 @@
 #include "display.h"
 #include <driver/gpio.h>
 
-const char* FIRMWARE_VERSION = "0.7.0";
+const char* FIRMWARE_VERSION = "0.8.0";
 const char* DETECTOR_VERSION = "0a.6";
 
 static ScaleManager scales;
@@ -111,11 +111,21 @@ static void printDisplay(Stream& out) {
   }
   const DisplayBus::Reading& r = display_bus.reading();
   const char* mode = r.mode == DisplayBus::Mode::TEMPERATURE ? "temp"
-                   : r.mode == DisplayBus::Mode::TIMER       ? "timer" : "none";
+                   : r.mode == DisplayBus::Mode::TIMER       ? "timer"
+                   : r.mode == DisplayBus::Mode::SETPOINT    ? "setpoint"
+                   : r.mode == DisplayBus::Mode::BLANK       ? "blank"
+                   : r.mode == DisplayBus::Mode::TEXT        ? "text" : "none";
   out.printf("# display=[%s] mode=%s", r.text, mode);
   if (r.mode == DisplayBus::Mode::TEMPERATURE) out.printf(" %d C", (int)r.temp_c);
+  else if (r.mode == DisplayBus::Mode::SETPOINT) out.printf(" %d C (being dialled)", (int)r.temp_c);
   else if (r.mode == DisplayBus::Mode::TIMER)  out.printf(" %u.%u s", r.timer_dl / 10, r.timer_dl % 10);
+  if (display_bus.adjusting())       out.print(" ADJUSTING");
+  if (display_bus.programming())     out.print(" PrG");
+  if (display_bus.setpointTouched()) out.print(" SETPOINT-TOUCHED");
   if (display_bus.stale(micros(), 2000000)) out.print(" (STALE)");
+
+  const DisplayBus::Buttons& b = display_bus.buttons();
+  out.printf(" | buttons=%s%s", b.left ? "L" : "-", b.right ? "R" : "-");
   out.printf(" | frames=%lu dropped=%lu\n",
              (unsigned long)dbus_frames, (unsigned long)dbus_dropped);
 }

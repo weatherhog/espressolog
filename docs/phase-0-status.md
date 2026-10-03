@@ -7,7 +7,7 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
 
 | Piece | Where | State |
 |---|---|---|
-| Firmware 0.7.0 (built, FLASH PENDING), detector 0a.6 | ESP32-S3 on a USB charger by the machine | both Bookoos bound: yield `aa:bb:cc:dd:ee:01`, dose `aa:bb:cc:dd:ee:02`. 0.7.0 adds the display-bus reader, **off by default** — nothing changes until the tap is wired and `display on` is issued. |
+| Firmware 0.8.0 (built, FLASH PENDING), detector 0a.6 | ESP32-S3 on a USB charger by the machine | both Bookoos bound: yield `aa:bb:cc:dd:ee:01`, dose `aa:bb:cc:dd:ee:02`. The display-bus reader is **off by default** — nothing changes until `display on` is issued. 0.8.0 rewrote it against the 0e captures; see below. |
 | Go server + SQLite + PWA | Proxmox LXC `espressolog`, Debian 13, `espressolog.lan` (DHCP-reserved) | systemd `espressolog.service`, db at `/var/lib/espressolog/espressolog.db` |
 | HTTPS | Caddy on the same LXC, `https://espresso.example.com` | Let's Encrypt via Cloudflare DNS-01; CF token in `/etc/caddy/env` |
 | DNS | AdGuard Home rewrite `espresso.example.com → espressolog.lan` | resolution is LAN-only; no public A record (challenge TXT only) |
@@ -110,12 +110,12 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    parts.
 
 3. **0e — temperature / display bus into the log — IN PROGRESS.**
-   Firmware 0.7.0 reads the bus: `firmware/src/display.{h,cpp}` is pure
+   Firmware 0.8.0 reads the bus: `firmware/src/display.{h,cpp}` is pure
    logic in the ShotDetector mould (no I/O, no clock of its own), an ISR
    stamps clock edges into a ring and `loop()` is the single consumer, so
    framing is done by the same `feedEdge()` the host tests exercise and no
    flash read can happen in the ISR. `firmware/test/host/display_test.cpp`
-   runs 8 scenarios against **real recorded frames** from
+   runs 18 scenarios against **real recorded frames** from
    `analysis/captures/`, not synthetic bit patterns.
 
    **Wiring (not yet built).** Two GPIOs, one divider per line, because the
@@ -275,37 +275,43 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
 
    Then `display on` (persisted in NVS) and check `status`.
 
-   **Two firmware gaps, both found by the 2026-10-03 captures and NEITHER
-   fixed yet.** `display.{h,cpp}` predates knowing any of this.
+   **Firmware caught up in 0.8.0** (`display.{h,cpp}`), against the
+   2026-10-03 captures as fixtures:
 
-   1. **Boot produces readings that are not temperatures.** From
-      `-cold-boot.sr`: the bus runs ~4.1 s of irregular non-frame traffic
-      (single-bit blips, one 564-bit burst) before framing starts, then
-      shows blank, then **`  0`**, then the real value.
+   - Parses the real structure — a 67-bit button frame and a 66-bit digit
+     frame — instead of only the merged 133-bit form, so the 1–8 % of
+     digit frames that arrive split are no longer dropped. That includes
+     the timer's own `000`, which the old decoder never once saw.
+   - Reads the **timer/temperature mode bit** instead of guessing from how
+     long a reading had held still. `100` is now unambiguous.
+   - Decodes the **button state**, and the **letters**, so `PrG` is a
+     reading rather than a garbled frame — `DisplayBus::programming()` is
+     true while the brew temperature is being changed.
+   - Matches frame lengths **exactly**, which stops the ~564-bit power-on
+     initialisation burst being clamped to `MAX_BITS` and decoded as a
+     reading at all.
+   - Treats an **all-blank display as its own mode**, not as 0 °C. This was
+     wrong in the first draft of 0.8.0 and caught in review: `' '` was
+     skipped in the numeric accumulate, so `"   "` came out as a confident
+     0 °C — 99 times in one 30 s capture, because the display blanks
+     constantly while a value is being edited.
+   - Reads that blink as the signal it is. Two blank frames inside 600 ms
+     mean a value is being **adjusted**, so a number shown then is the
+     **setpoint being dialled in**, not the boiler — a ramp to 120 used to
+     look like a boiler at 120. A lone blank, which is what a cold boot
+     emits, is not a blink.
+   - Latches `setpointTouched()`. `PrG` is a transient banner — 2 frames in
+     372 while an adjustment ran for seven seconds — so a consumer that
+     samples a level misses the event entirely. The latch is what belongs
+     on a shot record.
 
-      The `  0` is harmless in itself: it arrives as a standalone 66-bit
-      frame and `DIGIT_BITS == 120`, so `decodeFrame()` rejects it. **The
-      frame that does reach `temp_c` is the 564-bit init burst** — capped
-      to `MAX_BITS = 192`, offsets 106/115/124 land inside it, all three
-      fields read `0000000`, and a blank leading field is taken as "two
-      digits, always a temperature", giving `temp_c = 0`. That burst is
-      the case to add to `display_test.cpp`; there is no guard today.
+   All four are mutation-tested: breaking any one of them fails a named
+   test rather than passing quietly.
 
-      (An earlier version of this note said the hazard was a power-on
-      ` 88`. That reading came from a capture taken mid-warm-up and was
-      most likely a real 88 °C — see CLAUDE.md. The hazard is real; the
-      value was wrong.)
-
-   2. **`PrG` frames are silently discarded.** `glyph()` returns 0 for
-      anything outside its 12-entry digit table and `decodeFrame()` then
-      drops the whole frame as garbled. So the one display state that
-      says "the brew temperature is being changed" — the event this whole
-      exercise was justified by — never reaches the firmware. The 67-bit
-      button frames are not parsed either, which is the same gap from the
-      other direction.
-
-   `analysis/captures/2026-10-03-display-bus-buttons-separated.sr` is the
-   fixture for both. Neither needs the bench.
+   **Still to do:** nothing consumes any of this yet. The shot record has
+   no field for the machine's own timer, no `setpoint_changed` flag, and
+   `sample_t.temp_dc` is still never written. That is the next decision,
+   and it is a schema question rather than a firmware one.
 
    **Still to do after that:** decide what gets stored. `sample_t` already
    reserves `temp_dc`, and the shot timer is a truer boundary than the

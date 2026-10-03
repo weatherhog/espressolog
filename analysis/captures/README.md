@@ -101,8 +101,10 @@ The shunts earn their place by keeping the ESP32 inside its absolute
 maximum rating, which is reason enough. They are not a frame-integrity
 fix.
 
-**Every split loses a digit reading**, because both the Python decoder and
-`display.cpp` discard a frame that is not 133 bits. Up to ~8 % of readings
+**Every split used to lose a digit reading**: both decoders discarded any
+frame that was not 133 bits. Firmware 0.8.0 parses the 67/66 pair properly
+and no longer does; `tools/decode-display-bus.py` still has
+`MIN_FRAME_BITS = 120` and still does, so the two now disagree. Up to ~8 % of readings
 during hard heating. The fix is to parse the 67/66 pair properly instead
 of relying on a 1 ms gap threshold — see `docs/phase-0-status.md`.
 

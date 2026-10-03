@@ -341,10 +341,10 @@ brew-timer frames and clear in **every** temperature frame:
 | `-cold-boot.sr` | 0 | 1593 |
 
 So the machine tells you outright whether a three-digit reading is a timer
-in tenths or a temperature ≥ 100 °C. **`display.cpp` currently guesses**,
-using a 1.5 s staleness heuristic (`TIMER_STALE_US`) that
-`display_test.cpp` exercises as "stalled 3-digit reading reclassified as
-temperature". Bit 114 replaces that with a fact.
+in tenths or a temperature ≥ 100 °C. `display.cpp` **used** to guess, with
+a 1.5 s staleness heuristic; it now reads the bit (firmware 0.8.0). The
+test is a pair of real frames that both read `100` — one captured during a
+flush, one while the setpoint was ramped past 100 °C.
 
 This was recorded as "no decimal point observed" in an earlier draft —
 wrong, because the gap bits had only been checked in captures that contain
@@ -408,8 +408,9 @@ replaces 0c for *timing* only. Deciding what kind of event it was still
 needs J2.
 
 Agreement with real time, from the first frame showing `001` to the first
-showing the final value — **`000` is never displayed, so there is no
-earlier reference**:
+showing the final value. (**`000` IS displayed** — once per brew, always
+as a standalone 66-bit frame, which is why a decoder that only understood
+merged frames never saw it. Firmware 0.8.0 does.)
 
 | | displayed steps | measured | error |
 |---|---|---|---|

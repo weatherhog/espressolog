@@ -122,7 +122,7 @@ Its pinout, from the traced schematic in
 | 1 | VSS | ground — the pad with thermal-relief spokes into the copper pour |
 | 2 | `ESD1` | signal, via U26. One of the two we decode. |
 | 3 | `ESD4` | signal, via U26 and R24. The other one. |
-| 4 | `Disp-P4` | third signal — **bidirectional**, see below. Idle high; never moved in 78 s of capture, including eleven button events. |
+| 4 | `Disp-P4` | third signal — **bidirectional**, see below. Idle high; moves only at power-on, see below. |
 
 **`ESD4` (pin 3) is the CLOCK. `ESD1` (pin 2) is the DATA.** Settled
 2026-10-03 off the T-piece, after being unrecorded since 0b. The
@@ -154,10 +154,37 @@ pulled low from the display end. That topology only exists when both ends
 talk on one wire.
 
 **That hypothesis was WRONG — tested 2026-10-03 and disproven.** Across
-43 s of capture including six deliberate button events (two short presses,
-two ~2.7 s holds, then more), `Disp-P4` showed **zero edges** and sat at
-100.00 % high throughout. It is not the button line and it is not the
-display answering. What it actually does is still unknown.
+**344 s of live bus** — idle, every button press, the whole `SET UP` menu,
+both brew directions and a complete power cycle — `Disp-P4` produced
+transitions in exactly one place: **25 edges in the 204.5 ms after the
+supply rails come up**, starting 194 µs after `ESD1`/`ESD4` move. Nothing
+anywhere else. Per file: 8/30/40/60/60/60 s with no edges at all, and 86 s
+with those 25.
+
+The full interval list, in µs, because a truncated version of it was
+previously used to argue a conclusion it does not support:
+
+    1, 187, 1, 34, 1, 18, 1, 13, 2, 1, 9, 1, 23, 1, 32, 1, 94, 1,
+    2814, 1, 2, 2, 6, 201273
+
+Twenty-four edges inside the first 3.25 ms look like **rail settling**:
+irregular, converging, and `ESD1`/`ESD4` glitch at the same instant but
+settle within ~5 µs because they sit on 4.7 K pull-ups while `Disp-P4`
+reaches the MCU through **R32 = 100 K**, twenty times the impedance. A
+handshake would show a uniform bit period; this does not.
+
+**The 25th edge does not fit that story.** It arrives 201 ms after the
+previous one, long after the rails are up, and is unexplained. One edge is
+not a protocol either. Both readings are offered; neither is established.
+
+Note also that `2026-09-28-display-bus-flush-timer.sr` carries **4**
+`Disp-P4` edges — two 1 µs glitches at 47.959 s and 48.235 s, mid-flush —
+so "silent whenever the machine is doing anything" is not quite true
+either.
+
+So: not the button line, not the display answering, and silent whenever the
+machine is actually doing anything. Branched to a test point, terminated at
+nothing.
 
 **The buttons are in the 67-bit frames instead** — the short frames this
 file previously wrote off as carrying nothing. Two bits, active low:
@@ -167,10 +194,11 @@ file previously wrote off as carrying nothing. Two bits, active low:
 | 49 | LEFT | enters programming (`PrG`), then **decreases** |
 | 58 | RIGHT | **increases** |
 
-Only three distinct 67-bit payloads appear: neither bit low, bit 49 low,
-bit 58 low. Press and release timings matched the operator's account
-exactly in two separate sessions, so the **bit-to-button mapping is
-confirmed**.
+**Four** distinct 67-bit payloads exist: neither bit low, 49 low, 58 low,
+and **both low** — the last seen 2026-10-03 during the `SET UP` entry
+gesture, which is the only thing that presses both at once. Press and
+release timings matched the operator's account across three sessions, so
+the bit-to-button mapping is confirmed.
 
 Semantics are from the **Ascaso Dream PID user manual**, not inference —
 two earlier drafts of this paragraph guessed and one of them guessed wrong:
@@ -180,9 +208,9 @@ two earlier drafts of this paragraph guessed and one of them guessed wrong:
   **decrease** the setpoint.
 - **bit 58 = the RIGHT button** (#23). **Increases** the setpoint.
 - **Three seconds of inactivity** returns the display to normal.
-- **Both held ~3 s** opens the main `set up` menu — left scrolls
-  parameters, right shows the options under each. **Manual-only, not
-  observed**: no capture contains a payload with both bits low.
+- **23 held while 22 is pressed, ~3 s** opens the main `SET UP` menu — 22
+  scrolls parameters, 23 shows the options under each. **Confirmed
+  2026-10-03**, including the both-bits-low payload.
 
 This matches the captures: five short right-button presses alone did
 nothing, because programming mode had not been entered; five short left
@@ -240,10 +268,95 @@ Two traps, both of which cost time on 2026-09-28:
 
 It is **not I²C.** Plain synchronous serial: clock ~9.9 kHz (high 36 µs,
 low 65.5 µs), data sampled on the **rising** edge and stable across a whole
-clock period. Frames repeat every ~41 ms in two lengths, 133 and 67 bits,
-separated by >1 ms of clock idle; only the 133-bit frames carry digits.
+clock period.
+
+**The bus sends two frames, 67 bits then 66 bits, about every 41 ms.** The
+67-bit frame carries the button state; the 66-bit frame carries the digits.
+
+**A "133-bit frame" is a merge artefact, not a frame.** The gap between the
+pair usually falls under the 1 ms idle threshold both the decoder and
+`display.cpp` use to split frames, so they arrive glued together — and 67 +
+66 = 133. Verified 2026-10-03: every 133-bit frame's **first 67 bits**
+match a standalone 67-bit payload, in all nine captures. The **last 66**
+match a standalone 66-bit payload 141/141 in `-95c-poweron.sr`; that half
+cannot be checked in `-buttons-separated.sr`, which contains no standalone
+66-bit frames at all, so an earlier "604/604" here was meaningless. When the gap happens to
+run long the pair splits properly, which is all the stray "66-bit frames"
+ever were, and **both decoders silently discard them, losing that digit
+reading**. Within the merged frame the digits sit at 106/115/124, which is
+39/48/57 of the 66-bit frame.
+
+**How often the pair splits tracks heater activity, not wiring.** Measured
+within a single capture (`2026-10-03-display-bus-flush-timer.sr`): 1.18 %
+idle before a flush, 3.62 % during it, 5.19 % settling, **6.56 % while the
+boiler recovers**, and 8.26 % in a separate capture of a machine heating
+from cold. Across files at comparable states the divider makes no
+difference — 1.10 % unshunted against 1.18 % shunted, both idle at
+temperature. An earlier note here credited the shunts; that was a confound
+between captures taken at different boiler states.
+
+So a parser that keys on 133 bits throws away up to ~8 % of digit readings
+exactly when the machine is working hardest. **Parse the 67/66 pair
+directly rather than relying on a gap threshold.**
 Beware: sigrok's `i2c` decoder happily "decodes" this as endless writes to
 address 0x00 — that output is the symptom of a wrong guess, not a result.
+
+**The display is not digits-only.** Observed vocabulary, all measured
+2026-10-03 (`analysis/captures/2026-10-03-display-bus-setup-menu.sr`):
+
+| Glyph | abcdefg | Seen in |
+|---|---|---|
+| `0`–`9` | — | temperature, shot timer |
+| `P` | 1100111 | `PrG`, `UP` |
+| `r` | 0000101 | `PrG`, `Pr`, `Cr` |
+| `G` | 1011110 | `PrG` |
+| `E` | 1001111 | `SET` |
+| `t` | 0001111 | `SET` |
+| `U` | 0111110 | `UP`, `Ud`, `U` |
+| `d` | 0111101 | `Ud` |
+| `C` | 1001110 | `Cr` |
+| `F` | 1000111 | `OFF` |
+| blank | 0000000 | leading field, blink |
+
+**Two letters are indistinguishable from digits. This is the display's
+limitation, not the decoder's:** `S` is the same seven segments as `5`, and
+`O` the same as `0`. So the `SET UP` banner arrives as `5Et`/`UP `, and the
+stand-by parameter as `0FF`. Only context can tell you which was meant.
+
+Still unobserved: **`n`**, needed for the `ON` value of the timer
+parameter. It appears only in a parameter *value*, which means pressing
+button 23 inside the menu and changing a setting.
+
+**Bit 114 is a TIMER-MODE FLAG, and it is the most useful thing in the
+frame after the digits.** Of the six bits around the digit fields,
+113/122/123/131/132 are always zero — but 114 is set in **exactly** the
+brew-timer frames and clear in **every** temperature frame:
+
+| Capture | bit 114 set | clear |
+|---|---|---|
+| `-flush-timer.sr` (2Cup) | 492, all `001`…`210` | 619, all ` 95` |
+| `-1cup-clean.sr` | 307, all `001`…`105` | 878, all ` 95` |
+| `-buttons.sr` | 0 | 363, incl. the ` 96`…`120` setpoint ramp |
+| `-setup-menu.sr` | 0 | 803, incl. `0FF`, `Ud`, `Pr` |
+| `-cold-boot.sr` | 0 | 1593 |
+
+So the machine tells you outright whether a three-digit reading is a timer
+in tenths or a temperature ≥ 100 °C. **`display.cpp` currently guesses**,
+using a 1.5 s staleness heuristic (`TIMER_STALE_US`) that
+`display_test.cpp` exercises as "stalled 3-digit reading reclassified as
+temperature". Bit 114 replaces that with a fact.
+
+This was recorded as "no decimal point observed" in an earlier draft —
+wrong, because the gap bits had only been checked in captures that contain
+no brew. The decimal point question is separate and still open; `0.5`
+appears only as a stand-by parameter value and has never been displayed.
+
+**The `SET UP` menu**, entered by holding 23 while pressing 22 for ~3 s,
+scrolls with 22 in this fixed order: `Ud` (units C/F), `Pr` (pre-infusion
+0–5 s), `Cr` (timer ON/OFF), `OFF` (stand-by OFF/0.5/1/2 h), `U` (offset
+between set and displayed temperature). Three seconds idle saves and exits.
+**Do not hold 23 alone for three seconds — that is `PrS`, an immediate
+factory reset.**
 
 Three 7-segment digit fields, MSB = segment a, order abcdefg:
 
@@ -253,25 +366,62 @@ Three 7-segment digit fields, MSB = segment a, order abcdefg:
 | tens | `[115:122]` |
 | units | `[124:131]` |
 
-**At power-on the display reads ` 88` for ~1.7 s.** Measured 2026-10-03 in
-`analysis/captures/2026-10-03-display-bus-95c-poweron.sr`: 32 consecutive
-frames from 0.0221 s to 1.7341 s, then ` 95` at 1.8088 s. Both active digit
-fields are `1111111`; **the leading field is `0000000`, i.e. blank** — so
-this is not a full lamp test, which would read `888`. What it actually is
-has not been established; a 7 °C single-frame jump to the real reading is
-good evidence it is not a thermometer value.
+**Power-on sequence**, measured from genuinely off in
+`analysis/captures/2026-10-03-display-bus-cold-boot.sr`:
 
-Two consequences. **Firmware must not log an early ` 88` as a boiler
-temperature** — `display.cpp` currently would, see docs/phase-0-status.md.
-And an analysis that counts these as corrupt frames invents a noise problem
-that is not there, which is exactly what happened the first time.
+| From rails up | What happens |
+|---|---|
+| 0 | all three lines leave 0 V; `ESD1`/`ESD4` settle in ~1 µs on their 4.7 K pull-ups |
+| +194 µs | `Disp-P4` starts settling, taking ~250 µs — see below |
+| 0 to +4.1 s | **irregular bus activity, not frames**: 32 single-bit blips and one 564-bit burst. Plausibly display-controller init. Anything parsing frames here gets garbage. |
+| +4.1 s | normal 67/66 framing begins, display **blank** |
+| +4.6 s | `  0` |
+| +4.7 s | ` 95`, steady |
+
+**There is no lamp test and no ` 88` phase at boot** — that much is
+measured. `-95c-poweron.sr` was taken mid-warm-up, not at power-on, so
+whatever it shows is not a boot state.
+
+**What the ` 88` in that file actually is remains UNEXPLAINED.** Three
+stories have now been told about it — a lamp test, an unexplained
+"power-on state", and the boiler genuinely passing 88 °C — and none is
+supported. The third was argued from a ` 45` reading in an uncommitted
+scratch capture, which is not evidence this repo holds; and it is
+contradicted by the file itself, where ` 88` holds for 1.7 s and then
+jumps straight to ` 95` with no 89…94 in between, which is not how a
+warming boiler reads. Leave it unexplained until someone captures a
+warm-up deliberately.
 
 **Idle: the display shows boiler temperature in °C.** During a brew the
 machine takes the display over for a **shot timer in tenths of a second**
 (counts `001`→`169` for a 16.9 s pull), so temperature is *not* readable
-mid-shot. That timer is a gift though: it is the machine's own pump-on to
-pump-off measurement, which is exactly the signal 0c switch sensing was
-meant to provide.
+mid-shot. That timer is a gift, but a narrower one than first recorded. It IS the
+machine's own pump-on to pump-off measurement — stopping a cycle by hand
+stops the timer, so it tracks real pump time rather than counting out a
+stored duration (verified 2026-10-03: a 2Cup cycle cut short by hand
+stopped at `210`).
+
+**It does NOT tell you which switch direction ran.** 1Cup and 2Cup each
+produce exactly one 67-bit payload and it is byte-identical between them;
+nothing on J5 distinguishes a clean cycle from a shot. So the display
+replaces 0c for *timing* only. Deciding what kind of event it was still
+needs J2.
+
+Agreement with real time, from the first frame showing `001` to the first
+showing the final value — **`000` is never displayed, so there is no
+earlier reference**:
+
+| | displayed steps | measured | error |
+|---|---|---|---|
+| 2Cup `001`→`210` | 20.9 s | 21.0061 s | **+106 ms** |
+| 1Cup `001`→`105` | 10.4 s | 10.4303 s | **+30 ms** |
+
+Both are of the order of the display's own 100 ms tick plus the ~41 ms
+frame period, so there is nothing to explain — but **do not quote this as
+"within 100 ms"**, because 106 ms is not. Two earlier claims here were
+wrong: "6 ms" compared against the final displayed value instead of the
+interval, and "within the display's own 100 ms quantisation" was asserted
+without checking that 106 > 100.
 
 ### Scales: 2 × Bookoo Themis (BLE)
 

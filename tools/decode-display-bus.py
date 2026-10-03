@@ -46,8 +46,12 @@ PROTOCOL (measured, not guessed -- see docs/phase-0-status.md)
                   data sampled on the RISING clock edge
                   data is stable across a whole clock period
   Framing     : frames repeat every ~41 ms, separated by >1 ms of clock
-                idle. Two lengths occur: 133 bits and 67 bits. Only the
-                133-bit frames carry the digits.
+                idle. The bus actually sends a 67-bit frame (buttons)
+                then a 66-bit frame (digits); a "133-bit frame" is the two
+                merged because the gap between them usually falls under
+                FRAME_GAP_S. See CLAUDE.md. This decoder only handles the
+                merged form, so it drops standalone 66-bit frames and the
+                digit reading they carry.
   Digits      : three 7-segment fields, MSB = segment a, order abcdefg.
                   bits[106:113]  hundreds / leading  (blank when idle)
                   bits[115:122]  tens
@@ -59,8 +63,9 @@ WHAT THE DISPLAY SHOWS
   Brewing : the machine takes the display over for a shot timer in tenths
             of a second, counting 001 -> 169 for a 16.9 s pull. So the
             temperature is NOT readable during a shot -- but the timer is,
-            and it gives true pump-on/pump-off boundaries for free, which
-            is what 0c switch sensing was going to be for.
+            and it gives true pump-on/pump-off boundaries for free. NOT a
+            replacement for 0c though: 1Cup and 2Cup emit byte-identical
+            67-bit payloads, so nothing here says which direction ran.
 """
 import sys
 
@@ -73,7 +78,24 @@ SEG_ALPHA = {
     '1100111': 'P',   # a b e f g
     '0000101': 'r',   # e g
     '1011110': 'G',   # a c d e f
+    '1001111': 'E',   # a d e f g
+    '0001111': 't',   # d e f g
+    '0111110': 'U',   # b c d e f
+    '0111101': 'd',   # b c d e g
+    '1001110': 'C',   # a d e f
+    '1000111': 'F',   # a e f g
 }
+
+# TWO LETTERS ARE INDISTINGUISHABLE FROM DIGITS, and this is the display's
+# limitation, not the decoder's:
+#
+#   S == 5   both a c d f g     so 'PrS' (factory reset) renders 'Pr5'
+#   O == 0   both a b c d e f   so 'OFF' (stand-by param)  renders '0FF'
+#
+# Both confirmed on the machine 2026-10-03: the SET UP banner came through
+# as '5Et' / 'UP ', and the stand-by parameter as '0FF'. SEG is consulted
+# before SEG_ALPHA, so these resolve to the digit; only context can tell
+# you otherwise.
 
 SEG = {
     '1111110': '0', '0110000': '1', '1101101': '2', '1111001': '3',

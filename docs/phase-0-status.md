@@ -154,12 +154,12 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    only proves the line tolerates an analyser's near-infinite input
    impedance; it says nothing about 23K.
 
-   **DONE 2026-10-03 — the test was run and `Disp-P4` is dead.** Zero edges
-   at 100.0000 % high across all three captures, 78 s in total, including
-   eleven deliberate button events. It is not the button line and not the
-   display answering; what it is for remains unknown. The branch stays an
-   unterminated test point: it costs nothing and there is nothing to
-   terminate it for.
+   **DONE 2026-10-03 — the test was run.** `Disp-P4` is not the button line
+   and not the display answering: across 344 s of live bus, including every
+   button press, the whole menu and both brew directions, it moves only
+   during the 204.5 ms after the supply rails come up. See CLAUDE.md for
+   the full interval list and what is and is not explained by it. The
+   branch stays an unterminated test point.
 
    **The buttons turned up in the 67-bit frames instead**, on the same two
    wires — bits 49 and 58, active low. See CLAUDE.md for the mapping and
@@ -269,22 +269,32 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    3.5 V. **Do not enable an internal pull-down** — 45K across the 15K leg
    drops the open-drain case to 2.33 V and the pin stops reading high.
    **The T-piece is built and verified** (2026-10-03). The machine runs
-   normally through it and the tap decodes the live display — 0 % corrupt
-   frames with the 15K shunts fitted, and it tracked the boiler from 45 °C
-   to 95 °C while warming.
+   normally through it and the tap decodes the live display with 0 %
+   corrupt frames — which holds with or without the shunts; see
+   `analysis/captures/README.md`.
 
    Then `display on` (persisted in NVS) and check `status`.
 
    **Two firmware gaps, both found by the 2026-10-03 captures and NEITHER
    fixed yet.** `display.{h,cpp}` predates knowing any of this.
 
-   1. **The power-on ` 88` will be logged as a boiler temperature.**
-      `decodeFrame()` reads a blank leading field as "two digits, which is
-      always a temperature" and sets `last.temp_c = 88`. For the first
-      ~1.7 s after the machine powers up that is wrong, and 88 is a
-      plausible enough value that nothing downstream will question it.
-      There is no guard in `display.cpp` and no case in
-      `display_test.cpp`.
+   1. **Boot produces readings that are not temperatures.** From
+      `-cold-boot.sr`: the bus runs ~4.1 s of irregular non-frame traffic
+      (single-bit blips, one 564-bit burst) before framing starts, then
+      shows blank, then **`  0`**, then the real value.
+
+      The `  0` is harmless in itself: it arrives as a standalone 66-bit
+      frame and `DIGIT_BITS == 120`, so `decodeFrame()` rejects it. **The
+      frame that does reach `temp_c` is the 564-bit init burst** — capped
+      to `MAX_BITS = 192`, offsets 106/115/124 land inside it, all three
+      fields read `0000000`, and a blank leading field is taken as "two
+      digits, always a temperature", giving `temp_c = 0`. That burst is
+      the case to add to `display_test.cpp`; there is no guard today.
+
+      (An earlier version of this note said the hazard was a power-on
+      ` 88`. That reading came from a capture taken mid-warm-up and was
+      most likely a real 88 °C — see CLAUDE.md. The hazard is real; the
+      value was wrong.)
 
    2. **`PrG` frames are silently discarded.** `glyph()` returns 0 for
       anything outside its 12-entry digit table and `decodeFrame()` then

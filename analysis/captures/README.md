@@ -1,9 +1,10 @@
 # Display-bus captures
 
 Raw sigrok captures from J5 on the Ascaso Dream PID control board. These
-are the evidence the 0b/0e decode rests on and the fixtures
-`firmware/test/host/display_test.cpp` runs against — real recorded frames,
-never synthetic bit patterns.
+are the evidence the 0b/0e decode rests on. Note that **no code reads
+these files**: `firmware/test/host/display_test.cpp` uses bit literals
+transcribed from them, so the coupling is by hand and nothing breaks if a
+file changes.
 
 ## Two things that will catch you out
 
@@ -19,7 +20,7 @@ two columns swapped and the 2026-09-28 files must **not** be swapped.
 |---|---|---|---|
 | `2026-09-28-display-bus-95c-static.sr` | **2 MHz** | D0 | no |
 | `2026-09-28-display-bus-flush-timer.sr` | 1 MHz | D0 | no |
-| `2026-10-03-*` (all three) | 1 MHz | D1 | **yes** |
+| `2026-10-03-*` (all seven) | 1 MHz | D1 | **yes** |
 
 Decoding a 2026-10-03 file:
 
@@ -51,30 +52,59 @@ this time:
 | D2 | 4 | `Disp-P4` | 8.2 K series, never terminated |
 | GND | 1 | `VSS` | direct |
 
-`-buttons.sr` and `-95c-poweron.sr` were taken with **no shunt legs** —
-each node is 8.2 K into the analyser's input clamp, the same arrangement as
-0b. `-buttons-separated.sr` was taken after fitting the 15 K shunts on
-`ESD1`/`ESD4`, giving the full 8.2 K / 15 K divider. The bare-clamp
+Conditioning, which matters for any cross-file comparison:
+
+| Capture | `ESD1`/`ESD4` |
+|---|---|
+| `-95c-poweron.sr`, `-buttons.sr` | 8.2 K series only, into the analyser's input clamp — the 0b arrangement |
+| `-buttons-separated.sr`, `-setup-menu.sr`, `-flush-timer.sr`, `-1cup-clean.sr`, `-cold-boot.sr` | full 8.2 K / 15 K divider |
+
+`Disp-P4` is 8.2 K series with no shunt in all of them. The bare-clamp
 arrangement is fine for the analyser; it is **not** acceptable for the
 ESP32 — see `docs/phase-0-status.md`.
 
-**What the shunts measurably changed.** Not the digit decode: every
-133-bit frame in all three files renders cleanly, so there is no
-corruption to improve on. (An earlier version of this file claimed 0.6 %
-undecodable without shunts against 0 % with. That was wrong — those frames
-were `PrG`, which the decoder could not name at the time, and the
-*with*-shunt capture had more of them.) What does move is **truncated
-66-bit frames**, which both decoders drop silently:
+**The shunts changed nothing measurable here.** Two claims were made and
+both were wrong, so they are recorded rather than quietly deleted.
 
-| Capture | 66-bit frames |
+First: "0.6 % undecodable without shunts against 0 % with". Those frames
+were `PrG`, which the decoder could not name at the time — and the
+*with*-shunt capture had more of them. Digit-frame corruption is **zero**
+in every capture.
+
+Second: "the divider fixed the 66-bit splits". The evidence for that was a
+confound. What actually dominates is **how hard the heater is working** —
+0.03 % in `-95c-static.sr` (steady idle) against 8.26 % in
+`-95c-poweron.sr` (warming from cold), and within a single capture, one
+hardware configuration, `-flush-timer.sr`:
+
+| Window | Splits |
 |---|---|
-| `-95c-poweron.sr` (no shunt) | 18 of 218 — **8.26 %** |
-| `-buttons.sr` (no shunt) | 9 of 817 — 1.10 % |
-| `-buttons-separated.sr` (shunts) | 0 of 1058 — **0.00 %** |
+| Idle, before the brew | 1.19 % (1 of 84) |
+| During the brew | 3.62 % (20 of 552) |
+| Settling | 5.19 % (7 of 135) |
+| Idle after, boiler recovering | **6.55 % (54 of 825)** |
 
-Suggestive of real edge loss that the divider fixes, but their content has
-not been examined and the three captures are not otherwise comparable.
-Treat it as a lead, not a result.
+**Whether the shunts also help is NOT settled, and the honest reading
+leans the other way.** The cross-file idle comparison that was used to
+dismiss them — 1.10 % unshunted against 1.19 % shunted — rests on *one*
+split in 84 frames over 3.3 s, whose confidence interval spans the whole
+table. The better-powered shunted sample, `-buttons-separated.sr` at
+**0 of 1058 over 40 s**, was dropped; against `-buttons.sr`'s 9 of 817 it
+is significant in the shunts' favour. Both captures are idle at
+temperature, so that is the comparison to trust until someone runs a
+controlled pair.
+
+Either way the shunts earn their place by keeping the ESP32 inside its
+absolute maximum rating, which needs no help from this argument.
+
+The shunts earn their place by keeping the ESP32 inside its absolute
+maximum rating, which is reason enough. They are not a frame-integrity
+fix.
+
+**Every split loses a digit reading**, because both the Python decoder and
+`display.cpp` discard a frame that is not 133 bits. Up to ~8 % of readings
+during hard heating. The fix is to parse the 67/66 pair properly instead
+of relying on a 1 ms gap threshold — see `docs/phase-0-status.md`.
 
 ## The files
 
@@ -82,8 +112,12 @@ Treat it as a lead, not a result.
 |---|---|
 | `2026-09-28-display-bus-95c-static.sr` | Steady idle at 95 °C. Rendered ` 95` in all 2267 frames — the capture that proved the digit decode. |
 | `2026-09-28-display-bus-flush-timer.sr` | A flush. The machine takes the display over for a shot timer in tenths of a second, `001`→`169` against a displayed 16.9 s. |
-| `2026-10-03-display-bus-95c-poweron.sr` | 8 s from power-on. **First 1.7 s read ` 88`** — both digit fields all-segments, leading field blank — then ` 95` at 1.81 s. Counting that as corruption invents a noise problem that is not there. |
+| `2026-10-03-display-bus-95c-poweron.sr` | **Misnamed — this is mid-warm-up, not a boot.** 8 s showing ` 88` for the first 1.7 s then ` 95`, with no 89…94 in between. **What the ` 88` is remains unexplained**; three stories have been told about it (a lamp test, a "power-on state", the boiler passing 88 °C) and none survives the file itself. Kept as the example of why not to explain a reading you have not deliberately captured. |
+| `2026-10-03-display-bus-cold-boot.sr` | 90 s from genuinely **off**, through the rails coming up, to a steady ` 95`. 25 `Disp-P4` transitions spread over 204.5 ms from the rails coming up, none afterwards — see CLAUDE.md, where 24 of them fit rail settling and the 25th does not. (`2026-09-28-display-bus-flush-timer.sr` also carries 4, mid-flush.) Also shows ~4.1 s of irregular non-frame activity (32 single-bit blips, one 564-bit burst) before normal framing starts, then blank → `  0` → ` 95`. |
 | `2026-10-03-display-bus-buttons.sr` | 30 s, six button events: left short at 2.06 s, right short at 5.69 s, left held 2.8 s, right held 2.65 s, then repeated left presses from 18.25 s. Contains the 95 → 120 setpoint ramp and its return, and the ~2.44 Hz adjust-mode blink. |
+| `2026-10-03-display-bus-flush-timer.sr` | 60 s containing a **2Cup** cycle, stopped by hand at 21.0 s. Timer `001` at 3.326 s to `210` at 24.332 s — 20.9 s of displayed steps across 21.006 s, i.e. within the display's own 100 ms quantisation — then ` 95` at 29.451 s. The fixture for shot-timer parsing, and the only capture whose split rate can be read against machine state within one file. |
+| `2026-10-03-display-bus-1cup-clean.sr` | 60 s containing a **1Cup** clean cycle, `001` at 1.638 s to `105` at 12.068 s. Its purpose is the comparison: 1Cup and 2Cup each yield exactly one 67-bit payload and it is byte-identical between them, so **nothing on this bus distinguishes the two switch directions**. |
+| `2026-10-03-display-bus-setup-menu.sr` | 60 s walking the whole `SET UP` menu: `5Et`/`UP ` alternating, then `Ud`, `Pr`, `Cr`, `0FF`, `U` — the manual's five parameters in the manual's order. Source of the letter glyphs, and the only capture containing the **both-buttons-pressed** payload. Also shows the setpoint being corrected 92 → 95 from 46.7 s. |
 | `2026-10-03-display-bus-buttons-separated.sr` | 40 s through the finished divider. Five short **right** presses alone (5.2–12.5 s) change nothing, because programming mode was never entered; then five short **left** presses (18.8–25.9 s), each rendering **`PrG`**. The cleanest button fixture — one bit at a time, 6 s between the blocks. |
 
 The button sequences are the operator's own account, confirmed against the

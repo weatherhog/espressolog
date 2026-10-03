@@ -11,6 +11,12 @@
 // stable across a whole clock period and sampled on the RISING edge.
 // Frames repeat every ~41 ms separated by >1 ms of clock idle, in two
 // lengths: 133 bits (carries the digits) and 67 bits (does not).
+// NOT the real structure -- see CLAUDE.md. The bus sends a 67-bit button
+// frame then a 66-bit digit frame; 133 is the two merged because the gap
+// usually falls under FRAME_GAP_US. When it does not, this drops the
+// standalone 66-bit frame and loses that reading -- 1-8% depending on how
+// hard the heater is working. Bit 114 of the merged frame is a timer-mode
+// flag and would replace the TIMER_STALE_US guess outright.
 //
 // Three 7-segment fields, MSB = segment a, order abcdefg. Idle the display
 // shows boiler temperature in °C; during a brew the machine takes it over

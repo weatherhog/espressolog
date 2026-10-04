@@ -262,8 +262,9 @@ worth buying as dedicated bags so you are not down to your last two at
 | 150 kΩ | 10 | 0c switch divider, series leg — **already ordered** |
 | 220 kΩ | 10 | 0c switch divider, ground leg (**×2** — 1Cup, 2Cup). **In stock.** |
 | 1 kΩ | 10 | 0d flowmeter, **at PA8/PA9 only** — the board side, after its own conditioning. **Never at J4.** **In stock.** |
-| 8.2 kΩ (J4) | — | **the J4 analyser tap uses 8.2 kΩ, not 1 kΩ** — one channel, `#` only, no shunt. Covered by the 8.2 kΩ bag above. |
-| E12 assortment kit, 1/4 W | 1 | everything else |
+| 8.2 kΩ (J4) | — | **J4 ANALYSER tap only: 8.2 kΩ, one channel, `#` only, no shunt.** The ESP32 tap at J4 is 120 K + 220 K — see the 0d entry in `docs/phase-0-status.md`. Covered by the 8.2 kΩ bag above. |
+| **120 kΩ** | 10 | **0d J4 divider, series leg** — the only part now blocking 0d. Covered by the E12 kit. |
+| E12 assortment kit, 1/4 W | 1 | everything else, **including the 120 kΩ above** |
 
 Three of these are load-bearing — 0c is in CLAUDE.md, 0e and 0d are
 worked out in `docs/phase-0-status.md`. Repeated here because getting any
@@ -275,11 +276,13 @@ because the machine caught it:
   against an ESP32-S3 VIH of 2.475 V. Supply tolerance alone eats that
   margin and a pressed button reads as not pressed.
 - **0d's J4 ANALYSER tap is 8.2 K series, one channel, `#` only, ground
-  to `T` direct.** The **ESP32 conditioning at J4 is unresolved** — `#`
-  is open-collector and neither its pull-up rail nor the pull-up value is
-  known, so the divider cannot be sized yet. Do not read the 8.2 K as a
-  finished design. The 1 K figure in CLAUDE.md is the *board* side at
-  PA8/PA9, not the connector.
+  to `T` direct.** The **ESP32 divider at J4 is 120 K + 220 K → 2.95 V**,
+  solved 2026-10-04 from a measured 10.04 kΩ pull-up and 147.4 kΩ
+  pull-down. **Do NOT substitute 150 K / 220 K** — it is in stock, it
+  looks fine at 2.71 V, and it fails on tolerance stacking exactly as
+  220 K / 220 K does for 0c. CLAUDE.md's conditioning table gives 1 K for the
+  *board* side at PA8/PA9 and 120 K + 220 K at the connector; the `+`
+  rule sits in its own block beneath it.
 - **`+` is read-only, high-impedance meter only.** No input clamp — no
   analyser, no GPIO, no divider — **and nothing that sources or sinks
   current: never power the ESP32 from it.** It is the machine's sensor
@@ -355,8 +358,9 @@ Still outstanding: adhesive-lined heat-shrink, PTFE sleeving, perfboard,
 project box and cable gland — **~€30**, plus an E12 assortment kit
 (€8–15) which is the only resistor item left. **The load-bearing
 resistors are no longer on the critical path**: 8.2 K, 15 K, 220 K and
-1 K are in stock and 150 K is ordered. Nothing here blocks a build —
-which is a different claim from costing nothing. Add calipers (~€15) if you want the connector
+1 K are in stock and 150 K is ordered. **0d is now blocked on the 120 kΩ** in that kit — so
+"nothing blocks a build" is no longer true, and the kit moved from
+nice-to-have to the one outstanding part that gates a milestone. Add calipers (~€15) if you want the connector
 question settled by measurement rather than re-derived from photographs.
 The pre-crimped kit (~€10) and the Ascaso `I.4312` harness (~€15) only if
 a balance lead disappoints.

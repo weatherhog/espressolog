@@ -326,9 +326,73 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    not available from this source. Re-run `analysis/0f-noise-floor.ipynb`
    once the timer is logged; the shot-time figure may shrink.
 
-4. **0c — switch sensing.** The switch harness is **J2**, silkscreen
-   `BOTONE`, **5 pins**: +5 V, Steam, 1Cup, 2Cup, Water. Divider
-   **150 K / 220 K** into the GPIO (5 V → 2.97 V, 13.5 µA).
+4. **0c — switch sensing. J2 PINOUT MEASURED 2026-10-04.** The harness is
+   **J2**, silkscreen `BOTONE`, **5 pins**. Mapped by unpowered continuity
+   through the switches, then a powered DC check — no parts, no risk,
+   about twenty minutes:
+
+   | Position | Net | MCU pin | Evidence |
+   |---|---|---|---|
+   | **1** | **+5 V, switch common** | — | present in **all four** continuity pairs; **5.0 V** measured |
+   | 2 | Steam | PA10 | **plug inspection**; direction by analogy with lever A — not functionally verified |
+   | 3 | 2Cup | PB6 | lever A down |
+   | 4 | 1Cup | PB5 | lever A up |
+   | 5 | Hot Water | PB4 | **plug inspection**; direction by analogy with lever A — not functionally verified |
+
+   **Two findings that correct standing assumptions:**
+
+   - **There are TWO levers, not one.** Lever A is 1Cup/2Cup, lever B is
+     Hot Water/Steam, and they share conductor 1 as a common. CLAUDE.md
+     described a single SCI R13-29.
+   - **All four function lines are wired.** CLAUDE.md called Steam and
+     Water *"present on board, likely unwired on a Dream"*. They are
+     wired. Same category as the J4 census: an assumption sitting in the
+     hardware-facts section until someone measured.
+
+   Note also that **2Cup sits before 1Cup** in position order, while the
+   old list read "+5 V, Steam, 1Cup, 2Cup, Water". That list was never
+   positional; reading it as positional swaps the shot with the clean
+   cycle.
+
+   Grades of evidence differ and are recorded as such: **1Cup/2Cup is
+   functional** (lever operated, continuity observed), **Steam/Water was
+   identified by inspecting the plug.** Neither is on the Phase 0 path, so
+   inspection is proportionate for the latter.
+
+   **Polarity is established by measurement, not assumed.** The continuity
+   test shows a lever closes common to its direction line; the common
+   measures 5.0 V; the four direction lines measure 0 V at rest; and
+   **across the closed contacts (1→4, 1Cup held) the meter reads 4.95 V
+   idle and drops to zero when pressed.** That last one is the same
+   physical fact as the one before it, read differentially rather than to
+   ground — a corroboration, not an independent third route. So "pressing pulls high, idle
+   is low" rests on measurement rather than on the traced schematic — the
+   source that was wrong about J4's net count and about Steam/Water being
+   unwired.
+
+   **The board's pull-down value is NOT determined.** The drop across the
+   closed switch is the drop across R45 (100 Ω), so
+   `R_pulldown = 100 × (5 − V)/V` would give it — but the reading was
+   "zero" at the meter's resolution, not a millivolt figure. Anything from
+   ~50 kΩ upward is consistent, assuming the pen meter resolves 10 mV on
+   its 20 V range; at 100 mV resolution the bound would be ~5 kΩ. The
+   formula is right if anyone wants to finish the job with a millivolt
+   reading. It does not matter for 0c (a 370 K divider
+   in parallel with any of those shifts nothing), and it is recorded only
+   so nobody later mistakes "drops to zero" for a measured pull-down.
+
+   Divider **150 K / 220 K** into the GPIO (5 V → 2.97 V, 13.5 µA,
+   dropping **1.35 mV** across R45). **The 5 V is measured, which is the
+   step skipped at J4.**
+
+   **0d rejects this same pair and 0c keeps it — not a contradiction.**
+   0c's corner is **+203 mV** (rail −5 %, VIH +5 %, 1 % resistors), where
+   J4's is −45 mV. The difference is entirely source impedance: **100 Ω
+   here against 9.4 kΩ at J4.** Do not "correct" 0c to 120 K / 220 K on
+   the strength of the J4 warning. And unlike
+   J4's open-collector output, the switch line is driven through R45's
+   **100 Ω**, so a 370 K divider loads it by about a millivolt — the
+   unloaded arithmetic is valid here, where at J4 it was not.
 
    **NOT 220 K / 220 K**, which an earlier note here recommended: that
    gives 2.50 V against an ESP32-S3 VIH of 2.475 V — 2.60 V if the 3.3 V
@@ -678,6 +742,21 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    says the same — "we recommend to calibrate the number of pulses per
    litre".
 
+   **A standing habit, from three repeats.** Every table in this entry has
+   at some point claimed more than the prose beside it: a confidence
+   column reading "high" over a cell whose own text described a guess; a
+   header saying "If J4's rail is 5 V" when `+` and `#`'s pull-up rail are
+   different nets; and an Evidence column asserting "lever B down" when
+   the operator had said they identified those two by looking at the plug.
+   The prose was right all three times. **Write the table cell last, from
+   the prose — not the prose as a hedge on a cell already written.**
+
+   Related: the `+` safety rule has been lost from CLAUDE.md **three
+   times**, each time because it lived as a row in the conditioning table
+   and the table was rewritten when the divider changed. It is now a
+   standalone block beneath that table. Rewrite the divider freely; leave
+   that block alone.
+
    **Carry into the retry:**
 
    - **Record the as-built tap before powering anything.** Series value,
@@ -687,54 +766,65 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    - **One channel, `#` only, 8.2 kΩ series into the analyser's clamp**
      — the 0b arrangement, ~146 µA. That part is safe at any plausible
      rail.
-   - **DO NOT fit the ESP32 divider yet. Two unknowns block it.** An
-     earlier draft put 8.2 kΩ + 15 kΩ here and quoted
-     5 × 15/23.2 = 3.23 V. **That is the push-pull formula on an
-     open-collector line.** With no high-side drive the divider loads the
-     board's pull-up:
+   - **ESP32 divider: 120 K series + 220 K shunt → 2.95 V. SOLVED
+     2026-10-04 by measurement.** The node is a **10.04 kΩ pull-up to
+     5 V** against a **147.4 kΩ pull-down** — both read unpowered in Ω
+     mode at the T-piece window. That predicts an idle-high of
+     5 × 147.4/157.44 = **4.681 V** against **4.69 V measured**, so the
+     model is right and the source impedance is R_pu ∥ R_pd = **9.4 kΩ**.
 
-         node = rail × 23.2/(R_pullup + 23.2),  pin = node × 15/23.2
+     Because the source is 9.4 kΩ, the divider loads it and the unloaded
+     ratio is not the answer:
 
-     This file already states the correct model for J5 — "3.23 V at the
-     pin if push-pull, **2.69 V if open-drain** via the board's 4.7K
-     pull-ups" — and it reproduces J5's documented 4.16 V node exactly.
+     | Divider | node | pin | nominal | worst case |
+     |---|---|---|---|---|
+     | 8.2 K + 15 K | 3.33 V | **2.15 V** | −321 mV | **FAILS** |
+     | 150 K + 220 K | 4.57 V | 2.71 V | +239 mV | **−45 mV, FAILS** |
+     | **120 K + 220 K** | 4.56 V | **2.95 V** | +472 mV | **+177 mV** |
 
-     | If **`#`'s pull-up rail** is 5 V | pin | |
-     |---|---|---|
-     | R_pullup 4.7 K | **2.69 V** | 213 mV over VIH 2.475 |
-     | **R_pullup > 7.1 K** | **< 2.475 V** | **reads low forever, no pulses counted, nothing visibly broken** |
-     | rail 3.3 V | **≤ 2.13 V** even at R_pullup → 0 (1.77 V at 4.7 K) | **fails outright** |
+     Worst case is a full corner: the machine's 5 V sagging 5 %, the
+     ESP32's 3.3 V rail 5 % high (VIH 2.60 V), **1 % tolerance on the
+     divider pair, and ±1 % meter error on the measured 10.04 kΩ and
+     147.4 kΩ**. An earlier version of this table omitted the last two and
+     reported −20 mV and +201 mV — conclusions unchanged, margins
+     flattering.
 
-     **`+` is measured at 5.0 V; `#`'s pull-up rail is a different net and
-     need not match it.** A 3.3 V pull-up is at least as likely — the
-     conditioning feeds a 3.3 V MCU, and pulling an open collector to
-     3.3 V is the standard way to read one into such a part. Do not reach
-     for row 1 on the strength of a measurement of `+`.
+     **Two traps in that table.** The 8.2 K + 15 K an earlier draft
+     specified is 321 mV *under* VIH — it would have counted nothing,
+     forever, with nothing visibly broken. And **150 K / 220 K is in stock
+     and still wrong**: fine nominally, fails on tolerance stacking, which
+     is precisely why 220 K / 220 K was rejected for 0c. Do not substitute
+     it because it is in the drawer.
 
-     **Neither the rail nor the pull-up is known.** `#`'s high level is
-     underdetermined by the single 2.5 V reading — one equation, two
-     unknowns — and a 3.3 V rail at ~73 % duty fits it as well as 5 V at
-     50 %. The divider also loads the line *harder* than the setup
-     that may already have faulted the machine — on a line this file warns
-     can be held low by a careless load without breaking visibly:
+     The chosen divider disturbs the node by **126 mV (2.7 %)**, leaving
+     the machine's own reading unambiguously high.
 
-     | | R_pullup → 0 (upper bound) | at R_pullup = 4.7 K |
-     |---|---|---|
-     | 8.2 K + 15 K divider | 216 µA | **179 µA** |
-     | 8.2 K into the clamp | 146 µA | **93 µA** |
-     | ratio | 1.47× | **1.93×** |
+     **Low side**, which the corner above does not cover: the pin sits at
+     **0.19 V** against an ESP32-S3 VIL of 0.25·VDD = **0.784 V** at a
+     5 %-low rail — **+590 mV**. Even at the datasheet's *maximum*
+     saturation of 0.7 V rather than the measured 0.3 V, the pin is
+     0.45 V, still **+331 mV** clear.
 
-     Both columns are given deliberately: quoting only the ideal-node
-     figures would repeat, inside its own fix, the unloaded-model error
-     this bullet exists to correct. The real ratio is the worse one.
+     **Drift on the board's own resistors does not threaten it either.**
+     They were measured cold and unpowered and sit near a boiler, but they
+     move together in the ratio and 340 kΩ ≫ 10 kΩ, so the margin is
+     nearly flat: **+177 mV at ±1 %, +160 at ±5 %, +136 at ±10 %,
+     +111 mV at ±15 %.** A known gap, closed rather than flagged.
 
-     **Resolve it before fitting anything**: read the pull-up and its rail
-     off the techdregs schematic (no meter, no machine, no risk), or catch
-     `#` parked HIGH after a flush, which reads the rail directly.
+     **The 4.681 V prediction matching 4.69 V to 0.2 % is luckier than the
+     instrument.** It confirms the *model*, not the precision of the two
+     resistances — which is why the corner still carries ±1 % meter error
+     on them. **A 120 kΩ is not in stock** — the E12 kit on the
+     shopping list covers it.
+
+     The earlier derivation here assumed a push-pull source and quoted
+     5 × 15/23.2 = 3.23 V. That was the wrong model, and the right one was
+     already in this file for J5: "3.23 V if push-pull, **2.69 V if
+     open-drain**". It is kept in the history because the measurement that
+     refuted it only happened because the error was caught first.
 
      **The 1 kΩ remains wrong for this connector** — CLAUDE.md's
      "conditioned to 3.3 V logic" is the *board* side between J4 and PA8.
-     That much the measurement does settle.
    - **Ground to `T` directly** — the yellow conductor on the 2S lead,
      confirmed by continuity beep to J5 pin 1 (no value recorded). J4 is
      self-sufficient for ground and

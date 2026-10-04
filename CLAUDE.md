@@ -41,34 +41,81 @@ Pin map, from the traced schematic:
 
 | Net | Pin | Notes |
 |---|---|---|
-| 1Cup | PB5 | up direction of the switch, 15 s clean cycle |
-| 2Cup | PB6 | down direction, 60 s shot |
-| Water | PB4 | present on board, likely unwired on a Dream |
-| Steam | PA10 | as above |
+| 1Cup | PB5 | up direction of the switch. 15 s is the *default*; **this machine is set to ~10.5 s** — the operator reprogrammed it (2026-10-04). See below: these durations are user-modifiable state, not constants. |
+| 2Cup | PB6 | down direction. 60 s is the *default*; **this machine's stored value is UNKNOWN** — the 2026-10-03 capture was stopped by hand at 21.0 s, so it says nothing about the stored duration. User-modifiable, like 1Cup. |
+| Water | PB4 | **WIRED — continuity measured 2026-10-04** (an earlier version of this row said "likely unwired on a Dream"). On lever B; **which direction is from plug inspection, not functionally verified.** |
+| Steam | PA10 | **WIRED — continuity measured 2026-10-04**, same correction as the Water row. On lever B; **direction from plug inspection, not functionally verified.** |
 | DIP1–4 | PB0–PB3 | four config DIP switches (SW1), purpose unknown |
-| Flow-P1 / P2 | PA8 / PA9 | flowmeter, conditioned to 3.3 V logic **at the MCU**. **J4 carries only ONE signal** — measured 2026-10-04 (ground + 5 V + one signal), so the two-net reading of this row is wrong for this connector. **Which** of these pins it reaches is untraced. The connector carries the sensor's own open-collector output at **whatever the board's pull-up sets — rail and pull-up both unknown.** It is *not* the conditioned 3.3 V logic that exists at PA8/PA9; a 3.3 V rail at the connector remains possible. |
+| Flow-P1 / P2 | PA8 / PA9 | flowmeter, conditioned to 3.3 V logic **at the MCU**. **J4 carries only ONE signal** — measured 2026-10-04 (ground + 5 V + one signal), so the two-net reading of this row is wrong for this connector. **Which** of these pins it reaches is untraced. The connector carries the sensor's own open-collector output, **measured 2026-10-04: a 10.04 kΩ pull-up returning to the `+` net (5 V) against a 147.4 kΩ pull-down, idling at 4.69 V.** It is *not* the conditioned 3.3 V logic that exists at PA8/PA9. See 0d for the divider. |
 | AC_Sense | PA5 | mains zero-cross, via opto U27 |
 | Pump_Ctrl | PA15 | → FODM3053 → BTA204S triac (random-phase) |
 | Solenoid_CTRL | PB12 | |
 | HTR_CTRL | PB15 | |
 | display link | PB7/PB8 or PB8/PB9 | see below |
 
-**Switch electrical:** +5 V → R45 (100 R) → switch common. Pressing pulls
-the line **high**; idle is low. 5 V logic, *not* mains. The 5 V rail comes
+**Switch electrical — MEASURED 2026-10-04**, not taken from the schematic:
++5 V → R45 (100 R) → switch common. The common (J2 conductor 1) reads
+**5.0 V** against board ground; all four direction lines read **0 V** at
+rest. Combined with the continuity result below — a lever closes common to
+its direction line — that establishes **pressing pulls the line high,
+idle is low**, by measurement rather than inference. 5 V logic, *not*
+mains. The 5 V rail comes
 from an IRM-03-5 isolated module, so sharing ground with the ESP32 is safe
 provided the ESP32 runs from an isolated supply.
 
-**Switch semantics — important.** The switch is an SCI R13-29, momentary
-ON-OFF-ON, spring return to centre. The board *latches*:
+**J2 pinout — MEASURED 2026-10-04**, unpowered continuity through the
+switches plus a powered DC check. Positions counted on the harness:
+
+| Position | Net | MCU pin | How |
+|---|---|---|---|
+| **1** | **+5 V, switch common** | — | in **all four** continuity pairs; reads 5.0 V |
+| 2 | Steam | PA10 | **plug inspection**; direction by analogy — not functionally verified |
+| 3 | 2Cup | PB6 | continuity on lever A **down** |
+| 4 | 1Cup | PB5 | continuity on lever A **up** |
+| 5 | Hot Water | PB4 | **plug inspection**; direction by analogy — not functionally verified |
+
+Note the order: **2Cup sits before 1Cup**. The list "+5 V, Steam, 1Cup,
+2Cup, Water" that this file used to carry is not positional, and reading
+it as positional swaps the shot with the clean cycle.
+
+**THERE ARE TWO LEVERS, NOT ONE.** An earlier version of this section
+described a single SCI R13-29 and called Steam/Water *"present on board,
+likely unwired on a Dream"*. Both wrong:
+
+| Lever | up | down | grade |
+|---|---|---|---|
+| A | 1Cup | 2Cup | **functional** — lever operated, continuity observed |
+| B | Hot Water | Steam | **plug inspection** — direction not functionally verified |
+
+All four are wired, and both levers share conductor 1 as their common.
+The 1Cup/2Cup assignment is functional (lever operated, continuity
+observed); Steam/Water was identified by inspecting the plug, which is a
+weaker grade of evidence and is recorded as such.
+
+**Switch semantics — important.** Each lever is a momentary ON-OFF-ON
+(SCI R13-29), spring return to centre. The board *latches*:
 
 - short pulse → start the stored timer, or stop a running shot
 - **hold > ~2 s → reprograms that direction's timer to the hold duration**
+
+**So the stored durations are user-modifiable state, not machine
+constants.** `analysis/captures/2026-10-03-display-bus-1cup-clean.sr` runs
+`001`→`105` — 10.5 s, not the 15 s default — because the operator had
+reprogrammed it. Do not treat a captured duration as a property of the
+model, and do not "correct" one against the other: record which machine
+and when.
 
 Consequences: there is no way to stop the machine by opening the switch
 line, so no fail-safe-open design is possible on that path. And any future
 actuator that can hold the line will silently reprogram the machine. Phase 1
 must use a hardware one-shot (74HC123 or NE555, ~120 ms) so firmware can
 *trigger* but never *hold*.
+
+**That reasoning predates the discovery of the second lever and should be
+re-checked against it** — the conclusions above are about one direction
+line at a time and look unaffected, but they were derived from a
+one-switch model and nobody has walked them through a two-lever, shared-
+common topology.
 
 **Display bus — DECODED 2026-09-28 (0b done).** Captures and the decoder
 are in the repo: `analysis/captures/2026-09-28-display-bus-*.sr`,
@@ -524,9 +571,26 @@ contact. Most of the work, none of the risk. *This is where to start.*
 **0b — display bus.** Logic analyser on J5, offline reverse engineering.
 Parallel track, no code yet.
 
-**0c — switch sensing.** **150 K / 220 K** divider on PB5 and PB6 into GPIO
-(5 V → 2.97 V, 13.5 µA load — an optocoupler's mA would drop ~1 V across
-the 1 K series network and could break the board's own threshold). Do NOT
+**0c — switch sensing. The 5 V rail is now MEASURED (2026-10-04), so the
+divider is sized against a reading rather than the schematic** — which is
+the step that was skipped at J4. Unlike J4's open-collector line, the
+switch is driven through R45's **100 Ω**, so a 370 K divider loads it by
+about a millivolt and the unloaded arithmetic is valid here.
+
+**150 K / 220 K** divider on PB5 and PB6 into GPIO
+(5 V → 2.97 V, ~0.5 V over VIH; 13.5 µA load, dropping **1.35 mV** across
+R45).
+
+**0d rejects 150 K / 220 K and 0c keeps it — that is not a contradiction.**
+0c's corner is **+203 mV** (rail −5 %, VIH +5 %, 1 % resistors) because the
+switch is driven through **100 Ω**, so the divider barely loads it and the
+unloaded ratio holds. J4's source is **9.4 kΩ** — two orders of magnitude
+stiffer — which is what collapses the same pair to −45 mV there. **Do not
+"correct" 0c to 120 K / 220 K** on the strength of the J4 warning; the
+pair is fine here and the source impedance is the whole difference.
+
+**Not an optocoupler**: its mA would drop ~1 V across the 1 K series
+network and could break the board's own threshold. Do NOT
 use 220 K / 220 K: 2.50 V against an ESP32-S3 VIH of 2.475 V leaves 25 mV
 of margin, which supply tolerance alone consumes, and a pressed button
 would read as not pressed. The switch harness is **J2** (silkscreen
@@ -581,64 +645,68 @@ depending on where the turbine parked; this one parked at 0.3 V, i.e. LOW.
 Below 0.7 V is *consistent with* saturation, but a shorted conductor or a
 stuck output reads the same — it does not establish health.
 
-**The high level is NOT known, and the divider depends on it.** From
-mean = D·V_high + (1−D)·0.3 with one measurement, 2.5 V:
+**The high level was unknown until 2026-10-04 and is now measured** — see
+below. An earlier draft derived it from a duty-cycle figure taken off the
+wrong model's datasheet, which left it underdetermined (3.3 V and 5 V both
+fitted the single 2.5 V reading). Superseded by direct measurement.
 
-| duty | implied V_high |
+**J4 `#` NODE — SOLVED 2026-10-04.** Measured unpowered in Ω mode at the
+T-piece window, then cross-checked against the powered reading:
+
+| | |
 |---|---|
-| 0.45 | 5.19 V |
-| 0.50 | **4.70 V** |
-| 0.73 | **3.30 V** |
+| Pull-up, `#`→`+` | **10.04 kΩ** to 5 V |
+| Pull-down, `#`→`T` | **147.4 kΩ** |
+| Source impedance | R_pu ∥ R_pd = **9.4 kΩ** |
+| Predicted idle-high | 5 × 147.4/157.44 = **4.681 V** |
+| **Measured idle-high** | **4.69 V** — the model is right |
 
-One equation, two unknowns. A **3.3 V** rail fits the reading as well as a
-5 V one, and no duty figure for the FHKSC `932-952x` family has been
-found — the "50 % ± 5 %" quoted elsewhere is off the **FHK 937-15XX**
-sheet, the wrong model.
+`#` swings **0.3 V → 4.69 V**, both measured. The duty-cycle inference that
+an earlier draft used to argue "0–5 V" is no longer load-bearing.
 
-**Do not size the ESP32 divider yet.** `#` is open-collector, so the high
-level comes entirely through the board's pull-up and a divider *loads it*:
+**The ESP32 divider is 120 K series + 220 K shunt → 2.95 V.** Working into
+a 9.4 kΩ source, the divider loads the node, so the unloaded ratio is not
+the answer:
 
-    node = rail × 23.2/(R_pullup + 23.2),  pin = node × 15/23.2
+| Divider | node | pin | nominal margin | worst case |
+|---|---|---|---|---|
+| 8.2 K + 15 K | 3.33 V | **2.15 V** | −321 mV | **FAILS** |
+| 150 K + 220 K | 4.57 V | 2.71 V | +239 mV | **−45 mV, FAILS** |
+| **120 K + 220 K** | 4.56 V | **2.95 V** | +472 mV | **+177 mV** |
 
-That is the model this file already uses for J5 — "3.23 V if push-pull,
-**2.69 V if open-drain** via the board's 4.7K pull-ups" — and it
-reproduces J5's documented 4.16 V node exactly. Using 5 × 15/23.2 = 3.23 V
-here would be the push-pull case on a line that has no high-side drive.
+Worst case is a full corner: the machine's 5 V sagging 5 %, the ESP32's
+3.3 V rail 5 % high (VIH 2.60 V), **1 % tolerance on the divider pair, and
+±1 % meter error on the measured 10.04 kΩ and 147.4 kΩ**. An earlier
+version of this table omitted the last two and reported −20 mV and
++201 mV — conclusions unchanged, margins flattering.
 
-| If **`#`'s pull-up rail** is 5 V | pin | |
-|---|---|---|
-| R_pullup 4.7 K | 2.69 V | 213 mV over VIH 2.475 |
-| **R_pullup > 7.1 K** | **< 2.475 V** | **reads low forever, nothing visibly broken** |
-| rail 3.3 V | **≤ 2.13 V** even at R_pullup → 0 (1.77 V at 4.7 K) | **fails outright** |
+**150 K / 220 K is the trap here**: it is in stock, it looks fine
+nominally, and it fails on tolerance stacking — exactly the reason
+220 K / 220 K was rejected for 0c. Do not substitute it.
 
-**`+` is measured at 5.0 V; `#`'s pull-up rail is a different net and need
-not match it.** A 3.3 V pull-up is at least as likely — the conditioning
-feeds a 3.3 V MCU, and pulling an open collector to 3.3 V is the standard
-way to read one into such a part.
+The chosen divider disturbs the node by **126 mV (2.7 %)**, which leaves
+the machine's own reading unambiguously high. **A 120 kΩ is not in
+stock**; the E12 assortment kit on the shopping list covers it.
 
-**Two unknowns block this: the pull-up rail and the pull-up value.** Read
-them off the techdregs schematic — no meter, no machine, no risk — or
-catch `#` parked HIGH after a flush, which reads the rail directly. The divider also
-loads the line *harder* than the setup that may already have faulted the
-machine:
+**Low side, which the high-side corner above does not cover:** the pin
+sits at **0.19 V** against an ESP32-S3 VIL of 0.25·VDD = **0.784 V** at a
+5 %-low rail, so **+590 mV**. Even at the datasheet's *maximum* saturation
+of 0.7 V rather than the measured 0.3 V, the pin is 0.45 V — still
+**+331 mV** clear.
 
-| | R_pullup → 0 | at R_pullup = 4.7 K |
-|---|---|---|
-| 8.2 K + 15 K divider | 216 µA | **179 µA** |
-| 8.2 K into the clamp | 146 µA | **93 µA** |
-| ratio | 1.47× | **1.93×** |
+**Drift on the board's own 10.04 kΩ and 147.4 kΩ does not threaten this.**
+They were measured cold and unpowered and live next to a boiler, but they
+move together in the ratio and 340 kΩ ≫ 10 kΩ, so the margin is nearly
+flat: **+177 mV at ±1 %, +160 at ±5 %, +136 at ±10 %, +111 mV at ±15 %.**
 
-Both columns, because quoting only the ideal-node pair would repeat the
-unloaded-model error this section exists to correct.
+**The 4.681 V prediction matching 4.69 V to 0.2 % is luckier than the
+instrument.** It confirms the *model* — a resistive divider off the 5 V
+rail — not the precision of the two resistances, which is why the corner
+above still carries ±1 % meter error on them.
 
-| Use | Conditioning |
-|---|---|
-| Analyser at J4 | **8.2 K series alone**, one channel, `#` only, ground to `T` |
-| ESP32 at J4 | **unresolved — needs the rail and pull-up first** |
-| At PA8/PA9 instead | 1 K series; that is the *board* side, after conditioning |
-| **`+` (green)** | **READ-ONLY, high-impedance meter only. EVER.** No clamp, and nothing that sources or sinks current. |
+---
 
-**`+` is the one hard rule 0d has produced.**
+### J4 `+` — the one hard safety rule, and it does not live in a table
 
 > **`+` is read-only, through a high-impedance meter, and nothing else.**
 > Nothing with an input clamp — no analyser, no GPIO, no divider — **and
@@ -647,14 +715,20 @@ unloaded-model error this section exists to correct.
 > the machine's own sensor rail off a 3 W IRM-03-5. A 20 MΩ DMM is fine,
 > and is how its 5.0 V was read on 2026-10-04.
 
-An earlier draft said only "nothing with an input clamp". That enumerates
-*sensing* devices and leaves a power tap wide open — and a 5 V pin on an
-accessible connector is the obvious thing to reach for when the ESP32
-needs 5 V, especially having just read above that this rail is isolated.
-Sagging it gives you an `E01` or an MCU reset mid-cycle.
+This block is deliberately **outside** the conditioning table. The rule has
+now been lost three times, each time because it was a table row and the
+table got rewritten when the divider changed. Rewrite the divider as often
+as you like; do not touch this.
 
-**The 1 K is for PA8/PA9 only.** At J4 it feeds the raw sensor output into
-a 3.3 V GPIO.
+**Conditioning, for the other two conductors:**
+
+| Use | Conditioning |
+|---|---|
+| Analyser at J4 | **8.2 K series alone**, one channel, `#` only, ground to `T` |
+| ESP32 at J4 | **120 K + 220 K**, as derived above |
+| At PA8/PA9 instead | **1 K series** — that is the *board* side, after its own conditioning. At J4 it would feed the raw sensor output into a 3.3 V GPIO. |
+
+---
 
 **`E01` is the dose-control fault**, from Ascaso's `MAN.29-V10` alarm table
 ("Dose control fault" / "Fallo control volumétrico"); `E02` is the probe.

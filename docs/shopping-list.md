@@ -261,7 +261,7 @@ worth buying as dedicated bags so you are not down to your last two at
 | 15 kΩ | 10 | 0e divider, ground leg, at the box (**×2** — `Disp-P4` stays unterminated). **In stock.** |
 | 150 kΩ | 10 | 0c switch divider, series leg — **already ordered** |
 | 220 kΩ | 10 | 0c switch divider, ground leg (**×2** — 1Cup, 2Cup). **In stock.** |
-| 1 kΩ | 10 | 0d flowmeter, **ESP32 side only, and only after `#` has been measured** — see the 0d entry in `docs/phase-0-status.md`. **In stock.** |
+| 1 kΩ | 10 | 0d flowmeter, **at PA8/PA9 only** — the board side, after its own conditioning. **Never at J4.** **In stock.** |
 | 8.2 kΩ (J4) | — | **the J4 analyser tap uses 8.2 kΩ, not 1 kΩ** — one channel, `#` only, no shunt. Covered by the 8.2 kΩ bag above. |
 | E12 assortment kit, 1/4 W | 1 | everything else |
 
@@ -274,12 +274,20 @@ because the machine caught it:
 - **0c must be 150 K / 220 K, never 220 K / 220 K.** 220/220 gives 2.50 V
   against an ESP32-S3 VIH of 2.475 V. Supply tolerance alone eats that
   margin and a pressed button reads as not pressed.
-- **0d's J4 tap is 8.2 K series, one channel, ground to `T` direct.** The
-  1 K figure in CLAUDE.md is the *board* side at PA8/PA9, not the
-  connector. Nothing ever connects to the sensor's `+` pin — that is
-  what the leading hypothesis for the 2026-10-03 `E01` would make
-  dangerous, and it has not been ruled out. The mechanism is **not**
-  established; see the 0d entry before treating this as settled history.
+- **0d's J4 ANALYSER tap is 8.2 K series, one channel, `#` only, ground
+  to `T` direct.** The **ESP32 conditioning at J4 is unresolved** — `#`
+  is open-collector and neither its pull-up rail nor the pull-up value is
+  known, so the divider cannot be sized yet. Do not read the 8.2 K as a
+  finished design. The 1 K figure in CLAUDE.md is the *board* side at
+  PA8/PA9, not the connector.
+- **`+` is read-only, high-impedance meter only.** No input clamp — no
+  analyser, no GPIO, no divider — **and nothing that sources or sinks
+  current: never power the ESP32 from it.** It is the machine's sensor
+  rail off a 3 W IRM-03-5. A 20 MΩ DMM is fine, and is how its 5.0 V was
+  read on 2026-10-04. Clamping `+` is what the leading
+  hypothesis for the `E01` would make dangerous, and it has not been ruled
+  out. The mechanism is **not** established; see the 0d entry before
+  treating this as settled history.
 - **0e must be 8.2 K / 15 K, and do not enable an internal pull-down.**
   The internal 45 K across the 15 K leg drops the open-drain case to
   2.33 V and the pin stops reading high.

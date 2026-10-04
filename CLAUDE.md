@@ -46,7 +46,7 @@ Pin map, from the traced schematic:
 | Water | PB4 | present on board, likely unwired on a Dream |
 | Steam | PA10 | as above |
 | DIP1–4 | PB0–PB3 | four config DIP switches (SW1), purpose unknown |
-| Flow-P1 / P2 | PA8 / PA9 | flowmeter, conditioned to 3.3 V logic **at the MCU**. The conditioning sits between J4 and these pins — the connector carries the sensor's own output. **Whether both nets reach J4 is now in doubt**; see 0d below. |
+| Flow-P1 / P2 | PA8 / PA9 | flowmeter, conditioned to 3.3 V logic **at the MCU**. **J4 carries only ONE signal** — measured 2026-10-04 (ground + 5 V + one signal), so the two-net reading of this row is wrong for this connector. **Which** of these pins it reaches is untraced. The connector carries the sensor's own open-collector output at **whatever the board's pull-up sets — rail and pull-up both unknown.** It is *not* the conditioned 3.3 V logic that exists at PA8/PA9; a 3.3 V rail at the connector remains possible. |
 | AC_Sense | PA5 | mains zero-cross, via opto U27 |
 | Pump_Ctrl | PA15 | → FODM3053 → BTA204S triac (random-phase) |
 | Solenoid_CTRL | PB12 | |
@@ -551,25 +551,116 @@ the first and one gives +2.8 V for the second. Neither is a verified
 hardware fact yet, which is why they are hedged in a file whose heading
 says they would not be.
 
-Its three conductors are marked `+`, `T`, `#` — supply, ground, signal —
-which means **one** signal, not two, and that **conflicts with the
-Flow-P1/P2 row above. That conflict is unresolved**; a meter settles it.
+**J4 pinout — roles MEASURED 2026-10-04**, with a DC pen meter, at the
+window in the 2S T-piece lead, nothing attached:
+
+| Marking | Role | Lead | What was actually read |
+|---|---|---|---|
+| `T` | **ground** | yellow | continuity beep to J5 pin 1 `VSS`; **no resistance value recorded** |
+| `+` | **+5 V** | green | 5.0 V, steady through a flush |
+| `#` | **signal** | black | 0.3 V parked, **2.5 V averaged during flow** |
+
+The *roles* are measured. The conductor→**marking** mapping is corroborated
+but still rests on re-reading the worn label that first read "DIMASE
+PSACH"; `T` is anchored independently by the continuity test.
+
+Note: probing the three **board header** pins against the J5 pin 1 pad
+first gave **no beep at all**. Unexplained — plausibly the shrouded
+`B3B-XH-A` pins or an occupied J5 pad, but that is a hypothesis. **The
+T-piece window is where continuity is actually obtainable**, which matters
+because the retry plan prefers back-probing.
+
+So J4 carries ground, supply and **one** signal — the Flow-P1/P2 row above
+is wrong to claim both reach this connector, and **"quadrature, or two
+independent meters?" is closed: neither.** Which MCU pin the signal reaches,
+and whether the schematic's second net exists elsewhere or is commoned at
+the pin, is **untraced**.
+
+**`#` does NOT reliably idle high.** An open collector at rest is on or off
+depending on where the turbine parked; this one parked at 0.3 V, i.e. LOW.
+Below 0.7 V is *consistent with* saturation, but a shorted conductor or a
+stuck output reads the same — it does not establish health.
+
+**The high level is NOT known, and the divider depends on it.** From
+mean = D·V_high + (1−D)·0.3 with one measurement, 2.5 V:
+
+| duty | implied V_high |
+|---|---|
+| 0.45 | 5.19 V |
+| 0.50 | **4.70 V** |
+| 0.73 | **3.30 V** |
+
+One equation, two unknowns. A **3.3 V** rail fits the reading as well as a
+5 V one, and no duty figure for the FHKSC `932-952x` family has been
+found — the "50 % ± 5 %" quoted elsewhere is off the **FHK 937-15XX**
+sheet, the wrong model.
+
+**Do not size the ESP32 divider yet.** `#` is open-collector, so the high
+level comes entirely through the board's pull-up and a divider *loads it*:
+
+    node = rail × 23.2/(R_pullup + 23.2),  pin = node × 15/23.2
+
+That is the model this file already uses for J5 — "3.23 V if push-pull,
+**2.69 V if open-drain** via the board's 4.7K pull-ups" — and it
+reproduces J5's documented 4.16 V node exactly. Using 5 × 15/23.2 = 3.23 V
+here would be the push-pull case on a line that has no high-side drive.
+
+| If **`#`'s pull-up rail** is 5 V | pin | |
+|---|---|---|
+| R_pullup 4.7 K | 2.69 V | 213 mV over VIH 2.475 |
+| **R_pullup > 7.1 K** | **< 2.475 V** | **reads low forever, nothing visibly broken** |
+| rail 3.3 V | **≤ 2.13 V** even at R_pullup → 0 (1.77 V at 4.7 K) | **fails outright** |
+
+**`+` is measured at 5.0 V; `#`'s pull-up rail is a different net and need
+not match it.** A 3.3 V pull-up is at least as likely — the conditioning
+feeds a 3.3 V MCU, and pulling an open collector to 3.3 V is the standard
+way to read one into such a part.
+
+**Two unknowns block this: the pull-up rail and the pull-up value.** Read
+them off the techdregs schematic — no meter, no machine, no risk — or
+catch `#` parked HIGH after a flush, which reads the rail directly. The divider also
+loads the line *harder* than the setup that may already have faulted the
+machine:
+
+| | R_pullup → 0 | at R_pullup = 4.7 K |
+|---|---|---|
+| 8.2 K + 15 K divider | 216 µA | **179 µA** |
+| 8.2 K into the clamp | 146 µA | **93 µA** |
+| ratio | 1.47× | **1.93×** |
+
+Both columns, because quoting only the ideal-node pair would repeat the
+unloaded-model error this section exists to correct.
+
+| Use | Conditioning |
+|---|---|
+| Analyser at J4 | **8.2 K series alone**, one channel, `#` only, ground to `T` |
+| ESP32 at J4 | **unresolved — needs the rail and pull-up first** |
+| At PA8/PA9 instead | 1 K series; that is the *board* side, after conditioning |
+| **`+` (green)** | **READ-ONLY, high-impedance meter only. EVER.** No clamp, and nothing that sources or sinks current. |
+
+**`+` is the one hard rule 0d has produced.**
+
+> **`+` is read-only, through a high-impedance meter, and nothing else.**
+> Nothing with an input clamp — no analyser, no GPIO, no divider — **and
+> nothing that sources or sinks current: never power the ESP32 from it,
+> never feed it from another supply, never hang a pull-up on it.** It is
+> the machine's own sensor rail off a 3 W IRM-03-5. A 20 MΩ DMM is fine,
+> and is how its 5.0 V was read on 2026-10-04.
+
+An earlier draft said only "nothing with an input clamp". That enumerates
+*sensing* devices and leaves a power tap wide open — and a 5 V pin on an
+accessible connector is the obvious thing to reach for when the ESP32
+needs 5 V, especially having just read above that this rail is isolated.
+Sagging it gives you an `E01` or an MCU reset mid-cycle.
+
+**The 1 K is for PA8/PA9 only.** At J4 it feeds the raw sensor output into
+a 3.3 V GPIO.
 
 **`E01` is the dose-control fault**, from Ascaso's `MAN.29-V10` alarm table
 ("Dose control fault" / "Fallo control volumétrico"); `E02` is the probe.
 
-Two values, and they are not interchangeable:
-
-- **At J4 (analyser or any probe): 8.2 K series, one channel, `#` only,
-  ground to `T` direct, and NOTHING on `+`.** The connector carries the
-  sensor's output at whatever the board's pull-up sets, not 3.3 V.
-- **At PA8/PA9 (ESP32, already conditioned): 1 K series**, count on
-  interrupt — but only once `#` has actually been measured.
-
-Calibrate by weighing water on a Bookoo; invariant 3 means the K-factor
-is never baked in, and Digmesa's own datasheet recommends calibrating it.
-"Possibly quadrature, possibly two-meter support" predates the markings and
-may be a false dichotomy.
+Calibrate by weighing water on a Bookoo; invariant 3 means the K-factor is
+never baked in, and Digmesa's own datasheet recommends calibrating it.
 
 **0e — temperature**, only if 0b succeeded.
 

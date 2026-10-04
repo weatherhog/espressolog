@@ -381,7 +381,7 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    |---|---|---|---|
    | J5 | — | 4 | GND, `ESD1`, `ESD4`, `Disp-P4` — **JST XH, `XHP-4`** (verified) |
    | J2 | `BOTONE` | 5 | +5 V, Steam, 1Cup, 2Cup, Water — `XHP-5` |
-   | J4 | — | 3 | flowmeter `Flow-P1`/`P2` — `XHP-3` |
+   | J4 | — | 3 | flowmeter — `XHP-3`. **Measured 2026-10-04: ground (`T`), +5 V (`+`), ONE signal (`#`)** — not two nets. |
    | J3 | — | 2 | NTC thermistor |
    | J1 | — | 9 | **mains and loads — never touch** |
 5. **0d — flowmeter — FIRST ATTEMPT FAILED, 2026-10-03.** Recorded because
@@ -445,36 +445,89 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    is worn and was first read as "DIMASE PSACH"). Its three conductors are
    marked:
 
-   | Marking | Reading | Confidence |
-   |---|---|---|
-   | `+` | supply | unambiguous |
-   | `T` (middle) | ground — the IEC earth symbol ⏚ is a stem on a bar | plausible, unverified |
-   | `#` | signal out — a square-wave symbol ⌍ could hatch to something `#`-like | **a guess** |
+   **The three ROLES were measured on 2026-10-04.** The conductor→marking
+   mapping is corroborated but still rests on re-reading the worn label;
+   `T` is anchored independently by continuity. So the
+   symbol-reading below is now a record of how it was guessed, not of what
+   is known:
+
+   | Marking | Role | On the 2S T-piece lead | Measured |
+   |---|---|---|---|
+   | `T` (middle) | **ground** | yellow | continuity beep to J5 pin 1 `VSS`; **no resistance value recorded** |
+   | `+` | **+5 V supply** | green | 5.0 V, steady through a flush |
+   | `#` | **signal** | black | 0.3 V parked, **2.5 V averaged during flow** |
+
+   The guesses that turned out right: `T` as the IEC earth symbol ⏚ (a
+   stem on a bar), `#` as a square-wave symbol ⌍. Both were labelled
+   "plausible" and "a guess" before the meter went on them, which is the
+   correct amount of confidence to have had.
 
    Earlier confidence labels here read "high" for both. They were not
    earned: the `#` cell's own text describes a guess, and the label came
    from the same worn plastic that produced "DIMASE PSACH".
 
-   **Measurement replaces this table, but not with a plain DC reading** —
-   an earlier draft said "`T`→`#` should flicker during a flush", and it
-   will not. On an open-collector output idling high through a board
-   pull-up, `+` and `#` both sit near the supply at rest, and at ~4.8 Hz
-   an autoranging DMM averages to a steady mid-scale number. What works:
+   **How it was measured (2026-10-04), with a plain DC pen meter** — no
+   frequency mode, no scope, and nothing ever left attached:
 
-   1. **Continuity to the board's ground pour identifies `T`** — needs no
-      convention and no power.
-   2. **Frequency (Hz) mode on `#` during a flush** identifies the signal.
-   3. **`+` is whatever is left**, and must not be probed.
+   1. **Continuity identifies `T`.** No convention, no power. It also
+      cross-checks the markings: the ground *position* matching where `T`
+      sits is what lifts that row above a label-reading.
 
-   **This conflicts with the connector census above, and the conflict is
-   open.** The census says J4 carries `Flow-P1`/`Flow-P2` — PA8 *and*
-   PA9, two MCU pins. A supply/ground/signal sensor needs **one**. The
-   markings are direct evidence off the physical part; the census is
+      **This failed at the board header and worked at the T-piece
+      window.** Probing all three `B3B-XH-A` header pins against the J5
+      pin 1 pad gave **no beep at all**; the same test at the window in
+      the 2S lead gave a clean beep on yellow. The failure is
+      **unexplained** — plausibly the shrouded header pins or an occupied
+      J5 pad, but that is a hypothesis, not a finding. Recorded because
+      the retry plan prefers back-probing, and back-probing the header is
+      precisely what did not work.
+   2. **DC volts during a flush separates `+` from `#`.** While water
+      flows `#` averages toward mid-scale and `+` holds at full supply.
+      That is what was seen: 5.0 V against 2.5 V.
+
+      An earlier draft said both would **idle near the supply** and that
+      `#` would land at exactly half. Neither holds. An open collector at
+      rest sits wherever the turbine parked — this one parked **low, at
+      0.3 V** — and the mid-scale value depends on a duty figure that is
+      **not known for this model**. The contrast is robust; the arithmetic
+      on top of it is not.
+   3. **`+` is whatever is left.** It **was** probed on 2026-10-04 with a
+      20 MΩ DMM — that is how the 5.0 V above was read — and nothing
+      happened. So the rule is not "never touch `+`":
+
+      > **`+` is read-only, through a high-impedance meter, and nothing
+      > else.** Nothing with an input clamp — no analyser, no GPIO, no
+      > divider — **and nothing that sources or sinks current: never
+      > power the ESP32 from it, never feed it from another supply, never
+      > hang a pull-up on it.** It is the machine's own sensor rail off a
+      > 3 W IRM-03-5.
+
+      Two earlier drafts were wrong in opposite directions. "Must not be
+      probed" is contradicted by the step above and discards the evidence
+      that a high-impedance probe is safe. "Nothing with an input clamp"
+      enumerates only *sensing* devices and leaves a **power tap** open —
+      the single most tempting thing to do with a 5 V pin on an accessible
+      connector. The rule is about **current**, not clamps, which also
+      stops it depending on what voltage `+` happens to sit at.
+
+   Two earlier drafts got step 2 wrong in opposite directions: the first
+   said `#` would "flicker", which it will not at ~4.8 Hz; the second
+   concluded from that it needed Hz mode, which does not follow — the
+   mid-scale average *is* the signature. The third draft's error — that
+   both non-ground conductors would idle near the supply — is recorded at
+   step 2 above, together with the measurement that refutes it.
+
+   **The census row above is wrong to put both nets on this connector.**
+   It says J4 carries `Flow-P1`/`Flow-P2` — PA8 *and* PA9, two MCU pins.
+   Measurement says ground, supply, and **one** signal. The census is
    traced from `techdregs/Ascaso_Dream_PID_Electronics`, which already
-   ships the wrong MCU datasheet. Neither is settled. If the markings hold
-   up, the standing "quadrature, or two independent meters?" question is
-   a false dichotomy — but that follows *from* the markings and inherits
-   their uncertainty, so it is not yet an answer.
+   ships the wrong MCU datasheet; the markings are read off the
+   physical part and the meter agrees with them, which is the best
+   evidence available even though the label is worn.
+
+   So the standing **"quadrature, or two independent meters?" question is
+   a false dichotomy and is now closed: neither.** One sensor, one pulse
+   train, one GPIO, one counter.
 
    **The part, and its electrical data. Read the source column** — the two
    most load-bearing numbers are NOT in hand as primary sources. Every
@@ -519,8 +572,13 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    flagged as secondary and honest, and then the freely available primary
    source was never fetched. Flagging weak sourcing is not a substitute
    for replacing it — which is why the table above now names which rows
-   are still only flagged. **Retrieving this datasheet is the cheapest
-   open task in 0d.**
+   are still only flagged. **Retrieving this datasheet is BLOCKED, not cheap.**
+   Every published URL for the `932-952x` family serves HTML rather than a
+   PDF (`digmesa.com`, `shop.digmesa.com`), the Christian Berner mirror
+   404s, and the Google cache is HTML — checked 2026-10-03 and again with
+   browser headers on 2026-10-04. The remaining routes are a distributor
+   request or `info@digmesa.com`. Until one works, treat the K-factor and
+   the supply minimum as permanently secondary.
 
    **`E01` is the dose-control fault — confirmed from the manual.**
    Ascaso's own `MAN.29-V10` alarm table gives, across four languages:
@@ -543,14 +601,45 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
 
    **Open collector changes what the capture should look like.** The
    sensor only ever pulls *down*; the high level comes from a pull-up the
-   board must provide. So `#` should **idle HIGH and pulse LOW** — if a
-   capture shows the opposite, suspect the tap, not the sensor. It also
+   board must provide, and `#` **pulses LOW**.
+
+   An earlier draft added "so `#` should idle HIGH — if a capture shows
+   the opposite, suspect the tap, not the sensor." **The 2026-10-04
+   measurement refutes that**: `#` parked at **0.3 V**, i.e. low, because
+   an open collector at rest sits wherever the turbine stopped. The
+   heuristic would have told a reader to blame their tap for the one thing
+   now shown to be normal. It also
    means the line is only as stiff as that pull-up when high, which is the
    one way a careless load can hold it low and suppress pulses without
    breaking anything visibly.
 
-   **The leading hypothesis — still untested — is that the sensor lost
-   its supply.** If the probes sat on `+` and `T`, neither is the signal,
+   **The leading hypothesis is that the sensor lost its supply, and the
+   2026-10-04 measurements make it stronger — but not as much as an
+   earlier draft of this paragraph claimed.** The supply is **5 V,
+   measured** (12 V was never a reading, only the top of a datasheet
+   range), so the arithmetic below is the ~12 mA case rather than the
+   ~82 mA one. That makes the analyser's survival more likely; **D1 is
+   still unchecked.**
+
+   **The number the hypothesis most needs has NOT checked out.** The 3.8 V
+   minimum is still a search summary of an unretrieved datasheet, and one
+   source gives 2.8 V — under which 3.3 V is in spec and the mechanism
+   disappears. An earlier draft of this paragraph said "every number it
+   needs has now checked out", fifty lines below the warning in this same
+   entry that forbade exactly that sentence.
+
+   **A second probe arrangement now fits, and it is the more informative
+   one.** `#` parks at **0.3 V — LOW**. In `-j4-null.sr`, D0 was steady
+   low and D1 steady high, which is equally consistent with **D0 on `#`
+   (parked low, never pulsing) and D1 on `+`** as with the `+`/`T` reading
+   below. Under that arrangement the sensor produced no pulses across a
+   full 2Cup cycle, which is *direct* evidence it produced nothing — not yet that it was
+   dead, since "the turbine never turned" and "D0 was not on `#`" both
+   survive — rather than the
+   mere consistency conceded below. Nobody recorded the probe positions,
+   so both remain live.
+
+   If instead the probes sat on `+` and `T`, neither is the signal,
    so neither could ever move. The analyser is **not 5 V tolerant**
    (74HC245PW on a 3.3 V rail behind 100 Ω), so clipped to `+` its input
    clamp conducts and pulls the sensor supply toward 3.3 V — **below the
@@ -595,20 +684,66 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
      whether a shunt is fitted, which conductor each probe is on. Not
      knowing this is why the incident above cannot be diagnosed, and it
      costs one line in a notebook.
-   - **One channel, `#` only, through 8.2 kΩ — not the 1 kΩ this file
-     previously implied.** CLAUDE.md's "conditioned to 3.3 V logic"
-     describes the *board* side, between J4 and PA8; at the connector you
-     have the sensor's own output, whose swing is set by the board's
-     pull-up and is not known to be 3.3 V. 8.2 kΩ bounds the clamp
-     current to ~150 µA, which would drop ~0.7 V across a 4.7 K pull-up —
-     **but the pull-up value is unknown, so that is an estimate, not a
-     calculation. Measure the idle level on `#` first.** **No shunt leg** — unlike the J5 tap, which
-     pairs 8.2 K with 15 K to ground, this is a current limiter into the
-     analyser's clamp, which is acceptable for the analyser and **not**
-     acceptable for an ESP32. The 1 kΩ still stands for the permanent
-     ESP32 wiring, once `#` has actually been measured.
-   - **Ground to `T` directly. Put nothing on `+`.** That is the specific
-     rule the hypothesis supports.
+   - **One channel, `#` only, 8.2 kΩ series into the analyser's clamp**
+     — the 0b arrangement, ~146 µA. That part is safe at any plausible
+     rail.
+   - **DO NOT fit the ESP32 divider yet. Two unknowns block it.** An
+     earlier draft put 8.2 kΩ + 15 kΩ here and quoted
+     5 × 15/23.2 = 3.23 V. **That is the push-pull formula on an
+     open-collector line.** With no high-side drive the divider loads the
+     board's pull-up:
+
+         node = rail × 23.2/(R_pullup + 23.2),  pin = node × 15/23.2
+
+     This file already states the correct model for J5 — "3.23 V at the
+     pin if push-pull, **2.69 V if open-drain** via the board's 4.7K
+     pull-ups" — and it reproduces J5's documented 4.16 V node exactly.
+
+     | If **`#`'s pull-up rail** is 5 V | pin | |
+     |---|---|---|
+     | R_pullup 4.7 K | **2.69 V** | 213 mV over VIH 2.475 |
+     | **R_pullup > 7.1 K** | **< 2.475 V** | **reads low forever, no pulses counted, nothing visibly broken** |
+     | rail 3.3 V | **≤ 2.13 V** even at R_pullup → 0 (1.77 V at 4.7 K) | **fails outright** |
+
+     **`+` is measured at 5.0 V; `#`'s pull-up rail is a different net and
+     need not match it.** A 3.3 V pull-up is at least as likely — the
+     conditioning feeds a 3.3 V MCU, and pulling an open collector to
+     3.3 V is the standard way to read one into such a part. Do not reach
+     for row 1 on the strength of a measurement of `+`.
+
+     **Neither the rail nor the pull-up is known.** `#`'s high level is
+     underdetermined by the single 2.5 V reading — one equation, two
+     unknowns — and a 3.3 V rail at ~73 % duty fits it as well as 5 V at
+     50 %. The divider also loads the line *harder* than the setup
+     that may already have faulted the machine — on a line this file warns
+     can be held low by a careless load without breaking visibly:
+
+     | | R_pullup → 0 (upper bound) | at R_pullup = 4.7 K |
+     |---|---|---|
+     | 8.2 K + 15 K divider | 216 µA | **179 µA** |
+     | 8.2 K into the clamp | 146 µA | **93 µA** |
+     | ratio | 1.47× | **1.93×** |
+
+     Both columns are given deliberately: quoting only the ideal-node
+     figures would repeat, inside its own fix, the unloaded-model error
+     this bullet exists to correct. The real ratio is the worse one.
+
+     **Resolve it before fitting anything**: read the pull-up and its rail
+     off the techdregs schematic (no meter, no machine, no risk), or catch
+     `#` parked HIGH after a flush, which reads the rail directly.
+
+     **The 1 kΩ remains wrong for this connector** — CLAUDE.md's
+     "conditioned to 3.3 V logic" is the *board* side between J4 and PA8.
+     That much the measurement does settle.
+   - **Ground to `T` directly** — the yellow conductor on the 2S lead,
+     confirmed by continuity beep to J5 pin 1 (no value recorded). J4 is
+     self-sufficient for ground and
+     no longer needs to borrow J5's `VSS`.
+   - **`+` (green) is read-only, high-impedance meter only** — no clamp,
+     and **nothing that sources or sinks current**, which includes
+     powering the ESP32 from it. That is the specific rule the hypothesis
+     supports. See step 3 above; an earlier version of this bullet said
+     "put nothing on `+`", which the measurement retracts.
    - **Prefer back-probing to interposing**, on general grounds — a
      seated harness has nothing to fail to reconnect. Note this is a
      preference, not a conclusion from the incident: the evidence is

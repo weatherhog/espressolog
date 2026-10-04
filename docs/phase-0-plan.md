@@ -76,9 +76,23 @@ Real shot boundaries and flush events from the machine itself.
 Sense with a **resistor divider straight into an ESP32 GPIO**. Not an
 optocoupler: an opto LED wants milliamps, and a milliamp through the
 1 K series network is a 1 V drop that could break the board's own
-threshold. A 100 K / 200 K divider draws 17 µA and gives 3.3 V from
-5 V in. Confirm the idle/pressed polarity with the multimeter before
-connecting anything.
+threshold.
+
+**Use 150 K / 220 K** — 5 V → 2.97 V at 13.5 µA. An earlier version of
+this line said 100 K / 200 K, which is wrong twice over: it gives
+5 × 200/300 = **3.33 V, above the ESP32's own 3.3 V rail**, which leaves
+**zero headroom** and relies on both rails being exact. (30 mV over the
+rail does not forward-bias a clamp diode — that needs ~0.3–0.7 V — so do
+not repeat that mechanism; the objection is the missing margin.) CLAUDE.md has carried
+150 K / 220 K for some time and this file was never updated — the same
+stale-contradiction defect that put the pre-incident wiring in the
+shopping list. CLAUDE.md is the source of truth.
+
+Do **not** use 220 K / 220 K either: 2.50 V against an ESP32-S3 VIH of
+2.475 V, and supply tolerance alone eats that margin.
+
+Confirm the idle/pressed polarity with the multimeter before connecting
+anything.
 
 Share ground with the board's VSS. That's safe here — the 5 V rail
 comes from an IRM-03-5, which is an isolated module — provided the

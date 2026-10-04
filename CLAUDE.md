@@ -46,7 +46,7 @@ Pin map, from the traced schematic:
 | Water | PB4 | present on board, likely unwired on a Dream |
 | Steam | PA10 | as above |
 | DIP1–4 | PB0–PB3 | four config DIP switches (SW1), purpose unknown |
-| Flow-P1 / P2 | PA8 / PA9 | flowmeter, conditioned to 3.3 V logic |
+| Flow-P1 / P2 | PA8 / PA9 | flowmeter, conditioned to 3.3 V logic **at the MCU**. The conditioning sits between J4 and these pins — the connector carries the sensor's own output. **Whether both nets reach J4 is now in doubt**; see 0d below. |
 | AC_Sense | PA5 | mains zero-cross, via opto U27 |
 | Pump_Ctrl | PA15 | → FODM3053 → BTA204S triac (random-phase) |
 | Solenoid_CTRL | PB12 | |
@@ -394,7 +394,10 @@ warm-up deliberately.
 
 **Idle: the display shows boiler temperature in °C.** During a brew the
 machine takes the display over for a **shot timer in tenths of a second**
-(counts `001`→`169` for a 16.9 s pull), so temperature is *not* readable
+(counts `001`→`169` across 16.8915 s — 168 steps, i.e. 16.8 s of
+displayed time; see the agreement table below, and do **not** restate it
+as "a 16.9 s pull", which compares against the final value instead of the
+interval), so temperature is *not* readable
 mid-shot. That timer is a gift, but a narrower one than first recorded. It IS the
 machine's own pump-on to pump-off measurement — stopping a cycle by hand
 stops the timer, so it tracks real pump time rather than counting out a
@@ -530,9 +533,43 @@ would read as not pressed. The switch harness is **J2** (silkscreen
 `BOTONE`), 5 pins: +5 V, Steam, 1Cup, 2Cup, Water. Gives real shot
 boundaries, flush events, and a true `first_drip_ms`.
 
-**0d — flowmeter.** Tap PA8/PA9 (already 3.3 V logic) through 1 K series,
-count on interrupt. Calibrate by weighing water on a Bookoo. Log both nets
-— possibly quadrature, possibly two-meter support.
+**0d — flowmeter. FIRST ATTEMPT CAUSED AN INVARIANT-1 VIOLATION
+(2026-10-03) — read `docs/phase-0-status.md` before touching J4.** A tap on
+J4 made the machine fault with `E01` while a 2Cup cycle was running;
+disconnecting it and power-cycling cleared the fault. **Nothing is known to have been
+damaged — the analyser's D1 input has not been re-checked**, and the
+leading hypothesis involves ~12 mA through a clamp meant for signal-level
+currents. The machine's behaviour changed because of a Phase-0 tap, which
+invariant 1 forbids.
+
+The sensor is a **Digmesa FHKSC** (Ascaso `I.2560`, Digmesa `932-9525-B`):
+1.0 mm nozzle, **~2400 pulses/L**, **NPN open collector** (so `#` idles high
+on a board-side pull-up and pulses low), supply **+3.8 to +20 VDC** at
+<8 mA. **The K-factor and the supply minimum are from search summaries of
+a datasheet that could not be retrieved** — sources spread 2386–2494 on
+the first and one gives +2.8 V for the second. Neither is a verified
+hardware fact yet, which is why they are hedged in a file whose heading
+says they would not be.
+
+Its three conductors are marked `+`, `T`, `#` — supply, ground, signal —
+which means **one** signal, not two, and that **conflicts with the
+Flow-P1/P2 row above. That conflict is unresolved**; a meter settles it.
+
+**`E01` is the dose-control fault**, from Ascaso's `MAN.29-V10` alarm table
+("Dose control fault" / "Fallo control volumétrico"); `E02` is the probe.
+
+Two values, and they are not interchangeable:
+
+- **At J4 (analyser or any probe): 8.2 K series, one channel, `#` only,
+  ground to `T` direct, and NOTHING on `+`.** The connector carries the
+  sensor's output at whatever the board's pull-up sets, not 3.3 V.
+- **At PA8/PA9 (ESP32, already conditioned): 1 K series**, count on
+  interrupt — but only once `#` has actually been measured.
+
+Calibrate by weighing water on a Bookoo; invariant 3 means the K-factor
+is never baked in, and Digmesa's own datasheet recommends calibrating it.
+"Possibly quadrature, possibly two-meter support" predates the markings and
+may be a false dichotomy.
 
 **0e — temperature**, only if 0b succeeded.
 

@@ -63,8 +63,13 @@ Idle it carries **boiler temperature**. During a brew the machine takes the
 display over for its **own shot timer, in tenths of a second** — which is a
 truer pump-on/pump-off boundary than anything a scale can infer.
 
-The decode validates against itself: the timer ran `001` → `169` across 16.892 s
-of capture time, against a displayed 16.9 s. Eight milliseconds of agreement.
+The decode validates against itself: the timer ran `001` → `169` across
+16.8915 s of capture time. That is 168 displayed steps — 16.8 s — so the
+error is **+92 ms**, of the order of the display's own 100 ms tick plus the
+~41 ms frame period. (An earlier version of this line claimed "eight
+milliseconds of agreement" by comparing against the *final displayed value*
+rather than the interval. The same mistake is recorded, and corrected, in
+CLAUDE.md for the 2026-10-03 captures.)
 
 Protocol and probe point in [CLAUDE.md](../CLAUDE.md), decoder in
 [tools/decode-display-bus.py](../tools/decode-display-bus.py), raw captures in

@@ -61,7 +61,9 @@ WHAT THE DISPLAY SHOWS
 
   Idle    : boiler temperature in C, e.g. " 95".
   Brewing : the machine takes the display over for a shot timer in tenths
-            of a second, counting 001 -> 169 for a 16.9 s pull. So the
+            of a second, counting 001 -> 169 across 16.8915 s, i.e. 168 steps = 16.8 s of
+  displayed time, +92 ms -- NOT "a 16.9 s pull", which compares against
+  the final value instead of the interval. So the
             temperature is NOT readable during a shot -- but the timer is,
             and it gives true pump-on/pump-off boundaries for free. NOT a
             replacement for 0c though: 1Cup and 2Cup emit byte-identical

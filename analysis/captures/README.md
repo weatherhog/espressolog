@@ -1,6 +1,10 @@
-# Display-bus captures
+# Machine captures
 
-Raw sigrok captures from J5 on the Ascaso Dream PID control board. These
+Mostly display bus (J5). One J4 flowmeter capture, which is a **null
+result and the record of an invariant-1 violation** — see the last section.
+
+Raw sigrok captures from the Ascaso Dream PID control board — J5 for the
+display bus, J4 for the one flowmeter attempt. These
 are the evidence the 0b/0e decode rests on. Note that **no code reads
 these files**: `firmware/test/host/display_test.cpp` uses bit literals
 transcribed from them, so the coupling is by hand and nothing breaks if a
@@ -113,11 +117,11 @@ of relying on a 1 ms gap threshold — see `docs/phase-0-status.md`.
 | File | What it holds |
 |---|---|
 | `2026-09-28-display-bus-95c-static.sr` | Steady idle at 95 °C. Rendered ` 95` in all 2267 frames — the capture that proved the digit decode. |
-| `2026-09-28-display-bus-flush-timer.sr` | A flush. The machine takes the display over for a shot timer in tenths of a second, `001`→`169` against a displayed 16.9 s. |
+| `2026-09-28-display-bus-flush-timer.sr` | A flush. The machine takes the display over for a shot timer in tenths of a second, `001`→`169`: 168 displayed steps = 16.8 s against 16.8915 s measured, **+92 ms** (not "against a displayed 16.9 s", which compares to the final value instead of the interval — see CLAUDE.md). |
 | `2026-10-03-display-bus-95c-poweron.sr` | **Misnamed — this is mid-warm-up, not a boot.** 8 s showing ` 88` for the first 1.7 s then ` 95`, with no 89…94 in between. **What the ` 88` is remains unexplained**; three stories have been told about it (a lamp test, a "power-on state", the boiler passing 88 °C) and none survives the file itself. Kept as the example of why not to explain a reading you have not deliberately captured. |
 | `2026-10-03-display-bus-cold-boot.sr` | 90 s from genuinely **off**, through the rails coming up, to a steady ` 95`. 25 `Disp-P4` transitions spread over 204.5 ms from the rails coming up, none afterwards — see CLAUDE.md, where 24 of them fit rail settling and the 25th does not. (`2026-09-28-display-bus-flush-timer.sr` also carries 4, mid-flush.) Also shows ~4.1 s of irregular non-frame activity (32 single-bit blips, one 564-bit burst) before normal framing starts, then blank → `  0` → ` 95`. |
 | `2026-10-03-display-bus-buttons.sr` | 30 s, six button events: left short at 2.06 s, right short at 5.69 s, left held 2.8 s, right held 2.65 s, then repeated left presses from 18.25 s. Contains the 95 → 120 setpoint ramp and its return, and the ~2.44 Hz adjust-mode blink. |
-| `2026-10-03-display-bus-flush-timer.sr` | 60 s containing a **2Cup** cycle, stopped by hand at 21.0 s. Timer `001` at 3.326 s to `210` at 24.332 s — 20.9 s of displayed steps across 21.006 s, i.e. within the display's own 100 ms quantisation — then ` 95` at 29.451 s. The fixture for shot-timer parsing, and the only capture whose split rate can be read against machine state within one file. |
+| `2026-10-03-display-bus-flush-timer.sr` | 60 s containing a **2Cup** cycle, stopped by hand at 21.0 s. Timer `001` at 3.326 s to `210` at 24.332 s — 20.9 s of displayed steps across 21.006 s, i.e. **+106 ms — which is *larger* than the display's own 100 ms tick, not within it** (see CLAUDE.md; an earlier draft here claimed otherwise) — then ` 95` at 29.451 s. The fixture for shot-timer parsing, and the only capture whose split rate can be read against machine state within one file. |
 | `2026-10-03-display-bus-1cup-clean.sr` | 60 s containing a **1Cup** clean cycle, `001` at 1.638 s to `105` at 12.068 s. Its purpose is the comparison: 1Cup and 2Cup each yield exactly one 67-bit payload and it is byte-identical between them, so **nothing on this bus distinguishes the two switch directions**. |
 | `2026-10-03-display-bus-setup-menu.sr` | 60 s walking the whole `SET UP` menu: `5Et`/`UP ` alternating, then `Ud`, `Pr`, `Cr`, `0FF`, `U` — the manual's five parameters in the manual's order. Source of the letter glyphs, and the only capture containing the **both-buttons-pressed** payload. Also shows the setpoint being corrected 92 → 95 from 46.7 s. |
 | `2026-10-03-display-bus-buttons-separated.sr` | 40 s through the finished divider. Five short **right** presses alone (5.2–12.5 s) change nothing, because programming mode was never entered; then five short **left** presses (18.8–25.9 s), each rendering **`PrG`**. The cleanest button fixture — one bit at a time, 6 s between the blocks. |
@@ -131,3 +135,50 @@ letters; `tools/decode-display-bus.py` knows P, r and G and prints any
 other unknown glyph as its raw `<abcdefg>` pattern rather than `?`, because
 five identical `???` readings look exactly like noise and sent the first
 analysis chasing a frame-corruption problem that did not exist.
+
+## J4 — flowmeter (0d), failed attempt
+
+| File | Rate | Channels |
+|---|---|---|
+| `2026-10-03-flowmeter-j4-idle.sr` | **100 kHz** | D0, D1 on J4 — 2 s idle reference |
+| `2026-10-03-flowmeter-j4-null.sr` | **100 kHz** | D0, D1 on J4 — **net mapping NOT established** |
+
+90 s. **Zero edges on both channels**: D0 steady low, D1 steady high, start
+to finish. `2026-10-03-flowmeter-j4-idle.sr` is a 2 s idle capture from the
+same session with the same levels and also 0 edges.
+
+The file contains **no transitions at all on the probed channels**, so
+nothing in it timestamps the 2Cup cycle or the fault. That the cycle
+happened inside this window rests on the operator's account, not on the
+file.
+
+The machine stopped with **`E01`** (Ascaso's dose-control fault). Disconnecting J4 and
+power-cycling cleared it, so **the tap caused the fault**. The mechanism is
+not established — the leading hypothesis is that the flow sensor lost its
+supply, which would make J4 pin 3 the supply, but that is untested.
+
+Keep this file. It is the evidence for the 0d entry in
+`docs/phase-0-status.md`.
+
+**It is also the counter-example to its own first reading.** An earlier
+draft argued the absence of 50 Hz hum ruled out floating probes. The `.sr`
+format stores all eight hardware channels even when two are enabled, and
+reading them refutes that outright:
+
+| Capture | unconnected channels |
+|---|---|
+| this file | D3 **0 edges, steady low**; D2 and D4–D7 ~50 Hz hum |
+| `2026-10-03-display-bus-flush-timer.sr` | D3 **0 edges, steady low**; D2 0 edges, steady high; D4–D7 hum |
+
+Both of this capture's signatures are reproduced by channels connected to
+nothing. On a digital capture "zero edges" and "no hum" are also the same
+measurement, not two.
+
+Note this file was taken with **all eight channels live**, against the
+procedure in `tools/decode-display-bus.py` ("enable ONLY the channels in
+use"). Five of the six unused channels are full of hum; that is expected,
+not a defect in the capture.
+
+**Do not read "0 edges" as "the flowmeter does not pulse".** The capture
+cannot distinguish a dead sensor, wrong nets, a shorted conductor, and
+probes on nothing.

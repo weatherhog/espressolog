@@ -73,8 +73,14 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    display is readable from the wire. Protocol, probe point and bit
    offsets are in CLAUDE.md; the decoder is `tools/decode-display-bus.py`
    and the raw captures are in `analysis/captures/`. Validation: the
-   decoded shot timer ran `001`→`169` over 16.892 s of capture time
-   against a displayed 16.9 s — 8 ms of agreement — and the static
+   decoded shot timer ran `001`→`169` over 16.892 s of capture time.
+   That is 168 displayed steps, i.e. **16.8 s against 16.892 s — +92 ms**.
+   An earlier draft here said "8 ms of agreement" by comparing against the
+   final displayed value, 16.9 s, instead of the interval; the same
+   mistake is recorded — and corrected — in CLAUDE.md for the 2026-10-03
+   captures, where the errors are +106 ms and +30 ms. All three are of the order of the display's 100 ms tick
+   plus the ~41 ms frame period, so there is nothing to explain — but the
+   agreement is tens of milliseconds, not single digits. The static
    capture rendered ` 95` in all 2267 frames, matching the display.
    Kit that worked: SeenGreat SG-NANO-DLA-A + `sigrok-cli`, four wire
    stubs soldered to the J5 pads, 8.2 K in series per channel and 1.5 K
@@ -378,8 +384,239 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    | J4 | — | 3 | flowmeter `Flow-P1`/`P2` — `XHP-3` |
    | J3 | — | 2 | NTC thermistor |
    | J1 | — | 9 | **mains and loads — never touch** |
-5. **0d — flowmeter**, **0e — temperature** (if 0b cracked it), per
-   docs/phase-0-plan.md.
+5. **0d — flowmeter — FIRST ATTEMPT FAILED, 2026-10-03.** Recorded because
+   it is the **only time Phase 0 has violated hard invariant 1**, and the
+   mechanism is still not established.
+
+   **What was measured, and nothing beyond it:**
+
+   - 2 s idle on D0/D1 (`2026-10-03-flowmeter-j4-idle.sr`): **0 edges**,
+     D0 steady low, D1 steady high.
+   - 90 s spanning a 2Cup cycle (`2026-10-03-flowmeter-j4-null.sr`):
+     **0 edges on both channels**, same levels.
+   - The machine stopped with **`E01`** on the display.
+   - **J4 disconnected, machine power-cycled, 2Cup run again: no error.**
+
+   Those last two lines are the finding: **the tap caused the fault.** The
+   *mechanism* is not established and must not be written down as though
+   it were. Note the capture contains no transitions at all, so nothing in
+   it timestamps the cycle or the fault — that correlation rests on the
+   operator's account, not on the file.
+
+   **The captures say almost nothing else, and an earlier draft of this
+   section claimed they did.** It argued that the absence of 50 Hz hum
+   proved the probes were not floating. **That is refuted by this repo's
+   own files.** fx2lafw delivers all eight hardware channels regardless of
+   how many are enabled, and these captures store them at `unitsize=1`, so
+   the unprobed ones are readable:
+
+   | Capture | D2 | D3 | D4 / D5 | D6 / D7 |
+   |---|---|---|---|---|
+   | `-flowmeter-j4-idle.sr` | **0 edges, flat** | 0 edges, flat | 50 Hz | 50 Hz |
+   | `-flowmeter-j4-null.sr` | **50 Hz hum** | 0 edges, flat | 50 Hz | 50 Hz |
+   | `-display-bus-flush-timer.sr` | 0 edges, steady high | 0 edges, flat | **30 / 32 kHz** | 50 Hz |
+
+   An unconnected input picks up whatever is near it — **50 Hz mains
+   through to tens of kHz**, the latter almost certainly crosstalk from
+   the 9.9 kHz display clock and its harmonics. An earlier version of this
+   table said "D4–D7 hum", which is wrong: in the flush capture D4 and D5
+   run at 30 and 32 kHz.
+
+   **The decisive row is D2.** It is connected to nothing in either J4
+   capture, and it reads **dead flat in one and 50 Hz in the other**, 88 s
+   apart in the same session. The signature is not stable on one channel
+   within one sitting, let alone diagnostic. Both of the J4 capture's
+   signatures — steady low, steady high, no edges — are reproduced here
+   by channels on nothing at all. The captures cannot distinguish "probes
+   on the wrong nets" from "probes on nothing".
+
+   Two further traps in that reasoning, both worth keeping:
+
+   - On a purely digital capture, **"zero edges" and "no hum" are the same
+     measurement, not two.** A line sitting at a rail with 200 mV of
+     ripple produces no threshold crossings. The earlier draft counted one
+     observation twice and read it as corroboration.
+   - The capture was taken with **all eight channels live**, against this
+     repo's own written procedure — `tools/decode-display-bus.py` says
+     "enable ONLY the channels in use". Five of the six unused channels
+     are full of hum. Anyone opening the file in PulseView sees that.
+
+   **The sensor is a DIGMESA** (2026-10-03, read off the body — the label
+   is worn and was first read as "DIMASE PSACH"). Its three conductors are
+   marked:
+
+   | Marking | Reading | Confidence |
+   |---|---|---|
+   | `+` | supply | unambiguous |
+   | `T` (middle) | ground — the IEC earth symbol ⏚ is a stem on a bar | plausible, unverified |
+   | `#` | signal out — a square-wave symbol ⌍ could hatch to something `#`-like | **a guess** |
+
+   Earlier confidence labels here read "high" for both. They were not
+   earned: the `#` cell's own text describes a guess, and the label came
+   from the same worn plastic that produced "DIMASE PSACH".
+
+   **Measurement replaces this table, but not with a plain DC reading** —
+   an earlier draft said "`T`→`#` should flicker during a flush", and it
+   will not. On an open-collector output idling high through a board
+   pull-up, `+` and `#` both sit near the supply at rest, and at ~4.8 Hz
+   an autoranging DMM averages to a steady mid-scale number. What works:
+
+   1. **Continuity to the board's ground pour identifies `T`** — needs no
+      convention and no power.
+   2. **Frequency (Hz) mode on `#` during a flush** identifies the signal.
+   3. **`+` is whatever is left**, and must not be probed.
+
+   **This conflicts with the connector census above, and the conflict is
+   open.** The census says J4 carries `Flow-P1`/`Flow-P2` — PA8 *and*
+   PA9, two MCU pins. A supply/ground/signal sensor needs **one**. The
+   markings are direct evidence off the physical part; the census is
+   traced from `techdregs/Ascaso_Dream_PID_Electronics`, which already
+   ships the wrong MCU datasheet. Neither is settled. If the markings hold
+   up, the standing "quadrature, or two independent meters?" question is
+   a false dichotomy — but that follows *from* the markings and inherits
+   their uncertainty, so it is not yet an answer.
+
+   **The part, and its electrical data. Read the source column** — the two
+   most load-bearing numbers are NOT in hand as primary sources. Every
+   Digmesa PDF URL for this family 301-redirects to HTML; the datasheet
+   could not be retrieved on 2026-10-03.
+
+   | | |
+   |---|---|
+   | | | Source |
+   |---|---|---|
+   | Model | **Digmesa FHKSC**, three-pin | Ascaso-USA listing |
+   | Ascaso part | `I.2560` | vendor listings |
+   | Digmesa part | `932-9525-B` | vendor listings |
+   | Orifice | 1.0 mm, 5 mm barbed | vendor listings |
+   | Flow range | 0.033–0.40 L/min | **vendor listings; the datasheet reportedly gives min 0.05 L/min at Ø 1.00 mm — a 50 % disagreement at the low end, which matters for slow pre-infusion** |
+   | Output | **NPN open collector**, 0 VDC active, saturation <0.7 V | Daitron + Digmesa product pages, corroborated |
+   | Signal load | max 20 mA | as above |
+   | Supply | **+3.8 to +20 VDC**, <8 mA | **search summary of an unretrieved datasheet; another secondary source says +2.8 to +24 VDC** |
+   | K-factor | **~2400 pulses/L** at Ø 1.00 mm | **search summary, unretrieved — see below** |
+   | Accuracy | ± 2.0 % | product pages |
+
+   **The K-factor is ~2400, not a four-digit constant.** Returns for the
+   `932-952x-Bxxx` sheet give **2386** at Ø 1.00 mm, but one gives
+   **2386 / 2476 / 2436 for 0° / 90° / 180° mounting orientation** and a
+   separate FHKSC source gives **2494** — ~4 % spread, and mounting
+   orientation is precisely the installation variable Digmesa's own
+   calibration warning covers. Quoting one to four significant figures
+   would be false precision. Invariant 3 means nothing depends on it.
+
+   **The 3.8 V minimum is the most load-bearing unverified number in this
+   entry** — it is what upgrades the brownout hypothesis from speculation
+   to "supported". **One secondary source gives +2.8 V instead, and if
+   that is right then 3.3 V is in spec and the hypothesis loses its
+   mechanism.** Retrieving the PDF settles it; until then the hypothesis
+   is weaker than the paragraph below reads.
+
+   An earlier draft of this section used **1300 pulses/L**, taken from a search summary and never
+   checked against a datasheet — that is the Ø 1.50 mm figure (Digmesa's
+   FHK table gives 1386 p/L / 0.7216 g/pulse for 1.50 mm against 2223 for
+   1.00 mm). Everything derived from it was wrong by ~1.8×. **This is the
+   same failure the STM32 datasheet note warns about**: the sourcing was
+   flagged as secondary and honest, and then the freely available primary
+   source was never fetched. Flagging weak sourcing is not a substitute
+   for replacing it — which is why the table above now names which rows
+   are still only flagged. **Retrieving this datasheet is the cheapest
+   open task in 0d.**
+
+   **`E01` is the dose-control fault — confirmed from the manual.**
+   Ascaso's own `MAN.29-V10` alarm table gives, across four languages:
+   "Dose control fault" / "Fallo control volumétrico" / "Fehler
+   Fassungsvermögenskontrolle" / "Défaut du contrôle de volume", with
+   `E02` the probe fault. So `E01` is the volumetric path, which is the
+   flowmeter.
+
+   Note the manual renders it **`E01`, with no decimal point**, so the dot
+   in the operator's "E.01" is probably punctuation rather than a lit
+   segment. CLAUDE.md's open decimal-point question stands unanswered.
+
+   A note on how that was argued before: an earlier draft paired a dealer
+   customer review with our own tap-on/tap-off test and called the two
+   together "persuasive". They are not two views of one claim — the
+   review is evidence about *what the code means*, the controlled test is
+   evidence about *what caused this particular fault* and would have
+   "corroborated" any code equally. The conclusion survived; the reasoning
+   did not.
+
+   **Open collector changes what the capture should look like.** The
+   sensor only ever pulls *down*; the high level comes from a pull-up the
+   board must provide. So `#` should **idle HIGH and pulse LOW** — if a
+   capture shows the opposite, suspect the tap, not the sensor. It also
+   means the line is only as stiff as that pull-up when high, which is the
+   one way a careless load can hold it low and suppress pulses without
+   breaking anything visibly.
+
+   **The leading hypothesis — still untested — is that the sensor lost
+   its supply.** If the probes sat on `+` and `T`, neither is the signal,
+   so neither could ever move. The analyser is **not 5 V tolerant**
+   (74HC245PW on a 3.3 V rail behind 100 Ω), so clipped to `+` its input
+   clamp conducts and pulls the sensor supply toward 3.3 V — **below the
+   datasheet's 3.8 V minimum.** Without an external series resistor the
+   analyser's own 100 Ω bounds that current at roughly
+   (5 − 3.3 − 0.5)/100 ≈ **12 mA**, which is larger than the sensor's
+   entire <8 mA consumption; with a 1 kΩ fitted it is ~1.1 mA and
+   probably harmless. **Which of those applied was never recorded**, and
+   that is the single thing that would have made this diagnosable.
+
+   The idle levels are *consistent* with this hypothesis but do not
+   support it, for the reasons in the hum section above. Competing
+   explanations the data cannot exclude: the probes were on nets that
+   never pulse, or a conductor was shorted. **Check D1 still reads
+   correctly before trusting the analyser.**
+
+   **What 0d can and cannot deliver.** At ~2400 pulses/L each pulse is
+   **~0.42 ml**, an espresso shot at ~2 ml/s pulses at **~4.8 Hz**, and
+   the rated ceiling is **~16 Hz**. (The 4 % K-factor spread shifts these
+   by far less than the retention estimate below, so it changes nothing
+   here.) Inlet volume for a 36 g shot is
+   *not* 36 ml — it is output plus puck retention plus the solenoid dump,
+   realistically 55–75 ml, so very roughly **130–180 pulses**. That is
+   enough to be a useful total and still far coarser than the Bookoo at
+   ~10 Hz and 0.01 g, which resolves the pour better. **What the flowmeter
+   uniquely gives is inlet volume** — water going *in*, against the
+   scale's water coming *out*. The difference is exactly what the puck
+   absorbs and the solenoid dumps, which no scale can see.
+
+   For a pulse counter the binding constraint is minimum pulse *width*,
+   not rate: at ~50 % duty and a 16 Hz ceiling the half-period is ~31 ms,
+   so even 1 kHz sampling is ample and 100 kHz is ~6000× the rate.
+
+   Per invariant 3 the K-factor is never baked in: log raw pulses and
+   calibrate ml/pulse by weighing water on a Bookoo. The datasheet itself
+   says the same — "we recommend to calibrate the number of pulses per
+   litre".
+
+   **Carry into the retry:**
+
+   - **Record the as-built tap before powering anything.** Series value,
+     whether a shunt is fitted, which conductor each probe is on. Not
+     knowing this is why the incident above cannot be diagnosed, and it
+     costs one line in a notebook.
+   - **One channel, `#` only, through 8.2 kΩ — not the 1 kΩ this file
+     previously implied.** CLAUDE.md's "conditioned to 3.3 V logic"
+     describes the *board* side, between J4 and PA8; at the connector you
+     have the sensor's own output, whose swing is set by the board's
+     pull-up and is not known to be 3.3 V. 8.2 kΩ bounds the clamp
+     current to ~150 µA, which would drop ~0.7 V across a 4.7 K pull-up —
+     **but the pull-up value is unknown, so that is an estimate, not a
+     calculation. Measure the idle level on `#` first.** **No shunt leg** — unlike the J5 tap, which
+     pairs 8.2 K with 15 K to ground, this is a current limiter into the
+     analyser's clamp, which is acceptable for the analyser and **not**
+     acceptable for an ESP32. The 1 kΩ still stands for the permanent
+     ESP32 wiring, once `#` has actually been measured.
+   - **Ground to `T` directly. Put nothing on `+`.** That is the specific
+     rule the hypothesis supports.
+   - **Prefer back-probing to interposing**, on general grounds — a
+     seated harness has nothing to fail to reconnect. Note this is a
+     preference, not a conclusion from the incident: the evidence is
+     tap-present → fault, tap-absent → no fault, which does not
+     distinguish *opening* the connector from *loading* a net. Under the
+     leading hypothesis, back-probing `+` would fail identically.
+
+   **0e — temperature** (if 0b cracked it), per docs/phase-0-plan.md.
 
 ## Known quirks (details in the auto-memory notes)
 

@@ -258,20 +258,28 @@ worth buying as dedicated bags so you are not down to your last two at
 | Value | Qty | Where |
 |---|---|---|
 | 8.2 kΩ | 10 | 0e T-piece, series leg (**×3** — `ESD1`, `ESD4`, `Disp-P4`); 0b analyser tap (×3). **Bought: 25.** |
-| 15 kΩ | 10 | 0e divider, ground leg, at the box (**×2** — `Disp-P4` stays unterminated) |
+| 15 kΩ | 10 | 0e divider, ground leg, at the box (**×2** — `Disp-P4` stays unterminated). **In stock.** |
 | 150 kΩ | 10 | 0c switch divider, series leg — **already ordered** |
-| 220 kΩ | 10 | 0c switch divider, ground leg |
-| 1 kΩ | 10 | 0d flowmeter series protection (×2) |
-| 1.5 kΩ | 10 | 0b analyser ground lead |
+| 220 kΩ | 10 | 0c switch divider, ground leg (**×2** — 1Cup, 2Cup). **In stock.** |
+| 1 kΩ | 10 | 0d flowmeter, **ESP32 side only, and only after `#` has been measured** — see the 0d entry in `docs/phase-0-status.md`. **In stock.** |
+| 8.2 kΩ (J4) | — | **the J4 analyser tap uses 8.2 kΩ, not 1 kΩ** — one channel, `#` only, no shunt. Covered by the 8.2 kΩ bag above. |
 | E12 assortment kit, 1/4 W | 1 | everything else |
 
-Two values are load-bearing — 0c is in CLAUDE.md, 0e is worked out in
-`docs/phase-0-status.md`. Repeated here because getting either wrong fails
-silently:
+Three of these are load-bearing — 0c is in CLAUDE.md, 0e and 0d are
+worked out in `docs/phase-0-status.md`. Repeated here because getting any
+of them wrong is expensive, and one of them already was — the 0d tap made
+the machine fault and stop, which was loud rather than silent, but only
+because the machine caught it:
 
 - **0c must be 150 K / 220 K, never 220 K / 220 K.** 220/220 gives 2.50 V
   against an ESP32-S3 VIH of 2.475 V. Supply tolerance alone eats that
   margin and a pressed button reads as not pressed.
+- **0d's J4 tap is 8.2 K series, one channel, ground to `T` direct.** The
+  1 K figure in CLAUDE.md is the *board* side at PA8/PA9, not the
+  connector. Nothing ever connects to the sensor's `+` pin — that is
+  what the leading hypothesis for the 2026-10-03 `E01` would make
+  dangerous, and it has not been ruled out. The mechanism is **not**
+  established; see the 0d entry before treating this as settled history.
 - **0e must be 8.2 K / 15 K, and do not enable an internal pull-down.**
   The internal 45 K across the 15 K leg drops the open-drain case to
   2.33 V and the pin stops reading high.
@@ -335,8 +343,12 @@ data.
 Connectors are **bought** — the mixed balance-lead pack was €6.99 and
 should cover J5, J2 and J4, pending the seat check in section 1.
 
-Still outstanding: resistors, adhesive-lined heat-shrink, PTFE sleeving,
-perfboard, project box and cable gland — **~€35**. Add calipers (~€15) if
-you want the connector question settled by measurement rather than
-re-derived from photographs. The pre-crimped kit (~€10) and the Ascaso
-`I.4312` harness (~€15) only if a balance lead disappoints.
+Still outstanding: adhesive-lined heat-shrink, PTFE sleeving, perfboard,
+project box and cable gland — **~€30**, plus an E12 assortment kit
+(€8–15) which is the only resistor item left. **The load-bearing
+resistors are no longer on the critical path**: 8.2 K, 15 K, 220 K and
+1 K are in stock and 150 K is ordered. Nothing here blocks a build —
+which is a different claim from costing nothing. Add calipers (~€15) if you want the connector
+question settled by measurement rather than re-derived from photographs.
+The pre-crimped kit (~€10) and the Ascaso `I.4312` harness (~€15) only if
+a balance lead disappoints.

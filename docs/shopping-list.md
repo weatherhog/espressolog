@@ -251,20 +251,21 @@ Full reasoning in `docs/phase-0-status.md`.
 
 ## 4. Resistors
 
-A generic E12 kit covers most of it, but the four values that matter are
-worth buying as dedicated bags so you are not down to your last two at
-11 pm. **1 % metal film, 1/4 W.**
+Buy the load-bearing values as dedicated bags rather than relying on an
+assortment kit — **1 % metal film, 1/4 W**. Cheap E12 kits are 5 %, and
+while both dividers survive that (J4 +96 mV, 0c +110 mV), the margins are
+tighter than they need to be for the sake of a few euro.
 
 | Value | Qty | Where |
 |---|---|---|
 | 8.2 kΩ | 10 | 0e T-piece, series leg (**×3** — `ESD1`, `ESD4`, `Disp-P4`); 0b analyser tap (×3). **Bought: 25.** |
 | 15 kΩ | 10 | 0e divider, ground leg, at the box (**×2** — `Disp-P4` stays unterminated). **In stock.** |
-| 150 kΩ | 10 | 0c switch divider, series leg — **already ordered** |
-| 220 kΩ | 10 | 0c switch divider, ground leg (**×2** — 1Cup, 2Cup). **In stock.** |
+| 150 kΩ | 10 | 0c switch divider, series leg (**×4** — all four J2 lines) — **already ordered** |
+| 220 kΩ | 10 | Ground leg: **×4 at J2** (1Cup, 2Cup, Steam, Water) **+ ×1 at J4** = **5**. **In stock.** |
 | 1 kΩ | 10 | 0d flowmeter, **at PA8/PA9 only** — the board side, after its own conditioning. **Never at J4.** **In stock.** |
 | 8.2 kΩ (J4) | — | **J4 ANALYSER tap only: 8.2 kΩ, one channel, `#` only, no shunt.** The ESP32 tap at J4 is 120 K + 220 K — see the 0d entry in `docs/phase-0-status.md`. Covered by the 8.2 kΩ bag above. |
-| **120 kΩ** | 10 | **0d J4 divider, series leg** — the only part now blocking 0d. Covered by the E12 kit. |
-| E12 assortment kit, 1/4 W | 1 | everything else, **including the 120 kΩ above** |
+| **120 kΩ** | 10 | **0d J4 divider, series leg — the only part blocking 0d.** Buy a bag; the E12 kit is not needed for it. |
+| E12 assortment kit, 1/4 W | 0 | **Not required.** It covers no named requirement, and cheap kits are 5 % where the rows above are 1 %. Both dividers survive 5 % (J4 +96 mV, 0c +110 mV), but a €2 bag of 1 % 120 kΩ is cheaper and better. |
 
 Three of these are load-bearing — 0c is in CLAUDE.md, 0e and 0d are
 worked out in `docs/phase-0-status.md`. Repeated here because getting any
@@ -304,7 +305,7 @@ because the machine caught it:
 | PTFE or fibreglass sleeving, 2–4 mm, 200 °C+ | 8 | Silicone wire is good to ~200 °C on its own, so this is for abrasion and for anything routed near the boiler or group. Ordinary PVC sleeving and standard heat-shrink are not. |
 | Heat-shrink assortment, **adhesive-lined** | 6 | Strain relief at the T-piece branches, and over the stripped window. Adhesive-lined or nothing — plain heat-shrink is not insulation on its own. |
 | Perfboard + pin headers | 6 | The dividers want to live on a board, not in mid-air |
-| ABS project box, ~120 x 80 x 40 mm | 8 | ESP32 mounts **outside** the machine. Size it for **three** harnesses — 0c adds J2 (5 wires, 2 more dividers) and 0d adds J4, and they all land here. A box that fits only the display tap is a box bought twice. |
+| ABS project box, ~120 x 80 x 40 mm | 8 | ESP32 mounts **outside** the machine. Size it for **three** harnesses — 0c adds J2 (5 wires, **4** dividers — all four functions) and 0d adds J4, and they all land here. A box that fits only the display tap is a box bought twice. |
 | Cable gland or grommet | 3 | Where the harness leaves the case |
 | Nylon cable ties / adhesive tie mounts | 4 | Keep the tap away from the boiler and off moving parts |
 
@@ -355,12 +356,14 @@ Connectors are **bought** — the mixed balance-lead pack was €6.99 and
 should cover J5, J2 and J4, pending the seat check in section 1.
 
 Still outstanding: adhesive-lined heat-shrink, PTFE sleeving, perfboard,
-project box and cable gland — **~€30**, plus an E12 assortment kit
-(€8–15) which is the only resistor item left. **The load-bearing
-resistors are no longer on the critical path**: 8.2 K, 15 K, 220 K and
-1 K are in stock and 150 K is ordered. **0d is now blocked on the 120 kΩ** in that kit — so
-"nothing blocks a build" is no longer true, and the kit moved from
-nice-to-have to the one outstanding part that gates a milestone. Add calipers (~€15) if you want the connector
+project box and cable gland — **~€30** — plus a **€2 bag of 120 kΩ**.
+
+**That 120 kΩ is the critical path**: it is the only part gating 0d. 0c is
+gated on the 150 kΩ already ordered. Everything else load-bearing —
+8.2 K, 15 K, 220 K, 1 K — is in stock, and **neither milestone needs the
+E12 kit**, which is why it is Qty 0 above.
+
+Add calipers (~€15) if you want the connector
 question settled by measurement rather than re-derived from photographs.
 The pre-crimped kit (~€10) and the Ascaso `I.4312` harness (~€15) only if
 a balance lead disappoints.

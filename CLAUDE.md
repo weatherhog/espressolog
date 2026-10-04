@@ -43,8 +43,8 @@ Pin map, from the traced schematic:
 |---|---|---|
 | 1Cup | PB5 | up direction of the switch. 15 s is the *default*; **this machine is set to ~10.5 s** — the operator reprogrammed it (2026-10-04). See below: these durations are user-modifiable state, not constants. |
 | 2Cup | PB6 | down direction. 60 s is the *default*; **this machine's stored value is UNKNOWN** — the 2026-10-03 capture was stopped by hand at 21.0 s, so it says nothing about the stored duration. User-modifiable, like 1Cup. |
-| Water | PB4 | **WIRED — continuity measured 2026-10-04** (an earlier version of this row said "likely unwired on a Dream"). On lever B; **which direction is from plug inspection, not functionally verified.** |
-| Steam | PA10 | **WIRED — continuity measured 2026-10-04**, same correction as the Water row. On lever B; **direction from plug inspection, not functionally verified.** |
+| Water | PB4 | **WIRED** (continuity, 2026-10-04). **Lever B up runs the pump, water exits the steam valve — observed.** Conductor mapping is **plug inspection**, as for Steam. Whether that water passes the flowmeter is **unverified** — see 0d. |
+| Steam | PA10 | **WIRED** (continuity, 2026-10-04). **Lever B down drives the heater to 165 °C — observed.** But *which conductor* carries Steam is still **plug inspection**: nobody watched a continuity pair close while lever B was held. |
 | DIP1–4 | PB0–PB3 | four config DIP switches (SW1), purpose unknown |
 | Flow-P1 / P2 | PA8 / PA9 | flowmeter, conditioned to 3.3 V logic **at the MCU**. **J4 carries only ONE signal** — measured 2026-10-04 (ground + 5 V + one signal), so the two-net reading of this row is wrong for this connector. **Which** of these pins it reaches is untraced. The connector carries the sensor's own open-collector output, **measured 2026-10-04: a 10.04 kΩ pull-up returning to the `+` net (5 V) against a 147.4 kΩ pull-down, idling at 4.69 V.** It is *not* the conditioned 3.3 V logic that exists at PA8/PA9. See 0d for the divider. |
 | AC_Sense | PA5 | mains zero-cross, via opto U27 |
@@ -85,12 +85,45 @@ likely unwired on a Dream"*. Both wrong:
 | Lever | up | down | grade |
 |---|---|---|---|
 | A | 1Cup | 2Cup | **functional** — lever operated, continuity observed |
-| B | Hot Water | Steam | **plug inspection** — direction not functionally verified |
+| B | Hot Water | Steam | **the directions are functional** — Water runs the pump, Steam drives the boiler to 165 °C. **The conductor→function mapping is not**: still plug inspection. |
 
 All four are wired, and both levers share conductor 1 as their common.
 The 1Cup/2Cup assignment is functional (lever operated, continuity
 observed); Steam/Water was identified by inspecting the plug, which is a
 weaker grade of evidence and is recorded as such.
+
+**Two consequences of lever B, found 2026-10-04 and not yet designed for:**
+
+- **Steam drives the boiler to ~165 °C**, ~70 °C off setpoint. That lands
+  directly on `boiler_temp_start_dc` (spool v2) and silently invalidates an
+  0f run, exactly as `PrG` does. The blink signature will not catch it —
+  that detects a *user* editing the setpoint, not the machine moving its
+  own target.
+
+  **But the display probably does, and nobody has looked.** This file
+  already establishes that the display shows boiler temperature when idle,
+  so a boiler at 165 °C or recovering from it should be glaring — and
+  that is a *better* signal than a switch tap, because it says how hot and
+  whether it recovered rather than merely that a press happened.
+  **Capture the bus through one steam cycle before building the Steam
+  divider.** Sixty seconds, no parts. It resolves three ways: the display
+  keeps showing temperature (tap redundant for this purpose), it shows
+  something new (a vocabulary entry, and a better detector), or it blanks
+  (tap justified).
+- **Hot Water runs the pump**, which **probably** pulses the flowmeter
+  outside any shot — a prediction, not an observation. What was seen is
+  the pump running and water leaving the steam valve; **whether that path
+  crosses the flowmeter has not been traced.** Digmesa describe these
+  sensors as sitting between tank and pump, and 0d's whole rationale
+  assumes inlet-side placement, on which any pump run pulses it. First
+  thing to check once `#` is counted. 0d must scope its counting to shot boundaries or it will
+  attribute tap water to a shot.
+
+**The display does NOT run its shot timer during a hot-water draw**
+(observed 2026-10-04), so `machine_timer_dl` cannot pick up a tap draw and
+`machine_context.h` needs no special case. The flowmeter **does** pulse
+during one, so the timer and the flow counter disagree about what counts
+as an event — which is why 0d scopes counting to shot boundaries.
 
 **Switch semantics — important.** Each lever is a momentary ON-OFF-ON
 (SCI R13-29), spring return to centre. The board *latches*:
@@ -492,7 +525,13 @@ three.
 16 MB quad flash + 8 MB octal PSRAM. Three consequences:
 
 - PlatformIO needs `memory_type = qio_opi`. Getting this wrong boot-loops.
-- **GPIO35/36/37 are unavailable** (octal PSRAM uses them internally).
+- **GPIO33–37 are unavailable** (octal PSRAM uses them internally). An
+  earlier version of this line said 35/36/37 only — Espressif's own
+  guidance is that **GPIO33–GPIO37 are connected to SPIIO4–SPIIO7 and
+  SPIDQS** whenever octal flash or PSRAM is fitted, i.e. any `R8` or
+  higher part. 33 and 34 are not broken out on WROOM-1 modules anyway, but
+  touching them in software can lock up the PSRAM, so do not probe them
+  either. Configuring any of the five typically crashes the firmware.
 - **Partition table entries must stay below 0x800000.** The die is genuinely
   16 MB (esptool reads/writes distinct data above 8 MB, no address wrap), but
   any partition beyond 8 MB makes this clone's Macronix chip boot-loop
@@ -571,7 +610,60 @@ contact. Most of the work, none of the risk. *This is where to start.*
 **0b — display bus.** Logic analyser on J5, offline reverse engineering.
 Parallel track, no code yet.
 
-**0c — switch sensing. The 5 V rail is now MEASURED (2026-10-04), so the
+**0c — switch sensing. ALL FOUR direction lines are tapped** — the
+operator asked for all functions (2026-10-04), which is sufficient reason
+on its own. Four dividers, four GPIOs; the common (position 1) is the
+supply and is never tapped.
+
+The supporting arguments, neither settled: **Steam** drives the boiler to
+165 °C, which would contaminate `boiler_temp_start_dc` — though the display
+may already show that, see above. **Hot Water** runs the pump, which
+probably pulses the flowmeter — though the plumbing is untraced. Both are
+worth having; neither should be written up as a necessity derived from
+behaviour nobody has watched.
+
+**Positions 2 and 5 rest on plug inspection.** If they are swapped, the
+firmware labels a steam event as a water draw and vice versa — which
+breaks exactly the two things the four-line tap is for. **Two minutes with
+the meter settles it**: J2 unplugged, hold lever B each way, watch which
+pair closes, as was done for lever A. Needs the machine open, so it is a
+next-time-in-there job, not a blocker.
+
+**GPIO budget for the whole board: seven inputs.**
+
+| Signal | GPIO | Note |
+|---|---|---|
+| `ESD4` clock | **4** | fixed by `main.cpp`; this is J5 **pin 3** |
+| `ESD1` data | **5** | fixed by `main.cpp`; J5 **pin 2** |
+| Flow `#` | 6 | proposed — interrupt, ≤16 Hz |
+| 1Cup | 7 | proposed |
+| 2Cup | 15 | proposed |
+| Steam | 16 | proposed |
+| Hot Water | 17 | proposed |
+
+GPIO4/5 are **not** free choices — the firmware already names them, and
+swapping clock for data decodes nothing. The other five are proposals:
+avoid 0/3/45/46 (strapping; GPIO3 is JTAG source select), 19/20 (native
+USB), 26–32 (flash) and **33–37 (octal PSRAM on this module)**. Confirm
+against the DevKitC-1 silkscreen before drilling — it is a clone board,
+and these came from the constraint list rather than a pin-by-pin check.
+
+Two things worth knowing about the chosen pins:
+
+- **GPIO15–18 emit a brief (~60 µs) low pulse at power-up**, and three of
+  the five proposals are in that range. Harmless here — through the 150 K
+  series leg the pin can sink at most ~33 µA from a line driven through
+  R45's 100 Ω — but invariant 1 says every tap is "high-impedance **or
+  passive**", and a pin that briefly drives is not passive. **The series
+  resistor is what makes it so**, which is one more reason it belongs at
+  the machine end and is not optional.
+- **GPIO11–18 share ADC2, unusable while Wi-Fi is up**, and 15/16/17 are
+  in that set. Fine as digital inputs. But both ADC1-capable proposals
+  (6, 7) are allocated, so **there is no ADC1 pin left for an analog
+  read** — which is acceptable only because 0e takes temperature from the
+  display bus, not from J3's NTC. If that ever changes, reserve one.
+
+**The 5 V rail is now MEASURED (2026-10-04), so the
 divider is sized against a reading rather than the schematic** — which is
 the step that was skipped at J4. Unlike J4's open-collector line, the
 switch is driven through R45's **100 Ω**, so a 370 K divider loads it by

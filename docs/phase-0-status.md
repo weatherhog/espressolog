@@ -135,13 +135,21 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    J5 ground ------------------- ESP32 GND
    ```
 
+   **GPIO4 is the CLOCK and that is `ESD4`, J5 pin 3.** An earlier version
+   of the table below had `ESD1`→GPIO4 and `ESD4`→GPIO5, contradicting the
+   diagram above it and `firmware/src/main.cpp`
+   (`DISPLAY_CLK_PIN = 4`, `DISPLAY_DATA_PIN = 5`). Wiring from that table
+   would swap clock and data, which CLAUDE.md records as yielding **zero
+   frames of 120 bits or more** — a board that looks fine and decodes
+   nothing. The firmware is the authority; it is already written.
+
    **All four conductors are branched, but only three are terminated.**
 
    | J5 pin | Net | At the T-piece | At the box |
    |---|---|---|---|
    | 1 | `VSS` | branch, no resistor | ground |
-   | 2 | `ESD1` | 8.2K | 15K shunt -> GPIO4 |
-   | 3 | `ESD4` | 8.2K | 15K shunt -> GPIO5 |
+   | 2 | `ESD1` — **data** | 8.2K | 15K shunt -> **GPIO5** |
+   | 3 | `ESD4` — **clock** | 8.2K | 15K shunt -> **GPIO4** |
    | 4 | `Disp-P4` | 8.2K | **nothing — labelled test point** |
 
    An earlier draft left `Disp-P4` untapped as the cautious choice. It is
@@ -356,8 +364,21 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
 
    Grades of evidence differ and are recorded as such: **1Cup/2Cup is
    functional** (lever operated, continuity observed), **Steam/Water was
-   identified by inspecting the plug.** Neither is on the Phase 0 path, so
-   inspection is proportionate for the latter.
+   identified by inspecting the plug.**
+
+   **That justification is now void.** An earlier version said "neither is
+   on the Phase 0 path, so inspection is proportionate" — and the same
+   change put both squarely on it, since 0c now taps all four lines. An
+   inspection-grade mapping is load-bearing for the design built on it: if
+   positions 2 and 5 are swapped, a steam event is logged as a water draw
+   and vice versa, which breaks precisely the two problems the four-line
+   tap exists to solve.
+
+   **Two minutes settles it**, next time the machine is open: J2
+   unplugged, hold lever B each way, watch which continuity pair closes —
+   exactly what was done for lever A. Observing that lever B *does things*
+   (boiler to 165 °C one way, pump the other) does **not** establish which
+   conductor carries which.
 
    **Polarity is established by measurement, not assumed.** The continuity
    test shows a lever closes common to its direction line; the common

@@ -334,7 +334,17 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    not available from this source. Re-run `analysis/0f-noise-floor.ipynb`
    once the timer is logged; the shot-time figure may shrink.
 
-4. **0c — switch sensing. J2 PINOUT MEASURED 2026-10-04.** The harness is
+4. **0c — switch sensing. All four lines are tapped because the operator
+   asked for all four functions — NOT because Steam is needed to protect
+   `boiler_temp_start_dc`.** That argument was made on 2026-10-04 and
+   **disproved on 2026-10-05**: captured through a steam cycle, the display
+   blinks **`165`** for 49 s and then blinks **` 95`** while cooling
+   (`analysis/captures/2026-10-05-display-bus-steam.sr`). The bus already
+   reports steam, and better than a switch line could — it says how hot and
+   when the boiler came back, not merely that a press happened. Fit the
+   Steam divider by preference; do not cite necessity.
+
+   **J2 PINOUT MEASURED 2026-10-04.** The harness is
    **J2**, silkscreen `BOTONE`, **5 pins**. Mapped by unpowered continuity
    through the switches, then a powered DC check — no parts, no risk,
    about twenty minutes:

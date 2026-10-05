@@ -304,7 +304,10 @@ because the machine caught it:
 |---|---|---|
 | PTFE or fibreglass sleeving, 2–4 mm, 200 °C+ | 8 | Silicone wire is good to ~200 °C on its own, so this is for abrasion and for anything routed near the boiler or group. Ordinary PVC sleeving and standard heat-shrink are not. |
 | Heat-shrink assortment, **adhesive-lined** | 6 | Strain relief at the T-piece branches, and over the stripped window. Adhesive-lined or nothing — plain heat-shrink is not insulation on its own. |
-| Perfboard + pin headers | 6 | The dividers want to live on a board, not in mid-air |
+| Breadboard, 830-point | 6 | For the **J5 bench test before the perfboard**. Note a DevKitC-1 straddles a standard board leaving no rows beside it — put only the resistor junctions on the breadboard and jumper across to the devkit's headers. |
+| **Jumper wires, male-female AND male-male** | 6 | The easily-forgotten part. M-F reaches the devkit header pins from the breadboard. |
+| Perfboard + **FEMALE** pin headers | 6 | The dividers want to live on a board, not in mid-air. **Female** so the ESP32 sockets in and comes out — soldering the devkit down means it cannot be swapped or easily reflashed. |
+| Second mixed balance-lead pack | 7 | **Insurance.** The 4S is the only lead that fits J2 and there is no spare if a strip-and-solder goes wrong. The T-pieces are the most laborious part of the build and the pack is seven euro. |
 | ABS project box, ~120 x 80 x 40 mm | 8 | ESP32 mounts **outside** the machine. Size it for **three** harnesses — 0c adds J2 (5 wires, **4** dividers — all four functions) and 0d adds J4, and they all land here. A box that fits only the display tap is a box bought twice. |
 | Cable gland or grommet | 3 | Where the harness leaves the case |
 | Nylon cable ties / adhesive tie mounts | 4 | Keep the tap away from the boiler and off moving parts |

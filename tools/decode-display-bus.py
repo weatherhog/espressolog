@@ -117,7 +117,11 @@ def frames_from_csv(stream, samplerate):
     for line in stream:
         if not line or line[0] not in '01':
             continue
-        clk, dat = line.split(',')[:2]
+        # .strip() is load-bearing: with a TWO-column CSV the data field is
+        # the last one and carries the trailing newline, which poisons every
+        # glyph lookup downstream. Three-column captures hid this for months
+        # because the data column was in the middle. Found 2026-10-05.
+        clk, dat = line.strip().split(',')[:2]
         if prev is not None and clk != prev and clk == '1':
             edges.append((t / samplerate, dat))
         prev = clk

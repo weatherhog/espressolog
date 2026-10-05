@@ -112,6 +112,50 @@ and no longer does; `tools/decode-display-bus.py` still has
 during hard heating. The fix is to parse the 67/66 pair properly instead
 of relying on a 1 ms gap threshold — see `docs/phase-0-status.md`.
 
+## 2026-10-05 — warm-up, steam, and the version boot
+
+**The clock is on D1 — and it has been on D1 for both T-piece sessions.**
+Recorded this time:
+
+| Channel | Net | Conditioning |
+|---|---|---|
+| D0 | `ESD1` — data | 8.2 K series |
+| D1 | `ESD4` — **clock** | 8.2 K series |
+| D2 | `Disp-P4` (boot capture only) | 8.2 K series, never terminated |
+| GND | `VSS` | direct |
+
+So these need the **same first-two-column swap** as the 2026-10-03 files.
+
+| Session | tap | clock lands on |
+|---|---|---|
+| 2026-09-28 | soldered stubs | D0 |
+| 2026-10-03 | T-piece | **D1** |
+| 2026-10-05 | T-piece | **D1** |
+
+The intent on 2026-10-05 was to put the clock on D0 and it landed on D1
+again. **The mapping is stable, and differs only from intent** — which
+points at CLAUDE.md's "black adjacent to red is pin 3" rule being
+systematically wrong rather than at a one-off mis-plug, though a repeated
+habit of connecting it the same way is not excluded.
+
+**It does not affect decoding** — the clock is identifiable from its
+two-valued low period regardless — but it **must** be settled before the
+ESP32 is wired, because the firmware hard-codes GPIO4 as clock and the
+conductor rule is what tells you which wire to land there.
+
+**`tools/decode-display-bus.py` had a two-column bug until 2026-10-05.**
+`line.split(',')` without `.strip()` left the trailing newline on the data
+field whenever it was the *last* column — which it is in any two-channel
+capture. Every glyph lookup then failed. Three-column captures hid it for
+months because the data column sat in the middle. If you decode an old
+two-channel capture with an old checkout, this is why it returns garbage.
+
+| File | Rate | Holds |
+|---|---|---|
+| `2026-10-05-display-bus-warmup.sr` | 1 MHz | 114 s of a genuine warm-up. Climbs ` 46`→` 88` one degree at a time (48 change-events, 2270 digit frames), then **jumps to ` 95` with no 89–94**. Settles the ` 88` question. Shows the display reports the *actual* boiler **below ~88 °C** — it jitters ±1 °C there — but then holds ` 95` for 1134 consecutive frames without a single change, which is **not** how a PID boiler reads; above 88 °C actual and setpoint are indistinguishable. No blanks — warm-up does not blink. |
+| `2026-10-05-display-bus-steam.sr` | 1 MHz | 113 s spanning a steam cycle. Blinks `165` to 49.487 s, then ` 95` from 54.647 s — a **5.160 s** value-to-value gap (5.770 s blank-onset to blank-onset; quote whichever, but say which). 102 blank onsets → 101 intervals; discarding the capture-start artefact leaves 100, of which **99 fall in 1.021–1.101 s** and one is the 5.770 s regime change. This is the measurement showing `BLINK_WINDOW_US = 600 ms` sits inside a 414–1020 ms guard band — 186 ms below a setpoint edit, 420 ms above steam. |
+| `2026-10-05-display-bus-boot-version.sr` | 1 MHz | 90 s, D0/D1/D2, machine switched on at 56.34 s with a **hot** boiler. Reproduces the init burst (33 blips + one 564-bit frame), framing at +4.1 s, and **`Disp-P4`'s late edge at +204.3 ms** against the first capture's 204.5 ms. Also contains the ~3 s silent window in which the display shows `02.4` — the firmware version — that **nothing on the bus carries**. |
+
 ## The files
 
 | File | What it holds |

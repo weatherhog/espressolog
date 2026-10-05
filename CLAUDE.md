@@ -31,6 +31,17 @@ Violating any of these is a bug, not a design choice.
 
 ### Machine: Ascaso Dream PID
 
+**The display shows `02.4` for ~3 s at power-on** (read 2026-10-05). It is
+**probably a firmware version — that is an interpretation, not something
+observed**; all anyone has seen is the string. Which firmware, display
+controller or main MCU, is also unknown.
+
+Recorded anyway because every decode in this file came from **this machine
+in this state**: the glyph table, the bit offsets, the timer flag at 114,
+the 67/66 structure. If a future capture disagrees, check whether `02.4`
+still shows before assuming the protocol changed.
+
+
 Control board MCU is an **STM32F030R8T6** (LQFP64, 64 KB flash). Read off
 the physical chip marking. Note: the community schematic repo
 (`techdregs/Ascaso_Dream_PID_Electronics`) bundles the *wrong* datasheet —
@@ -100,16 +111,16 @@ weaker grade of evidence and is recorded as such.
   that detects a *user* editing the setpoint, not the machine moving its
   own target.
 
-  **But the display probably does, and nobody has looked.** This file
-  already establishes that the display shows boiler temperature when idle,
-  so a boiler at 165 °C or recovering from it should be glaring — and
-  that is a *better* signal than a switch tap, because it says how hot and
-  whether it recovered rather than merely that a press happened.
-  **Capture the bus through one steam cycle before building the Steam
-  divider.** Sixty seconds, no parts. It resolves three ways: the display
-  keeps showing temperature (tap redundant for this purpose), it shows
-  something new (a vocabulary entry, and a better detector), or it blanks
-  (tap justified).
+  **And the display DOES detect it — captured 2026-10-05.** Through a steam
+  cycle the display blinks **`165`** for 49 s, then after release blinks
+  **`95`** while cooling. Unmistakable on the bus, and a *better* signal
+  than a switch tap because it says how hot and when it came back, not
+  merely that a press happened.
+
+  **So the J2 Steam tap is redundant for detecting steam.** Fitting it is
+  still fine — the operator asked for all four functions — but it is not
+  required for `boiler_temp_start_dc` integrity, and this entry should not
+  claim it is.
 - **Hot Water runs the pump**, which **probably** pulses the flowmeter
   outside any shot — a prediction, not an observation. What was seen is
   the pump running and water leaving the steam valve; **whether that path
@@ -253,9 +264,26 @@ settle within ~5 µs because they sit on 4.7 K pull-ups while `Disp-P4`
 reaches the MCU through **R32 = 100 K**, twenty times the impedance. A
 handshake would show a uniform bit period; this does not.
 
-**The 25th edge does not fit that story.** It arrives 201 ms after the
-previous one, long after the rails are up, and is unexplained. One edge is
-not a protocol either. Both readings are offered; neither is established.
+**The late edge does not fit that story, and it reproduced on a second
+boot.** The quantity that reproduces is **its delay from the preceding
+edge**, not the rails-to-last-edge span:
+
+| Boot | delay from previous edge |
+|---|---|
+| `-cold-boot.sr` | **201.273 ms** |
+| `-boot-version.sr` (2026-10-05, hot) | **201.3 ms** |
+
+Agreement to ~30 µs on a 201 ms interval. **Quote that, not the 204 ms
+span**, because the span bundles in the settling burst, which does *not*
+reproduce: the cold boot had **24** intervals inside the first 3.2 ms, the
+2026-10-05 boot had **2**. The surrounding noise varied by an order of
+magnitude while the late edge landed within 30 µs — which is itself the
+argument that it is a real event rather than more settling.
+
+**n = 2.** Observed on both boots so far; that is not "every boot". Still
+no known cause, nothing has been seen to respond to it, and one edge is
+still not a protocol. Note also `-flush-timer.sr` carries 4 `Disp-P4` edges
+mid-flush, so it is not purely a boot phenomenon.
 
 Note also that `2026-09-28-display-bus-flush-timer.sr` carries **4**
 `Disp-P4` edges — two 1 µs glitches at 47.959 s and 48.235 s, mid-flush —
@@ -307,10 +335,42 @@ on the bidirectional line, no extra pin — the short frames were already
 arriving and being discarded. `Disp-P4` can stay an unterminated test
 point.
 
-**Setpoint changes are detectable:** while adjusting, the display blanks
-**entirely** (all three fields zero) and comes back, at a measured 2.44 Hz
-— 0.204–0.210 s per half-cycle. That blink is the other signature of the
-same event.
+**THE DISPLAY BLINKS FOR TWO DIFFERENT REASONS, AT DIFFERENT RATES.** Only
+one of them is a setpoint edit, and the firmware distinguishes them by
+period alone — so the period is load-bearing:
+
+| State | blank-to-blank | `display.cpp` |
+|---|---|---|
+| **Setpoint being adjusted** | **~410 ms** (2.44 Hz, 0.204–0.210 s per half-cycle) | latches `setpoint_touched` ✓ |
+| **Steam, and cooling afterwards** | **1.021–1.101 s** (measured over 100 intervals) | does **not** latch ✓ |
+| `BLINK_WINDOW_US` | **600 ms**, sitting between them | |
+
+The guard band is **414 → 1020 ms**, and 600 ms sits inside it with
+**186 ms below and 420 ms above**. So steaming does not produce a false
+`setpoint_touched`, and a setpoint edit still latches. **The threshold was
+chosen before anyone knew the steam blink existed**; this is the
+measurement that justifies it rather than luck.
+`2026-10-05-display-bus-steam.sr`, 102 blank onsets.
+
+**Use the interval, never the blank duration.** Steam blanks average longer
+(0.550 s against a setpoint edit's 0.204 s), which looks like a cleaner
+discriminator — but steam's **shortest blank is 0.156 s, shorter than the
+setpoint blank**, so duration would misfire. The interval does not. This
+choice is deliberate.
+
+One interval of the 102 is **5.77 s** — the gap between the `165` and ` 95`
+blink regimes. Harmless (it is also > 600 ms) but it is why the quoted
+1.021–1.101 s range covers 99 intervals, not 100.
+
+While adjusting, the display blanks **entirely** (all three fields zero)
+and comes back. The steam blink does the same thing more slowly, which is
+why period is the only discriminator available.
+
+**What blinking means is "showing a target it has not reached":** during a
+steam cycle the display blinks **`165`**, and after steam is released it
+blinks **`95`** while the boiler cools back down. Contrast the warm-up from
+cold, which shows the *actual* temperature climbing and does **not** blink
+at all. That asymmetry is unexplained.
 
 This is the one J5 line where a careless connection could actuate the
 machine, which hard invariant 1 forbids. The 8.2 K / 15 K divider is
@@ -428,8 +488,33 @@ flush, one while the setpoint was ramped past 100 °C.
 
 This was recorded as "no decimal point observed" in an earlier draft —
 wrong, because the gap bits had only been checked in captures that contain
-no brew. The decimal point question is separate and still open; `0.5`
-appears only as a stand-by parameter value and has never been displayed.
+no brew. **The decimal point is not in the frame format — 2026-10-05.** The strong
+evidence is a counted negative: across the three new captures, the gap bits
+**113 / 122 / 123 / 131 / 132 are set in ZERO of 2784 digit frames** (577
+boot + 2207 warm-up 133-bit frames; the steam capture agrees). A decimal
+point would almost certainly live in one of those, one bit past each
+seven-segment field. It never does.
+
+Separately, the display **can** render a point: at power-on it shows
+`02.4`. That appears during a window in which the bus sends nothing (see
+the power-on table), so the controller can clearly drive the display
+without being told frame-by-frame — **`02.4` is therefore most likely
+controller-generated and never visible to a frame parser.**
+
+Two honest limits on that. Nobody timed `02.4` against the capture, so
+"shown during the silent window" is inference from its ~3 s duration, not
+observation. And a search of the boot bitstream for the `0`/`2`/`4` segment
+patterns (both polarities, spacings to 20 bits) found nothing — but that is
+one strategy against an init burst nobody has decoded, and it would miss
+any other encoding.
+
+Consequence either way: the operator's `E.01` reading was punctuation,
+consistent with the manual printing `E01`.
+
+**One loose end, recorded rather than smoothed over:** bit 132 is set in
+the 564-bit init burst. It is zero in every 133-bit frame. This file says
+113/122/123/131/132 are always zero, which holds for digit frames; the init
+burst is not one.
 
 **The `SET UP` menu**, entered by holding 23 while pressing 22 for ~3 s,
 scrolls with 22 in this fixed order: `Ud` (units C/F), `Pr` (pre-infusion
@@ -453,26 +538,80 @@ Three 7-segment digit fields, MSB = segment a, order abcdefg:
 |---|---|
 | 0 | all three lines leave 0 V; `ESD1`/`ESD4` settle in ~1 µs on their 4.7 K pull-ups |
 | +194 µs | `Disp-P4` starts settling, taking ~250 µs — see below |
-| 0 to +4.1 s | **irregular bus activity, not frames**: 32 single-bit blips and one 564-bit burst. Plausibly display-controller init. Anything parsing frames here gets garbage. |
-| +4.1 s | normal 67/66 framing begins, display **blank** |
-| +4.6 s | `  0` |
-| +4.7 s | ` 95`, steady |
+| 0 to ~+1.1 s | **irregular bus activity, not frames**: 32–33 single-bit blips, a 48-bit frame, and one 564-bit burst. Plausibly display-controller init. Anything parsing frames here gets garbage. |
+| **~+1.1 s to +4.1 s** | **THE BUS IS SILENT — no frames at all for ~3 s.** Confirmed 2026-10-05: ~800 of the clock edges counted in this window are the 564-bit burst's own tail, and after it the line idles 98.8 % high. |
+| | **This is when the display shows `02.4`, the firmware version, with a decimal point** — and nothing on the bus carries it. See the decimal-point note above. |
+| +4.1 s | normal 67/66 framing begins |
+| +4.12 s | blank |
+| +4.63 s | **`  0`** |
+| +4.69 s | the first real reading |
+
+**`  0` is a boot transient, not a boiler reading**, and it is present on
+both boots — cold (+4.1/+4.6/+4.7) and hot (+4.116/+4.627/+4.694,
+2026-10-05). An earlier draft of this table claimed the hot boot skipped it
+and told readers to drop the step; that was wrong, and wrong because
+`tools/decode-display-bus.py` discards 66-bit frames (`MIN_FRAME_BITS =
+120`) and both the blank and the `  0` arrive in 66-bit frames. **If you are
+checking boot behaviour, do not use that tool.**
+
+What boiler state *does* change is what comes next: a cold machine climbs
+from the forties, a hot one is already at its reading.
 
 **There is no lamp test and no ` 88` phase at boot** — that much is
 measured. `-95c-poweron.sr` was taken mid-warm-up, not at power-on, so
 whatever it shows is not a boot state.
 
-**What the ` 88` in that file actually is remains UNEXPLAINED.** Three
-stories have now been told about it — a lamp test, an unexplained
-"power-on state", and the boiler genuinely passing 88 °C — and none is
-supported. The third was argued from a ` 45` reading in an uncommitted
-scratch capture, which is not evidence this repo holds; and it is
-contradicted by the file itself, where ` 88` holds for 1.7 s and then
-jumps straight to ` 95` with no 89…94 in between, which is not how a
-warming boiler reads. Leave it unexplained until someone captures a
-warm-up deliberately.
+**The ` 88` is SOLVED — 2026-10-05**, by capturing a warm-up deliberately,
+which this file previously said was the only thing that would settle it.
+`analysis/captures/2026-10-05-display-bus-warmup.sr`:
 
-**Idle: the display shows boiler temperature in °C.** During a brew the
+    0.040s [ 46]   ...one degree at a time...   52.489s [ 87]
+                                                54.631s [ 88]
+                                                57.165s [ 95]   <- jumps
+
+The boiler climbs **one degree at a time from 46 to 88, then jumps straight
+to 95 with no 89–94** — 48 change-events across 2270 digit frames.
+
+**The ±1 °C jitter elsewhere in the same ramp makes the skip more striking,
+not less**: the display demonstrably flickers between adjacent values at
+47/48 and 54/55, so 89–94 is not a display that cannot show those numbers. That is exactly the pattern in `-95c-poweron.sr`.
+
+So of the three stories told about it, the third — "the boiler genuinely
+passing 88 °C" — was right, and the objection that killed it was the error:
+"no 89–94 in between is not how a warming boiler reads" assumed a behaviour
+this machine does not have. **It really does skip 89–94.** Why is still
+unknown; the display may switch from reporting the boiler to reporting the
+setpoint once it decides it is ready.
+
+**The ` 95` at +4.7 s in `-cold-boot.sr` is explained the same way**: that
+machine was already hot. No boiler reaches 95 °C in 4.7 s, and that
+discrepancy sat unremarked in this file.
+
+**Idle: the display shows a temperature in °C — but WHICH temperature
+depends on the range, and the range that matters is the ambiguous one.**
+
+**Below ~88 °C it is demonstrably the actual boiler**: during a warm-up it
+climbs one degree at a time and **jitters ±1 °C** (` 47`→` 48`→` 47`→` 48`
+at 1.9–2.0 s; ` 54`→` 55`→` 54`→` 55` at 8.5 s), which is what a live
+readout looks like.
+
+**At ` 95` it is indistinguishable from the setpoint.** In the same capture
+it sits at ` 95` for **1134 consecutive frames — 57 s without a single
+change**. A PID-controlled boiler does not hold ±0 °C for a minute. And
+during the post-steam cooldown the display blinks ` 95` while the boiler is
+demonstrably hotter than that.
+
+**This matters for `boiler_temp_start_dc`** (spool v2, migration 008),
+which is sampled immediately before a shot — i.e. always in the ambiguous
+range. An earlier draft of this paragraph claimed the warm-up "confirmed"
+the column measures the real boiler and so rescued 008's rationale. **It
+does not**: it confirms the behaviour only in the range the column is never
+sampled in.
+
+What the column *does* reliably carry: a steady ` 95` means at setpoint; a
+blink or a different value means not. That is still worth storing. Settling
+whether it is ever a true boiler reading above 88 °C needs a capture with
+the boiler deliberately pulled off setpoint and allowed to recover. During a brew the
 machine takes the display over for a **shot timer in tenths of a second**
 (counts `001`→`169` across 16.8915 s — 168 steps, i.e. 16.8 s of
 displayed time; see the agreement table below, and do **not** restate it

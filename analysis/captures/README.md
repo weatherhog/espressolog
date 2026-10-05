@@ -25,8 +25,20 @@ two columns swapped and the 2026-09-28 files must **not** be swapped.
 | `2026-09-28-display-bus-95c-static.sr` | **2 MHz** | D0 | no |
 | `2026-09-28-display-bus-flush-timer.sr` | 1 MHz | D0 | no |
 | `2026-10-03-*` (all seven) | 1 MHz | D1 | **yes** |
+| `2026-10-05-*` (all three) | 1 MHz | D1 | **yes** |
 
-Decoding a 2026-10-03 file:
+**Mind the column count as well as the order.** The 2026-10-03 files have
+three channels, the 2026-10-05 warm-up and steam captures have **two** —
+so the three-column snippet below raises `IndexError` on them. Use the
+matching form:
+
+    # TWO-column (2026-10-05 warm-up, steam)
+    p=s.split(','); print(f'{p[1]},{p[0]}')
+
+    # THREE-column (2026-10-03, and 2026-10-05 boot-version)
+    p=s.split(','); print(f'{p[1]},{p[0]},{p[2]}')
+
+Decoding a 2026-10-03 file (three-column):
 
     sigrok-cli -i <file> -O csv \
       | python3 -c "import sys
@@ -133,15 +145,29 @@ So these need the **same first-two-column swap** as the 2026-10-03 files.
 | 2026-10-05 | T-piece | **D1** |
 
 The intent on 2026-10-05 was to put the clock on D0 and it landed on D1
-again. **The mapping is stable, and differs only from intent** — which
-points at CLAUDE.md's "black adjacent to red is pin 3" rule being
-systematically wrong rather than at a one-off mis-plug, though a repeated
-habit of connecting it the same way is not excluded.
+again. **RESOLVED 2026-10-05: the probes were connected the other way
+round, both times. CLAUDE.md's "black adjacent to red is pin 3 = `ESD4`"
+rule is CORRECT** — confirmed by the operator, who built the T-piece.
 
-**It does not affect decoding** — the clock is identifiable from its
-two-valued low period regardless — but it **must** be settled before the
-ESP32 is wired, because the firmware hard-codes GPIO4 as clock and the
-conductor rule is what tells you which wire to land there.
+An earlier version of this note reasoned from the stability of the
+mis-landing that the conductor rule was systematically wrong. The second
+step is the error: *systematic* means "repeatable cause", and a repeated
+operator habit is exactly as systematic as a wrong document. **"Stable"
+distinguishes systematic from random — not documentation from operator.**
+
+Two things make that sharper and are worth carrying:
+
+- **The two trials were not independent.** Same operator, same lead, same
+  posture, five weeks apart. Stability across non-independent trials
+  mostly measures that the operator is consistent.
+- **More of the same observation could never have separated the two
+  causes**, because both predicted it. The discriminator was asking the
+  person who built the lead, and it cost one sentence.
+
+So the conductor rule stands, and **the ESP32 wiring is unblocked**:
+`ESD4` (black adjacent to red) → **GPIO4**, `ESD1` → **GPIO5**, matching
+`main.cpp`. These captures still need the first-two-column swap, because
+the probes — not the harness — were crossed.
 
 **`tools/decode-display-bus.py` had a two-column bug until 2026-10-05.**
 `line.split(',')` without `.strip()` left the trailing newline on the data

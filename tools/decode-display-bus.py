@@ -24,9 +24,12 @@ ample; 5M samples is ~5 s, or ~120 frames at 41 ms.
 
 Column 0 of the CSV is taken as the clock, and THE CLOCK IS ESD4 (J5 pin
 3); ESD1 (pin 2) is the data. Settled 2026-10-03. Capture ESD4 on the lower
-channel number and the CSV needs no rearranging; the 2026-10-03 files in
-analysis/captures/ were taken the other way round and need their first two
-columns swapped -- see that directory's README.
+channel number and the CSV needs no rearranging; **the 2026-10-03 AND
+2026-10-05 files in analysis/captures/ were taken the other way round and
+need their first two columns swapped** -- see that directory's README,
+which has the snippet in both two- and three-column forms. The 2026-10-05
+captures are TWO-column, so the three-column swap snippet raises
+IndexError on them.
 
 Reads a two-column CSV (clock, data) on stdin and prints what the machine's
 front display was showing, with a timestamp for every change.

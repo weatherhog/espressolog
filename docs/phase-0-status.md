@@ -1,4 +1,4 @@
-# Phase 0 status — as of 2026-09-15
+# Phase 0 status — as of 2026-10-05
 
 Phase 0a (scale logging, stages 0–6) is **complete and in production**.
 This file is the resume point: read it (and CLAUDE.md) before continuing.
@@ -873,6 +873,132 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
      leading hypothesis, back-probing `+` would fail identically.
 
    **0e — temperature** (if 0b cracked it), per docs/phase-0-plan.md.
+
+6. **Pressure — replacing the analog gauge. DISCUSSED 2026-10-05, NOT
+   STARTED, and deliberately not Phase 0.** CLAUDE.md puts pressure/flow
+   profiling at **Phase 5**. This is recorded here because the thread
+   identification is done and would otherwise be re-derived, not because
+   it is next.
+
+   **The plan, as it stands:** remove the analog gauge and put a wired
+   pressure transducer on the thermoblock's gauge port, with a small round
+   display (GC9A01, 240×240 SPI) in the vacated bezel. Threads, parts and
+   evidence grades are in **CLAUDE.md, `### Hydraulics`** — read that
+   first; it is not repeated here. The short version: the thermoblock
+   presents an **M6 female** gauge port, `I.4234` adapts it to **G1/8
+   male** (9.55 mm, measured), **the gauge end cannot be teed** because
+   its capillary is soldered to a structural stem, and the circuit is
+   rigid tube with compression fittings so **there are no spare ports**.
+
+   **The BooKoo Espresso Monitor was evaluated and dropped.** Recorded so
+   it is not re-proposed: BLE, protocol published at
+   `github.com/BooKooCode/OpenSource` — **read via an automated summary of
+   `espresso_monitor/protocols.md`, NOT the file itself**, so service
+   `0x0FFF`, notify `0xFF02` and pressure as `uint16` big-endian in
+   **bar × 100** are summary-grade and must be re-read from the primary
+   before anything is implemented against them — €111, 10 Hz, and it
+   would have reused the Themis BLE path. It fails on **placement, not
+   threads** — its M6 adapter fits the port, but it is a 38–175 g battery
+   puck rated **0–80 °C** and the only place it mates is bolted to the
+   thermoblock, inside a closed case with no charging access. **Steam
+   drives the boiler toward 165 °C** (CLAUDE.md), but note that figure is
+   a *target blinked on the display*, not a temperature measured at the
+   external gauge union — **what that fitting actually reaches is
+   unknown**, and measuring it is gating item 1 below. The rejection rests
+   on the closed case and the charging access as much as on the heat. Note its `0xFF01` characteristic accepts
+   **Start/Stop Extraction** writes; if it is ever revisited, subscribe to
+   `0xFF02` and never cache a handle for `0xFF01`.
+
+   **Leading transducer: TE M3200**, analog, from the datasheet rather
+   than a listing — `M323L-000002-017BG` is a **reconstruction of the
+   order code from the datasheet's own example and must be confirmed with
+   the distributor**, not treated as a SKU. Output 3 = 0.5–4.5 V
+   ratiometric on 5 ± 0.25 V; port 2 = G1/4 (**there is no G1/8 option**,
+   only 1/8 **NPT**, which is tapered and not interchangeable); range
+   017B = 0–17 bar against the original gauge's 0–16.
+
+   Three things from that datasheet that drive decisions:
+
+   - **Isolation, body to any lead: 50 MΩ @ 250 VDC.** This is what keeps
+     the "neither side is earth-referenced, no loop" argument — the one
+     the J5/J2/J4 taps rest on — intact when a metal sensor is bonded to
+     the machine's plumbing. **But the cable's drain wire is internally
+     terminated to the pressure port**, so it must be left unterminated at
+     the box or the isolation is thrown away. Same category of trap as
+     "do not enable an internal pull-down" on J5.
+   - **Analog beats digital on temperature here.** Analog operates
+     −40 to +125 °C (cable 105 °C); the I²C variant only −20 to +85 °C,
+     compensated 0–55 °C. Next to a thermoblock that settles it.
+   - **Quote repeatability, not the total error band.** ±1.5 % F.S. is a
+     worst-case absolute figure across the whole compensated range
+     (±0.26 bar on 17 bar). The number that matters for variance work is
+     **±0.25 % F.S. BFSL** and 0.25 %/yr stability — about **±0.04 bar**,
+     far below the 12.2 % flow noise floor.
+
+   **TE M5600 was checked and rejected:** it is not a cheaper sibling but
+   a **wireless** transducer — Bluetooth only, coin cell, battery life
+   quoted at a **5-second transmission interval**, −20 to +85 °C, ~$350.
+   Fifty times too slow at its design point, with no wired fallback.
+   Sourced from distributor listings, not the datasheet — TE and Mouser
+   both refused the PDF — but the verdict is not close enough for that to
+   matter.
+
+   **GPIO is not a constraint, and CLAUDE.md's 0c note overstates it.**
+   "No ADC1 pin left for an analog read" is true of the *plan*, not the
+   chip: on an ESP32-S3, ADC1 is GPIO1–10, of which **1, 2, 8, 9 and 10 are
+   unallocated**, with 11–14, 18, 21 and 38–48 free besides for an SPI
+   display. **That mapping is from general knowledge, not verified here**,
+   and CLAUDE.md's own warning still stands: confirm against the
+   DevKitC-1 silkscreen before drilling, because it is a clone board. Divider for 0.5–4.5 V → **10 kΩ
+   series, 20 kΩ shunt** gives 0.333–3.00 V, inside the ADC's usable
+   range. Because the output is **ratiometric** and the ESP32 references
+   an internal ~1.1 V rather than the supply, put an identical divider on
+   the 5 V rail into a second ADC1 pin and compute the ratio.
+
+   Per invariant 3, store **raw counts**, not bar — same reasoning as the
+   flowmeter K-factor. The supply reading barely moves within a shot, so
+   it belongs in the header rather than per-sample; `sample_t` gains one
+   `uint16_t` and the header goes to v3, with the server decoding v1, v2
+   **and** v3 per invariant 6.
+
+   **Fitting it is an epoch boundary.** It changes the hydraulic circuit,
+   so shots before and after are not poolable — exactly invariant 5's
+   logic for `grind_epoch`. The project needs a `machine_epoch` and this
+   is its first use. Do it **before** any 0f re-run, not between halves of
+   one.
+
+   **DECIDED 2026-10-05: the circuit does not get opened while the machine
+   is in daily use.** Everything else goes first — transducer calibrated
+   on a bicycle floor pump (which reads to ~10 bar, i.e. the whole range),
+   display working, firmware and schema done — so the eventual teardown is
+   a swap, not a project. Keep the gauge, capillary, `I.4234` and its M6
+   seal bagged as a ten-minute rollback, and **pressure-test against a
+   blind basket before the panels go back on**.
+
+   **Gating, none of it needing the water opened:**
+
+   1. **Peak temperature at the brass gauge union through a full steam
+      cycle.** Decides whether a transducer can live at the port and what
+      rating it needs. **There is currently no way to measure it** — the
+      multimeter in hand has no temperature function, so this needs a
+      thermometer bought first. An **irreversible max-temperature
+      indicator label** is arguably the better instrument here anyway: it
+      latches the peak, needs no probe routed out of the case, and so can
+      be read after a run with the panels **on**, which is the thermal
+      environment that actually matters.
+   2. **Bezel hole diameter — DONE 2026-10-05.** The gauge is **43 mm**
+      across the chrome bezel and the hole is slightly larger. That
+      confirms a 1.28" GC9A01 (240×240, ~32.4 mm of active glass); the
+      next size up, 2.1"/480×480 at ~55 mm, would not fit. Note the
+      original *dial* inside that bezel is well under 43 mm, so 32.4 mm
+      of lit area lands near the original and should read as a gauge
+      rather than a small screen in a large hole. Still to check: module
+      PCB diameter (32.5 / 37.5 / 40.4 mm variants exist — 40.4 suits
+      this hole), depth behind the panel, and a carrier, since a display
+      has no threaded stem like the gauge did.
+   3. Confirming an **M6 male × G1/4 female** adapter can actually be
+      bought — including its pitch and seat form, which are not
+      established.
 
 ## Known quirks (details in the auto-memory notes)
 

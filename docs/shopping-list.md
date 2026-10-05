@@ -265,6 +265,8 @@ tighter than they need to be for the sake of a few euro.
 | 1 kΩ | 10 | 0d flowmeter, **at PA8/PA9 only** — the board side, after its own conditioning. **Never at J4.** **In stock.** |
 | 8.2 kΩ (J4) | — | **J4 ANALYSER tap only: 8.2 kΩ, one channel, `#` only, no shunt.** The ESP32 tap at J4 is 120 K + 220 K — see the 0d entry in `docs/phase-0-status.md`. Covered by the 8.2 kΩ bag above. |
 | **120 kΩ** | 10 | **0d J4 divider, series leg — the only part blocking 0d.** Buy a bag; the E12 kit is not needed for it. |
+| 10 kΩ | 10 | **Pressure transducer divider, series leg** (section 8) — ×1, plus ×1 for the supply-ratio channel. Not yet needed; buy with the transducer. |
+| 20 kΩ | 10 | **Pressure transducer divider, shunt leg** — ×2, same. 10 K/20 K puts 0.5–4.5 V at 0.333–3.00 V. |
 | E12 assortment kit, 1/4 W | 0 | **Not required.** It covers no named requirement, and cheap kits are 5 % where the rows above are 1 %. Both dividers survive 5 % (J4 +96 mV, 0c +110 mV), but a €2 bag of 1 % 120 kΩ is cheaper and better. |
 
 Three of these are load-bearing — 0c is in CLAUDE.md, 0e and 0d are
@@ -323,7 +325,8 @@ power the ESP32 from the machine.
 
 | Item | ~€ | Notes |
 |---|---|---|
-| **Multimeter** | 25–40 | **Already ordered.** Continuity beep and auto-range are what matter; a **K-type thermocouple** would also settle the ambient-at-J5 question empirically. Its absence cost two full evenings of guessing at connectors from photographs. |
+| **Multimeter** | 25–40 | **Already ordered.** Continuity beep and auto-range are what matter. Its absence cost two full evenings of guessing at connectors from photographs. |
+| **Something that measures temperature** | 10–25 | **NOT owned — the multimeter in hand has no temperature function.** This now gates section 8 entirely. Cheapest useful option is a pack of **irreversible max-temperature indicator labels** (~€10), which latch the peak and can be read after a run with the panels **on** — the thermal environment that actually matters, and one no probe can easily reach. A K-type meter or standalone thermometer (~€20) works too and is reusable, but needs the probe routed out of the case. **An IR thermometer is the wrong tool here**: the target is shiny brass, whose low emissivity makes IR read badly low unless it is taped or painted first. |
 | Digital calipers | 15 | The *only* measurement that separates JST XH from EH is depth — 5.7 vs 3.8 mm. Identifying this by eye failed three times. |
 | Headband magnifier | 15 | |
 | Flux pen + 0.5 mm solder | 12 | |
@@ -353,6 +356,64 @@ data.
 
 ---
 
+## 8. Pressure — replacing the analog gauge (NOT Phase 0)
+
+**Do not buy any of this yet.** CLAUDE.md puts pressure/flow profiling at
+**Phase 5**, and three things gate the order — all of them measurements,
+none of them needing the water circuit opened. Listed here because the
+thread work is done and would otherwise be re-derived.
+
+Full reasoning is in `docs/phase-0-status.md` §6; threads and evidence
+grades are in **CLAUDE.md `### Hydraulics`**. Not repeated here.
+
+**Gating, in order:**
+
+1. **Peak temperature at the brass gauge union, through a full steam
+   cycle.** Decides whether the transducer mounts at the port or needs a
+   hose to move it forward, and what rating to buy. **Steam drives the
+   boiler toward 165 °C, but that is a target blinked on the display, not
+   a reading at this fitting — what the union reaches is unknown.**
+   **BLOCKED: nothing in hand measures temperature.** See the thermometer
+   row in section 6; buy that before anything in this section.
+2. **Bezel hole diameter — DONE 2026-10-05: gauge is 43 mm across the
+   chrome bezel, hole slightly larger.** Confirms a 1.28" GC9A01.
+3. **Does an M6 male × G1/4 female adapter actually exist** in a form you
+   can buy, and **what is its pitch and seat form**? M6 being the E61
+   gauge thread is vendor-listing grade, not a spec. Everything below
+   assumes this works out.
+
+| Item | ~€ | Notes |
+|---|---|---|
+| Pressure transducer | 60–90 | **TE M3200, analog.** `M323L-000002-017BG` is a **reconstruction of the order code from the datasheet example — confirm with the distributor.** Output 3 (0.5–4.5 V ratiometric), port 2 (G1/4), range 017B (0–17 bar), gage. **There is no G1/8 option** — the only 1/8 is NPT, which is tapered and not interchangeable. Check stock early: the M3200 is built to order across a big option matrix and many combinations are long-lead. |
+| M6 × G1/4 adapter | 5–10 | M6 **male** into the thermoblock, G1/4 **female** for the transducer. M6 is the E61 gauge-port thread, so shop in E61 accessories. |
+| M6 sealing washer | 1 | **Buy after you have seen what comes off `I.4234`**, and match it. An M6 *parallel* thread does not seal on its threads; PTFE tape is not a substitute. |
+| Round display | 10 | **GC9A01 240×240 1.28" SPI — confirmed by the 43 mm bezel measurement.** ~32.4 mm of active glass; PCB ships in 32.5 / 37.5 / **40.4 mm** variants and 40.4 suits this hole. Needs a **carrier/retaining ring** — the gauge hung on a threaded stem through bracket `I.4238` and a display has nothing equivalent. Check depth behind the panel before ordering. |
+| 10 kΩ / 20 kΩ 1 % | — | Divider, section 4. Two of each: one channel for the sensor, one for the 5 V rail. |
+| Braided PTFE hose, G1/8 or G1/4 | 10–15 | **Only if the thermocouple says the transducer cannot live at the port.** The capillary run is ~10 cm, so a hose adds two joints for no benefit unless heat forces it. |
+| Blind-basket gauge portafilter | 30 | **Optional but recommended.** Removing the analog gauge removes the independent cross-check; this restores it as an occasional calibration against a known reference, and it answers "is my OPV at 9 bar" on its own. |
+
+**Two traps worth more than the parts:**
+
+- **Leave the transducer cable's drain wire unterminated at the box.** The
+  M3200's body-to-lead isolation is 50 MΩ, which is what stops a metal
+  sensor in the plumbing earth-referencing the ESP32 ground and breaking
+  the isolation argument J5/J2/J4 rest on — but the datasheet states the
+  drain is **internally terminated to the pressure port**. Connect it and
+  the isolation is gone. Same category as "do not enable an internal
+  pull-down" on J5.
+- **Check the transducer's mass before committing.** It hangs cantilevered
+  off an M6 stud in a machine with an Ulka vibratory pump. If it is much
+  over ~60 g, it wants a bracket — or the hose, with the sensor
+  chassis-mounted.
+
+**The BooKoo Espresso Monitor (€111) was evaluated and rejected** — see
+`docs/phase-0-status.md` §6. Threads fit; placement does not. Recorded so
+it is not re-proposed. **TE M5600 likewise**: it is a wireless coin-cell
+transducer quoted at a 5-second transmission interval, ~$350, not a
+cheaper M3200.
+
+---
+
 ## Rough total
 
 Connectors are **bought** — the mixed balance-lead pack was €6.99 and
@@ -365,6 +426,10 @@ project box and cable gland — **~€30** — plus a **€2 bag of 120 kΩ**.
 gated on the 150 kΩ already ordered. Everything else load-bearing —
 8.2 K, 15 K, 220 K, 1 K — is in stock, and **neither milestone needs the
 E12 kit**, which is why it is Qty 0 above.
+
+**Section 8 is NOT in this total** and is not Phase 0. It is gated on
+measurements rather than money, and nothing there should be bought until
+the thermocouple reading and the adapter check are done.
 
 Add calipers (~€15) if you want the connector
 question settled by measurement rather than re-derived from photographs.

@@ -131,6 +131,45 @@ public:
     return last.mode == Mode::NONE || (t_us - last.at_us) > max_age_us;
   }
 
+  // Call when the reader is attached to a live bus — `display on`, and the
+  // boot path that restores it from NVS. The ISR starts wherever the bus
+  // happens to be, so the first frame assembled is a FRAGMENT of the one
+  // already in progress: arbitrary length, arbitrary alignment. It is
+  // garbage and should not be decoded.
+  //
+  // In practice the fragment is usually rejected by LENGTH first — only
+  // ~2.4 % of attach points land on 66/67/133 — so the guard normally
+  // spends itself on the first *good* frame instead. That costs one frame,
+  // ~41 ms, to prevent a bogus decode 2.4 % of the time. Cheap end of the
+  // trade. On the boot path the whole init burst is non-decodable, so the
+  // guard survives it and is spent on the first 66-bit reading at +4.1 s.
+  //
+  // What it actually decodes as, measured over 60000 simulated attach
+  // points against three real captures: **`-88`-class readings**, 37–51
+  // times per capture. Not blanks — ZERO blank-decoding fragments on a
+  // non-blinking display. Blast radius is small (`-` fails the numeric
+  // test, so it lands in Mode::TEXT, which MachineContextTracker ignores)
+  // but a reading invented from the wrong bit offsets has no business
+  // reaching a consumer.
+  //
+  // There is a structural reason the obvious fear does not materialise:
+  // the digit field offsets 106/115/124 are exactly 67 — the button-frame
+  // length — above 39/48/57, so **the digit frame is the last 66 bits of
+  // the merged 133**. A tail fragment of exactly 66 bits IS the correctly
+  // aligned digit frame. The one length that reaches readDigits() is
+  // self-correcting.
+  //
+  // DO NOT cite this as the cause of the 2026-10-07 SETPOINT-TOUCHED. It
+  // was first attributed here and that was wrong twice over: a clean
+  // attach yields one fragment, one blank cannot latch, and fragments do
+  // not decode as blanks anyway. The cause was reproduced on the bench
+  // instead — see docs/phase-0-status.md.
+  //
+  // It also drops a half-frame left behind by a previous detach, which
+  // used to be flushed on the next attach stamped with the pre-detach
+  // timestamp. Nobody had hit that; it is fixed here regardless.
+  void beginCapture();
+
   // Exposed for the host test: decode one complete frame directly.
   bool decodeFrame(const uint8_t* bits, size_t n, uint32_t t_us);
 
@@ -146,6 +185,7 @@ private:
   size_t   count = 0;
   uint32_t last_edge_us = 0;
   bool     have_edge = false;
+  bool     skip_first = false;   // armed by beginCapture(); see there
 
   Reading  last;
   Buttons  btn;

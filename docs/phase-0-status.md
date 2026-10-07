@@ -1,4 +1,4 @@
-# Phase 0 status — as of 2026-10-05
+# Phase 0 status — as of 2026-10-07
 
 Phase 0a (scale logging, stages 0–6) is **complete and in production**.
 This file is the resume point: read it (and CLAUDE.md) before continuing.
@@ -7,11 +7,92 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
 
 | Piece | Where | State |
 |---|---|---|
-| Firmware 0.8.0 (built, FLASH PENDING), detector 0a.6 | ESP32-S3 on a USB charger by the machine | both Bookoos bound: yield `aa:bb:cc:dd:ee:01`, dose `aa:bb:cc:dd:ee:02`. The display-bus reader is **off by default** — nothing changes until `display on` is issued. 0.8.0 rewrote it against the 0e captures; see below. |
+| **Firmware 0.8.2, FLASHED 2026-10-07**, detector 0a.6 | ESP32-S3 on a USB charger by the machine | both Bookoos bound: yield `aa:bb:cc:dd:ee:01`, dose `aa:bb:cc:dd:ee:02`. **The J5 tap is wired and `display on` is live** — reading the machine's display over the wire, `dropped=0` in normal operation. 0.8.0's parser, written blind against the 0e captures, **was validated against a real brew**: mode flipped `temp` → `timer`, counted `042/080/112/143/174/206` in tenths, returned to `temp 95 C`. **0.8.1 and 0.8.2 both add `beginCapture()`** — 0.8.1 was flashed, then `display.cpp` changed again, so the board briefly ran a 0.8.1 that no longer existed in the repo; bumped to 0.8.2 and reflashed rather than leave that ambiguity. No shot record carries either version. See 0e. |
 | Go server + SQLite + PWA | Proxmox LXC `espressolog`, Debian 13, `espressolog.lan` (DHCP-reserved) | systemd `espressolog.service`, db at `/var/lib/espressolog/espressolog.db` |
 | HTTPS | Caddy on the same LXC, `https://espresso.example.com` | Let's Encrypt via Cloudflare DNS-01; CF token in `/etc/caddy/env` |
 | DNS | AdGuard Home rewrite `espresso.example.com → espressolog.lan` | resolution is LAN-only; no public A record (challenge TXT only) |
 | Deploys | `make deploy` in `server/` (web+binary), `pio run -t upload` in `firmware/` | ESP talks plain HTTP to `:8080` directly, never through Caddy |
+
+## The J5 tap went live 2026-10-07, and two things came out of it
+
+**A false `SETPOINT-TOUCHED`, and the cause is now MEASURED.** On first
+enabling the reader the display showed a steady ` 95` and the latch was
+set. Nobody had touched the setpoint.
+
+**Reproduced on the bench**, which is what makes this a finding rather
+than a story:
+
+| Action, reader attached and running | Latch |
+|---|---|
+| unplug/replug **GPIO4** (the clock) | **nothing** |
+| unplug/replug **GPIO5** (the data) | **SETPOINT-TOUCHED** |
+
+**The mechanism, stated so it generalises.** A blank needs the **data**
+line to read all-zero across all three digit fields. Only a floating data
+pin produces that. With the **clock** pin floating, frames still assemble
+— an unplugged ESP32 input on a breadboard beside a random-phase triac
+picks up plenty of noise edges, so "the ISR stops" would be wrong — but
+they sample *real* `ESD1` levels, so they land on non-decodable lengths or
+`-88`-class readings and never on blanks.
+
+So the rule is not "do not unplug GPIO5". It is: **any disturbance that
+zeroes the data line while the clock keeps running will latch**, and two
+such frames inside `BLINK_WINDOW_US` are enough. On 2026-10-07 both
+jumpers were swapped with the reader **on**, which necessarily passed
+through exactly that state.
+
+Worth pairing with this: the J5 tap reads **~2.7 V** at the GPIO in the
+open-drain case, about **210 mV over VIH**. On breadboard jumpers a
+marginal data line is a standing risk, not only a rewiring one.
+
+**Two wrong diagnoses were published before that, and both are instructive.**
+First: an attach-time fragment decoding as blank. Refuted twice over — a
+clean attach yields exactly ONE fragment and the latch needs two blanks
+(now a test assertion), and 60000 simulated attach points against three
+real captures produced **zero** blank-decoding fragments on a non-blinking
+display. There is a structural reason: digit offsets 106/115/124 sit
+exactly 67 bits — the button-frame length — above 39/48/57, so **the digit
+frame is the last 66 bits of the merged 133**, and a 66-bit tail fragment
+IS the aligned digit frame. The one length that reaches `readDigits()` is
+self-correcting. Fragments decode as **`-88`-class garbage** instead,
+which lands in `Mode::TEXT` and is ignored by `MachineContextTracker`.
+
+**Exposure is bounded**: `clearSetpointTouched()` runs at pour start, so a
+disturbance only matters *during* a pour. Between shots it is irrelevant.
+**While on a breadboard, do not touch the wiring during a shot** — nothing
+breaks, but the record would be silently marked as having had its setpoint
+edited, which is the flag 0f uses to discard runs.
+
+**Still open, and only one of the obvious hardenings actually works.**
+Two blanks inside 600 ms is thin evidence. But **requiring three
+consecutive blanks buys nothing**: a real setpoint blink produces runs of
+~5 blank frames 41 ms apart (`display.h`), so it fires on both. The
+discriminator the captures support is **alternation** — a real blink
+*returns to a value* (204 ms blanks, 414 ms blank-to-blank, so a reading
+sits between every pair), whereas a zeroed data line decodes blank
+continuously and never shows a value at all.
+
+So the rule to test is **"a blank run must be bounded by a non-blank
+reading"**, with `2026-10-03-display-bus-buttons.sr` and bench garbage as
+the two fixtures. Recorded explicitly because "require three" is the
+cheaper-looking option and is the one someone will reach for.
+
+**`dropped` counts edges, and serial polling causes them.** During a
+polling loop `dropped` went 0 → 10266, then froze there across ~1500
+further frames once polling stopped. That shows polling is **sufficient**
+to cause drops; it does not show it is **necessary**, and because the brew
+overlapped the polling, **a brew has not been shown clean with no serial
+attached.**
+
+The ring tolerates a longer stall than the code comment implies.
+`DBUS_RING = 512` gives 511 usable slots, and the comment's "~50 ms" is the
+*burst* figure (511/9900 Hz). The bus is not continuous — 133 edges every
+41 ms is **3244 edges/s average**, so the main loop must stall **>158 ms**
+to drop anything. 10266 edges is ~77 frames, ~3.2 s of bus traffic.
+
+The one place a >158 ms stall is expected by design is the spool flash
+write at shot end — and invariant 2 puts that *after* the pump stops, when
+the display is back in temperature mode, so edges lost there cost nothing.
 
 ## What works end-to-end (all verified with real shots)
 
@@ -116,7 +197,7 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
    parts.
 
 3. **0e — temperature / display bus into the log — IN PROGRESS.**
-   Firmware 0.8.0 reads the bus: `firmware/src/display.{h,cpp}` is pure
+   Firmware 0.8.0 onward reads the bus: `firmware/src/display.{h,cpp}` is pure
    logic in the ShotDetector mould (no I/O, no clock of its own), an ISR
    stamps clock edges into a ring and `loop()` is the single consumer, so
    framing is done by the same `feedEdge()` the host tests exercise and no

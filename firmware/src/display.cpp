@@ -121,10 +121,36 @@ bool DisplayBus::decodeFrame(const uint8_t* bits, size_t n, uint32_t t_us) {
   return false;
 }
 
+// See the header for why the first frame after attaching is discarded.
+void DisplayBus::beginCapture() {
+  count         = 0;      // also drops any half-frame left by a detach
+  have_edge     = false;  // and the stale timestamp that would have stamped it
+  skip_first    = true;
+  blanks        = 0;
+  last_blank_us = 0;
+  prev_blank_us = 0;
+  adjust        = false;
+  touched       = false;  // a fresh attach starts with a clean latch; we
+                          // were not watching while it was detached.
+  last          = Reading{};    // not just mode: printDisplay() shows
+  btn           = Buttons{};    // last.text, so a partial reset leaves a
+                                // stale reading on screen next to "none".
+}
+
 bool DisplayBus::finishFrame(uint32_t t_us) {
   size_t n = count;
   count = 0;
   if (n == 0) return false;
+  if (skip_first) {
+    // Spend the guard only on a frame that WOULD have been decoded. The
+    // power-on burst is full of one-bit blips (32-33 of them, see
+    // CLAUDE.md) and decodeFrame() rejects those anyway; letting one
+    // consume the guard would hand the real misaligned fragment straight
+    // through, which is the opposite of the intent.
+    if (n == MERGED_FRAME_BITS || n == BUTTON_FRAME_BITS || n == DIGIT_FRAME_BITS)
+      skip_first = false;
+    return false;
+  }
   return decodeFrame(buf, n, t_us);
 }
 

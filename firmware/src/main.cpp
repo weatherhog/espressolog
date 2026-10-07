@@ -12,7 +12,7 @@
 #include "display.h"
 #include <driver/gpio.h>
 
-const char* FIRMWARE_VERSION = "0.8.0";
+const char* FIRMWARE_VERSION = "0.8.2";
 const char* DETECTOR_VERSION = "0a.6";
 
 static ScaleManager scales;
@@ -87,6 +87,7 @@ static void displaySetEnabled(bool on) {
     pinMode(DISPLAY_CLK_PIN, INPUT);
     pinMode(DISPLAY_DATA_PIN, INPUT);
     dbus_head = dbus_tail = 0;
+    display_bus.beginCapture();   // drop the in-progress frame; see display.h
     attachInterrupt(digitalPinToInterrupt(DISPLAY_CLK_PIN), dbusIsr, RISING);
   } else {
     detachInterrupt(digitalPinToInterrupt(DISPLAY_CLK_PIN));

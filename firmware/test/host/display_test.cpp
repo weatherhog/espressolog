@@ -395,6 +395,89 @@ int main() {
     printf("blink expiry returns to temperature OK\n");
   }
 
+  // 19. The fragment left over from attaching mid-frame must not be
+  //     decoded. `display on` hooks the ISR wherever the bus happens to
+  //     be, so the first frame assembled is whatever remained of the one
+  //     in flight — arbitrary length and alignment. Measured, it decodes
+  //     as `-88`-class garbage, never as a blank.
+  //
+  //     SCOPE, because two earlier versions of this comment overclaimed.
+  //     ONE fragment cannot latch setpoint_touched, which needs two blanks
+  //     inside BLINK_WINDOW_US — the first assertion below proves that.
+  //     And no fragment can supply a spurious blank at all: a 66-bit tail
+  //     IS the aligned digit frame (offsets 39/48/57 sit exactly 67 — the
+  //     button-frame length — below 106/115/124), a 67-bit one reaches
+  //     readButtons() and returns before any digit is read, and a 133-bit
+  //     one only occurs on an exact boundary. The all-zero 66-bit input
+  //     below is therefore a CONSTRUCTED worst case, not a pattern the
+  //     machine produces. The test pins the guard's behaviour; it is not
+  //     evidence about the machine.
+  {
+    // A lone fragment latches nothing. This is the bound on the whole
+    // problem, and it is why the 2026-10-07 observation needs another
+    // explanation than this code path.
+    DisplayBus lone;
+    uint32_t t = 1000;
+    for (int i = 0; i < 66; i++) { lone.feedEdge(t, 0); t += 101; }
+    lone.poll(t + 50000);
+    assert(!lone.setpointTouched());
+
+    // Fragment immediately followed by a real blank: without the guard the
+    // fragment counts as the first half of a blink that never happened.
+    DisplayBus bug;
+    t = 1000;
+    for (int i = 0; i < 66; i++) { bug.feedEdge(t, 0); t += 101; }  // fragment
+    t += 50000;                                                     // frame gap
+    for (int i = 0; i < 66; i++) { bug.feedEdge(t, 0); t += 101; }  // real blank
+    bug.poll(t + 50000);
+    assert(bug.setpointTouched());
+
+    // Armed, the fragment is dropped and the same sequence is one blank.
+    DisplayBus d;
+    d.beginCapture();
+    t = 1000;
+    for (int i = 0; i < 66; i++) { d.feedEdge(t, 0); t += 101; }
+    t += 50000;
+    for (int i = 0; i < 66; i++) { d.feedEdge(t, 0); t += 101; }
+    d.poll(t + 50000);
+    assert(!d.setpointTouched());
+    assert(!d.adjusting());
+
+    // A genuine blink still latches — a "fix" that merely disabled the
+    // latch would pass everything above and fail here.
+    t += 50000;
+    for (int i = 0; i < 66; i++) { d.feedEdge(t, 0); t += 101; }
+    d.poll(t + 50000);
+    assert(d.setpointTouched());
+    printf("attach fragment is discarded; a lone fragment never latched OK\n");
+  }
+
+  // 20. A one-bit blip must NOT spend the guard. The power-on burst carries
+  //     32-33 single-bit frames (CLAUDE.md), and decodeFrame() rejects
+  //     those anyway — so if one consumed skip_first, the real misaligned
+  //     fragment would be handed straight through, which is the exact
+  //     opposite of the intent. Attaching with the machine off and powering
+  //     it on later walks into this.
+  {
+    DisplayBus d;
+    d.beginCapture();
+    uint32_t t = 1000;
+
+    // Three isolated blips, each its own "frame" by virtue of the gaps.
+    for (int i = 0; i < 3; i++) { d.feedEdge(t, 0); t += 50000; }
+
+    // Now the fragment that actually matters: 66 bits reading blank.
+    for (int i = 0; i < 66; i++) { d.feedEdge(t, 0); t += 101; }
+    t += 50000;
+    // ...followed by a real blank, which together would latch if the
+    // fragment had been decoded.
+    for (int i = 0; i < 66; i++) { d.feedEdge(t, 0); t += 101; }
+    d.poll(t + 50000);
+
+    assert(!d.setpointTouched());
+    printf("one-bit blips do not spend the attach guard OK\n");
+  }
+
   printf("\nall display bus tests passed\n");
   return 0;
 }

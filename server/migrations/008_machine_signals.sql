@@ -6,9 +6,23 @@
 -- the display bus and leave all three NULL, which is honest rather than
 -- zero.
 
--- The boiler temperature the machine was showing immediately before the
--- pump started. NOT brew_temp_c, which is the PID setpoint someone typed
--- in and may never have been reached. This is what the machine said it had.
+-- The temperature the machine was showing immediately before the pump
+-- started.
+--
+-- READ THIS BEFORE TRUSTING THE VALUE. An earlier version of this comment
+-- said "NOT brew_temp_c ... this is what the machine said it had", i.e.
+-- that it is the real boiler. Measurement on 2026-10-05 undercut that:
+--   * below ~88 C the display demonstrably tracks the boiler -- it climbs
+--     one degree at a time and jitters +-1 C, so a sub-88 reading here IS
+--     a real temperature;
+--   * at the setpoint value it holds +-0 C for a minute at a time, which
+--     no PID boiler does, and during post-steam cooldown it blinks ` 95`
+--     while the boiler is demonstrably hotter than that.
+-- This column is sampled immediately before a pour, i.e. almost always in
+-- that second range. So in practice it means "at setpoint", and it cannot
+-- be distinguished from brew_temp_c when it reads the setpoint value.
+-- A capture with the boiler pulled off setpoint and allowed to recover
+-- would settle it. See docs/phase-0-status.md.
 --
 -- It is read from before the pour and not during it, because the machine
 -- takes the display over for its shot timer the moment the pump runs — so

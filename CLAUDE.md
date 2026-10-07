@@ -1056,7 +1056,21 @@ as you like; do not touch this.
 Calibrate by weighing water on a Bookoo; invariant 3 means the K-factor is
 never baked in, and Digmesa's own datasheet recommends calibrating it.
 
-**0e — temperature**, only if 0b succeeded.
+**0e — temperature. PATH DONE 2026-10-07** (shot 109); **what the number
+means is OPEN.** The J5 tap is
+wired to the ESP32 and `boiler_temp_start_c` / `machine_timer_s` land in
+the database off the machine's own display. Conditioning: 8.2 K series at
+the T-piece, 15 K shunt at the board, `ESD4`→GPIO4, `ESD1`→GPIO5, `VSS`
+ground direct, `Disp-P4` unterminated.
+
+**What `boiler_temp_start_c` actually means is narrower than migration
+008's comment claims.** Below ~88 °C the display tracks the real boiler and
+jitters ±1 °C; at 95 it holds ±0 °C for a minute, which no PID boiler does,
+and during post-steam cooldown it blinks ` 95` while the boiler is
+demonstrably hotter. The column is sampled immediately before a pour —
+always in that ambiguous range — so today it means **"at setpoint"**, not a
+verified temperature. Settling it needs a capture with the boiler pulled
+off setpoint and allowed to recover. See `docs/phase-0-status.md`.
 
 **0f — sit still.** 30 shots changing nothing, then compute the standard
 deviation of shot time and mean flow. That number is the noise floor, the

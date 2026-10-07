@@ -121,7 +121,20 @@ pulses, divide. Store the raw pulses and the calibration separately
 
 ### 0e — Integrate temperature
 
-Only if 0b succeeded. Feed decoded temperature into `shot_sample.temp_dc`.
+Only if 0b succeeded. **The deliverable changed once 0b revealed what the
+display does during a brew**, and this entry used to describe something
+that cannot be done from this source.
+
+The machine takes the display over for its shot timer the moment the pump
+runs, so there is **no boiler temperature to read mid-shot**:
+`shot_sample.temp_dc` stays NULL for the pour by design, and
+`008_machine_signals.sql` says so. The deliverable is therefore the
+**pre-pour reading in `shot.boiler_temp_start_c`**, which is a per-shot
+column rather than a per-sample one.
+
+**Path DONE 2026-10-07** (shot 109). **What the number means is OPEN** —
+see `docs/phase-0-status.md`: at the setpoint value the display cannot be
+distinguished from the setpoint itself.
 
 ### 0f — Sit still and look at the data
 

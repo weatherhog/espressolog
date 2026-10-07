@@ -13,6 +13,107 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
 | DNS | AdGuard Home rewrite `espresso.example.com → espressolog.lan` | resolution is LAN-only; no public A record (challenge TXT only) |
 | Deploys | `make deploy` in `server/` (web+binary), `pio run -t upload` in `firmware/` | ESP talks plain HTTP to `:8080` directly, never through Caddy |
 
+## The chain carried machine data end-to-end for the first time — shot 109, 2026-10-07
+
+The first shot carrying data the machine told us about itself:
+
+| id | yield | flow | `boiler_temp_start_c` | `machine_timer_s` | `setpoint_touched` | fw |
+|---|---|---|---|---|---|---|
+| **109** | 70.9 g | 4.31 g/s | **95.0** | **16.0** | 0 | 0.8.2 |
+| 108 | 37.6 g | 1.98 g/s | — | — | 0 | 0.8.0 |
+
+Machine display → J5 tap → ESP32 → spool v2 → upload → server decode →
+database. Every link had been built and tested separately; none had
+carried a live draw.
+
+**Shot 109 was a FLUSH WITH NO BASKET, and it is `excluded = 1`.** 70.9 g
+at **4.31 g/s** is 2.2× the same morning's shot 108 and roughly **12 σ
+above the 0f mean of ~1.72 g/s** (σ 0.21) — water meeting no puck
+resistance at all, which is exactly what it was. Flagged in the database
+with `exclude_reason = "flush, no basket — first end-to-end test of the
+J5 display tap (2026-10-07)"` so it cannot silently join a 0f pool, where
+at this magnitude one row would move the result on its own.
+
+**The anomaly was caught from the numbers before anyone said what the draw
+was**, which is the useful part: 4.31 g/s against an 0f baseline is a
+12 σ outlier, and the file would have stopped on it regardless.
+
+None of it weakens what follows: bytes are bytes, and the data path is
+what this row proves.
+
+**A scale check, which it passes cleanly — and that is the real content.**
+The failure most likely in a first end-to-end run is a units error, and
+the wire carries the timer in **tenths of a second**. `machine_timer_s`
+reading **16.0** rather than 160 or 1.6 is what this row proves.
+
+Beyond that, only plausibility, and the obvious check is invalid.
+70.9 g over the machine's 16.0 s of pump time is **4.43 g/s average**,
+against the scale's **4.31 g/s**. Same region, so nothing contradicts —
+but it is not a precise cross-check and must not be written as one:
+`mean_flow_gps` is measured only from 5 g out to 80 % of final (so 51.7 g
+of this pour), while `machine_timer_s` is pump-on to pump-off and
+`yield_final_g` includes post-pump settling. A first draft divided total
+yield by the windowed mean and called the 16.45 s result agreement with
+16.0 s; that compares three mismatched quantities, and its own logic runs
+backwards — the slow first-drip and tail should make the true time
+*longer* than that estimate, not shorter.
+
+**What this one row actually validates** — narrower than a first draft
+claimed:
+
+| Claim | Status |
+|---|---|
+| 113-byte **v2 header** round-trips device → server | ✓ all three fields populated |
+| migration **008**'s three columns | ✓ |
+| the display parser (written in 0.8.0, unchanged through 0.8.2) | ✓ temperature read, timer carried |
+| `record.go`'s **v1** dispatch | ✗ **not demonstrated in production** |
+
+The v1 claim was wrong twice over. Shot 108 is **not** a v1 record — spool
+format v2 shipped *with* firmware 0.8.0, so every 0.8.0 row is v2 with the
+display off. And the last genuine v1 writer, 0.7.0, stopped at
+**2026-10-04 07:07 UTC**, while the current binary was deployed at
+**18:41 UTC the same day** — so **no v1 record has ever been decoded by
+the running server.**
+
+It is covered by Go unit tests (`record_test.go`, `store_test.go` pin v1
+fixtures), which is not nothing. But this is the path that guards
+**invariant 6**, and replaying one archived v1 record through the current
+binary would turn a unit test into production evidence. Worth doing.
+
+**`setpoint_touched` has never been observed reading 1 end-to-end.** Both
+rows read 0, so the column is so far indistinguishable from one hard-wired
+to zero. The complementary test — edit the setpoint *during* a pour and
+confirm a 1 lands in the record — is what proves the field carries signal,
+and it has not been done.
+
+**That said, `clearSetpointTouched()` was validated by accident, which is
+the best kind.** The latch was *set* going into shot 109 — jumpers had been
+swapped live minutes earlier, the measured mechanism below — and it
+cleared at pour start under real conditions. The host test asserts that;
+this is the production evidence.
+
+**The honest limit on `boiler_temp_start_c = 95.0`.** Three legs, and the
+third is the strongest:
+
+- below ~88 °C the display **demonstrably tracks the real boiler** — it
+  climbs one degree at a time and jitters ±1 °C;
+- at 95 it holds **±0 °C for a minute at a time**, which no PID boiler
+  does;
+- during post-steam cooldown it **blinks ` 95` while the boiler is
+  demonstrably hotter than that** — the one case where we independently
+  know the boiler is *not* at the displayed value.
+
+**So the precise statement is narrower than "the column is meaningless":**
+a reading **at the setpoint value** cannot be distinguished from the
+setpoint; a reading **below ~88 °C is a real temperature**. Nobody pulls a
+shot at 82 °C, so in practice this column means "at setpoint" — but it is
+not uniformly uninformative and should not be written as if it were.
+
+`008_machine_signals.sql`'s comment used to assert the opposite outright
+("this is what the machine said it had"); **it has been corrected in
+place**, because CLAUDE.md tells readers to read the schema first and that
+comment is the authority for anyone touching the data model.
+
 ## The J5 tap went live 2026-10-07, and two things came out of it
 
 **A false `SETPOINT-TOUCHED`, and the cause is now MEASURED.** On first
@@ -149,6 +250,13 @@ the display is back in temperature mode, so edges lost there cost nothing.
    pump-to-pump — 0b's display timer now offers the real boundary, so
    **re-run the notebook once that timer is logged**: the flow figure should
    stand, the time figure may shrink.
+
+   **That precondition is now MET (2026-10-07)** — `machine_timer_s` is
+   landing in the database. Two caveats before anyone reaches for the
+   notebook: the re-run needs **30 shots carrying the timer**, not one; and
+   shot 109, the first of them, is hydraulically anomalous (4.31 g/s
+   against the 0f mean of ~1.72 g/s — roughly 12 σ) and may not belong in
+   the pool at all. `shot.excluded` exists for exactly this.
 
 2. **0b — display bus — DONE 2026-09-28.** The bus is decoded and the
    display is readable from the wire. Protocol, probe point and bit

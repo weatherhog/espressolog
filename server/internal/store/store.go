@@ -324,13 +324,16 @@ func insertShot(tx *sql.Tx, h *record.Header, samples []record.Sample, scaleID a
 		return 0, err
 	}
 
-	// Format v1 predates the flowmeter (0d): its inlet_pulses bytes are a
-	// placeholder 0, not a measurement, so they land as NULL. temp_dc
-	// INT16_MIN likewise means "no reading".
+	// inlet_pulses is a placeholder 0 in every record written before the 0d
+	// tap was wired — v1 by format, and v2 whenever the tap was simply off —
+	// so a stored 0 would be indistinguishable from "no water moved". The
+	// header flag is the only thing that separates them, which is why this
+	// is keyed on FlowTap() and not on the format version. temp_dc draws the
+	// same distinction with INT16_MIN.
 	// OR REPLACE: BLE notifications can arrive in a same-millisecond burst,
 	// producing two samples with equal t_ms — the later reading wins rather
 	// than failing the whole ingest (the raw record keeps both regardless).
-	stmt, err := tx.Prepare(`INSERT OR REPLACE INTO shot_sample (shot_id, t_ms, weight_mg, inlet_pulses, temp_dc) VALUES (?,?,?,NULL,?)`)
+	stmt, err := tx.Prepare(`INSERT OR REPLACE INTO shot_sample (shot_id, t_ms, weight_mg, inlet_pulses, temp_dc) VALUES (?,?,?,?,?)`)
 	if err != nil {
 		return 0, err
 	}
@@ -340,7 +343,11 @@ func insertShot(tx *sql.Tx, h *record.Header, samples []record.Sample, scaleID a
 		if smp.TempDc != record.TempNone {
 			temp = smp.TempDc
 		}
-		if _, err := stmt.Exec(shotID, smp.TMs, smp.WeightMg, temp); err != nil {
+		var pulses any
+		if h.FlowTap() {
+			pulses = smp.InletPulses
+		}
+		if _, err := stmt.Exec(shotID, smp.TMs, smp.WeightMg, pulses, temp); err != nil {
 			return 0, err
 		}
 	}

@@ -36,3 +36,4 @@ analysis/espressolog.db-wal
 # of this repo, not content of it.
 .claude/worktrees/
 firmware/test/host/machine_context_test
+firmware/test/host/machine_io_test

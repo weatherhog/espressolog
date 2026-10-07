@@ -264,7 +264,7 @@ tighter than they need to be for the sake of a few euro.
 | 220 kΩ | 10 | Ground leg: **×4 at J2** (1Cup, 2Cup, Steam, Water) **+ ×1 at J4** = **5**. **In stock.** |
 | 1 kΩ | 10 | 0d flowmeter, **at PA8/PA9 only** — the board side, after its own conditioning. **Never at J4.** **In stock.** |
 | 8.2 kΩ (J4) | — | **J4 ANALYSER tap only: 8.2 kΩ, one channel, `#` only, no shunt.** The ESP32 tap at J4 is 120 K + 220 K — see the 0d entry in `docs/phase-0-status.md`. Covered by the 8.2 kΩ bag above. |
-| **120 kΩ** | 10 | **0d J4 divider, series leg — the only part blocking 0d.** Buy a bag; the E12 kit is not needed for it. |
+| **120 kΩ** | 10 | 0d J4 divider, series leg (**×1**). **In stock 2026-10-07.** |
 | E12 assortment kit, 1/4 W | 0 | **Not required.** It covers no named requirement, and cheap kits are 5 % where the rows above are 1 %. Both dividers survive 5 % (J4 +96 mV, 0c +110 mV), but a €2 bag of 1 % 120 kΩ is cheaper and better. |
 
 Three of these are load-bearing — 0c is in CLAUDE.md, 0e and 0d are
@@ -359,12 +359,14 @@ Connectors are **bought** — the mixed balance-lead pack was €6.99 and
 should cover J5, J2 and J4, pending the seat check in section 1.
 
 Still outstanding: adhesive-lined heat-shrink, PTFE sleeving, perfboard,
-project box and cable gland — **~€30** — plus a **€2 bag of 120 kΩ**.
+project box and cable gland — **~€30**.
 
-**That 120 kΩ is the critical path**: it is the only part gating 0d. 0c is
-gated on the 150 kΩ already ordered. Everything else load-bearing —
-8.2 K, 15 K, 220 K, 1 K — is in stock, and **neither milestone needs the
-E12 kit**, which is why it is Qty 0 above.
+**No resistor gates anything any more.** 8.2 K, 15 K, 120 K, 220 K and 1 K
+are all in stock and 150 K is ordered; the E12 kit is Qty 0 and not
+needed. **0d is now gated on FIRMWARE, not parts** — nothing counts
+flowmeter pulses yet (`sample_t.inlet_pulses` exists and is always 0). The
+schema is ready (`001_init.sql:222`) and the divider is derived; what is
+missing is the interrupt counter.
 
 Add calipers (~€15) if you want the connector
 question settled by measurement rather than re-derived from photographs.

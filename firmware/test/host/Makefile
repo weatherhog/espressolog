@@ -10,10 +10,11 @@
 CXX ?= clang++
 CXXFLAGS = -std=c++17 -Wall
 
-test: detector_test display_test machine_context_test
+test: detector_test display_test machine_context_test machine_io_test
 	./detector_test
 	./display_test
 	./machine_context_test
+	./machine_io_test
 
 detector_test: detector_test.cpp ../../src/detector.cpp ../../src/detector.h
 	$(CXX) $(CXXFLAGS) -o $@ detector_test.cpp ../../src/detector.cpp
@@ -24,9 +25,12 @@ display_test: display_test.cpp ../../src/display.cpp ../../src/display.h
 machine_context_test: machine_context_test.cpp ../../src/machine_context.h ../../src/display.cpp ../../src/display.h
 	$(CXX) $(CXXFLAGS) -o $@ machine_context_test.cpp ../../src/display.cpp
 
+machine_io_test: machine_io_test.cpp ../../src/machine_io.cpp ../../src/machine_io.h
+	$(CXX) $(CXXFLAGS) -o $@ machine_io_test.cpp ../../src/machine_io.cpp
+
 replay: replay.cpp ../../src/detector.cpp ../../src/detector.h
 	$(CXX) $(CXXFLAGS) -o $@ replay.cpp ../../src/detector.cpp
 
 clean:
-	rm -f detector_test display_test machine_context_test replay
+	rm -f detector_test display_test machine_context_test machine_io_test replay
 .PHONY: test clean

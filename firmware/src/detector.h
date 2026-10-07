@@ -134,7 +134,17 @@ public:
   // and during a shot; recorded weights are relative to it.
   int32_t baselineMg() const { return baseline; }
 
-  bool feed(uint32_t t_ms, int32_t weight_mg);
+  // `inlet_pulses_total` is the FREE-RUNNING flowmeter count (0d). It is
+  // windowed here rather than by the caller: each sample stores the pulses
+  // since this shot's t=0, so the stored number shares the sample's own time
+  // base and can never inherit a hot-water draw pulled before the shot —
+  // which CLAUDE.md warns is exactly how tap water gets attributed to a
+  // brew. Still raw per invariant 3: a count, never millilitres.
+  //
+  // Defaulted so the scale-only path, the host tests and replay.cpp stay
+  // untouched; 0 from a board with no flowmeter tap is indistinguishable
+  // from a shot during which nothing flowed, and both are honest.
+  bool feed(uint32_t t_ms, int32_t weight_mg, uint32_t inlet_pulses_total = 0);
   ShotState state() const { return st; }
   const ShotResult& result() const { return res; }
   int32_t flowNowMgps() const { return flow_now; }
@@ -160,6 +170,8 @@ private:
   uint16_t lift_buf = 0;         // buf_count at the moment the drop began
   uint32_t last_step_at = 0;     // last >5 g single-sample step (cup moved); 0 = none
   uint32_t settle_until = 0;
+  uint32_t pulse_now = 0;        // latest free-running flowmeter count
+  uint32_t pulse_base = 0;       // its value at t=0; samples store the difference
   int32_t  running_max = 0;
   int32_t  last_w = 0;
 

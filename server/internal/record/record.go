@@ -28,6 +28,12 @@ const (
 	// this shot was recorded. Latched by the firmware, because PrG is a
 	// transient banner and the blink stops the moment they walk away.
 	FlagSetpointTouched = 0x08
+	// FlagFlowTap (v2, 0d): the flowmeter tap was live, so each sample's
+	// InletPulses is a measurement. Absent, the field is the placeholder 0
+	// it has carried since 0a and means "nothing was counting" — which is
+	// not the same fact as "no water moved", and must not reach the archive
+	// looking like it.
+	FlagFlowTap = 0x10
 
 	headerLenV1 = 109
 	headerLenV2 = 113 // v1 + boiler_temp_start_dc (int16) + machine_timer_dl (uint16)
@@ -144,6 +150,7 @@ func (h *Header) ScaleMacString() string {
 func (h *Header) Fault() bool           { return h.Flags&FlagFault != 0 }
 func (h *Header) Truncated() bool       { return h.Flags&FlagTruncated != 0 }
 func (h *Header) SetpointTouched() bool { return h.Flags&FlagSetpointTouched != 0 }
+func (h *Header) FlowTap() bool         { return h.Flags&FlagFlowTap != 0 }
 
 // BoilerTempStartC returns the boiler temperature just before the pump
 // started, in whole degrees, and false when the machine did not say — a v1

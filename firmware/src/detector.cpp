@@ -131,12 +131,24 @@ void ShotDetector::appendSample(uint32_t t, int32_t w) {
     buf[buf_count - 1].weight_mg = w;
     return;
   }
-  buf[buf_count++] = { (uint16_t)rel, w, 0, INT16_MIN };
+  // Pulses since t=0, saturating rather than wrapping: uint16 holds ~27 L at
+  // the datasheet's ~2400 pulses/L against a few hundred per shot, so this
+  // only ever trips if the tap is counting something that is not flow — and
+  // a pegged ceiling says that out loud where a wrap would read plausible.
+  uint32_t d = pulse_now - pulse_base;
+  if (d > UINT16_MAX) d = UINT16_MAX;
+  buf[buf_count++] = { (uint16_t)rel, w, (uint16_t)d, INT16_MIN };
 }
 
 void ShotDetector::beginPour(uint32_t crossing_t) {
   st = ShotState::POURING;
   t0 = crossing_t;
+  // Set BEFORE the backdated replay below, so the pre-history samples store
+  // 0. Their true counts are not recoverable — the ring keeps weights, not
+  // pulses — and 0 is the one answer that cannot over-attribute flow to this
+  // shot. The window opens at first drip, not at pump-on; the pre-infusion
+  // pulses therefore sit outside it until 0c can supply the pump-start edge.
+  pulse_base = pulse_now;
   buf_count = 0;
   running_max = 0;
   lift_since = 0;
@@ -220,7 +232,8 @@ void ShotDetector::resetToIdle() {
   lift_since = 0;
 }
 
-bool ShotDetector::feed(uint32_t t, int32_t w) {
+bool ShotDetector::feed(uint32_t t, int32_t w, uint32_t inlet_pulses_total) {
+  pulse_now = inlet_pulses_total;
   flow_now = computeFlow(t, w);
   ringPush(t, w);
   int32_t prev_w = last_w;

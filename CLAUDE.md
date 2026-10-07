@@ -863,11 +863,25 @@ next-time-in-there job, not a blocker.
 |---|---|---|
 | `ESD4` clock | **4** | fixed by `main.cpp`; this is J5 **pin 3** |
 | `ESD1` data | **5** | fixed by `main.cpp`; J5 **pin 2** |
-| Flow `#` | 6 | proposed — interrupt, ≤16 Hz |
-| 1Cup | 7 | proposed |
-| 2Cup | 15 | proposed |
-| Steam | 16 | proposed |
-| Hot Water | 17 | proposed |
+| Flow `#` | **6** | fixed by `main.cpp` (0.9.0); FALLING-edge interrupt |
+| 1Cup | **7** | fixed by `main.cpp` (0.9.0); polled |
+| 2Cup | **15** | fixed by `main.cpp` (0.9.0); polled |
+| Steam | **16** | fixed by `main.cpp` (0.9.0); polled |
+| Hot Water | **17** | fixed by `main.cpp` (0.9.0); polled |
+
+**All seven are now named in firmware 0.9.0, so none of them is a free
+choice any more** — this table used to mark five of them "proposed" and they
+were still unclaimed. Changing one now means changing `main.cpp`, not just
+this row. They have **not** been checked against the clone DevKitC-1's
+silkscreen; do that before the perfboard is drilled.
+
+**GPIO8 is reserved and is the one pin this firmware ever drives.** The
+`selftest` command makes it an output to feed a known pulse train into
+GPIO6, proving the ISR/ring/loop path counts exactly, which no real shot can
+prove (there is nothing to check the count against). It returns to INPUT the
+moment the run ends. **Unplug J4 before running it** — driving a pin that
+reaches the machine is precisely what invariant 1 forbids. Keep GPIO8 off
+the perfboard's machine side and bring it to a header instead.
 
 GPIO4/5 are **not** free choices — the firmware already names them, and
 swapping clock for data decodes nothing. The other five are proposals:
@@ -1182,6 +1196,27 @@ pump runs, so there is no boiler temperature to read during a brew. The
 useful value is the one from just before the pump started, which is why
 `boiler_temp_start_c` is a per-shot column rather than something derived
 from the samples.
+
+**`inlet_pulses` needs a flag, not a format version — bit 4,
+`SPOOL_FLAG_FLOW_TAP` (0.9.0).** The field has sat in `sample_t` since 0a
+holding a placeholder 0, which is exactly why the flash layout did not have
+to change when 0d arrived. But that also means **a stored 0 cannot be read
+as a measurement**: it is indistinguishable from "nothing was counting".
+The flag says the tap was live for that shot; without it the server stores
+NULL, the same way `INT16_MIN` means "no reading" for temperature.
+
+The server previously bound a literal `NULL` for *every* record while its
+comment claimed it was only doing so for v1 — so counted pulses would have
+been dropped at ingest with a green test suite. Fixed 2026-10-07, with a
+test that fails against the old behaviour.
+
+**Pulses are windowed at the shot's own `t=0`**, not free-running, so the
+number shares the sample's time base and a hot-water draw pulled beforehand
+cannot be attributed to the brew. Backdated pre-crossing samples store 0 —
+their true counts are not recoverable, the detector's ring holds weights
+rather than pulses, and 0 is the one answer that cannot over-attribute.
+Note the window opens at **first drip, not pump-on**, so pre-infusion
+pulses sit outside it until 0c supplies the pump-start edge.
 
 350 samples ≈ 3.5 KB per shot. One file per shot, header + samples.
 Config (WiFi, endpoint, flow calibration, current bean, grind epoch) in

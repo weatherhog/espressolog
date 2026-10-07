@@ -88,6 +88,19 @@ typedef struct __attribute__((packed)) {
 // noise-floor run, and it is over long before anyone reads a level — so it
 // is latched, not sampled.
 #define SPOOL_FLAG_SETPOINT_TOUCHED 0x08
+// v2 (0d). The flowmeter tap was live while this shot was recorded, so each
+// sample's inlet_pulses is a MEASUREMENT. Without it the field is the
+// placeholder 0 it has carried since 0a, and a reader cannot tell "no water
+// moved" from "nothing was counting" — the same distinction INT16_MIN draws
+// for temperature.
+//
+// A flag rather than a format bump on purpose: the field has existed in
+// sample_t since 0a precisely so the flash layout would not change when 0d
+// arrived, and it did not. What changed is whether the bytes mean anything,
+// which is exactly what a flag is for. Format v2 records written by firmware
+// 0.8.x carry placeholder zeros and no flag, so they read correctly as
+// "the machine did not say".
+#define SPOOL_FLAG_FLOW_TAP 0x10
 
 
 // LittleFS spool: one file per record under /spool, written only when no
@@ -99,7 +112,8 @@ public:
   bool begin();
   // Both return the written path, or "" on refusal/failure.
   String writeShot(const ShotResult& r, const String& scale_mac,
-                   const MachineContext& mc = MachineContext{});
+                   const MachineContext& mc = MachineContext{},
+                   bool flow_tap = false);
   String writeWeighing(uint8_t role, const WeighingDetector::Event& ev, const String& scale_mac);
   bool remove(const String& name);
   void list(Stream& out);

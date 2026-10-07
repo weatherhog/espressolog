@@ -651,3 +651,45 @@ func TestIngestLeavesMachineSignalsNullWhenUnavailable(t *testing.T) {
 		t.Errorf("v1 record claims machine data: boiler=%v timer=%v touched=%v", boiler, timer, touched)
 	}
 }
+
+// 0d. inlet_pulses has existed in sample_t since 0a as a placeholder 0, so
+// the format version cannot say whether a zero is a measurement — only the
+// FlagFlowTap header bit can. Both directions are asserted here because the
+// ingest previously bound a literal NULL for every record, which made a
+// correct-looking archive out of counted pulses and would not have failed a
+// single existing test.
+func TestIngestFlowPulses(t *testing.T) {
+	raw, _ := os.ReadFile("../record/testdata/shot-fw040-timevalid.bin")
+
+	// Tap off: a counted-looking value is still not a measurement.
+	recOff, _ := record.Decode(raw)
+	recOff.Samples[5].InletPulses = 42
+	st := openTestStore(t)
+	res, err := st.Ingest("aa:bb:cc:dd:ee:03", recOff, raw, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, samples, _ := st.Shot(res.ShotID)
+	if samples[5]["inlet_pulses"] != nil {
+		t.Errorf("tap off: pulses stored anyway: %v", samples[5]["inlet_pulses"])
+	}
+
+	// Tap live: the same bytes are now a reading and must reach the archive.
+	recOn, _ := record.Decode(raw)
+	recOn.Header.Flags |= record.FlagFlowTap
+	recOn.Header.Seq++ // not a duplicate of the record above
+	for i := range recOn.Samples {
+		recOn.Samples[i].InletPulses = uint16(i)
+	}
+	res2, err := st.Ingest("aa:bb:cc:dd:ee:03", recOn, []byte("raw-flowtap"), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, samples2, _ := st.Shot(res2.ShotID)
+	if got := samples2[0]["inlet_pulses"]; got == nil || got.(int64) != 0 {
+		t.Errorf("tap live: first sample = %v, want 0", got)
+	}
+	if got := samples2[7]["inlet_pulses"]; got == nil || got.(int64) != 7 {
+		t.Errorf("tap live: pulses not stored: %v", got)
+	}
+}

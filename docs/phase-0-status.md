@@ -7,7 +7,7 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
 
 | Piece | Where | State |
 |---|---|---|
-| **Firmware 0.8.2, FLASHED 2026-10-07**, detector 0a.6 | ESP32-S3 on a USB charger by the machine | both Bookoos bound: yield `aa:bb:cc:dd:ee:01`, dose `aa:bb:cc:dd:ee:02`. **The J5 tap is wired and `display on` is live** — reading the machine's display over the wire, `dropped=0` in normal operation. 0.8.0's parser, written blind against the 0e captures, **was validated against a real brew**: mode flipped `temp` → `timer`, counted `042/080/112/143/174/206` in tenths, returned to `temp 95 C`. **0.8.1 and 0.8.2 both add `beginCapture()`** — 0.8.1 was flashed, then `display.cpp` changed again, so the board briefly ran a 0.8.1 that no longer existed in the repo; bumped to 0.8.2 and reflashed rather than leave that ambiguity. No shot record carries either version. See 0e. |
+| **Firmware 0.9.0 BUILT, NOT FLASHED** (0.8.2 is what is on the board), detector 0a.6 | ESP32-S3 on a USB charger by the machine | both Bookoos bound: yield `aa:bb:cc:dd:ee:01`, dose `aa:bb:cc:dd:ee:02`. **The J5 tap is wired and `display on` is live** — reading the machine's display over the wire, `dropped=0` in normal operation. 0.8.0's parser, written blind against the 0e captures, **was validated against a real brew**: mode flipped `temp` → `timer`, counted `042/080/112/143/174/206` in tenths, returned to `temp 95 C`. **0.8.1 and 0.8.2 both add `beginCapture()`** — 0.8.1 was flashed, then `display.cpp` changed again, so the board briefly ran a 0.8.1 that no longer existed in the repo; bumped to 0.8.2 and reflashed rather than leave that ambiguity. No shot record carries either version. See 0e. |
 | Go server + SQLite + PWA | Proxmox LXC `espressolog`, Debian 13, `espressolog.lan` (DHCP-reserved) | systemd `espressolog.service`, db at `/var/lib/espressolog/espressolog.db` |
 | HTTPS | Caddy on the same LXC, `https://espresso.example.com` | Let's Encrypt via Cloudflare DNS-01; CF token in `/etc/caddy/env` |
 | DNS | AdGuard Home rewrite `espresso.example.com → espressolog.lan` | resolution is LAN-only; no public A record (challenge TXT only) |
@@ -113,6 +113,88 @@ not uniformly uninformative and should not be written as if it were.
 ("this is what the machine said it had"); **it has been corrected in
 place**, because CLAUDE.md tells readers to read the schema first and that
 comment is the authority for anyone touching the data model.
+
+## 0c and 0d firmware — written 2026-10-07, bench-testable without the machine
+
+**0.9.0 adds the code for both remaining taps. Neither tap is wired.** The
+point of writing them now is that the breadboard is still up and the machine
+is closed: everything that can be settled without voltage should be settled
+before the perfboard is drilled, because after that the pin map is copper.
+
+What landed:
+
+| | |
+|---|---|
+| `firmware/src/machine_io.{h,cpp}` | all the logic: glitch filter, debouncer, press duration, reprogram threshold, event queue |
+| `firmware/test/host/machine_io_test.cpp` | 13 cases, all four mutations checked |
+| `detector.{h,cpp}` | `feed()` takes the free-running count; samples store pulses since t=0 |
+| `spool.h` / `record.go` / `store.go` | `SPOOL_FLAG_FLOW_TAP` (bit 4) |
+| `main.cpp` | ISR + polling + `flow`/`switches`/`pins`/`selftest` |
+
+**The logic is in its own unit for the reason `machine_context.h` records:**
+the last time this kind of logic lived inline in `main.cpp` it had no tests
+and shipped two bugs a fully green suite could not see.
+
+### Two decisions worth knowing before the bench
+
+**The switch lines are POLLED, not interrupt-driven.** A press is tens to
+hundreds of ms against a ~5 ms loop, so resolution is ample, and polling
+cannot be storm-triggered by a floating line the way four more edge
+interrupts could. The risk it does carry is a press missed inside a long
+`loop()` stall — so the worst poll gap is **measured and printed in
+`status`** rather than assumed. If the bench shows gaps near a press length,
+this becomes interrupt-driven, and the measurement will be the reason.
+A missed press is also not silent: the display bus runs the machine's own
+shot timer, so a brew with no switch event still leaves a trace.
+
+**Nothing persists a switch event yet.** Presses go to serial and the live
+socket; `machine_event` is untouched. That is deliberate — persistence is
+not what gates the perfboard, and `machine_event`'s schema still assumes
+ONE lever (`direction` is `CHECK IN ('down','up')`), which cannot express
+"lever B up" versus "lever A up". That migration is its own job.
+
+### The bench sequence, in order
+
+Everything here runs on the breadboard with the machine closed.
+
+1. `pio run -t upload`, then `pins`. With nothing connected the five machine
+   inputs float and read arbitrarily — that is the expected result, and it
+   is the baseline that makes step 2 mean something.
+2. **Flow counting, the one thing host tests cannot prove.** Jumper
+   **GPIO8 → GPIO6**, nothing else connected, then `flow on` and `selftest`.
+   It drives 500 pulses at 100 Hz — four times the fastest plausible real
+   rate — and prints counted against expected. **Anything other than an
+   exact match means the shot pulse count cannot be trusted**, and the
+   glitch/drop counters say which half is at fault.
+   *`selftest` is the only command that ever makes a pin an output. Unplug
+   J4 first; invariant 1 is exactly about this.*
+3. `switches on`, then jumper each of GPIO7/15/16/17 to 3V3 and back while
+   watching the serial log. Each touch should print one `# switch …` line
+   with a plausible duration, never several. Hold one past 2 s and confirm
+   the `REPROGRAM` warning fires.
+4. Leave it running an hour with the scales connected and pull the usual
+   shots. Then `status`: **worst poll gap** is the number that decides
+   whether polling survives into the perfboard, and `dropped=0` on the
+   display bus confirms the new ISR did not cost the old one anything.
+
+### What still needs the machine, and should be batched into one opening
+
+- **Meter lever B** — J2 positions 2 and 5 are plug inspection only. If they
+  are swapped the firmware labels steam as a water draw, which breaks the
+  two things the four-line tap is for. Two minutes with the meter.
+- **Fit J2 and J4, then `pins` before anything else.** Levels at rest decide
+  whether the dividers are right; at rest `flow` should read 1 and all four
+  switches 0. That is a measurement, not a calculation, and it is the thing
+  the perfboard is actually waiting on.
+- **J4 first contact is the risk.** The 120 K + 220 K has never been
+  energised, and the last J4 tap faulted the machine. Fit it, power on, *no
+  brew*, watch for `E01`. Then a flush. Then a shot. Not all three at once.
+- **Calibrate** — weigh water on the Bookoo against pulses, write the row
+  into `flowmeter_calibration`. ~2400 pulses/L is a search summary, not a
+  datasheet.
+- Whether a **hot-water draw** pulses the meter at all. CLAUDE.md records
+  this as a prediction; nobody has traced the plumbing. First thing `#` can
+  answer once it is counting.
 
 ## The J5 tap went live 2026-10-07, and two things came out of it
 

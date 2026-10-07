@@ -338,6 +338,44 @@ int main() {
     printf("tare-during-drips OK (1 record, final=%d mg incl. pre-tare drips)\n", r->yield_final_mg);
   }
 
+
+  // 0d: the flowmeter count is windowed at t=0, so a hot-water draw pulled
+  // before the shot cannot be attributed to it. CLAUDE.md flags that exactly
+  // this would happen without scoping — lever B runs the pump, and whether
+  // that water crosses the flowmeter is untraced, so the firmware must not
+  // depend on the answer.
+  {
+    ShotDetector d;
+    uint32_t tt = 500000;
+    uint32_t pulses = 777;          // an earlier draw already moved the counter
+
+    for (int i = 0; i < 30; i++) { d.feed(tt, 0, pulses); tt += 100; }   // 3 s armed, no flow
+    assert(d.state() == ShotState::ARMED);
+
+    const ShotResult* rr = nullptr;
+    bool done = false;
+    for (int i = 0; i < 250 && !done; i++) {                             // 25 s ramp to 36 g
+      pulses += (i % 2) ? 1 : 0;                                         // 5 pulses/s
+      done = d.feed(tt, (int32_t)(36000.0 * i / 250.0), pulses);
+      tt += 100;
+    }
+    for (int i = 0; i < 100 && !done; i++) {                             // pump off: count frozen
+      done = d.feed(tt, 36000, pulses);
+      tt += 100;
+    }
+    assert(done);
+    rr = &d.result();
+    assert(rr->valid && rr->sample_count > 10);
+
+    assert(rr->samples[0].inlet_pulses == 0);        // the window opens at zero
+    uint16_t last = rr->samples[rr->sample_count - 1].inlet_pulses;
+    assert(last > 110 && last < 130);                // ~125 counted during the pour
+    assert(last < 700);                              // and NOT the 777 carried in
+    for (uint16_t i = 1; i < rr->sample_count; i++)  // cumulative never goes backwards
+      assert(rr->samples[i].inlet_pulses >= rr->samples[i - 1].inlet_pulses);
+    printf("flowmeter windowing OK (%u pulses in-shot, 777 pre-shot excluded)\n", last);
+  }
+
   printf("all scenarios passed\n");
   return 0;
 }

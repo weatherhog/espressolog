@@ -86,7 +86,7 @@ String Spool::writeFile(char kind, const spool_header_t& h, const sample_t* samp
 }
 
 String Spool::writeShot(const ShotResult& r, const String& scale_mac,
-                        const MachineContext& mc) {
+                        const MachineContext& mc, bool flow_tap) {
   if (nearlyFull()) {
     // Refusing is deliberate: dropping the oldest silently is also losing a
     // shot. ~90 % full means months of failed uploads — that needs a human.
@@ -98,7 +98,8 @@ String Spool::writeShot(const ShotResult& r, const String& scale_mac,
   fillCommon(h, 1, r.started_at_ms, 0, scale_mac);
   h.flags = (r.fault ? SPOOL_FLAG_FAULT : 0) | (r.truncated ? SPOOL_FLAG_TRUNCATED : 0)
           | ((!r.valid && !r.fault) ? SPOOL_FLAG_REJECT : 0)
-          | (mc.setpoint_touched ? SPOOL_FLAG_SETPOINT_TOUCHED : 0);
+          | (mc.setpoint_touched ? SPOOL_FLAG_SETPOINT_TOUCHED : 0)
+          | (flow_tap ? SPOOL_FLAG_FLOW_TAP : 0);
   h.boiler_temp_start_dc = mc.boiler_temp_start_dc;
   h.machine_timer_dl     = mc.machine_timer_dl;
   h.stop_ms = r.stop_ms;

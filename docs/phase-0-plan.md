@@ -98,8 +98,21 @@ Share ground with the board's VSS. That's safe here — the 5 V rail
 comes from an IRM-03-5, which is an isolated module — provided the
 ESP32 also runs from an isolated supply (any USB phone charger).
 
+**Firmware DONE (0.9.0, 2026-10-07); the tap is NOT yet built.** Four
+polled, debounced lines, each press emitted with its backdated start and
+duration, and a hold past 2 s flagged as a timer reprogram — which is the
+machine rewriting its own configuration and the reason this machine's 1Cup
+is ~10.5 s rather than 15 s with nothing recording when that happened.
+
+**Note what the level does NOT mean.** Both levers are momentary with spring
+return, and the board latches, so the line is high for the *press*, not for
+the brew. Anything reading "shot in progress" off these pins is wrong.
+
 **Done when:** flushes and shots appear in `machine_event` with correct
-durations, and `first_drip_ms` becomes a real measurement.
+durations, and `first_drip_ms` becomes a real measurement. **Neither is true
+yet** — the firmware reports presses on serial and over the live socket, and
+nothing persists them. That is the remaining 0c work and it is deliberate:
+persistence is not what gates the perfboard.
 
 ### 0d — Flowmeter
 
@@ -107,16 +120,33 @@ Inlet-side flow. Combined with outlet weight this is a direct read on
 puck resistance — the nearest thing to a pressure profile without
 plumbing in a transducer.
 
-Tap the **conditioned** side (PA8 = Flow-P1, PA9 = Flow-P2), not the
-raw sensor at J4. It's already level-shifted to 3.3 V logic through the
-PDTC143ET transistors, so it goes straight to a GPIO through a 1 K
-series resistor. Count on interrupt.
+**Both paragraphs that used to be here were wrong, and were still here
+after CLAUDE.md had corrected them** — the same stale-contradiction defect
+flagged under 0c above. CLAUDE.md is the source of truth. For the record,
+so nobody re-derives them:
 
-Two nets — possibly quadrature, possibly two-meter support. Log both
-and find out.
+- *"Tap the conditioned side (PA8/PA9), not the raw sensor at J4."* The tap
+  is **at J4**, on the raw open-collector output, through a **120 K + 220 K**
+  divider derived against the measured 9.4 kΩ node. 1 K series is correct
+  only on the *board* side of the board's own conditioning; at J4 it would
+  feed a 4.69 V sensor output into a 3.3 V GPIO.
+- *"Two nets — possibly quadrature, possibly two-meter support. Log both."*
+  **J4 carries ONE signal** (ground + 5 V + `#`), measured 2026-10-04. The
+  question is closed: neither.
 
-**Calibrate empirically:** run water into a jug on the Bookoo, count
-pulses, divide. Store the raw pulses and the calibration separately
+**Read `docs/phase-0-status.md` before touching J4.** The 2026-10-03 tap
+made the machine fault with `E01` mid-cycle — a hard invariant-1 violation.
+
+**Firmware DONE (0.9.0, 2026-10-07); the tap is NOT yet refitted.** Falling
+edges on GPIO6 into a ring, a 2 ms glitch floor, and a count windowed at the
+shot's own t=0 so a hot-water draw cannot be attributed to a brew. Off by
+default behind `flow on`; `selftest` drives a known pulse train from GPIO8
+so the counting path is provable on the bench without the machine.
+
+**Calibrate empirically** — run water into a jug on the Bookoo, count pulses,
+divide. The ~2400 pulses/L figure is a search summary of a datasheet nobody
+could retrieve, with sources spread 2386–2494; it is a sanity check, not a
+constant. Store raw pulses and the calibration separately
 (`flowmeter_calibration`), never the converted millilitres.
 
 ### 0e — Integrate temperature

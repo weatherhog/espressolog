@@ -344,7 +344,13 @@ func insertShot(tx *sql.Tx, h *record.Header, samples []record.Sample, scaleID a
 			temp = smp.TempDc
 		}
 		var pulses any
-		if h.FlowTap() {
+		// Version-guarded for the same reason setpoint_touched is above: bit 4
+		// only means anything from v2 onward, and a v1 record presenting it —
+		// from a flipped bit in flash, a padded upload, or a hand-built
+		// record — would otherwise turn 220 placeholder zeros into a
+		// measurement reading "no water moved". That is the exact confusion
+		// this flag exists to prevent, so it must not be the way in.
+		if h.FormatVersion >= 2 && h.FlowTap() {
 			pulses = smp.InletPulses
 		}
 		if _, err := stmt.Exec(shotID, smp.TMs, smp.WeightMg, pulses, temp); err != nil {

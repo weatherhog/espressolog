@@ -31,7 +31,12 @@ typedef struct __attribute__((packed)) {
   uint8_t  time_valid;         // 1 = unix_ms trustworthy
   uint8_t  scale_role;         // 0 yield, 1 dose
   uint8_t  scale_mac[6];       // → equipment.ble_address lookup
-  uint8_t  flags;              // bit0 FAULT, bit1 TRUNCATED, bit2 REJECT, bit3 SETPOINT_TOUCHED
+  uint8_t  flags;              // bit0 FAULT, bit1 TRUNCATED, bit2 REJECT,
+                               // bit3 SETPOINT_TOUCHED, bit4 FLOW_TAP.
+                               // Keep this list in step with the #defines
+                               // below: this struct is what a second reader
+                               // reads, and a list that stops short reads as
+                               // "the rest are reserved".
   char     detector_version[8];
   char     firmware_version[16];
   // shot-only (zero for weighing records):

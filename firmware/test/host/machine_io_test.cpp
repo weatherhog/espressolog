@@ -1,5 +1,21 @@
 // Host tests for the 0c/0d taps.
 //
+// MUTATIONS CHECKED (each must turn the suite red; re-run them if you change
+// the logic). The claim "all four mutations were checked" was once made in a
+// commit message with nothing in the repo to back it, which is not a record:
+//
+//   1. PulseCounter::feedEdge advances last_us on a reject   -> case 3
+//   2. SwitchBank::feed sets since_ms = t_ms, not cand_since -> case 6
+//   3. the DEBOUNCE_MS confirmation check removed            -> case 8
+//   4. SwitchBank::push drops without counting `lost`        -> case 13
+//
+// Two further regressions, both found in review AFTER the above passed, are
+// pinned by cases 11b and 11d. Both were reachable because the original tests
+// were scoped so they could not reach them — 11 ran 500 ms against a 2 s
+// threshold, and case 2 stopped one step short of MIN_PERIOD_US. That is the
+// failure mode to watch for here: a test that exercises a path without ever
+// reaching the condition it claims to check.
+//
 // Both milestones read physical wiring that cannot be exercised from a
 // laptop, so everything that can be decided without the machine is decided
 // here: the glitch filter, the debouncer, press duration, the reprogramming
@@ -46,14 +62,24 @@ int main() {
     printf("1. a 25 s pour at 5 Hz counts every pulse OK\n");
   }
 
-  // 2. Contact bounce / hash: a burst 100 us apart yields exactly one count.
+  // 2. Contact bounce / hash. WITHIN one window a burst yields one count —
+  //    but the filter rate-limits rather than rejects, so SUSTAINED noise
+  //    keeps scoring one count per MIN_PERIOD_US. The first half of this
+  //    used to be the whole test, stopping at t<2000, one step short of the
+  //    threshold — which made it structurally incapable of falsifying the
+  //    "at most one spurious count" claim written beside it. That claim was
+  //    false; this is what the code actually does.
   {
     PulseCounter p;
     assert(p.feedEdge(0));
     for (uint32_t t = 100; t < 2000; t += 100) assert(!p.feedEdge(t));
-    assert(p.total() == 1);
-    assert(p.glitches() == 19);
-    printf("2. a 100 us burst counts once, 19 rejected OK\n");
+    assert(p.total() == 1 && p.glitches() == 19);
+
+    PulseCounter q;                                   // 50 ms of 10 kHz hash
+    for (uint32_t t = 0; t < 50000; t += 100) q.feedEdge(t);
+    assert(q.total() == 25);                          // one per 2 ms, NOT one
+    assert(q.glitches() == 475);
+    printf("2. one count per window, and sustained noise scores 25 not 1 OK\n");
   }
 
   // 3. THE MUTATION TEST for feedEdge not advancing last_us on a reject.
@@ -210,7 +236,60 @@ int main() {
     b.run(100);
     assert(b.drain(ev, 8) == 1);             // the release IS witnessed
     assert(ev[0].pressed_at_ms == 0);
+    assert(ev[0].synthetic);                 // and is marked as unwitnessed
     printf("11. a line high at boot is adopted, not invented OK\n");
+  }
+
+  // 11b. THE REGRESSION. A line high at the first poll and released past the
+  //      2 s threshold must NOT raise the reprogram alarm. Test 11 ran only
+  //      500 ms, so it exercised this path without ever crossing the
+  //      threshold, and the bug it was meant to cover shipped: an unwired
+  //      (floating) line settling ten seconds later printed
+  //      "*** HELD PAST 2 s: STORED TIMER REPROGRAMMED ***" for a press
+  //      nobody made — the loudest message in the firmware, asserting the
+  //      machine had rewritten its own stored timer. Found in review.
+  {
+    Bench b;
+    b.lv[SwitchBank::STEAM] = true;          // already high when we start looking
+    b.run(10000);                            // five times REPROGRAM_MS
+    b.lv[SwitchBank::STEAM] = false;
+    b.run(500);
+    assert(b.drain(ev, 8) == 1);
+    assert(ev[0].duration_ms == 10000);      // the span is reported honestly
+    assert(ev[0].synthetic);                 // and graded as unwitnessed
+    assert(!ev[0].reprogram);                // so the alarm stays silent
+    printf("11b. an unwitnessed 10 s press raises no reprogram alarm OK\n");
+  }
+
+  // 11c. A REAL press after a witnessed rising edge still alarms — the fix
+  //      must not have bought 11b by disabling the feature.
+  {
+    Bench b;
+    b.run(500);                              // starts idle: the edge IS seen
+    b.lv[SwitchBank::ONE_CUP] = true;
+    b.run(3000);
+    b.lv[SwitchBank::ONE_CUP] = false;
+    b.run(100);
+    assert(b.drain(ev, 8) == 1);
+    assert(!ev[0].synthetic);
+    assert(ev[0].reprogram);
+    printf("11c. a witnessed 3 s press still alarms OK\n");
+  }
+
+  // 11d. reset() exists because the taps go in one at a time. Without it,
+  //      state adopted from a floating line during an earlier `switches on`
+  //      survives `switches off`, and the first poll after rewiring emits a
+  //      release whose duration is the hours in between.
+  {
+    Bench b;
+    b.lv[SwitchBank::TWO_CUP] = true;        // floating high, tap not yet wired
+    b.run(5000);
+    b.sb.reset();                            // switches off … wire J2 … on
+    b.lv[SwitchBank::TWO_CUP] = false;       // now reads its true idle level
+    b.run(500);
+    assert(b.drain(ev, 8) == 0);             // no phantom 5 s release
+    assert(!b.sb.pressed(SwitchBank::TWO_CUP));
+    printf("11d. reset() drops state adopted from an unwired line OK\n");
   }
 
   // 12. heldMs tracks a press in flight — how a stuck line shows up in

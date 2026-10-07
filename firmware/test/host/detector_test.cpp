@@ -369,8 +369,11 @@ int main() {
 
     assert(rr->samples[0].inlet_pulses == 0);        // the window opens at zero
     uint16_t last = rr->samples[rr->sample_count - 1].inlet_pulses;
-    assert(last > 110 && last < 130);                // ~125 counted during the pour
-    assert(last < 700);                              // and NOT the 777 carried in
+    // ~125 flowed during the pour. The band is tight enough to also exclude
+    // the 777 carried in beforehand — an earlier version asserted `last < 700`
+    // on the next line as if that were an independent check; it was implied by
+    // this one and proved nothing.
+    assert(last > 110 && last < 130);
     for (uint16_t i = 1; i < rr->sample_count; i++)  // cumulative never goes backwards
       assert(rr->samples[i].inlet_pulses >= rr->samples[i - 1].inlet_pulses);
     printf("flowmeter windowing OK (%u pulses in-shot, 777 pre-shot excluded)\n", last);

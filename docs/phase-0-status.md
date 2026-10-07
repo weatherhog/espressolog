@@ -153,6 +153,68 @@ not what gates the perfboard, and `machine_event`'s schema still assumes
 ONE lever (`direction` is `CHECK IN ('down','up')`), which cannot express
 "lever B up" versus "lever A up". That migration is its own job.
 
+### The review round found three bugs the tests were shaped not to catch
+
+Recorded because the shape matters more than the bugs. All three passed a
+green suite, and in each case the test exercised the right code path without
+ever reaching the condition it claimed to check:
+
+- **A false reprogram alarm.** A line already high on the first poll had its
+  release timed from adoption, so an unwired (floating) line settling ten
+  seconds later printed `*** HELD PAST 2 s: STORED TIMER REPROGRAMMED ***` —
+  the loudest message in the firmware, asserting the machine had rewritten
+  its own stored timer, for a press nobody made. The test covering that exact
+  path ran 500 ms against a 2000 ms threshold. Fixed: an unwitnessed press is
+  marked `synthetic` and can never raise the alarm (cases 11b/11c).
+- **"A noise burst costs at most one spurious count"** — false. The filter
+  rate-limits, it does not reject: 50 ms of 10 kHz hash scores **25** counts,
+  about 10 ml of phantom water. The test iterated `t < 2000` against a 2000 µs
+  threshold, stopping one step short of the behaviour it was asserting about.
+  Comment corrected, test extended, and `status` now warns when glitches are a
+  large fraction of counts.
+- **`selftest` had no shot-state guard**, so it would inject ~500 phantom
+  pulses into a live record and busy-wait ~5 s, overflowing the 64-deep scale
+  queue. Invariant 2's harm by a route that is not a flash write.
+
+Also fixed in the same round: the flow-tap flag is now latched at pour start
+rather than read at shot close (it could stamp a record of placeholder zeros
+as "no water moved"); `pins` configures the display pads, which it did not, so
+it reported `clk=0 data=0` on a perfectly good J5 tap; `pollFlow()` moved above
+the sample drain; `switches on` resets state adopted from a floating line; and
+the ingest now version-guards the flag, so a v1 record cannot present it.
+
+### Three structural problems, deferred on purpose
+
+None of these is cleanup for 0.9.0; each is its own piece of work. Written
+down because the first one invalidates an argument the schema makes.
+
+1. **`002_ingest.sql` reasons from a safety net that does not exist.** Its
+   comment argues a decoder bug is survivable because "a decoder bug can be
+   repaired months later by re-parsing the archive". `ingest_record.raw` is
+   written at `store.go:148` and **read by nothing** — no re-parse path, no
+   tool, no endpoint. `firmware/test/host/replay` is not it (it reads a
+   `t_ms,weight_mg` CSV through the detector, not raw blobs). Either build the
+   re-parse path or stop reasoning from it.
+2. **The pulse windowing is irreversible.** Only the delta is stored; the
+   free-running base is never written anywhere. When 0c supplies the pump-start
+   edge, every shot recorded by 0.9.0 is permanently missing its pre-infusion
+   pulses — not recoverable from the database, and not from the raw record,
+   because the firmware zeroed them before writing. Carrying the absolute base
+   in the header (4 bytes, and a format bump) would make them re-windowable.
+   Arguably invariant 3's territory: the free-running count is the sensor
+   value, the windowed delta is derived from it plus a detection decision that
+   is itself still under revision.
+3. **Nothing can say a shot's count is bad.** `flow_dropped` and the glitch
+   rejects are free-running serial counters. By the firmware's own reasoning a
+   ring overflow means the line is carrying something that is not flow — i.e.
+   *this shot's count is invalid* — and the record has no bit to say so.
+   `SPOOL_FLAG_TRUNCATED` is the precedent for exactly that.
+
+**And one ordering rule with nothing enforcing it:** deploy the server before
+flashing 0.9.0. An older binary decodes a 0.9.0 record perfectly well — magic,
+version, header_len and CRC are all unchanged — and then silently binds NULL
+for every pulse, with its own suite green.
+
 ### The bench sequence, in order
 
 Everything here runs on the breadboard with the machine closed.
@@ -1116,7 +1178,7 @@ the display is back in temperature mode, so edges lost there cost nothing.
      **The 4.681 V prediction matching 4.69 V to 0.2 % is luckier than the
      instrument.** It confirms the *model*, not the precision of the two
      resistances — which is why the corner still carries ±1 % meter error
-     on them. **A 120 kΩ is not in stock** — the E12 kit on the
+     on them. **The 120 kΩ is in stock (2026-10-07)** — the E12 kit on the
      shopping list covers it.
 
      The earlier derivation here assumed a push-pull source and quoted

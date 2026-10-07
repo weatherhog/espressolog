@@ -3,11 +3,15 @@
 // ---------------------------------------------------------------- 0d: flow
 bool PulseCounter::feedEdge(uint32_t t_us) {
   if (have_last && (uint32_t)(t_us - last_us) < MIN_PERIOD_US) {
-    // Deliberately does NOT advance last_us. The window is measured from the
-    // last REAL pulse, so a noise burst costs at most one spurious count and
-    // can never push the window far enough to reject the next real pulse.
-    // Advancing it here would let a sustained train just under the threshold
-    // walk the window forever and swallow genuine flow.
+    // Deliberately does NOT advance last_us: the window is measured from the
+    // last REAL pulse, so noise can never push it far enough to reject the
+    // next genuine one. Advancing it here would let a sustained train just
+    // under the threshold walk the window forever and swallow real flow.
+    //
+    // The cost of that choice is that sustained noise IS counted, once per
+    // MIN_PERIOD_US — see the header. This branch rate-limits; it does not
+    // reject. The trade is deliberate: swallowing real flow is silent, and
+    // phantom counts show up next to a large `glitches()`.
     rejected++;
     return false;
   }
@@ -26,6 +30,13 @@ const char* SwitchBank::lineName(uint8_t line) {
     case HOT_WATER: return "water";
   }
   return "?";
+}
+
+void SwitchBank::reset() {
+  for (uint8_t i = 0; i < N_LINES; i++) st[i] = LineState{};
+  q_head = q_count = 0;
+  // `lost` deliberately survives: it is a lifetime fault counter, and zeroing
+  // it on every re-enable would hide a queue that overflows at every bring-up.
 }
 
 void SwitchBank::push(const Event& e) {
@@ -57,6 +68,7 @@ void SwitchBank::feed(uint32_t t_ms, const bool level[N_LINES]) {
       s.init = true;
       s.stable = s.cand = raw;
       s.cand_since = s.since_ms = t_ms;
+      s.adopted = raw;   // high at first sight = a press we did not witness
       continue;
     }
 
@@ -72,20 +84,25 @@ void SwitchBank::feed(uint32_t t_ms, const bool level[N_LINES]) {
     // confirmation, not the measurement, the same reason the shot detector
     // backdates t=0 to the flow crossing rather than to POUR_HOLD_MS later.
     uint32_t prev_since = s.since_ms;
+    bool     was_adopted = s.adopted;
     s.stable   = raw;
     s.since_ms = s.cand_since;
+    if (raw) s.adopted = false;   // a witnessed rising edge: real from here on
 
     if (!raw) {   // release completes a press
+      s.adopted = false;
       Event e = {};
       e.line          = i;
       e.pressed_at_ms = prev_since;
       e.duration_ms   = s.cand_since - prev_since;
+      e.synthetic     = was_adopted;
       // ">= 2 s" against CLAUDE.md's "> ~2 s": the threshold is the
       // machine's observed behaviour, not a spec, so a press landing within
       // milliseconds of it is ambiguous either way. Flagging the ambiguous
       // case is the safe direction — a reprogram that goes unflagged is a
       // silent change to the machine's stored timers.
-      e.reprogram     = e.duration_ms >= REPROGRAM_MS;
+      // Never on a press whose start was never observed — see Event::synthetic.
+      e.reprogram     = !was_adopted && e.duration_ms >= REPROGRAM_MS;
       push(e);
     }
   }

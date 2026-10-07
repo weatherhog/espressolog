@@ -219,7 +219,13 @@ CREATE TABLE shot_sample (
   shot_id      INTEGER NOT NULL REFERENCES shot(id) ON DELETE CASCADE,
   t_ms         INTEGER NOT NULL,
   weight_mg    INTEGER NOT NULL,
-  inlet_pulses INTEGER,                 -- cumulative, raw
+  -- Cumulative WITHIN THE SHOT (firmware windows it at pour confirmation),
+  -- raw pulses, never millilitres. NULL and 0 differ and the difference is
+  -- load-bearing: NULL means nothing was counting (no tap, or the tap was
+  -- off), 0 means the tap was live and no water had moved yet. The firmware
+  -- says which via the FLOW_TAP header flag; a reader that treats NULL as 0
+  -- invents measurements.
+  inlet_pulses INTEGER,
   pressure_cbar INTEGER,
   temp_dc      INTEGER,                 -- decidegrees C, from the display bus if sniffable
   PRIMARY KEY (shot_id, t_ms)

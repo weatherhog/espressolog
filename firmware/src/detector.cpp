@@ -143,11 +143,18 @@ void ShotDetector::appendSample(uint32_t t, int32_t w) {
 void ShotDetector::beginPour(uint32_t crossing_t) {
   st = ShotState::POURING;
   t0 = crossing_t;
-  // Set BEFORE the backdated replay below, so the pre-history samples store
-  // 0. Their true counts are not recoverable — the ring keeps weights, not
-  // pulses — and 0 is the one answer that cannot over-attribute flow to this
-  // shot. The window opens at first drip, not at pump-on; the pre-infusion
-  // pulses therefore sit outside it until 0c can supply the pump-start edge.
+  // Set BEFORE the backdated replay below, so those samples store 0. Their
+  // true counts are not recoverable — the ring keeps weights, not pulses —
+  // and 0 is the one answer that cannot over-attribute flow to this shot.
+  //
+  // Note this runs at pour CONFIRMATION while t0 is the crossing POUR_HOLD_MS
+  // earlier, so the window opens ~300 ms after t=0 rather than at it. Fixing
+  // that properly means carrying pulse counts in the ring alongside weights;
+  // it is deliberately not done, because the first-order gap is much larger:
+  // the window opens at FIRST DRIP, not at pump-on, so every pre-infusion
+  // pulse is outside it until 0c supplies the pump-start edge. Closing the
+  // 300 ms while seconds of pre-infusion go uncounted would be polish on the
+  // wrong axis. Both gaps close together when 0c lands.
   pulse_base = pulse_now;
   buf_count = 0;
   running_max = 0;

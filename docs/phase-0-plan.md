@@ -69,9 +69,16 @@ capture. If the protocol turns out to be opaque, abandon it — cost was
 
 Real shot boundaries and flush events from the machine itself.
 
-- **PB5 = 1Cup** (your up direction, 15 s clean)
-- **PB6 = 2Cup** (your down direction, 60 s shot)
-- Idle low, **high when pressed** (+5 V → R45 100 R → switch common)
+- **All four direction lines are tapped**, not two: there are TWO levers,
+  A (1Cup up / 2Cup down) and B (Hot Water up / Steam down), sharing J2
+  conductor 1 as their common. CLAUDE.md has the measured J2 pinout — note
+  **2Cup sits before 1Cup** on the harness.
+- Idle low, **high when pressed** (+5 V → R45 100 R → switch common),
+  measured 2026-10-04.
+- **The stored durations are not constants.** This machine's 1Cup is ~10.5 s,
+  not the 15 s default, because it was reprogrammed by hand; 2Cup's stored
+  value is unknown. An earlier version of these bullets quoted 15 s and 60 s
+  as properties of the model. They are user-modifiable state.
 
 Sense with a **resistor divider straight into an ESP32 GPIO**. Not an
 optocoupler: an opto LED wants milliamps, and a milliamp through the

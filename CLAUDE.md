@@ -884,26 +884,28 @@ reaches the machine is precisely what invariant 1 forbids. Keep GPIO8 off
 the perfboard's machine side and bring it to a header instead.
 
 GPIO4/5 are **not** free choices — the firmware already names them, and
-swapping clock for data decodes nothing. The other five are proposals:
-avoid 0/3/45/46 (strapping; GPIO3 is JTAG source select), 19/20 (native
-USB), 26–32 (flash) and **33–37 (octal PSRAM on this module)**. Confirm
-against the DevKitC-1 silkscreen before drilling — it is a clone board,
-and these came from the constraint list rather than a pin-by-pin check.
+swapping clock for data decodes nothing. **Nor are the other five any
+more** — 0.9.0 names all seven. They were chosen to avoid 0/3/45/46
+(strapping; GPIO3 is JTAG source select), 19/20 (native USB), 26–32 (flash)
+and **33–37 (octal PSRAM on this module)**, from the constraint list rather
+than a pin-by-pin check of the board in hand.
 
 Two things worth knowing about the chosen pins:
 
 - **GPIO15–18 emit a brief (~60 µs) low pulse at power-up**, and three of
-  the five proposals are in that range. Harmless here — through the 150 K
+  the five switch/flow pins are in that range. Harmless here — through the 150 K
   series leg the pin can sink at most ~33 µA from a line driven through
   R45's 100 Ω — but invariant 1 says every tap is "high-impedance **or
   passive**", and a pin that briefly drives is not passive. **The series
   resistor is what makes it so**, which is one more reason it belongs at
   the machine end and is not optional.
 - **GPIO11–18 share ADC2, unusable while Wi-Fi is up**, and 15/16/17 are
-  in that set. Fine as digital inputs. But both ADC1-capable proposals
-  (6, 7) are allocated, so **there is no ADC1 pin left for an analog
-  read** — which is acceptable only because 0e takes temperature from the
-  display bus, not from J3's NTC. If that ever changes, reserve one.
+  in that set. Fine as digital inputs. Both ADC1-capable pins in the budget
+  (6, 7) are allocated, and GPIO8 — also ADC1 — is now claimed by `selftest`.
+  **GPIO1, 2, 9 and 10 are ADC1 and unallocated**, so an analog read is still
+  possible; an earlier version of this line said "there is no ADC1 pin left",
+  which was wrong even before GPIO8 was claimed. It matters only if J3's NTC
+  is ever wanted, since 0e takes temperature from the display bus instead.
 
 **The 5 V rail is now MEASURED (2026-10-04), so the
 divider is sized against a reading rather than the schematic** — which is
@@ -1019,8 +1021,8 @@ nominally, and it fails on tolerance stacking — exactly the reason
 220 K / 220 K was rejected for 0c. Do not substitute it.
 
 The chosen divider disturbs the node by **126 mV (2.7 %)**, which leaves
-the machine's own reading unambiguously high. **A 120 kΩ is not in
-stock**; the E12 assortment kit on the shopping list covers it.
+the machine's own reading unambiguously high. **The 120 kΩ is in stock
+(2026-10-07)**; the E12 assortment kit is not needed.
 
 **Low side, which the high-side corner above does not cover:** the pin
 sits at **0.19 V** against an ESP32-S3 VIL of 0.25·VDD = **0.784 V** at a

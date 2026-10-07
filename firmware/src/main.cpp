@@ -173,6 +173,22 @@ static PulseCounter flow;
 static SwitchBank   switches;
 static bool flow_on = false, switches_on = false;
 
+// Whether the flow tap was live FOR THIS SHOT, latched when the pour starts.
+// Sampling flow_on at shot close instead (which is what 0.9.0 first did) gets
+// it wrong in both directions: `flow on` typed during SETTLING stamps a whole
+// record of placeholder zeros as a measurement meaning "no water moved", and
+// `flow off` mid-pour discards real counts. Any change to the tap while a shot
+// is in progress clears this, because a count that covers part of a shot is
+// not a measurement of that shot.
+static bool flow_tap_shot = false;
+
+// Staleness on millis(), not micros(). PulseCounter::sinceLastUs is exact but
+// wraps at ~71 min, so an overnight idle on a dead tap reported a few minutes
+// and read as healthy. millis() wraps at ~49.7 days, which covers every span
+// this diagnostic is asked about.
+static uint32_t flow_last_ms = 0;
+static bool     flow_ever = false;
+
 // Same producer/consumer split as the display bus: the ISR stamps and
 // enqueues, loop() is the only consumer, and the glitch filter runs in the
 // pure class so the logic that ships is the logic the host tests exercise.
@@ -208,18 +224,34 @@ static void flowSetEnabled(bool on) {
   flow_on = on;
 }
 
+static uint32_t sw_last_poll = 0, sw_max_gap = 0;
+
 static void switchesSetEnabled(bool on) {
   if (on == switches_on) return;
-  if (on) for (uint8_t i = 0; i < SwitchBank::N_LINES; i++) pinMode(SW_PINS[i], INPUT);
+  if (on) {
+    for (uint8_t i = 0; i < SwitchBank::N_LINES; i++) pinMode(SW_PINS[i], INPUT);
+    // The taps go in one at a time, so an earlier `switches on` against an
+    // unwired line may have adopted a floating high. Carrying that across the
+    // rewire made the first poll afterwards emit a release whose duration was
+    // the hours in between — see SwitchBank::reset().
+    switches.reset();
+    sw_last_poll = 0;   // the off period is not a loop() stall; see sw_max_gap
+  }
   switches_on = on;
 }
 
+// Called at the TOP of loop(), before the scale-sample drain that tags each
+// sample with flow.total(). Running it at the bottom (which is where 0.9.0
+// first put it) left every sample carrying the previous iteration's count —
+// invisible at a 5 ms loop, but after a stall the whole backlog of samples
+// gets one stale count and the next one jumps by the lot, which is a
+// staircase in the inlet curve made of loop artefacts rather than flow.
 static void pollFlow() {
   if (!flow_on) return;
   while (flow_tail != flow_head) {
     uint32_t t_us = flow_ring[flow_tail];
     flow_tail = (uint16_t)((flow_tail + 1) % FLOW_RING);
-    flow.feedEdge(t_us);
+    if (flow.feedEdge(t_us)) { flow_last_ms = millis(); flow_ever = true; }
   }
 }
 
@@ -233,17 +265,16 @@ static void pollFlow() {
 //
 // A missed press is also not silent: the display bus runs the machine's own
 // shot timer, so a brew with no switch event still leaves a trace.
-static uint32_t sw_last_poll = 0, sw_max_gap = 0;
-
 static void reportSwitch(const SwitchBank::Event& e) {
-  Serial.printf("# switch %s %lu ms%s\n", SwitchBank::lineName(e.line),
+  Serial.printf("# switch %s %lu ms%s%s\n", SwitchBank::lineName(e.line),
                 (unsigned long)e.duration_ms,
+                e.synthetic ? "  (press edge never seen — line was already high)" : "",
                 e.reprogram ? "   *** HELD PAST 2 s: STORED TIMER REPROGRAMMED ***" : "");
-  char frame[128];
+  char frame[160];
   snprintf(frame, sizeof(frame),
-           "{\"ev\":\"switch\",\"line\":\"%s\",\"t\":%lu,\"ms\":%lu,\"reprogram\":%d}",
+           "{\"ev\":\"switch\",\"line\":\"%s\",\"t\":%lu,\"ms\":%lu,\"reprogram\":%d,\"synthetic\":%d}",
            SwitchBank::lineName(e.line), (unsigned long)e.pressed_at_ms,
-           (unsigned long)e.duration_ms, e.reprogram ? 1 : 0);
+           (unsigned long)e.duration_ms, e.reprogram ? 1 : 0, e.synthetic ? 1 : 0);
   net.sendLive(frame);
 }
 
@@ -269,15 +300,39 @@ static void pollSwitches() {
 // a real shot, so a quiet undercount would look exactly like a slow pour.
 // Here the expected count is known exactly.
 //
-// GPIO8 is deliberately NOT one of the seven tap pins: it is ADC1, free in the
-// budget, and it is the only pin in this firmware that is ever an output. It
-// is returned to INPUT the moment the run ends.
+// GPIO8 is deliberately NOT one of the seven tap pins, and is the only pin
+// this firmware ever drives ON A MACHINE-FACING NET. (It is not the only
+// output full stop — updateLed() drives the onboard RGB LED on GPIO48, which
+// reaches nothing outside the DevKit. An earlier version of this comment said
+// "the only pin in this firmware that is ever an output", which was simply
+// false, and it was carrying the invariant-1 argument for this whole
+// command.) GPIO8 is returned to INPUT the moment the run ends.
 static constexpr uint8_t SELFTEST_PIN = 8;
 
 static void runSelfTest(Stream& out, uint32_t pulses, uint32_t hz) {
   if (!flow_on) { out.println("# selftest: run 'flow on' first"); return; }
-  if (hz < 1 || hz > 400) hz = 100;
+  // Refuse during a shot. This injects pulses straight into the count the
+  // detector is folding into live samples, AND busy-waits for seconds, which
+  // overflows the 64-deep scale queue (xQueueSend drops silently) and puts a
+  // hole in the curve. That is invariant 2's harm reached without a flash
+  // write, so the same quiet test the spool and net.tick use applies here.
+  ShotState st_now = detector.state();
+  if (st_now != ShotState::IDLE && st_now != ShotState::ARMED) {
+    out.println("# selftest: REFUSED — a shot is in progress."
+                " It would add phantom pulses to the record and stall the scale queue.");
+    return;
+  }
+  if (hz < 20 || hz > 400) hz = 100;   // floor at 20: see the duration cap below
   if (pulses < 1 || pulses > 5000) pulses = 500;
+  // Cap the blocking time. `selftest 500 1` — an easy argument-order slip —
+  // used to busy-wait 500 s with no watchdog to rescue it (the loop task runs
+  // on core 1 and idle-task WDT is not enabled there), leaving the board deaf
+  // to scales, spool and serial for eight minutes.
+  if (pulses / hz > 30) {
+    out.printf("# selftest: REFUSED — %lu pulses at %lu Hz would block loop() for %lu s (max 30).\n",
+               (unsigned long)pulses, (unsigned long)hz, (unsigned long)(pulses / hz));
+    return;
+  }
 
   out.println("# ***********************************************************");
   out.printf("# * SELFTEST DRIVES GPIO%u AS AN OUTPUT.\n", SELFTEST_PIN);
@@ -302,13 +357,17 @@ static void runSelfTest(Stream& out, uint32_t pulses, uint32_t hz) {
     delayMicroseconds(half);
     pollFlow();                         // drain as loop() would, not in a lump
   }
-  pinMode(SELFTEST_PIN, INPUT);         // high-impedance again, immediately
+  // Settle and drain while GPIO8 still HOLDS the line high. Releasing it first
+  // leaves GPIO6 floating against the jumper, and a floating CMOS input can
+  // oscillate — adding counts to the very delta this test is about to judge,
+  // and failing a run that passed.
   delay(20);
   pollFlow();
-
   uint32_t counted = flow.total() - c0;
   uint32_t glitch  = flow.glitches() - g0;
   uint32_t dropped = flow_dropped - d0;
+  pinMode(SELFTEST_PIN, INPUT);         // high-impedance again, measurement taken
+  sw_last_poll = 0;                     // this block was not a loop() stall
   out.printf("# selftest: expected %lu, counted %lu (%+ld), glitches %lu, ring drops %lu\n",
              (unsigned long)pulses, (unsigned long)counted,
              (long)counted - (long)pulses, (unsigned long)glitch, (unsigned long)dropped);
@@ -331,6 +390,19 @@ static void printPins(Stream& out) {
   // invariant 1; it is also the state these pins should be in regardless.
   pinMode(FLOW_PIN, INPUT);
   for (uint8_t i = 0; i < SwitchBank::N_LINES; i++) pinMode(SW_PINS[i], INPUT);
+  // The display pins too, but ONLY when the bus is off — they are configured
+  // by displaySetEnabled otherwise, and there is no reason to touch a pad with
+  // a live interrupt on it. Without this, `pins` printed clk=0 data=0 whenever
+  // the display tap was off: an ESP32-S3 pad comes out of reset with its input
+  // buffer disabled, so gpio_get_level() reads 0 regardless of pin voltage.
+  // CLAUDE.md records both J5 lines as idling HIGH on 4.7 K pull-ups, so that
+  // output read as a dead tap and would have sent the operator re-metering a
+  // working harness — from the command whose own comment calls it the first
+  // thing to run at the machine.
+  if (!display_on) {
+    pinMode(DISPLAY_CLK_PIN, INPUT);
+    pinMode(DISPLAY_DATA_PIN, INPUT);
+  }
   out.printf("# pins: flow/GPIO%u=%d | 1cup/GPIO%u=%d 2cup/GPIO%u=%d steam/GPIO%u=%d water/GPIO%u=%d",
              FLOW_PIN,  gpio_get_level((gpio_num_t)FLOW_PIN),
              SW_PINS[0], gpio_get_level((gpio_num_t)SW_PINS[0]),
@@ -349,12 +421,15 @@ static void printMachine(Stream& out) {
     out.println("# flow: off — 'flow on' once the J4 tap is wired."
                 " READ docs/phase-0-status.md FIRST: the 2026-10-03 tap faulted the machine (E01).");
   } else {
-    uint32_t idle_us = flow.sinceLastUs(micros());
     out.printf("# flow: pulses=%lu glitches=%lu dropped=%lu last=",
                (unsigned long)flow.total(), (unsigned long)flow.glitches(),
                (unsigned long)flow_dropped);
-    if (idle_us == UINT32_MAX) out.println("NEVER (nothing has pulsed since boot)");
-    else out.printf("%lu ms ago\n", (unsigned long)(idle_us / 1000));
+    if (!flow_ever) out.println("NEVER (nothing has pulsed since boot)");
+    else out.printf("%lu ms ago\n", (unsigned long)(millis() - flow_last_ms));
+    if (flow.glitches() > flow.total() / 4 && flow.glitches() > 20)
+      out.println("# flow: WARNING — glitches are a large fraction of counts."
+                  " The filter rate-limits noise, it does not reject it:"
+                  " the counted figure is suspect too.");
   }
   if (!switches_on) {
     out.println("# switches: off — 'switches on' once the J2 tap is wired");
@@ -364,7 +439,9 @@ static void printMachine(Stream& out) {
     for (uint8_t i = 0; i < SwitchBank::N_LINES; i++) {
       out.printf(" %s=%s", SwitchBank::lineName(i), switches.pressed(i) ? "PRESSED" : "idle");
       uint32_t held = switches.heldMs(i, now);
-      if (held > SwitchBank::REPROGRAM_MS) out.printf("(%lus!)", (unsigned long)(held / 1000));
+      // >=, matching the event path in machine_io.cpp — 0.9.0 had > here and
+      // >= there, so a line held at exactly 2000 ms disagreed with itself.
+      if (held >= SwitchBank::REPROGRAM_MS) out.printf("(%lus!)", (unsigned long)(held / 1000));
     }
     out.printf(" | worst poll gap=%lu ms, events dropped=%lu\n",
                (unsigned long)sw_max_gap, (unsigned long)switches.dropped());
@@ -404,7 +481,7 @@ static void handleShotComplete(const ShotResult& r) {
     Serial.println("# spool unavailable — record NOT persisted");
   } else {
     String path = spool.writeShot(r, scales.slotMac(ScaleRole::YIELD),
-                                  machine_ctx.context(), flow_on);
+                                  machine_ctx.context(), flow_tap_shot);
     if (path.length()) Serial.printf("# spooled %s%s\n", path.c_str(), r.valid ? "" : " (reject)");
   }
   Serial.println("# ---- end shot ----");
@@ -471,11 +548,21 @@ static void handleCommand(String line, Stream& out) {
     bool is_flow = (cmd == "flow");
     if (arg == "on" || arg == "off") {
       bool on = (arg == "on");
+      // Writing NVS is a flash write of tens of ms, which invariant 2 forbids
+      // during a shot, and toggling the flow tap mid-pour would make the
+      // record cover only part of the shot. Both reasons, one guard.
+      ShotState st_now = detector.state();
+      if (st_now == ShotState::POURING || st_now == ShotState::SETTLING) {
+        out.println("# refused — a shot is in progress (NVS write + partial count)");
+        printMachine(out);
+        return;
+      }
       Preferences p;
       p.begin("espl", false);
       p.putBool(is_flow ? "flow" : "switches", on);
       p.end();
-      if (is_flow) flowSetEnabled(on); else switchesSetEnabled(on);
+      if (is_flow) { flowSetEnabled(on); flow_tap_shot = false; }
+      else switchesSetEnabled(on);
     }
     printMachine(out);
   } else if (cmd == "pins") {
@@ -639,6 +726,10 @@ static void queueWeighing(uint8_t role, const WeighingDetector::Event& ev) {
 }
 
 void loop() {
+  // Before the drain below: every sample is tagged with flow.total(), so the
+  // count must be current as of this iteration, not the previous one.
+  pollFlow();
+
   ScaleSample smp;
   while (xQueueReceive(sample_queue, &smp, 0) == pdTRUE) {
     bool shot_active = detector.state() == ShotState::POURING
@@ -650,6 +741,8 @@ void loop() {
       bool complete = detector.feed(smp.t_ms, smp.weight_mg, flow.total());
       if (before != ShotState::POURING && detector.state() == ShotState::POURING) {
         machine_ctx.onPourStart(micros());
+        // Latch the tap state for THIS shot. See flow_tap_shot.
+        flow_tap_shot = flow_on;
         // The bus latch is per-boot; a new shot starts with a clean slate,
         // otherwise one tweak at the start of a session condemns every
         // shot after it.
@@ -702,7 +795,6 @@ void loop() {
     }
   }
 
-  pollFlow();
   pollSwitches();
   pollDisplay();
   machineContextPoll();

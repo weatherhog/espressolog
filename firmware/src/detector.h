@@ -135,11 +135,20 @@ public:
   int32_t baselineMg() const { return baseline; }
 
   // `inlet_pulses_total` is the FREE-RUNNING flowmeter count (0d). It is
-  // windowed here rather than by the caller: each sample stores the pulses
-  // since this shot's t=0, so the stored number shares the sample's own time
-  // base and can never inherit a hot-water draw pulled before the shot —
-  // which CLAUDE.md warns is exactly how tap water gets attributed to a
-  // brew. Still raw per invariant 3: a count, never millilitres.
+  // windowed here rather than by the caller, so the stored number shares the
+  // sample's own time base and can never inherit a hot-water draw pulled
+  // before the shot — which CLAUDE.md warns is exactly how tap water gets
+  // attributed to a brew. Still raw per invariant 3: a count, never ml.
+  //
+  // THE WINDOW OPENS AT POUR CONFIRMATION, NOT AT t=0. An earlier version of
+  // this comment claimed "pulses since this shot's t=0", which is not what
+  // the code does: t0 is backdated to the flow crossing, but pulse_base is
+  // captured in beginPour(), which runs POUR_HOLD_MS (300 ms) later. So each
+  // shot loses the 1-2 pulses that flowed in that window, and the backdated
+  // replay samples store 0 while water was genuinely moving. The error is
+  // small and one-directional (it never over-attributes), and it is dwarfed
+  // by the first-order gap below — but it is not zero, and the claim that it
+  // was zero was wrong.
   //
   // Defaulted so the scale-only path, the host tests and replay.cpp stay
   // untouched; 0 from a board with no flowmeter tap is indistinguishable

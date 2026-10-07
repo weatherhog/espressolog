@@ -361,12 +361,18 @@ should cover J5, J2 and J4, pending the seat check in section 1.
 Still outstanding: adhesive-lined heat-shrink, PTFE sleeving, perfboard,
 project box and cable gland — **~€30**.
 
-**No resistor gates anything any more.** 8.2 K, 15 K, 120 K, 220 K and 1 K
-are all in stock and 150 K is ordered; the E12 kit is Qty 0 and not
-needed. **0d is now gated on FIRMWARE, not parts** — nothing counts
-flowmeter pulses yet (`sample_t.inlet_pulses` exists and is always 0). The
-schema is ready (`001_init.sql:222`) and the divider is derived; what is
-missing is the interrupt counter.
+**0d's resistors are all in hand; 0c is still waiting on a delivery.**
+8.2 K, 15 K, 120 K, 220 K and 1 K are in stock; the E12 kit is Qty 0 and
+not needed. **The 150 K is ordered, not arrived** — an ordered resistor is
+not a resistor, and 0c's four series legs need it.
+
+**0d is no longer gated on firmware.** It was, for about an hour: the
+counter landed in 0.9.0 (`PulseCounter`, `flowIsr`, `sample_t.inlet_pulses`
+written through to SQLite), and this paragraph was rewritten in the very
+commit that falsified it — a reader who trusted it would skip the bench
+`selftest` and take the first shot's pulse count on faith. What gates 0d now
+is the bench run, the J4 refit (read `docs/phase-0-status.md` first: `E01`)
+and the calibration weigh-off.
 
 Add calipers (~€15) if you want the connector
 question settled by measurement rather than re-derived from photographs.

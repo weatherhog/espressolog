@@ -652,44 +652,131 @@ func TestIngestLeavesMachineSignalsNullWhenUnavailable(t *testing.T) {
 	}
 }
 
+// v2BuildFlowRecord assembles a genuine format-2 shot the way the firmware
+// does, with `n` samples whose inlet_pulses count 0,1,2,… and the flow-tap
+// flag set or clear. It goes through record.Decode, so the CRC and header
+// length are exercised rather than bypassed — the first version of the test
+// below mutated an already-decoded v1 fixture, which asserted the store's
+// behaviour on a v1-record-with-a-v2-flag: a combination no firmware has ever
+// written, and the one shape the version guard in insertShot now rejects.
+func v2BuildFlowRecord(t *testing.T, seq uint32, flowTap bool, n int) ([]byte, *record.Record) {
+	t.Helper()
+	h := record.Header{
+		Magic: record.Magic, FormatVersion: 2, RecordType: record.TypeShot,
+		HeaderLen: 113, BootID: 0xfeed0002, Seq: seq,
+		StartedAtUnixMs: uint64(time.Now().UnixMilli()), TimeValid: 1,
+		StopMs: 21000, YieldAtStopMg: 35800, YieldFinalMg: 36000,
+		PeakFlowMgps: 2100, MeanFlowMgps: 1710,
+		FlowWinStartMs: 3000, FlowWinEndMs: 18000,
+		BoilerTempStartDc: 950, MachineTimerDl: 210,
+		SampleCount: uint16(n),
+	}
+	if flowTap {
+		h.Flags |= record.FlagFlowTap
+	}
+	copy(h.DetectorVersion[:], "0a.6")
+	copy(h.FirmwareVersion[:], "0.9.0")
+
+	samples := make([]record.Sample, n)
+	for i := range samples {
+		samples[i] = record.Sample{
+			TMs: uint16(i * 100), WeightMg: int32(i * 150),
+			InletPulses: uint16(i), TempDc: record.TempNone,
+		}
+	}
+
+	var buf bytes.Buffer
+	if err := binary.Write(&buf, binary.LittleEndian, &h); err != nil {
+		t.Fatal(err)
+	}
+	if err := binary.Write(&buf, binary.LittleEndian, samples); err != nil {
+		t.Fatal(err)
+	}
+	raw := buf.Bytes()
+	for i := 113 - 4; i < 113; i++ {
+		raw[i] = 0
+	}
+	binary.LittleEndian.PutUint32(raw[113-4:], crc32.ChecksumIEEE(raw))
+
+	rec, err := record.Decode(raw)
+	if err != nil {
+		t.Fatalf("built record does not decode: %v", err)
+	}
+	return raw, rec
+}
+
 // 0d. inlet_pulses has existed in sample_t since 0a as a placeholder 0, so
-// the format version cannot say whether a zero is a measurement — only the
-// FlagFlowTap header bit can. Both directions are asserted here because the
+// the format version alone cannot say whether a zero is a measurement — only
+// the FlagFlowTap header bit can. Both directions are asserted because the
 // ingest previously bound a literal NULL for every record, which made a
 // correct-looking archive out of counted pulses and would not have failed a
 // single existing test.
 func TestIngestFlowPulses(t *testing.T) {
-	raw, _ := os.ReadFile("../record/testdata/shot-fw040-timevalid.bin")
-
-	// Tap off: a counted-looking value is still not a measurement.
-	recOff, _ := record.Decode(raw)
-	recOff.Samples[5].InletPulses = 42
 	st := openTestStore(t)
-	res, err := st.Ingest("aa:bb:cc:dd:ee:03", recOff, raw, time.Now())
+	dev := "aa:bb:cc:dd:ee:03"
+
+	// Tap off: the bytes are placeholders, whatever they happen to hold.
+	rawOff, recOff := v2BuildFlowRecord(t, 1, false, 12)
+	res, err := st.Ingest(dev, recOff, rawOff, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, samples, _ := st.Shot(res.ShotID)
-	if samples[5]["inlet_pulses"] != nil {
-		t.Errorf("tap off: pulses stored anyway: %v", samples[5]["inlet_pulses"])
+	_, samples, err := st.Shot(res.ShotID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, s := range samples {
+		if s["inlet_pulses"] != nil {
+			t.Fatalf("tap off: sample %d stored pulses anyway: %v", i, s["inlet_pulses"])
+		}
 	}
 
-	// Tap live: the same bytes are now a reading and must reach the archive.
-	recOn, _ := record.Decode(raw)
-	recOn.Header.Flags |= record.FlagFlowTap
-	recOn.Header.Seq++ // not a duplicate of the record above
-	for i := range recOn.Samples {
-		recOn.Samples[i].InletPulses = uint16(i)
-	}
-	res2, err := st.Ingest("aa:bb:cc:dd:ee:03", recOn, []byte("raw-flowtap"), time.Now())
+	// Tap live: the same field is now a reading and must reach the archive —
+	// including sample 0's legitimate zero, which must be 0 and not NULL.
+	rawOn, recOn := v2BuildFlowRecord(t, 2, true, 12)
+	res2, err := st.Ingest(dev, recOn, rawOn, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, samples2, _ := st.Shot(res2.ShotID)
-	if got := samples2[0]["inlet_pulses"]; got == nil || got.(int64) != 0 {
-		t.Errorf("tap live: first sample = %v, want 0", got)
+	_, samples2, err := st.Shot(res2.ShotID)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if got := samples2[7]["inlet_pulses"]; got == nil || got.(int64) != 7 {
-		t.Errorf("tap live: pulses not stored: %v", got)
+	for i, s := range samples2 {
+		got, ok := s["inlet_pulses"].(int64)
+		if !ok || got != int64(i) {
+			t.Fatalf("tap live: sample %d = %v, want %d", i, s["inlet_pulses"], i)
+		}
+	}
+}
+
+// A v1 record can only carry bit 4 through corruption or a hand-built blob,
+// and it must not be honoured: v1 predates the flowmeter entirely, so its
+// placeholder zeros would become a measurement meaning "no water moved".
+func TestIngestFlowPulsesRejectsV1Flag(t *testing.T) {
+	raw, err := os.ReadFile("../record/testdata/shot-fw040-timevalid.bin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec, err := record.Decode(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.Header.FormatVersion != 1 {
+		t.Fatalf("fixture is v%d; this test needs a v1 record", rec.Header.FormatVersion)
+	}
+	rec.Header.Flags |= record.FlagFlowTap
+
+	st := openTestStore(t)
+	res, err := st.Ingest("aa:bb:cc:dd:ee:03", rec, raw, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, samples, err := st.Shot(res.ShotID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if samples[0]["inlet_pulses"] != nil {
+		t.Errorf("v1 record honoured a v2 flag: %v", samples[0]["inlet_pulses"])
 	}
 }

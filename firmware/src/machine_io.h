@@ -47,6 +47,14 @@ public:
 
   // One timestamped falling edge, in ISR arrival order. Returns true if it
   // was counted, false if the glitch filter ate it.
+  //
+  // THE FILTER BOUNDS THE RATE OF FALSE COUNTS, NOT THEIR TOTAL. An earlier
+  // comment here claimed a noise burst "costs at most one spurious count";
+  // it does not. Sustained hash is counted once per MIN_PERIOD_US, so 50 ms
+  // of 10 kHz noise yields 25 phantom pulses — about 10 ml of phantom water
+  // at ~2400 pulses/L. Measured against this class, not reasoned about.
+  // `glitches()` is therefore a diagnostic, not a reassurance: a large
+  // rejected count means the counted one is suspect too.
   bool feedEdge(uint32_t t_us);
 
   // Free-running since boot. Never reset — a reset would make two readings
@@ -55,7 +63,12 @@ public:
   uint32_t glitches() const { return rejected; }
 
   // Microseconds since the last counted pulse; UINT32_MAX if none yet.
-  // Lets status tell "parked" apart from "tap is dead".
+  //
+  // ONLY MEANINGFUL UNDER ~71 MINUTES — micros() wraps there, so a longer
+  // idle reports elapsed-modulo-71-min and a dead tap can look freshly
+  // active. Do not use this to decide "parked" vs "dead" over long spans;
+  // main.cpp tracks that on millis() instead. Kept for the short-interval
+  // case, where it is exact.
   uint32_t sinceLastUs(uint32_t now_us) const {
     return have_last ? (uint32_t)(now_us - last_us) : UINT32_MAX;
   }
@@ -102,12 +115,29 @@ public:
     uint32_t pressed_at_ms;   // backdated to the first edge, not to confirmation
     uint32_t duration_ms;
     bool     reprogram;       // held long enough to have rewritten the timer
+    // The press edge was NEVER SEEN: the line already read high on the first
+    // poll, so pressed_at_ms is when this firmware started looking, not when
+    // anyone pressed anything, and duration_ms is a lower bound on nothing in
+    // particular. `reprogram` is forced false on these — it is the loudest
+    // message this firmware prints, it asserts the machine rewrote its own
+    // stored timer, and an unwitnessed press is not evidence of that.
+    // Without this, enabling `switches` against an unwired (floating) line
+    // and letting it settle minutes later printed a REPROGRAM alarm for a
+    // press nobody made. Found in review, reproduced, then fixed.
+    bool     synthetic;
   };
 
   // Raw levels for all four lines, true = pressed (line high). Timestamps
   // come from the caller so this stays host-testable and so a stretched
   // loop() distorts nothing it does not have to.
   void feed(uint32_t t_ms, const bool level[N_LINES]);
+
+  // Forget every line and drop any queued event. main.cpp calls this when the
+  // tap is enabled, because the taps go in one at a time: without it, state
+  // adopted from a floating line during an earlier `switches on` survives the
+  // `switches off`, and the first poll after rewiring emits a release whose
+  // duration is the hours in between.
+  void reset();
 
   // Drain completed events. More than one can complete in a single feed()
   // when both levers are released in the same tick, which a single
@@ -135,6 +165,7 @@ private:
     uint32_t cand_since = 0;      // when the candidate first appeared
     uint32_t since_ms = 0;        // when the current stable level began
     bool     init = false;
+    bool     adopted = false;     // stable==true was assumed at init, not witnessed
   };
   static constexpr size_t EV_N = 8;
 

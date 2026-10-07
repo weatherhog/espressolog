@@ -180,7 +180,8 @@ private:
   uint32_t last_step_at = 0;     // last >5 g single-sample step (cup moved); 0 = none
   uint32_t settle_until = 0;
   uint32_t pulse_now = 0;        // latest free-running flowmeter count
-  uint32_t pulse_base = 0;       // its value at t=0; samples store the difference
+  uint32_t pulse_base = 0;       // its value at pour CONFIRMATION (not t=0 —
+                                 // see feed()); samples store the difference
   int32_t  running_max = 0;
   int32_t  last_w = 0;
 

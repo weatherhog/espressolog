@@ -1178,8 +1178,8 @@ the display is back in temperature mode, so edges lost there cost nothing.
      **The 4.681 V prediction matching 4.69 V to 0.2 % is luckier than the
      instrument.** It confirms the *model*, not the precision of the two
      resistances — which is why the corner still carries ±1 % meter error
-     on them. **The 120 kΩ is in stock (2026-10-07)** — the E12 kit on the
-     shopping list covers it.
+     on them. **The 120 kΩ is in stock (2026-10-07)**; the E12 assortment
+     kit is not needed.
 
      The earlier derivation here assumed a push-pull source and quoted
      5 × 15/23.2 = 3.23 V. That was the wrong model, and the right one was

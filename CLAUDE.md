@@ -1212,13 +1212,24 @@ comment claimed it was only doing so for v1 — so counted pulses would have
 been dropped at ingest with a green test suite. Fixed 2026-10-07, with a
 test that fails against the old behaviour.
 
-**Pulses are windowed at the shot's own `t=0`**, not free-running, so the
-number shares the sample's time base and a hot-water draw pulled beforehand
-cannot be attributed to the brew. Backdated pre-crossing samples store 0 —
-their true counts are not recoverable, the detector's ring holds weights
-rather than pulses, and 0 is the one answer that cannot over-attribute.
-Note the window opens at **first drip, not pump-on**, so pre-infusion
-pulses sit outside it until 0c supplies the pump-start edge.
+**Pulses are windowed, not free-running**, so the number shares the sample's
+time base and a hot-water draw pulled beforehand cannot be attributed to the
+brew. Backdated replay samples store 0 — their true counts are not
+recoverable, the detector's ring holds weights rather than pulses, and 0 is
+the one answer that cannot over-attribute.
+
+**The window opens at POUR CONFIRMATION, and that is two gaps, not one.** An
+earlier version of this paragraph said "windowed at the shot's own `t=0`",
+which is not what the code does:
+
+| gap | size | why |
+|---|---|---|
+| `t0` → confirmation | ~300 ms (`POUR_HOLD_MS`) | `t0` is backdated to the flow crossing, but `pulse_base` is captured in `beginPour()`, which runs after the hold |
+| pump-on → first drip | seconds | the window opens at first drip; every pre-infusion pulse is outside it |
+
+The second dwarfs the first, which is why neither is fixed in code yet —
+closing 300 ms while seconds go uncounted is polish on the wrong axis. Both
+close together when **0c** supplies the pump-start edge.
 
 350 samples ≈ 3.5 KB per shot. One file per shot, header + samples.
 Config (WiFi, endpoint, flow calibration, current bean, grind epoch) in

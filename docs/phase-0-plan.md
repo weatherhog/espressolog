@@ -145,8 +145,9 @@ so nobody re-derives them:
 made the machine fault with `E01` mid-cycle — a hard invariant-1 violation.
 
 **Firmware DONE (0.9.0, 2026-10-07); the tap is NOT yet refitted.** Falling
-edges on GPIO6 into a ring, a 2 ms glitch floor, and a count windowed at the
-shot's own t=0 so a hot-water draw cannot be attributed to a brew. Off by
+edges on GPIO6 into a ring, a 2 ms glitch floor, and a count windowed to the
+shot so a hot-water draw cannot be attributed to a brew (the window opens at
+pour confirmation — CLAUDE.md has the two gaps that leaves). Off by
 default behind `flow on`; `selftest` drives a known pulse train from GPIO8
 so the counting path is provable on the bench without the machine.
 

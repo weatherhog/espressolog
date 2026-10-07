@@ -62,6 +62,14 @@ public:
   uint32_t total() const { return counted; }
   uint32_t glitches() const { return rejected; }
 
+  // Forget the diagnostics, keep the running total. main.cpp calls this when
+  // the tap is enabled: `flow on` against an unwired GPIO6 lets a floating
+  // input oscillate, and the counts it racks up are lifetime figures that then
+  // describe a tap that no longer exists. `counted` is deliberately NOT reset —
+  // the detector takes a difference across it, and a discontinuity there would
+  // corrupt a shot rather than merely mislead a reader.
+  void resetDiagnostics() { rejected = 0; }
+
   // Microseconds since the last counted pulse; UINT32_MAX if none yet.
   //
   // ONLY MEANINGFUL UNDER ~71 MINUTES — micros() wraps there, so a longer
@@ -146,6 +154,14 @@ public:
 
   bool pressed(uint8_t line) const {
     return line < N_LINES && st[line].stable;
+  }
+  // True when the current press was never witnessed starting — the line
+  // already read high on the first poll. Callers must not present such a
+  // press as evidence of anything: `status` used to print "steam=PRESSED(10s!)"
+  // for a floating line, which is the status-pane form of the REPROGRAM alarm
+  // the event path refuses to raise, from the same evidence (none).
+  bool pressedSynthetic(uint8_t line) const {
+    return line < N_LINES && st[line].stable && st[line].adopted;
   }
   // How long the current press has been held, 0 if not pressed. Lets status
   // show a stuck line; nothing here manufactures an event for one, because

@@ -292,6 +292,49 @@ int main() {
     printf("11d. reset() drops state adopted from an unwired line OK\n");
   }
 
+  // 11e. THE ORDERING 11d CANNOT REACH, and the one that actually happens.
+  //      11d drops the line low before the next poll, so reset() never has to
+  //      RE-adopt — which left it blind to a reset() that cleared state but
+  //      kept `init`. That implementation would mark the next release as
+  //      WITNESSED and raise the REPROGRAM alarm, i.e. re-introduce the first
+  //      bug through the fix for the second, with 11d still green. Verified by
+  //      mutation: 11d alone passes against exactly that.
+  //
+  //      The real sequence: `switches off`, the line is STILL floating high,
+  //      `switches on`.
+  {
+    Bench b;
+    b.lv[SwitchBank::TWO_CUP] = true;
+    b.run(3000);
+    b.sb.reset();                            // off … on, line never moved
+    b.run(5000);                             // still high, well past 2 s
+    b.lv[SwitchBank::TWO_CUP] = false;
+    b.run(500);
+    assert(b.drain(ev, 8) == 1);
+    assert(ev[0].synthetic);                 // re-adopted, so still unwitnessed
+    assert(!ev[0].reprogram);                // and still no alarm
+    printf("11e. reset() RE-adopts a line that is still high OK\n");
+  }
+
+  // 11f. reset() drops queued events but keeps `lost`. Both halves are
+  //      behavioural claims made in machine_io.cpp and neither was pinned:
+  //      mutations removing the queue clear, and zeroing `lost`, both left
+  //      the suite green. `lost` is a lifetime fault counter — zeroing it on
+  //      every re-enable would hide a queue that overflows at every bring-up.
+  {
+    Bench b;
+    b.run(100);
+    for (int i = 0; i < 10; i++) {           // 10 presses into a queue of 8
+      b.lv[SwitchBank::ONE_CUP] = true;  b.run(50);
+      b.lv[SwitchBank::ONE_CUP] = false; b.run(50);
+    }
+    assert(b.sb.dropped() == 2);
+    b.sb.reset();
+    assert(b.drain(ev, 8) == 0);             // queued events are gone
+    assert(b.sb.dropped() == 2);             // the fault count is NOT
+    printf("11f. reset() clears the queue and keeps the drop count OK\n");
+  }
+
   // 12. heldMs tracks a press in flight — how a stuck line shows up in
   //     status. Nothing synthesises a release for one.
   {

@@ -177,9 +177,13 @@ static bool flow_on = false, switches_on = false;
 // Sampling flow_on at shot close instead (which is what 0.9.0 first did) gets
 // it wrong in both directions: `flow on` typed during SETTLING stamps a whole
 // record of placeholder zeros as a measurement meaning "no water moved", and
-// `flow off` mid-pour discards real counts. Any change to the tap while a shot
-// is in progress clears this, because a count that covers part of a shot is
-// not a measurement of that shot.
+// `flow off` mid-pour discards real counts.
+//
+// The command handler REFUSES while POURING or SETTLING, so the tap cannot in
+// fact change mid-shot; the clear there is belt-and-braces for a future caller
+// that does not go through the CLI. An earlier version of this comment said
+// the clear was what made mid-shot changes safe, crediting a safety property
+// to the wrong mechanism.
 static bool flow_tap_shot = false;
 
 // Staleness on millis(), not micros(). PulseCounter::sinceLastUs is exact but
@@ -217,6 +221,15 @@ static void flowSetEnabled(bool on) {
   if (on) {
     pinMode(FLOW_PIN, INPUT);
     flow_head = flow_tail = 0;
+    // Same rationale as switches.reset(): the taps go in one at a time, and
+    // counts racked up by an earlier `flow on` against a floating pin describe
+    // a tap that is no longer there. Without this the glitch warning below
+    // latches on for ~16 shots, and `flow_ever` never lets status print
+    // "NEVER" again — the one message that identifies a dead, freshly-refitted
+    // J4. flow_dropped is cleared for the same reason.
+    flow.resetDiagnostics();
+    flow_dropped = 0;
+    flow_ever = false;
     attachInterrupt(digitalPinToInterrupt(FLOW_PIN), flowIsr, FALLING);
   } else {
     detachInterrupt(digitalPinToInterrupt(FLOW_PIN));
@@ -241,11 +254,15 @@ static void switchesSetEnabled(bool on) {
 }
 
 // Called at the TOP of loop(), before the scale-sample drain that tags each
-// sample with flow.total(). Running it at the bottom (which is where 0.9.0
-// first put it) left every sample carrying the previous iteration's count —
-// invisible at a 5 ms loop, but after a stall the whole backlog of samples
-// gets one stale count and the next one jumps by the lot, which is a
-// staircase in the inlet curve made of loop artefacts rather than flow.
+// sample with flow.total(). Running it at the bottom (where 0.9.0 first put
+// it) left every sample carrying the PREVIOUS iteration's count; now it
+// carries this one's.
+//
+// Note what this does NOT fix: a backlog drained in a single iteration still
+// shares one flow.total() snapshot, so a stall still yields a plateau and
+// then a jump. The move relocates that discontinuity from after the backlog
+// to before it; it does not shrink it. An earlier version of this comment
+// claimed the staircase was the thing being fixed, which overstated it.
 static void pollFlow() {
   if (!flow_on) return;
   while (flow_tail != flow_head) {
@@ -316,20 +333,31 @@ static void runSelfTest(Stream& out, uint32_t pulses, uint32_t hz) {
   // overflows the 64-deep scale queue (xQueueSend drops silently) and puts a
   // hole in the curve. That is invariant 2's harm reached without a flash
   // write, so the same quiet test the spool and net.tick use applies here.
-  ShotState st_now = detector.state();
-  if (st_now != ShotState::IDLE && st_now != ShotState::ARMED) {
-    out.println("# selftest: REFUSED — a shot is in progress."
-                " It would add phantom pulses to the record and stall the scale queue.");
+  // REFUSE UNLESS IDLE. An earlier version allowed ARMED, which is the worst
+  // state to allow: ARMED is cup-on-scale, tared, about to pull. This blocks
+  // loop() for seconds, the 64-deep sample queue holds ~3.2 s at 2x10 Hz and
+  // xQueueSend drops silently, so a pour started during the run arrives as a
+  // stale burst across a multi-second hole — the detector either misses the
+  // onset or confirms it from a backlog with a fabricated flow rate. That is
+  // invariant 6 reached by the same non-flash route the shot guard was added
+  // for, and checking only at entry did not cover it.
+  if (detector.state() != ShotState::IDLE) {
+    out.println("# selftest: REFUSED — the scale is armed or a shot is running."
+                " Take the cup off the scale first.");
     return;
   }
-  if (hz < 20 || hz > 400) hz = 100;   // floor at 20: see the duration cap below
   if (pulses < 1 || pulses > 5000) pulses = 500;
-  // Cap the blocking time. `selftest 500 1` — an easy argument-order slip —
-  // used to busy-wait 500 s with no watchdog to rescue it (the loop task runs
-  // on core 1 and idle-task WDT is not enabled there), leaving the board deaf
-  // to scales, spool and serial for eight minutes.
+  // Cap the blocking time rather than silently substituting a rate. An
+  // earlier version floored hz at 20 FIRST, which quietly rewrote the very
+  // example this comment cites — `selftest 500 1`, an easy argument-order
+  // slip — into a 5 s run at 100 Hz, and also turned `selftest 100 5` (5 Hz,
+  // the realistic espresso rate and the most useful bench case) into
+  // something else. Refusing and saying why is strictly better than running
+  // a different test than the one asked for.
+  if (hz < 1 || hz > 400) hz = 100;
   if (pulses / hz > 30) {
-    out.printf("# selftest: REFUSED — %lu pulses at %lu Hz would block loop() for %lu s (max 30).\n",
+    out.printf("# selftest: REFUSED — %lu pulses at %lu Hz blocks loop() for ~%lu s (max 30)."
+               " Try fewer pulses or a higher rate.\n",
                (unsigned long)pulses, (unsigned long)hz, (unsigned long)(pulses / hz));
     return;
   }
@@ -357,6 +385,18 @@ static void runSelfTest(Stream& out, uint32_t pulses, uint32_t hz) {
     delayMicroseconds(half);
     pollFlow();                         // drain as loop() would, not in a lump
   }
+  // NO mid-run abort here, deliberately. An attempt at one re-checked
+  // detector.state() inside this loop — it could never have fired:
+  // detector.feed() is reached only from the sample drain in loop(), which is
+  // exactly what this busy-wait is blocking, so the state is frozen for the
+  // duration. scales.tick() only enqueues. A guard that cannot reach its own
+  // condition is worse than no guard, because it reads as coverage.
+  //
+  // What actually bounds the risk is the IDLE-only entry check plus the 30 s
+  // cap: a shot cannot begin without weight on the scale, and weight on the
+  // scale means not IDLE. The residual case — cup placed AND pour started
+  // entirely within the run — is left open and is the reason this stays a
+  // deliberate bench command rather than anything automatic.
   // Settle and drain while GPIO8 still HOLDS the line high. Releasing it first
   // leaves GPIO6 floating against the jumper, and a floating CMOS input can
   // oscillate — adding counts to the very delta this test is about to judge,
@@ -437,11 +477,18 @@ static void printMachine(Stream& out) {
     uint32_t now = millis();
     out.print("# switches:");
     for (uint8_t i = 0; i < SwitchBank::N_LINES; i++) {
-      out.printf(" %s=%s", SwitchBank::lineName(i), switches.pressed(i) ? "PRESSED" : "idle");
+      bool syn = switches.pressedSynthetic(i);
+      out.printf(" %s=%s", SwitchBank::lineName(i),
+                 switches.pressed(i) ? (syn ? "high?" : "PRESSED") : "idle");
       uint32_t held = switches.heldMs(i, now);
       // >=, matching the event path in machine_io.cpp — 0.9.0 had > here and
       // >= there, so a line held at exactly 2000 ms disagreed with itself.
-      if (held >= SwitchBank::REPROGRAM_MS) out.printf("(%lus!)", (unsigned long)(held / 1000));
+      // Suppressed on an unwitnessed press for the same reason the event path
+      // suppresses the REPROGRAM alarm: "(3600s!)" on a line that merely read
+      // high at boot sends the operator hunting a stuck lever. `high?` says
+      // what was actually observed.
+      if (!syn && held >= SwitchBank::REPROGRAM_MS)
+        out.printf("(%lus!)", (unsigned long)(held / 1000));
     }
     out.printf(" | worst poll gap=%lu ms, events dropped=%lu\n",
                (unsigned long)sw_max_gap, (unsigned long)switches.dropped());
@@ -551,6 +598,11 @@ static void handleCommand(String line, Stream& out) {
       // Writing NVS is a flash write of tens of ms, which invariant 2 forbids
       // during a shot, and toggling the flow tap mid-pour would make the
       // record cover only part of the shot. Both reasons, one guard.
+      //
+      // The rule is general but the enforcement is not: `display on|off`,
+      // `set`, `rm`, `fake` and `dump` all touch flash with no such check.
+      // Pre-existing, not introduced here, and not fixed here either — but
+      // this comment should not read as if the rule were enforced everywhere.
       ShotState st_now = detector.state();
       if (st_now == ShotState::POURING || st_now == ShotState::SETTLING) {
         out.println("# refused — a shot is in progress (NVS write + partial count)");

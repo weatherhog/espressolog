@@ -87,7 +87,12 @@ void SwitchBank::feed(uint32_t t_ms, const bool level[N_LINES]) {
     bool     was_adopted = s.adopted;
     s.stable   = raw;
     s.since_ms = s.cand_since;
-    if (raw) s.adopted = false;   // a witnessed rising edge: real from here on
+    // No `if (raw) s.adopted = false;` here: `adopted` is set only at init,
+    // alongside `stable = true`, and cleared on release — so it implies
+    // `stable == true`, and this branch is only reached when `raw != stable`.
+    // A rising edge therefore always finds `adopted` already false. An earlier
+    // version cleared it here anyway; deleting that line left the suite green,
+    // which is the test that it was dead.
 
     if (!raw) {   // release completes a press
       s.adopted = false;

@@ -677,11 +677,19 @@ func v2BuildFlowRecord(t *testing.T, seq uint32, flowTap bool, n int) ([]byte, *
 	copy(h.DetectorVersion[:], "0a.6")
 	copy(h.FirmwareVersion[:], "0.9.0")
 
+	// Deliberately NOT co-linear with TMs or WeightMg. An earlier version used
+	// InletPulses: i against TMs: i*100, so binding smp.TMs/100 by mistake read
+	// back identically and the test passed — it could not tell which field the
+	// ingest had actually stored.
+	pulses := []uint16{0, 3, 3, 7, 19, 19, 20, 41, 97, 98, 250, 251}
+	if n > len(pulses) {
+		t.Fatalf("v2BuildFlowRecord: n=%d exceeds the %d fixture values", n, len(pulses))
+	}
 	samples := make([]record.Sample, n)
 	for i := range samples {
 		samples[i] = record.Sample{
 			TMs: uint16(i * 100), WeightMg: int32(i * 150),
-			InletPulses: uint16(i), TempDc: record.TempNone,
+			InletPulses: pulses[i], TempDc: record.TempNone,
 		}
 	}
 
@@ -742,10 +750,11 @@ func TestIngestFlowPulses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	want := []int64{0, 3, 3, 7, 19, 19, 20, 41, 97, 98, 250, 251}
 	for i, s := range samples2 {
 		got, ok := s["inlet_pulses"].(int64)
-		if !ok || got != int64(i) {
-			t.Fatalf("tap live: sample %d = %v, want %d", i, s["inlet_pulses"], i)
+		if !ok || got != want[i] {
+			t.Fatalf("tap live: sample %d = %v, want %d", i, s["inlet_pulses"], want[i])
 		}
 	}
 }

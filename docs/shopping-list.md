@@ -260,12 +260,13 @@ tighter than they need to be for the sake of a few euro.
 |---|---|---|
 | 8.2 kΩ | 10 | 0e T-piece, series leg (**×3** — `ESD1`, `ESD4`, `Disp-P4`); 0b analyser tap (×3). **Bought: 25.** |
 | 15 kΩ | 10 | 0e divider, ground leg, at the box (**×2** — `Disp-P4` stays unterminated). **In stock.** |
-| 150 kΩ | 10 | 0c switch divider, series leg (**×4** — all four J2 lines) — **already ordered** |
+| 150 kΩ | 10 | 0c switch divider, series leg (**×4** — all four J2 lines). **In stock 2026-10-07.** |
 | 220 kΩ | 10 | Ground leg: **×4 at J2** (1Cup, 2Cup, Steam, Water) **+ ×1 at J4** = **5**. **In stock.** |
 | 1 kΩ | 10 | 0d flowmeter, **at PA8/PA9 only** — the board side, after its own conditioning. **Never at J4.** **In stock.** |
-| 8.2 kΩ (J4) | — | **J4 ANALYSER tap only: 8.2 kΩ, one channel, `#` only, no shunt.** The ESP32 tap at J4 is 120 K + 220 K — see the 0d entry in `docs/phase-0-status.md`. Covered by the 8.2 kΩ bag above. |
-| **120 kΩ** | 10 | 0d J4 divider, series leg (**×1**). **In stock 2026-10-07.** |
-| E12 assortment kit, 1/4 W | 0 | **Not required.** It covers no named requirement, and cheap kits are 5 % where the rows above are 1 %. Both dividers survive 5 % (J4 +96 mV, 0c +110 mV), but a €2 bag of 1 % 120 kΩ is cheaper and better. |
+| 8.2 kΩ (J4) | — | **J4 ANALYSER tap only: 8.2 kΩ, one channel, `#` only, no shunt.** The ESP32 tap at J4 is **100 K + 220 K** — see the 0d entry in `docs/phase-0-status.md`. Covered by the 8.2 kΩ bag above. |
+| **100 kΩ** | 10 | **0d J4 divider, series leg (×1)** — the chosen value since 2026-10-08. **In stock.** |
+| 120 kΩ | 0 | **NOT in stock.** Recorded as in stock on 2026-10-07 from a verbal report; the bag held 100 K and 150 K. Superseded by 100 kΩ, which has ~double the margin — not needed. |
+| E12 assortment kit, 1/4 W | 0 | **Not required.** It covers no named requirement, and cheap kits are 5 % where the rows above are 1 %. Both dividers survive 5 % (J4 +96 mV, 0c +110 mV), and 100 kΩ is already in stock. |
 
 Three of these are load-bearing — 0c is in CLAUDE.md, 0e and 0d are
 worked out in `docs/phase-0-status.md`. Repeated here because getting any
@@ -277,12 +278,12 @@ because the machine caught it:
   against an ESP32-S3 VIH of 2.475 V. Supply tolerance alone eats that
   margin and a pressed button reads as not pressed.
 - **0d's J4 ANALYSER tap is 8.2 K series, one channel, `#` only, ground
-  to `T` direct.** The **ESP32 divider at J4 is 120 K + 220 K → 2.95 V**,
+  to `T` direct.** The **ESP32 divider at J4 is 100 K + 220 K → 3.13 V**,
   solved 2026-10-04 from a measured 10.04 kΩ pull-up and 147.4 kΩ
   pull-down. **Do NOT substitute 150 K / 220 K** — it is in stock, it
   looks fine at 2.71 V, and it fails on tolerance stacking exactly as
   220 K / 220 K does for 0c. CLAUDE.md's conditioning table gives 1 K for the
-  *board* side at PA8/PA9 and 120 K + 220 K at the connector; the `+`
+  *board* side at PA8/PA9 and 100 K + 220 K at the connector; the `+`
   rule sits in its own block beneath it.
 - **`+` is read-only, high-impedance meter only.** No input clamp — no
   analyser, no GPIO, no divider — **and nothing that sources or sinks
@@ -361,10 +362,18 @@ should cover J5, J2 and J4, pending the seat check in section 1.
 Still outstanding: adhesive-lined heat-shrink, PTFE sleeving, perfboard,
 project box and cable gland — **~€30**.
 
-**0d's resistors are all in hand; 0c is still waiting on a delivery.**
-8.2 K, 15 K, 120 K, 220 K and 1 K are in stock; the E12 kit is Qty 0 and
-not needed. **The 150 K is ordered, not arrived** — an ordered resistor is
-not a resistor, and 0c's four series legs need it.
+**Every resistor this project needs is now in hand (2026-10-08).** 8.2 K,
+15 K, 100 K, 150 K, 220 K and 1 K are all in stock; the E12 kit is Qty 0 and
+not needed. No milestone is gated on a part.
+
+**Note what changed:** 0d was specified as 120 K, which this list claimed was
+in stock on 2026-10-07. It was not — the bag held 100 K and 150 K. 0d now
+uses **100 K**, which is better here (see CLAUDE.md), and **150 K must not be
+substituted at J4** — it fails at −45 mV.
+
+What is left to buy is for the **perfboard stage, not the bench**: perfboard,
+project box, cable gland, adhesive-lined heat-shrink and PTFE sleeving, ~€30.
+The whole breadboard bench sequence can be done without any of it.
 
 **0d is no longer gated on firmware.** It was, for about an hour: the
 counter landed in 0.9.0 (`PulseCounter`, `flowIsr`, `sample_t.inlet_pulses`

@@ -216,8 +216,20 @@ static void IRAM_ATTR flowIsr() {
   flow_head = nxt;
 }
 
+// IDEMPOTENT ON PURPOSE: `flow on` while already on still zeroes the
+// diagnostics, because that is how an operator gets a clean slate between
+// bench runs. 0.9.0 opened with `if (on == flow_on) return;`, so the reset
+// never ran in the one case anyone would type it for — the documented clean
+// slate silently did nothing and a stale glitch count read as current.
+// Found at the bench 2026-10-08 while calibrating, after `flow on` left
+// glitches=1384 standing and the next reading was interpreted against it.
+//
+// The interrupt is detached before the ring is zeroed, in both paths. Zeroing
+// flow_head/flow_tail while the ISR can still fire is a race that would drop
+// or duplicate an edge, and re-running this on a live tap is now a reachable
+// case rather than a hypothetical one.
 static void flowSetEnabled(bool on) {
-  if (on == flow_on) return;
+  if (flow_on) detachInterrupt(digitalPinToInterrupt(FLOW_PIN));
   if (on) {
     pinMode(FLOW_PIN, INPUT);
     flow_head = flow_tail = 0;
@@ -231,16 +243,16 @@ static void flowSetEnabled(bool on) {
     flow_dropped = 0;
     flow_ever = false;
     attachInterrupt(digitalPinToInterrupt(FLOW_PIN), flowIsr, FALLING);
-  } else {
-    detachInterrupt(digitalPinToInterrupt(FLOW_PIN));
   }
   flow_on = on;
 }
 
 static uint32_t sw_last_poll = 0, sw_max_gap = 0;
 
+// Idempotent for the same reason as flowSetEnabled above: re-running
+// `switches on` is how state adopted from a floating line gets dropped, and
+// returning early when already on made that a no-op.
 static void switchesSetEnabled(bool on) {
-  if (on == switches_on) return;
   if (on) {
     for (uint8_t i = 0; i < SwitchBank::N_LINES; i++) pinMode(SW_PINS[i], INPUT);
     // The taps go in one at a time, so an earlier `switches on` against an

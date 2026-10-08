@@ -133,8 +133,9 @@ flagged under 0c above. CLAUDE.md is the source of truth. For the record,
 so nobody re-derives them:
 
 - *"Tap the conditioned side (PA8/PA9), not the raw sensor at J4."* The tap
-  is **at J4**, on the raw open-collector output, through a **120 K + 220 K**
-  divider derived against the measured 9.4 kΩ node. 1 K series is correct
+  is **at J4**, on the raw open-collector output, through a **100 K + 220 K**
+  divider derived against the measured 9.4 kΩ node (120 K until 2026-10-08;
+  100 K has about double the margin and is what is in stock). 1 K series is correct
   only on the *board* side of the board's own conditioning; at J4 it would
   feed a 4.69 V sensor output into a 3.3 V GPIO.
 - *"Two nets — possibly quadrature, possibly two-meter support. Log both."*
@@ -152,9 +153,11 @@ default behind `flow on`; `selftest` drives a known pulse train from GPIO8
 so the counting path is provable on the bench without the machine.
 
 **Calibrate empirically** — run water into a jug on the Bookoo, count pulses,
-divide. The ~2400 pulses/L figure is a search summary of a datasheet nobody
-could retrieve, with sources spread 2386–2494; it is a sanity check, not a
-constant. Store raw pulses and the calibration separately
+divide. **DONE 2026-10-08: ~5900 pulses/L measured** over two weighed
+flushes (both in `flowmeter_calibration`), which is 2.5× the ~2400 search
+summary — that figure came from a datasheet nobody could retrieve and is now
+folklore. The measurement is provisional until the analyser confirms the
+counts are pulses rather than ringing; CLAUDE.md has the reasoning. Store raw pulses and the calibration separately
 (`flowmeter_calibration`), never the converted millilitres.
 
 ### 0e — Integrate temperature

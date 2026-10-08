@@ -54,8 +54,8 @@ Pin map, from the traced schematic:
 |---|---|---|
 | 1Cup | PB5 | up direction of the switch. 15 s is the *default*; **this machine is set to ~10.5 s** — the operator reprogrammed it (2026-10-04). See below: these durations are user-modifiable state, not constants. |
 | 2Cup | PB6 | down direction. 60 s is the *default*; **this machine's stored value is UNKNOWN** — the 2026-10-03 capture was stopped by hand at 21.0 s, so it says nothing about the stored duration. User-modifiable, like 1Cup. |
-| Water | PB4 | **WIRED** (continuity, 2026-10-04). **Lever B up runs the pump, water exits the steam valve — observed.** Conductor mapping is **plug inspection**, as for Steam. Whether that water passes the flowmeter is **unverified** — see 0d. |
-| Steam | PA10 | **WIRED** (continuity, 2026-10-04). **Lever B down drives the heater to 165 °C — observed.** But *which conductor* carries Steam is still **plug inspection**: nobody watched a continuity pair close while lever B was held. |
+| Water | PB4 | **WIRED**, and the conductor mapping is **FUNCTIONAL since 2026-10-08**: with the 0c tap live, lever B **up** drove the line on J2 position 5 high and the firmware logged `water`. Lever B up also runs the pump — observed. Whether that water passes the flowmeter is still **unverified** — see 0d. |
+| Steam | PA10 | **WIRED**, and the conductor mapping is **FUNCTIONAL since 2026-10-08**: lever B **down** drove J2 position 2 high and the firmware logged `steam`. Lever B down also drives the heater to 165 °C — observed. |
 | DIP1–4 | PB0–PB3 | four config DIP switches (SW1), purpose unknown |
 | Flow-P1 / P2 | PA8 / PA9 | flowmeter, conditioned to 3.3 V logic **at the MCU**. **J4 carries only ONE signal** — measured 2026-10-04 (ground + 5 V + one signal), so the two-net reading of this row is wrong for this connector. **Which** of these pins it reaches is untraced. The connector carries the sensor's own open-collector output, **measured 2026-10-04: a 10.04 kΩ pull-up returning to the `+` net (5 V) against a 147.4 kΩ pull-down, idling at 4.69 V.** It is *not* the conditioned 3.3 V logic that exists at PA8/PA9. See 0d for the divider. |
 | AC_Sense | PA5 | mains zero-cross, via opto U27 |
@@ -80,10 +80,10 @@ switches plus a powered DC check. Positions counted on the harness:
 | Position | Net | MCU pin | How |
 |---|---|---|---|
 | **1** | **+5 V, switch common** | — | in **all four** continuity pairs; reads 5.0 V |
-| 2 | Steam | PA10 | **plug inspection**; direction by analogy — not functionally verified |
+| 2 | Steam | PA10 | **functional 2026-10-08** — lever B down, logged as `steam` through the live tap |
 | 3 | 2Cup | PB6 | continuity on lever A **down** |
 | 4 | 1Cup | PB5 | continuity on lever A **up** |
-| 5 | Hot Water | PB4 | **plug inspection**; direction by analogy — not functionally verified |
+| 5 | Hot Water | PB4 | **functional 2026-10-08** — lever B up, logged as `water` through the live tap |
 
 Note the order: **2Cup sits before 1Cup**. The list "+5 V, Steam, 1Cup,
 2Cup, Water" that this file used to carry is not positional, and reading
@@ -96,12 +96,14 @@ likely unwired on a Dream"*. Both wrong:
 | Lever | up | down | grade |
 |---|---|---|---|
 | A | 1Cup | 2Cup | **functional** — lever operated, continuity observed |
-| B | Hot Water | Steam | **the directions are functional** — Water runs the pump, Steam drives the boiler to 165 °C. **The conductor→function mapping is not**: still plug inspection. |
+| B | Hot Water | Steam | **functional** — the directions were already observed (Water runs the pump, Steam drives the boiler to 165 °C), and **2026-10-08 closed the conductor→function mapping** by watching each direction drive its own J2 line through the fitted tap. |
 
 All four are wired, and both levers share conductor 1 as their common.
-The 1Cup/2Cup assignment is functional (lever operated, continuity
-observed); Steam/Water was identified by inspecting the plug, which is a
-weaker grade of evidence and is recorded as such.
+**All four conductor→function assignments are now functional.** 1Cup/2Cup
+came from lever-operated continuity on 2026-10-04; Steam/Water was plug
+inspection until **2026-10-08**, when the 0c tap went live and each lever
+direction was watched driving its own line into its own GPIO. That was the
+weakest claim in this file and it is now the same grade as the rest.
 
 **Two consequences of lever B, found 2026-10-04 and not yet designed for:**
 
@@ -850,12 +852,13 @@ probably pulses the flowmeter — though the plumbing is untraced. Both are
 worth having; neither should be written up as a necessity derived from
 behaviour nobody has watched.
 
-**Positions 2 and 5 rest on plug inspection.** If they are swapped, the
-firmware labels a steam event as a water draw and vice versa — which
-breaks exactly the two things the four-line tap is for. **Two minutes with
-the meter settles it**: J2 unplugged, hold lever B each way, watch which
-pair closes, as was done for lever A. Needs the machine open, so it is a
-next-time-in-there job, not a blocker.
+**Positions 2 and 5 were plug inspection until 2026-10-08 — now closed.**
+The risk was that a swap would make the firmware label a steam event as a
+water draw, breaking exactly the two things the four-line tap is for. It was
+settled not with the meter but with the tap itself: with all four dividers
+fitted and `switches on`, lever B up logged `water` and lever B down logged
+`steam`. Stronger than the planned continuity check, because it exercises
+the whole chain — conductor, divider, GPIO, firmware name.
 
 **GPIO budget for the whole board: seven inputs.**
 
@@ -922,7 +925,7 @@ R45).
 switch is driven through **100 Ω**, so the divider barely loads it and the
 unloaded ratio holds. J4's source is **9.4 kΩ** — two orders of magnitude
 stiffer — which is what collapses the same pair to −45 mV there. **Do not
-"correct" 0c to 120 K / 220 K** on the strength of the J4 warning; the
+"correct" 0c to J4's 100 K / 220 K** on the strength of the J4 warning; the
 pair is fine here and the source impedance is the whole difference.
 
 **Not an optocoupler**: its mA would drop ~1 V across the 1 K series
@@ -943,13 +946,37 @@ currents. The machine's behaviour changed because of a Phase-0 tap, which
 invariant 1 forbids.
 
 The sensor is a **Digmesa FHKSC** (Ascaso `I.2560`, Digmesa `932-9525-B`):
-1.0 mm nozzle, **~2400 pulses/L**, **NPN open collector** (so `#` idles high
-on a board-side pull-up and pulses low), supply **+3.8 to +20 VDC** at
-<8 mA. **The K-factor and the supply minimum are from search summaries of
-a datasheet that could not be retrieved** — sources spread 2386–2494 on
-the first and one gives +2.8 V for the second. Neither is a verified
-hardware fact yet, which is why they are hedged in a file whose heading
-says they would not be.
+1.0 mm nozzle, **NPN open collector** (so `#` idles high on a board-side
+pull-up and pulses low), supply **+3.8 to +20 VDC** at <8 mA. The supply
+minimum is from a search summary of a datasheet that could not be retrieved
+(one source gives +2.8 V) and is not a verified hardware fact.
+
+**MEASURED 2026-10-08: ~5900 pulses/L, which is 2.5× the ~2400 this file
+used to carry.** Two weighed flushes into a jug on the yield Bookoo, free
+flow, no basket, fw 0.9.0 with the 100 K + 220 K divider:
+
+| water | counts | glitches rejected | pulses/L |
+|---|---|---|---|
+| 25.2 g | 164 | 544 (3.32:1) | 6508 |
+| **204.4 g** | **1209** | **4032 (3.34:1)** | **5915** |
+
+Both runs are in `flowmeter_calibration`; the 204.4 g one is preferred (at
+25 g, splash and start/stop edges are ~4 % of the measurement).
+
+**The 2400 figure was never verified** — a search summary of an unobtainable
+datasheet, sources spread 2386–2494, and its predecessor (1300) was 1.8 wrong for being the Ø1.50 mm row. Treat the measured number as the working
+one and the datasheet number as folklore.
+
+**But the measurement is PROVISIONAL, for a reason worth keeping.** 1209
+counts is equally consistent with ~490 real pulses each ringing past the
+2 ms glitch window and scoring extra counts. What argues against that is the
+rejected:counted ratio holding at **3.32 and 3.34 across an 8× volume
+change** — independent environmental noise would wobble, ringing correlated
+with each real transition would not. Suggestive, not proof. **Settle it with
+the logic analyser on `#`** (8.2 K series, one channel, ground to `T`) and
+compare its edge count against the firmware's before this is called the
+sensor's K-factor. Invariant 3 means nothing downstream bakes it in either
+way.
 
 **J4 pinout — roles MEASURED 2026-10-04**, with a DC pen meter, at the
 window in the 2S T-piece lead, nothing attached:
@@ -1000,15 +1027,22 @@ T-piece window, then cross-checked against the powered reading:
 `#` swings **0.3 V → 4.69 V**, both measured. The duty-cycle inference that
 an earlier draft used to argue "0–5 V" is no longer load-bearing.
 
-**The ESP32 divider is 120 K series + 220 K shunt → 2.95 V.** Working into
+**The ESP32 divider is 100 K series + 220 K shunt → 3.13 V.** Working into
 a 9.4 kΩ source, the divider loads the node, so the unloaded ratio is not
 the answer:
 
-| Divider | node | pin | nominal margin | worst case |
+**This was specified as 120 K until 2026-10-08**, when the bag turned out to
+hold 100 K and 150 K. 100 K is not a fallback — it has roughly **double** the
+logic-high margin, because shrinking the series leg stiffens the divider
+against that 9.4 kΩ source. The arithmetic below is the reason the
+substitution is safe, and it is the reason 150 K is still not.
+
+| Divider | pin | nominal margin | worst case | over-rail corner |
 |---|---|---|---|---|
-| 8.2 K + 15 K | 3.33 V | **2.15 V** | −321 mV | **FAILS** |
-| 150 K + 220 K | 4.57 V | 2.71 V | +239 mV | **−45 mV, FAILS** |
-| **120 K + 220 K** | 4.56 V | **2.95 V** | +472 mV | **+177 mV** |
+| 8.2 K + 15 K | **2.15 V** | −321 mV | **FAILS** | — |
+| 150 K + 220 K | 2.71 V | +239 mV | **−45 mV, FAILS** | — |
+| 120 K + 220 K | 2.95 V | +472 mV | +177 mV | −13 mV |
+| **100 K + 220 K** | **3.13 V** | **+651 mV** | **+348 mV** | **+174 mV** |
 
 Worst case is a full corner: the machine's 5 V sagging 5 %, the ESP32's
 3.3 V rail 5 % high (VIH 2.60 V), **1 % tolerance on the divider pair, and
@@ -1020,9 +1054,22 @@ version of this table omitted the last two and reported −20 mV and
 nominally, and it fails on tolerance stacking — exactly the reason
 220 K / 220 K was rejected for 0c. Do not substitute it.
 
-The chosen divider disturbs the node by **126 mV (2.7 %)**, which leaves
-the machine's own reading unambiguously high. **The 120 kΩ is in stock
-(2026-10-07)**; the E12 assortment kit is not needed.
+The chosen divider disturbs the node by **134 mV (2.9 %)**, which leaves the
+machine's own reading unambiguously high.
+
+**The one number 100 K is worse on: the over-rail corner.** With the machine
+rail 5 % high, the ESP rail 5 % low and tolerances aligned, the pin sits
+**174 mV above VDD**, where 120 K stays 13 mV below it. That is inside the
+ESP32-S3's **VDD + 0.3 V absolute maximum** with 126 mV to spare, and a clamp
+diode does not conduct meaningfully below ~0.4 V, so it is benign — recorded
+because it is the only axis on which the substitution loses, not because it
+is a problem. (With the ESP powered OFF and the machine on, the pin drives
+~24 µA into the dead rail through the clamp. 120 K gives ~23 µA; this is not
+a difference between them, and neither actuates anything.)
+
+**A parts claim in this file was wrong for a day.** "The 120 kΩ is in stock
+(2026-10-07)" was recorded from a verbal report and corrected on 2026-10-08
+when the bag was opened. In stock should mean counted.
 
 **Low side, which the high-side corner above does not cover:** the pin
 sits at **0.19 V** against an ESP32-S3 VIL of 0.25·VDD = **0.784 V** at a
@@ -1061,7 +1108,7 @@ as you like; do not touch this.
 | Use | Conditioning |
 |---|---|
 | Analyser at J4 | **8.2 K series alone**, one channel, `#` only, ground to `T` |
-| ESP32 at J4 | **120 K + 220 K**, as derived above |
+| ESP32 at J4 | **100 K + 220 K**, as derived above. **Never 150 K** — it is in stock, looks fine nominally, and fails at −45 mV. |
 | At PA8/PA9 instead | **1 K series** — that is the *board* side, after its own conditioning. At J4 it would feed the raw sensor output into a 3.3 V GPIO. |
 
 ---

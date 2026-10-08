@@ -114,6 +114,72 @@ not uniformly uninformative and should not be written as if it were.
 place**, because CLAUDE.md tells readers to read the schema first and that
 comment is the authority for anyone touching the data model.
 
+## The bench session, 2026-10-08 — all seven inputs live, 0d end to end
+
+Everything on the breadboard, all three T-pieces in the machine, firmware
+0.9.0. What it settled and what it opened.
+
+### Settled
+
+| | |
+|---|---|
+| **`selftest`** | **500/500, 0 glitches, 0 ring drops** at 100 Hz — four times the fastest rate the sensor can produce. The one thing host tests cannot establish, because a real shot has no independent count to check against. |
+| **All four switches** | correct GPIO mapping, taps of 345–480 ms, no false reprogram |
+| **Lever B** | **plug inspection → functional.** B up logged `water`, B down logged `steam` |
+| **J4 first contact** | **no `E01`.** The 100 K + 220 K is energised and the machine has not noticed — the tap that faulted it on 2026-10-03 |
+| **Worst poll gap** | **10 ms** against ~400 ms presses. Polling stays; it goes into the perfboard |
+| **0d end to end** | `inlet_pulses` in `shot_sample` for the first time |
+| **K-factor** | **~5900 pulses/L measured**, provisional — see the 0d section |
+
+**The 0d chain is proven by the data, not by inspection.** Shot 109 (fw
+0.8.2, no tap) stores `inlet_pulses` NULL; shots 110–112 (fw 0.9.0, tap live)
+store integers climbing monotonically from 0. That is exactly the distinction
+`SPOOL_FLAG_FLOW_TAP` exists for, and the one the server destroyed until
+2026-10-07 by binding NULL for every record. 110–112 are marked `excluded` —
+they are calibration flushes, not shots.
+
+**1027 of 1209 counts landed inside shot windows.** The missing ~180 is flow
+between cycles and before each pour confirmed, which is the documented
+two-gap behaviour and closes when 0c supplies the pump-start edge.
+
+### Opened: the display bus drops frames during a flush
+
+**`frames=3677 dropped=5812`** — more lost than captured, accumulated during
+the calibration run, on a board that had rebooted since an earlier
+`dropped=20016`. So the first explanation (a hot-plugged GPIO4 floating and
+storming the ISR) does **not** cover it: something in a flush cycle stalls
+the display consumer repeatedly.
+
+This is a **0e correctness problem, not a diagnostic nuisance**:
+`boiler_temp_start_c` and `machine_timer_dl` both come off that bus.
+
+Leading suspect is the spool. Each cycle closes a record and writes it to
+LittleFS; a flash write blocks tens of ms against a ring holding ~50 ms of
+bus. That is invariant 2's harm landing just *after* the shot rather than
+during it — which the invariant does not currently forbid.
+
+**The experiment that splits it:** run a flush with the yield scale
+disconnected, so no record is spooled. `dropped` near zero means the spool
+write; `dropped` climbing anyway means the flow ISR, and the fix differs.
+
+### Two defects the host tests could not have found
+
+- **`flow on` did not reset the diagnostics when flow was already on.**
+  `flowSetEnabled` opened with `if (on == flow_on) return;`, so the
+  documented clean-slate command silently did nothing and a stale glitch
+  count of 1384 was read as current during calibration. Both enable paths
+  are now idempotent, and the interrupt is detached before the ring is
+  zeroed because re-running on a live tap is now reachable.
+- **An unterminated J4 cable counts mains hum.** With the T-piece out of the
+  machine and `flow on`, GPIO6 logged 546 counts and 9416 glitches from a
+  100 K series into a floating lead against a 220 K pull-down. Harmless, and
+  the diagnostics reported it correctly — but do not leave `flow on` with J4
+  unplugged, and do not read a count taken in that state.
+
+Also seen: hot-plugging the J5 tap on a live bus can latch
+`setpoint_touched`, because the garbage edges mimic the ~410 ms blink. It
+clears at the next pour start.
+
 ## 0c and 0d firmware — written 2026-10-07, bench-testable without the machine
 
 **0.9.0 adds the code for both remaining taps. Neither tap is wired.** The
@@ -248,11 +314,12 @@ Everything here runs on the breadboard with the machine closed.
   whether the dividers are right; at rest `flow` should read 1 and all four
   switches 0. That is a measurement, not a calculation, and it is the thing
   the perfboard is actually waiting on.
-- **J4 first contact is the risk.** The 120 K + 220 K has never been
+- **J4 first contact is the risk.** The 100 K + 220 K has never been
   energised, and the last J4 tap faulted the machine. Fit it, power on, *no
   brew*, watch for `E01`. Then a flush. Then a shot. Not all three at once.
 - **Calibrate** — weigh water on the Bookoo against pulses, write the row
-  into `flowmeter_calibration`. ~2400 pulses/L is a search summary, not a
+  into `flowmeter_calibration`. **DONE 2026-10-08: ~5900 pulses/L measured**,
+  2.5× the ~2400 search summary, which was never a
   datasheet.
 - Whether a **hot-water draw** pulses the meter at all. CLAUDE.md records
   this as a prediction; nobody has traced the plumbing. First thing `#` can
@@ -599,10 +666,17 @@ the display is back in temperature mode, so edges lost there cost nothing.
    one of each, so write the allocation down rather than rediscovering it
    with a bag of cut leads.
 
-   **Size the box for three harnesses.** 0c adds J2 (two dividers, on PB5
-   and PB6 only — the other three pins of J2 need not reach the box) and
-   0d adds J4; they all land here. A box that fits only this one is a job
-   done twice.
+   **Size the box for three harnesses.** 0c adds J2 and 0d adds J4; they
+   all land here. A box that fits only this one is a job done twice.
+
+   **J2 needs FOUR dividers, not two.** An earlier version of this line said
+   "two dividers, on PB5 and PB6 only — the other three pins of J2 need not
+   reach the box", which is the superseded two-line plan: the operator asked
+   for all four functions on 2026-10-04 and CLAUDE.md, the firmware pin budget
+   and `SwitchBank::N_LINES` have all said four ever since. **Four of J2's five
+   conductors reach the box** (Steam, 2Cup, 1Cup, Water); only position 1, the
+   +5 V common, stays behind. Building to the old sentence gets you a harness
+   with three conductors too few.
 
    More than convenience: **J2 carries no ground** (+5 V, Steam, 1Cup,
    2Cup, Water), so 0c's dividers have to reference the ground that comes
@@ -752,7 +826,7 @@ the display is back in temperature mode, so edges lost there cost nothing.
    **0d rejects this same pair and 0c keeps it — not a contradiction.**
    0c's corner is **+203 mV** (rail −5 %, VIH +5 %, 1 % resistors), where
    J4's is −45 mV. The difference is entirely source impedance: **100 Ω
-   here against 9.4 kΩ at J4.** Do not "correct" 0c to 120 K / 220 K on
+   here against 9.4 kΩ at J4.** Do not "correct" 0c to J4's 100 K / 220 K on
    the strength of the J4 warning. And unlike
    J4's open-collector output, the switch line is driven through R45's
    **100 Ω**, so a 370 K divider loads it by about a millivolt — the
@@ -974,10 +1048,23 @@ the display is back in temperature mode, so edges lost there cost nothing.
    | Output | **NPN open collector**, 0 VDC active, saturation <0.7 V | Daitron + Digmesa product pages, corroborated |
    | Signal load | max 20 mA | as above |
    | Supply | **+3.8 to +20 VDC**, <8 mA | **search summary of an unretrieved datasheet; another secondary source says +2.8 to +24 VDC** |
-   | K-factor | **~2400 pulses/L** at Ø 1.00 mm | **search summary, unretrieved — see below** |
+   | K-factor | **~5900 pulses/L MEASURED 2026-10-08** (datasheet summaries said ~2400) | **two weighed flushes — see below** |
    | Accuracy | ± 2.0 % | product pages |
 
-   **The K-factor is ~2400, not a four-digit constant.** Returns for the
+   **MEASURED 2026-10-08: ~5900 pulses/L, 2.5× the sourced figure.** Two
+   weighed flushes into a jug on the yield Bookoo, free flow, no basket:
+   **164 counts / 25.2 g** and **1209 counts / 204.4 g**, i.e. 6508 and 5915
+   pulses/L. Both rows are in `flowmeter_calibration`, the larger preferred.
+
+   **Provisional.** 1209 counts is equally consistent with ~490 real pulses
+   each ringing past the 2 ms filter and scoring extra counts. Against that:
+   the rejected:counted ratio held at **3.32 and 3.34 across an 8× volume
+   change**, which is what correlated ringing looks like and not what
+   independent noise looks like. Suggestive, not proof — put the analyser on
+   `#` and compare edge counts before calling this the sensor's K-factor.
+
+   **The sourced figure below is folklore and stays only as provenance.**
+   Returns for the
    `932-952x-Bxxx` sheet give **2386** at Ø 1.00 mm, but one gives
    **2386 / 2476 / 2436 for 0° / 90° / 180° mounting orientation** and a
    separate FHKSC source gives **2494** — ~4 % spread, and mounting
@@ -1084,9 +1171,12 @@ the display is back in temperature mode, so edges lost there cost nothing.
    never pulse, or a conductor was shorted. **Check D1 still reads
    correctly before trusting the analyser.**
 
-   **What 0d can and cannot deliver.** At ~2400 pulses/L each pulse is
-   **~0.42 ml**, an espresso shot at ~2 ml/s pulses at **~4.8 Hz**, and
-   the rated ceiling is **~16 Hz**. (The 4 % K-factor spread shifts these
+   **What 0d can and cannot deliver.** **Recompute these against the
+   measured ~5900 pulses/L** — at that figure each pulse is **~0.17 ml** and
+   an espresso shot at ~2 ml/s pulses at **~12 Hz**, not 4.8. The numbers
+   below were derived from the sourced ~2400 (0.42 ml, ~4.8 Hz, ceiling
+   ~16 Hz) and have not been reworked; the resolution argument gets *better*
+   at 12 Hz, so nothing here breaks, but do not quote the rates. (The 4 % K-factor spread shifts these
    by far less than the retention estimate below, so it changes nothing
    here.) Inlet volume for a 36 g shot is
    *not* 36 ml — it is output plus puck retention plus the solenoid dump,
@@ -1130,7 +1220,7 @@ the display is back in temperature mode, so edges lost there cost nothing.
    - **One channel, `#` only, 8.2 kΩ series into the analyser's clamp**
      — the 0b arrangement, ~146 µA. That part is safe at any plausible
      rail.
-   - **ESP32 divider: 120 K series + 220 K shunt → 2.95 V. SOLVED
+   - **ESP32 divider: 100 K series + 220 K shunt → 3.13 V. SOLVED
      2026-10-04 by measurement.** The node is a **10.04 kΩ pull-up to
      5 V** against a **147.4 kΩ pull-down** — both read unpowered in Ω
      mode at the T-piece window. That predicts an idle-high of
@@ -1140,11 +1230,16 @@ the display is back in temperature mode, so edges lost there cost nothing.
      Because the source is 9.4 kΩ, the divider loads it and the unloaded
      ratio is not the answer:
 
-     | Divider | node | pin | nominal | worst case |
+     | Divider | pin | nominal | worst case | over-rail |
      |---|---|---|---|---|
-     | 8.2 K + 15 K | 3.33 V | **2.15 V** | −321 mV | **FAILS** |
-     | 150 K + 220 K | 4.57 V | 2.71 V | +239 mV | **−45 mV, FAILS** |
-     | **120 K + 220 K** | 4.56 V | **2.95 V** | +472 mV | **+177 mV** |
+     | 8.2 K + 15 K | **2.15 V** | −321 mV | **FAILS** | — |
+     | 150 K + 220 K | 2.71 V | +239 mV | **−45 mV, FAILS** | — |
+     | 120 K + 220 K | 2.95 V | +472 mV | +177 mV | −13 mV |
+     | **100 K + 220 K** | **3.13 V** | **+651 mV** | **+348 mV** | **+174 mV** |
+
+     **100 K is the fitted value as of 2026-10-08** — the 120 K this section
+     was written around was never in stock. It wins on margin and loses only
+     on the over-rail corner, which stays inside VDD + 0.3 V abs max.
 
      Worst case is a full corner: the machine's 5 V sagging 5 %, the
      ESP32's 3.3 V rail 5 % high (VIH 2.60 V), **1 % tolerance on the
@@ -1178,8 +1273,9 @@ the display is back in temperature mode, so edges lost there cost nothing.
      **The 4.681 V prediction matching 4.69 V to 0.2 % is luckier than the
      instrument.** It confirms the *model*, not the precision of the two
      resistances — which is why the corner still carries ±1 % meter error
-     on them. **The 120 kΩ is in stock (2026-10-07)**; the E12 assortment
-     kit is not needed.
+     on them. **The divider is 100 K + 220 K as of 2026-10-08** — the 120 K
+     this section was written around was never in stock, and 100 K has about
+     double the logic-high margin. CLAUDE.md carries the corner table.
 
      The earlier derivation here assumed a push-pull source and quoted
      5 × 15/23.2 = 3.23 V. That was the wrong model, and the right one was

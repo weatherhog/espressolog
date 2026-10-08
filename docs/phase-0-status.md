@@ -207,14 +207,55 @@ two points. The ~140 ms spacing quoted to justify 20 ms is **espresso** flow
 neither calibration flush's duration was recorded, so which regime they ran
 in is unknown.
 
-**The sweep that does work:** `flow filter` at **2000, 5000, 10000, 20000**,
-one flush each, recording **weight and duration** every time.
+### The test that actually separates water from interference: vary the FLOW RATE
 
-- Ringing dies within a few ms, so it is gone by ~5 ms and the count then
-  goes **flat** across 5 → 10 → 20 → **the remaining count is water**.
-- A filter eating real pulses **declines continuously**, and the duration
-  gives the pulse period, so you can predict where that starts rather than
-  discover it.
+**Do this one first.** The width sweep below is secondary and cannot settle
+the question by itself.
+
+Everything measured so far has been a free flush at one rate, which is the
+same confound that invalidated the 3.32/3.34 ratio argument three paragraphs
+up: at a fixed flow rate, a count proportional to *volume* and a count
+proportional to *time* are indistinguishable. Varying the rate separates them
+outright, and you already need to do it:
+
+| run | rate | pulses per gram if WATER | if TIME-PROPORTIONAL |
+|---|---|---|---|
+| free flush, no basket | ~8–10 ml/s | **X** | X |
+| a real shot, puck in | ~2 ml/s | **X** (same) | **~4–5× X** |
+
+Weigh both, count both. **Same pulses/gram → the counts are water** and
+5900–6500 pulses/L stands. **Far more per gram on the slow run → a
+time-proportional source** is scoring counts, and the K-factor is inflated by
+roughly the ratio.
+
+This also needs no new hardware, and a real shot is an open item anyway —
+every run so far has been a flush.
+
+### The width sweep, secondary
+
+`flow filter` at **2000, 5000, 10000**, one flush each, weight and duration
+recorded.
+
+**A plateau does NOT mean the counts are water.** Any periodic source whose
+period exceeds every width swept plateaus identically, and two are live here:
+**100 Hz mains/triac coupling** (10 ms — which `machine_io.h` deliberately
+does *not* reject) and **one count per vibratory-pump stroke** (50 Hz, 20 ms).
+The session's own figures are consistent with ~50 Hz: at the flush rate this
+file computes, 1209 counts over ~24 s is ~50 Hz, and 164 over ~3 s is ~51 Hz.
+Nobody has checked that, and counts-per-second appears nowhere in the repo.
+
+**20 ms is excluded as an anchor**, not swept for the verdict: it starts
+rejecting real pulses at 8.5 ml/s, inside the band a free flush runs at, so a
+missing plateau there carries no information. **5 ms is marginal** in the
+other direction — at 2.47 counts per real pulse, some ringing must already
+span ~3 ms. So **2 vs 10 is the comparison that carries weight**:
+
+- **2 and 10 agree** → narrow-window ringing is not being counted.
+- **2 ≫ 10** → it is, and the 2 ms figure is inflated by that factor.
+
+**Replicate.** Run-to-run K-factor spread at a *fixed* width is already 10 %,
+so a step smaller than that is not distinguishable from flush-to-flush
+variation at n=1. Two runs per width, minimum.
 
 Note pulses= **before and after each run and subtract**. `flow on` resets the
 glitch and drop counters but **not** `pulses=` — that is deliberate (the
@@ -254,7 +295,9 @@ clears at the next pour start.
 
 ## 0c and 0d firmware — written 2026-10-07, bench-testable without the machine
 
-**0.9.0 adds the code for both remaining taps. Neither tap is wired.** The
+**0.9.0 added the code for both remaining taps. Both were wired and proven
+on 2026-10-08** — see the bench section above; this section records what the
+firmware was when it was written. The
 point of writing them now is that the breadboard is still up and the machine
 is closed: everything that can be settled without voltage should be settled
 before the perfboard is drilled, because after that the pin map is copper.
@@ -613,7 +656,7 @@ the display is back in temperature mode, so edges lost there cost nothing.
    runs 18 scenarios against **real recorded frames** from
    `analysis/captures/`, not synthetic bit patterns.
 
-   **Wiring (not yet built).** Two GPIOs, one divider per line, because the
+   **Wiring — BUILT and live since 2026-10-07.** Two GPIOs, one divider per line, because the
    bus is 5 V and the ESP32 is not 5 V tolerant:
 
    ```

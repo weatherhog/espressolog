@@ -13,7 +13,7 @@
 #include "machine_io.h"
 #include <driver/gpio.h>
 
-const char* FIRMWARE_VERSION = "0.9.1";
+const char* FIRMWARE_VERSION = "0.9.2";
 const char* DETECTOR_VERSION = "0a.6";
 
 static ScaleManager scales;
@@ -153,19 +153,27 @@ static void printDisplay(Stream& out) {
   // frames (~66-133 bits each), dropped are individual ISR edges. Comparing
   // them directly reads a ~1 % loss as a ~100 % one, which is exactly the
   // mistake made on 2026-10-08. Labelled rather than left to the reader.
-  // Snapshot both volatiles once: three separate reads inside one printf can
-  // come from different ISR states, and the inconsistency is widest during
-  // the storm that makes anyone read this line.
+  // Snapshot once so the printed counts and the percentage are consistent.
+  // dbus_dropped is volatile (the ISR writes it); dbus_frames is not, but
+  // reading both once is what keeps the three numbers from coming out of
+  // different ISR states, which is widest during the storm that makes anyone
+  // read this line.
   uint32_t fr = dbus_frames, dr = dbus_dropped;
-  // 131 bits/frame, not 100: the bus runs 67+66 merged and CLAUDE.md records
-  // the pair splitting only 1-8 % of the time. 100 overstated the loss ~31 %.
-  // 64-bit because dropped*131 overflows uint32 past ~33 M edges.
+  // ~128 bits/frame. The merged pair is 67+66 = 133, and the pair splits into
+  // two separately-counted frames some of the time — CLAUDE.md measures 1.18 %
+  // idle but 3.62-6.56 % during a flush and settling, which is exactly when
+  // this is read, so 133/(1+p) lands near 128. The old 100 overstated the loss
+  // by ~31 %. 64-bit because fr*128 overflows uint32 past ~33 M frames.
   // GUARD ON EITHER COUNTER. Guarding on frames alone printed "~0 %" when
   // frames==0 and dropped was climbing — which is precisely the leading
   // hypothesis for the open display-bus question (a noisy GPIO4 firing so
   // fast no frame ever completes). That under-reads total loss as zero, the
   // same direction as the units error this line was written to prevent.
-  uint64_t edges = (uint64_t)fr * 131ULL + dr;
+  uint64_t edges = (uint64_t)fr * 128ULL + dr;
+  // Upper bound, not exact: under the leading hypothesis for the open
+  // dropped-edge question (a GPIO4 so noisy no frame completes) most dropped
+  // edges belong to no frame at all, so this denominator understates the true
+  // edge count and the printed percentage reads high.
   out.printf(" | frames=%lu dropped_edges=%lu (~%lu%% of bus)\n",
              (unsigned long)fr, (unsigned long)dr,
              edges ? (unsigned long)(((uint64_t)dr * 100ULL) / edges) : 0UL);
@@ -653,7 +661,12 @@ static void handleCommand(String line, Stream& out) {
     // and a reboot must not silently re-enable an input whose wire is out.
     bool is_flow = (cmd == "flow");
     bool is_filter = is_flow && arg.startsWith("filter");
-    bool mutating = is_filter || arg == "on" || arg == "off";
+    // A bare `flow filter` is a QUERY and must not be refused: it writes
+    // nothing and changes no counting basis, so the refusal message named two
+    // effects it does not have — and with the tap off, printMachine does not
+    // show the width, so the query was the only way to read it.
+    bool is_filter_set = is_filter && arg.substring(6).length() > 0;
+    bool mutating = is_filter_set || arg == "on" || arg == "off";
 
     // ONE GUARD FOR EVERY MUTATING FORM, including `filter`. 0.9.1 put the
     // filter branch above the guard with its own `return`, so it slipped past:
@@ -669,6 +682,11 @@ static void handleCommand(String line, Stream& out) {
     if (mutating) {
       ShotState st_now = detector.state();
       if (st_now == ShotState::POURING || st_now == ShotState::SETTLING) {
+        // Two reasons, as the flow/switches guard has always had: an NVS
+        // write is tens of ms of flash, which invariant 2 forbids during a
+        // shot; and changing the tap or the filter width mid-pour changes the
+        // counting basis inside a single record, which nothing in that record
+        // would say.
         out.println("# refused — a shot is in progress"
                     " (flash write, and a mid-shot change to the counting basis)");
         printMachine(out);

@@ -149,8 +149,10 @@ so nobody re-derives them:
 made the machine fault with `E01` mid-cycle — a hard invariant-1 violation.
 
 **DONE 2026-10-08 — firmware and tap both.** The J4 tap was refitted with
-the 100 K + 220 K divider, energised, and **produced no `E01`**: the
-invariant-1 risk from 2026-10-03 is retired. Pulses reached the database.
+the 100 K + 220 K divider, energised, and **produced no `E01`** across one
+session. Pulses reached the database. That is **n=1** — the 2026-10-03 risk
+is not retired on one clean run, and the status doc's wording ("energised,
+and the machine has not noticed") is the grade to quote.
 What is still open is whether the counts are water or ringing — see the
 filter sweep in `docs/phase-0-status.md`. Falling
 edges on GPIO6 into a ring, a 2 ms glitch floor, and a count windowed to the
@@ -260,20 +262,48 @@ perfboard rather than retrofit it later, after the arguments below were put
 and reaffirmed. Retrofitting into a finished, glanded, cable-tied box is the
 cost that decided it.
 
-**This does not end Phase 0 by itself.** The board is Phase 0 while the drive
-section is unarmed; see the hardware disable below, which is what makes that
-a provable statement rather than a firmware claim.
+**This needs a decision about hard invariant 1, which has not been made.**
+The invariant says *"Every tap is high-impedance or passive. Read-only."* A
+photoMOS across common↔direction is neither, except while its LED is
+unpowered. The argument that an open jumper in the LED supply makes actuation
+physically impossible is defensible — off-state leakage is nanoamps — but
+**the invariant as written grants no exception, and this section is not one.**
+
+So: either invariant 1 gets an explicit carve-out in CLAUDE.md naming this
+section, or this section is recorded as pending one. It is currently pending.
+And note the claim does not survive the shorted-output case above.
 
 #### Topology, per actuated line
 
 ```
-J2 pos 1 (+5 V common) ──┬───────────────────────┐
-                         │                  [photoMOS]
-J2 pos N (direction) ────┼──[150K]──┬── GPIO      │
-                         │       [220K]           │
-                         └──────────┴─────────────┘
-                                   GND     ← drive path, parallel to sense
+  J2 pos 1 — +5 V switch common (through R45, 100 R, on the control board)
+      |
+  [photoMOS]        DRIVE. Closes common to the direction line.
+      |             This is the lever, and nothing else connects here.
+      |
+      +-------------------------------------  J2 pos N, direction line
+      |
+  [150 K]           SENSE. Unchanged from 0c.
+      |
+      +--- GPIO
+      |
+  [220 K]
+      |
+     GND
 ```
+
+**Read that carefully: the photoMOS goes between pos 1 and pos N, and
+NOTHING on the drive path touches ground.** An earlier box-drawing version of
+this diagram put the common on the ground rail — built literally it would
+have held the direction line high permanently (pump running, stored timer
+reprogrammed inside 2 s) and drawn ~50 mA continuously through R45 off a 3 W
+supply. The prose was right and the drawing was not.
+
+**Current budget**, which the earlier version asserted without stating: with
+the photoMOS closed, the only path is +5 V → R45 (100 R) → direction line, so
+the current is bounded at **≤50 mA / 250 mW** against the IRM-03-5's 3 W.
+Comfortable, and it is bounded by the machine's own resistor rather than by
+anything on our board.
 
 A **photoMOS relay** (AQY212, TLP222A) across common↔direction is a genuine
 contact replacement: bidirectional, a few ohms on-resistance against R45's
@@ -306,7 +336,24 @@ the parts and the failure surface. **Sense all four, drive two.**
 
 One dual 74HC221 and two photoMOS.
 
-#### Two things that make it provably safe
+#### The failure neither mechanism bounds
+
+**A photoMOS fails short** — that is the characteristic MOSFET failure mode.
+The one-shot bounds the *trigger*; the hardware disable cuts the *LED*.
+Neither bounds a shorted output, which holds common to the direction line
+indefinitely: the stored timer is reprogrammed within 2 s and the pump does
+not stop. There is no fail-safe-open on this path — CLAUDE.md already records
+that opening the switch line cannot stop the machine.
+
+Mitigations worth designing in, none of them free:
+- a **series fuse or PTC** on the drive leg, so a shorted output becomes an
+  open one rather than a permanent press
+- a **watchdog relay** in the LED supply that firmware must keep re-arming,
+  so a crash de-energises the drive path rather than leaving it as it was
+- at minimum, **record it as a known unmitigated failure** rather than let
+  "two things make it provably safe" stand as the whole story
+
+#### Two things that bound the firmware-side failures
 
 - **A hardware disable.** A jumper or DIP switch cutting power to the
   photoMOS LEDs, so actuation is *physically* impossible in that position.

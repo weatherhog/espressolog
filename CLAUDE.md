@@ -162,8 +162,17 @@ and when.
 Consequences: there is no way to stop the machine by opening the switch
 line, so no fail-safe-open design is possible on that path. And any future
 actuator that can hold the line will silently reprogram the machine. Phase 1
-must use a hardware one-shot (~120 ms) so firmware can *trigger* but never
-*hold*.
+must use a hardware one-shot so firmware can *trigger* but never *hold*.
+
+**The pulse width's UPPER bound is sound and its LOWER bound is not
+established.** ~120 ms is comfortably under the ~2 s reprogram threshold, and
+no RC tolerance gets near it. But nothing has established the shortest press
+this board actually latches: every press ever measured on this machine was
+**345–480 ms** (2026-10-08), by hand. A one-shot that is too short produces a
+drive path that silently does nothing — and the sense tap would still show
+the pulse, so it would look like it worked. **Measure the minimum before
+choosing the RC**: press-and-release progressively shorter with the tap
+watching, and find where the machine stops responding.
 
 **Use the 74HC221, NOT the 74HC123 this file used to name.** The '123 is
 **retriggerable**: a new trigger edge restarts the pulse, so a GPIO
@@ -863,8 +872,16 @@ Parallel track, no code yet.
 
 **0c — switch sensing. ALL FOUR direction lines are tapped** — the
 operator asked for all functions (2026-10-04), which is sufficient reason
-on its own. Four dividers, four GPIOs; the common (position 1) is the
-supply and is never tapped.
+on its own. Four dividers, four GPIOs; the common (position 1) is the supply and is
+never tapped **for sensing**.
+
+**Phase 1 changes that.** The actuation design (`docs/phase-0-plan.md`) needs
+position 1 at the board as the switching source — a photoMOS closes it to a
+direction line, which is what the lever does. That is a drive path, not a
+tap, and it is bounded at ≤50 mA by the machine's own R45. Note this is **not
+the J4 `+` net**, which the standalone read-only rule names and which remains
+untouchable; they are different conductors on different connectors that
+happen to share the IRM-03-5 rail.
 
 The supporting arguments, neither settled: **Steam** drives the boiler to
 165 °C, which would contaminate `boiler_temp_start_dc` — though the display
@@ -1017,9 +1034,11 @@ constant ratio. The argument only works if the flow rate differs between
 runs, and it did not. Neither run's duration was recorded, which would have
 made the error visible.
 
-So the open question is narrowed, not closed: the noise is pump-correlated,
-but whether it is ringing around real pulses (counts correct) or hash that
-scores its own counts (counts inflated ~2.5×) is undecided. **Settle it with the `flow filter` sweep** (0.9.1) — 2 / 5 / 10 / 20 ms, one
+So the open question is narrowed, not closed: the noise is
+**activity**-correlated (see immediately above — pump, solenoid, heater and
+zero-cross triac are not separated by that datum), and whether it is ringing
+around real pulses (counts correct) or a source scoring its own counts
+(counts inflated ~2.5×) is undecided. **Settle it with the `flow filter` sweep** (0.9.1) — 2 / 5 / 10 / 20 ms, one
 flush each, weight and duration recorded; a plateau after 5 ms means the
 remaining count is water, a continuous decline means the filter is eating
 real pulses. `docs/phase-0-status.md` has the arithmetic and the reason a

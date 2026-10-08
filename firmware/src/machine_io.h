@@ -54,25 +54,33 @@ public:
   // specified 2 ms against 20 ms and was unusable, because both outcomes
   // produce the same signature:
   //
-  //   a 20 ms window starts rejecting real pulses at 50 Hz = 8.5 ml/s;
-  //   the sensor's rated ceiling (0.40 L/min) is 25 ms, only 27 % clear,
-  //   and a hot-water draw at 10 ml/s is 17 ms — BELOW the window, where a
-  //   20 ms filter counts every second pulse, i.e. a 50 % drop.
-  //   The "it was ringing" verdict is a drop toward 2400/5915 = 41 %.
+  //   a 20 ms window starts rejecting real pulses at 50 Hz = 7.7-8.5 ml/s
+  //   (across the measured 5900-6500 p/L); the sensor's rated ceiling
+  //   (0.40 L/min) is 23-25 ms, only 15-27 % clear, and a hot-water draw at
+  //   10 ml/s is 15-17 ms — BELOW the window, where a 20 ms filter counts
+  //   every second pulse, i.e. a 50 % drop.
+  //   The "it was ringing" verdict is a drop toward 2400/K = 37-41 %.
   //   Indistinguishable. And the two calibration flushes' durations were
   //   never recorded, so which regime they ran in is unknown. The 140 ms
   //   figure the first version quoted is ESPRESSO flow (1.2 ml/s); the
   //   experiment runs on a flush, which is unrestricted.
   //
-  // Sweep 2 / 5 / 10 / 20 ms and record each run's WEIGHT AND DURATION:
+  // THE WIDTH SWEEP IS THE SECONDARY TEST. On its own it cannot tell water
+  // from a periodic interference source, because a plateau is produced by
+  // anything whose period exceeds every width swept — and two such sources
+  // are live here: 100 Hz mains/triac coupling (10 ms, which machine_io.h
+  // deliberately does not reject) and one count per vibratory-pump stroke
+  // (50 Hz, 20 ms). The session's own numbers are consistent with ~50 Hz.
   //
-  //   ringing dies within a few ms, so it is gone by ~5 ms and the count
-  //   then goes FLAT across 5 -> 10 -> 20.   A filter eating real pulses
-  //   declines CONTINUOUSLY, and the duration tells you the pulse period
-  //   so you can predict where that starts.
+  // Sweep 2 / 5 / 10 ms, one flush each, WEIGHT AND DURATION recorded.
+  // 20 ms is reported but NOT load-bearing: it starts rejecting real pulses
+  // at 8.5 ml/s, which is inside the band a free flush runs at, so a missing
+  // plateau there means nothing. 5 ms is marginal for the opposite reason —
+  // at 2.47 counts per real pulse some ringing must already span ~3 ms — so
+  // the comparison that carries weight is 2 vs 10.
   //
-  //   plateau after 5 ms   -> ringing removed, the remaining count is water
-  //   continuous decline   -> the filter is eating real flow
+  //   2 and 10 agree      -> narrow-window ringing is not being counted
+  //   2 >> 10             -> it is, and the 2 ms figure is inflated
   //
   // The alternative was a logic analyser on `#` — which is the tap that
   // produced the E01 fault on 2026-10-03, and whose corrected conditioning

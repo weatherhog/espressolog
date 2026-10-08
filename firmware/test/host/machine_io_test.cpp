@@ -120,7 +120,7 @@ int main() {
   }
 
   // 5b. The runtime-settable filter, which exists to settle whether the
-  //     measured ~5900 pulses/L counts water or ringing.
+  //     measured 5900-6500 pulses/L counts water or ringing.
   //
   //     Case A, ringing that DIES inside the window (3 edges at 200 us
   //     spacing): the 2 ms filter already cleans it, and widening to 20 ms
@@ -156,16 +156,24 @@ int main() {
         assert(p.minPeriodUs() == widths[i]);                   // exactly, not bucketed
       }
     }
-    // And an off-grid width must actually filter at that width: edges 6 ms
-    // apart survive a 5 ms window and are rejected by a 10 ms one.
+    // An off-grid width must FILTER at that width, and the bound has to be
+    // two-sided. `spaced6(5000) == 10` alone only requires the effective
+    // width to be <= 6000, which every smaller bucket satisfies — a setter
+    // that reported 5000 while filtering at 2000 passed the whole suite,
+    // demonstrated in review, including the line that prints "not bucketed".
+    // Pinning 5000 needs an upper bound (6 ms edges accepted) AND a lower one
+    // (4 ms edges rejected), i.e. 4000 < W <= 6000.
     {
-      auto spaced = [](uint32_t width) {
+      auto spaced = [](uint32_t width, uint32_t gap_us) {
         PulseCounter p; p.setMinPeriodUs(width);
-        for (int i = 0; i < 10; i++) p.feedEdge((uint32_t)i * 6000);
+        for (int i = 0; i < 10; i++) p.feedEdge((uint32_t)i * gap_us);
         return p.total();
       };
-      assert(spaced(5000) == 10);
-      assert(spaced(10000) == 5);   // every other one
+      assert(spaced(5000, 6000) == 10);   // upper bound: W <= 6000
+      assert(spaced(5000, 4000) == 5);    // LOWER bound: W > 4000
+      assert(spaced(2000, 4000) == 10);   // ...and 2000 really is narrower
+      assert(spaced(10000, 6000) == 5);   // 6000 < W <= 12000
+      assert(spaced(10000, 12000) == 10);
     }
     printf("5b. clean input is width-invariant; the width is exact, not bucketed OK\n");
   }
@@ -177,7 +185,7 @@ int main() {
   //     filter swallows the whole tail and recovers the true count.
   //
   //     This is what a flush will look like at two filter widths if the
-  //     ~5900 pulses/L figure is ringing rather than water — and it is the
+  //     5900-6500 pulses/L figure is ringing rather than water — and it is the
   //     case that broke the first draft of test 5b, which assumed 1 ms
   //     ringing stayed inside a 2 ms window. It does not.
   {

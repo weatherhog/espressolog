@@ -341,11 +341,35 @@ not optional.
 
 ## 7. Deliberately not yet — Phase 1
 
-74HC123 or NE555, optocoupler, RC parts for the hardware one-shot.
+**74HC221** (dual, non-retriggerable monostable), **2 × photoMOS relay**
+(AQY212 / TLP222A), RC parts for the one-shot, and a jumper or DIP switch
+for the hardware disable.
 
-These are the parts that let the firmware *trigger* the machine while
-being physically incapable of *holding* the line — which matters because
-holding >2 s silently reprograms that direction's stored timer.
+These are the parts that let the firmware *trigger* the machine while being
+physically incapable of *holding* the line — which matters because holding
+>2 s silently reprograms that direction's stored timer.
+
+**NOT the 74HC123**, which this list and CLAUDE.md both used to name. The
+'123 is **retriggerable**: a trigger oscillating faster than ~8 Hz — a boot
+loop, a brown-out, a floating pin — restarts the pulse before it ends and
+holds the output high indefinitely, which is the exact failure the one-shot
+exists to prevent. The NE555 has the mirror-image trap (a trigger held low
+holds the output high) and needs an RC+diode differentiator. The '221 needs
+neither.
+
+A **photoMOS** rather than a bipolar optocoupler: it is a true contact
+replacement, bidirectional, a few ohms against R45's 100 Ω, with no
+saturation offset. (CLAUDE.md's "not an optocoupler" warning is about
+*sensing*, where milliamps would break the board's own threshold. It does
+not apply to the drive path.)
+
+**Scope: drive two lines, sense four.** Brew-by-weight needs 1Cup and 2Cup
+only — the board latches, so one pulse starts and a second stops. Steam and
+Hot Water double the parts and the failure surface for nothing.
+
+**The design is in `docs/phase-0-plan.md`**, including the harness change:
+J2 position 1 (+5 V common) must reach the board, which it deliberately does
+not today.
 
 Don't order them yet. 0f is measured (σ = 0.21 g/s, 12.2 %) and overshoot
 says stop-at-weight is viable, but the trigger path still depends on 0c

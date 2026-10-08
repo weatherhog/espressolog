@@ -95,8 +95,8 @@ likely unwired on a Dream"*. Both wrong:
 
 | Lever | up | down | grade |
 |---|---|---|---|
-| A | 1Cup | 2Cup | **functional** — lever operated, continuity observed |
-| B | Hot Water | Steam | **functional** — the directions were already observed (Water runs the pump, Steam drives the boiler to 165 °C), and **2026-10-08 closed the conductor→function mapping** by watching each direction drive its own J2 line through the fitted tap. |
+| A | 1Cup | 2Cup | **functional (1-link)** — lever operated, continuity observed |
+| B | Hot Water | Steam | **functional (3-link)** — the directions were already observed (Water runs the pump, Steam drives the boiler to 165 °C), and **2026-10-08 closed the conductor→function mapping** by watching each direction drive its own J2 line through the fitted tap. |
 
 All four are wired, and both levers share conductor 1 as their common.
 **All four conductor→function assignments are now functional.** 1Cup/2Cup
@@ -162,8 +162,21 @@ and when.
 Consequences: there is no way to stop the machine by opening the switch
 line, so no fail-safe-open design is possible on that path. And any future
 actuator that can hold the line will silently reprogram the machine. Phase 1
-must use a hardware one-shot (74HC123 or NE555, ~120 ms) so firmware can
-*trigger* but never *hold*.
+must use a hardware one-shot (~120 ms) so firmware can *trigger* but never
+*hold*.
+
+**Use the 74HC221, NOT the 74HC123 this file used to name.** The '123 is
+**retriggerable**: a new trigger edge restarts the pulse, so a GPIO
+oscillating faster than ~8 Hz — a boot loop, a brown-out, a floating pin —
+retriggers it continuously and holds the output high indefinitely. That is
+exactly the failure the one-shot exists to prevent, and the part originally
+specified does not prevent it. The '221 is non-retriggerable: the pulse
+width is set by its RC per trigger, whatever the input does afterwards.
+
+The NE555 has the mirror-image trap — in the standard monostable a trigger
+held **low** holds the output high for as long as it is held — so it needs an
+RC+diode differentiator on the trigger before it is safe here. The '221 avoids
+the question.
 
 **That reasoning predates the discovery of the second lever and should be
 re-checked against it** — the conclusions above are about one direction
@@ -960,8 +973,8 @@ pull-up and pulses low), supply **+3.8 to +20 VDC** at <8 mA. The supply
 minimum is from a search summary of a datasheet that could not be retrieved
 (one source gives +2.8 V) and is not a verified hardware fact.
 
-**MEASURED 2026-10-08: ~5900 pulses/L, which is 2.5× the ~2400 this file
-used to carry.** Two weighed flushes into a jug on the yield Bookoo, free
+**MEASURED 2026-10-08: 5900–6500 pulses/L from two runs, ~2.5× the ~2400
+this file used to carry.** Two weighed flushes into a jug on the yield Bookoo, free
 flow, no basket, fw 0.9.0 with the 100 K + 220 K divider:
 
 | water | counts | glitches rejected | pulses/L |
@@ -988,9 +1001,12 @@ with ~490 real pulses each ringing past the 2 ms glitch window and scoring
 extra counts.
 
 **What rules out one class of error: a 35-second idle window, machine
-powered, logged ZERO counts and ZERO glitches.** So there is no free-running,
-flow-independent source on this line — the glitches only exist while the pump
-does. That is the strongest evidence this session produced about the counts
+powered, logged ZERO counts and ZERO glitches.** So there is no free-running
+source on this line — the glitches exist only while the machine is doing
+something. Note that is **activity**-correlated, not specifically
+pump-correlated: the solenoid, the heater and the mains zero-cross triac are
+all equally "active during a flush and not at idle", and this datum does not
+separate them. That is the strongest evidence this session produced about the counts
 and it was left out of the first write-up entirely.
 
 **What does NOT discriminate, recorded because it was argued and is wrong:**
@@ -1003,10 +1019,19 @@ made the error visible.
 
 So the open question is narrowed, not closed: the noise is pump-correlated,
 but whether it is ringing around real pulses (counts correct) or hash that
-scores its own counts (counts inflated ~2.5×) is undecided. **Settle it with
-the logic analyser on `#`** (8.2 K series, one channel, ground to `T`) and
-compare its edge count against the firmware's. Invariant 3 means nothing
-downstream bakes the factor in either way.
+scores its own counts (counts inflated ~2.5×) is undecided. **Settle it with the `flow filter` sweep** (0.9.1) — 2 / 5 / 10 / 20 ms, one
+flush each, weight and duration recorded; a plateau after 5 ms means the
+remaining count is water, a continuous decline means the filter is eating
+real pulses. `docs/phase-0-status.md` has the arithmetic and the reason a
+two-point comparison cannot work.
+
+**Prefer that over the logic analyser**, which was the original plan: the
+analyser tap on `#` (8.2 K series, one channel, ground to `T`) is the one
+that produced the `E01` invariant-1 violation on 2026-10-03, and its
+corrected conditioning has never been re-tested — whereas the ESP tap at
+100 K + 220 K now has been. Use the proven tap.
+
+Invariant 3 means nothing downstream bakes the factor in either way.
 
 **J4 pinout — roles MEASURED 2026-10-04**, with a DC pen meter, at the
 window in the 2S T-piece lead, nothing attached:

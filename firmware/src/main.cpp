@@ -153,13 +153,22 @@ static void printDisplay(Stream& out) {
   // frames (~66-133 bits each), dropped are individual ISR edges. Comparing
   // them directly reads a ~1 % loss as a ~100 % one, which is exactly the
   // mistake made on 2026-10-08. Labelled rather than left to the reader.
+  // Snapshot both volatiles once: three separate reads inside one printf can
+  // come from different ISR states, and the inconsistency is widest during
+  // the storm that makes anyone read this line.
+  uint32_t fr = dbus_frames, dr = dbus_dropped;
+  // 131 bits/frame, not 100: the bus runs 67+66 merged and CLAUDE.md records
+  // the pair splitting only 1-8 % of the time. 100 overstated the loss ~31 %.
+  // 64-bit because dropped*131 overflows uint32 past ~33 M edges.
+  // GUARD ON EITHER COUNTER. Guarding on frames alone printed "~0 %" when
+  // frames==0 and dropped was climbing — which is precisely the leading
+  // hypothesis for the open display-bus question (a noisy GPIO4 firing so
+  // fast no frame ever completes). That under-reads total loss as zero, the
+  // same direction as the units error this line was written to prevent.
+  uint64_t edges = (uint64_t)fr * 131ULL + dr;
   out.printf(" | frames=%lu dropped_edges=%lu (~%lu%% of bus)\n",
-             (unsigned long)dbus_frames, (unsigned long)dbus_dropped,
-             // 64-bit: dropped*100 overflows uint32 past ~43 M edges, which a
-             // long uptime reaches. ~100 bits/frame is the estimate (frames are
-             // 66, 67 or 133 merged), so the figure is indicative, not exact.
-             dbus_frames ? (unsigned long)(((uint64_t)dbus_dropped * 100ULL)
-                           / ((uint64_t)dbus_frames * 100ULL + dbus_dropped)) : 0UL);
+             (unsigned long)fr, (unsigned long)dr,
+             edges ? (unsigned long)(((uint64_t)dr * 100ULL) / edges) : 0UL);
 }
 
 // --------------------------------------------------- machine wiring (0c/0d)
@@ -215,7 +224,7 @@ static bool     flow_ever = false;
 // enqueues, loop() is the only consumer, and the glitch filter runs in the
 // pure class so the logic that ships is the logic the host tests exercise.
 // 64 entries is ~1.1 s at the fastest plausible real rate (~59 Hz, a
-// hot-water draw at the MEASURED ~5900 pulses/L — it was ~24 Hz against the
+// hot-water draw at the MEASURED 5900-6500 pulses/L — it was ~24 Hz against the
 // old ~2400 figure) and the loop drains every ~5 ms, so an overflow here
 // does not mean
 // "busy" — it means the line is carrying something that is not flow. That is
@@ -618,6 +627,20 @@ static void handleCommand(String line, Stream& out) {
   } else if (cmd == "display") {
     if (arg == "on" || arg == "off") {
       bool on = (arg == "on");
+      // Same guard as flow/switches, and NEWLY NEEDED. Until 0.9.1 the early
+      // return in displaySetEnabled made a mid-shot `display on` a harmless
+      // no-op; now it detaches the ISR, zeroes the ring, discards the in-flight
+      // frame via beginCapture() and zeroes the counters — on top of the NVS
+      // write. And the documented procedure for the dropped-edge experiment is
+      // "`display on` to zero the counters, then one flush", which is exactly
+      // what an operator types around a brew.
+      ShotState st_now = detector.state();
+      if (st_now == ShotState::POURING || st_now == ShotState::SETTLING) {
+        out.println("# refused — a shot is in progress"
+                    " (this would drop the in-flight frame and stall on flash)");
+        printDisplay(out);
+        return;
+      }
       Preferences p;
       p.begin("espl", false);
       p.putBool("display", on);
@@ -629,41 +652,71 @@ static void handleCommand(String line, Stream& out) {
     // Persisted in NVS exactly like `display`: the taps go in one at a time,
     // and a reboot must not silently re-enable an input whose wire is out.
     bool is_flow = (cmd == "flow");
-    if (is_flow && arg.startsWith("filter")) {
+    bool is_filter = is_flow && arg.startsWith("filter");
+    bool mutating = is_filter || arg == "on" || arg == "off";
+
+    // ONE GUARD FOR EVERY MUTATING FORM, including `filter`. 0.9.1 put the
+    // filter branch above the guard with its own `return`, so it slipped past:
+    // inlet_pulses is a delta on flow.total(), so changing the window mid-pour
+    // changes the counting basis inside one record, and nothing in the record
+    // says which width produced it (SPOOL_FLAG_FLOW_TAP only says the tap was
+    // live; firmware_version is the same either way). That is the second of
+    // the two reasons this guard exists, and it applies verbatim.
+    //
+    // The rule is general but the enforcement is not: `set`, `rm`, `fake` and
+    // `dump` all touch flash with no such check. Pre-existing and not fixed
+    // here — this comment should not read as if it were enforced everywhere.
+    if (mutating) {
+      ShotState st_now = detector.state();
+      if (st_now == ShotState::POURING || st_now == ShotState::SETTLING) {
+        out.println("# refused — a shot is in progress"
+                    " (flash write, and a mid-shot change to the counting basis)");
+        printMachine(out);
+        return;
+      }
+    }
+
+    if (is_filter) {
       String v = arg.substring(6); v.trim();
-      if (v.length()) {
-        uint32_t us = (uint32_t)v.toInt();
-        if (us > 100000) {
+      if (!v.length()) {
+        out.printf("# flow filter = %lu us (usage: flow filter <microseconds>)\n",
+                   (unsigned long)flow.minPeriodUs());
+      } else {
+        // Digits only. String::toInt() is atol-shaped and yields 0 for
+        // non-numeric text, so `flow filter abc` used to pass the range check
+        // and set 0 — the one value that disables filtering entirely and makes
+        // the next flush read as raw edge counts. One typo would have looked
+        // like a dramatic K-factor confirmation.
+        bool numeric = true;
+        for (unsigned i = 0; i < v.length(); i++)
+          if (!isdigit((unsigned char)v[i])) { numeric = false; break; }
+        uint32_t us = numeric ? (uint32_t)v.toInt() : 0;
+        if (!numeric) {
+          out.printf("# refused — '%s' is not a number\n", v.c_str());
+        } else if (us > 100000) {
           out.println("# refused — a filter above 100 ms would reject real flow");
         } else {
           flow.setMinPeriodUs(us);
           out.printf("# flow filter = %lu us%s\n", (unsigned long)us,
-                     us == 0 ? " (OFF — every edge counts)" : "");
-          out.println("# NOT persisted; a reboot restores 2000 us. Run 'flow on' to"
-                      " zero the counters before comparing.");
+                     us == 0 ? "  *** OFF — EVERY EDGE COUNTS, including hash ***" : "");
+          out.println("# NOT persisted; a reboot restores 2000 us.");
+          // `flow on` resets only `rejected`/`dropped`. `counted` is never
+          // reset by design (the detector takes a difference across it), and
+          // `counted` is what prints as pulses= and is the ONLY number the
+          // counts-per-gram comparison uses. 0.9.1 told the operator to run
+          // `flow on` to zero the counters, which would have had them read a
+          // cumulative figure as a per-run one — the same error this release
+          // exists to document.
+          out.println("# To compare runs: note pulses= BEFORE and AFTER each"
+                      " run and subtract. 'flow on' does NOT zero pulses=.");
         }
-      } else {
-        out.printf("# flow filter = %lu us (usage: flow filter <microseconds>)\n",
-                   (unsigned long)flow.minPeriodUs());
       }
+      printMachine(out);
       return;
     }
+
     if (arg == "on" || arg == "off") {
       bool on = (arg == "on");
-      // Writing NVS is a flash write of tens of ms, which invariant 2 forbids
-      // during a shot, and toggling the flow tap mid-pour would make the
-      // record cover only part of the shot. Both reasons, one guard.
-      //
-      // The rule is general but the enforcement is not: `display on|off`,
-      // `set`, `rm`, `fake` and `dump` all touch flash with no such check.
-      // Pre-existing, not introduced here, and not fixed here either — but
-      // this comment should not read as if the rule were enforced everywhere.
-      ShotState st_now = detector.state();
-      if (st_now == ShotState::POURING || st_now == ShotState::SETTLING) {
-        out.println("# refused — a shot is in progress (NVS write + partial count)");
-        printMachine(out);
-        return;
-      }
       Preferences p;
       p.begin("espl", false);
       p.putBool(is_flow ? "flow" : "switches", on);

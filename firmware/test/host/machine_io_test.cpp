@@ -141,7 +141,33 @@ int main() {
     assert(run(PulseCounter::MIN_PERIOD_US) == 50);
     assert(run(20000) == 50);
     assert(run(0) == 200);          // filter off: every ringing edge scores
-    printf("5b. clean input is filter-width-invariant OK\n");
+
+    // THE GETTER IS ASSERTED AND AN OFF-GRID WIDTH IS USED. Without this, a
+    // setter that merely bucketed its argument into {0, 2000, 20000} passed
+    // the whole suite — demonstrated in review — and minPeriodUs() was read by
+    // no test at all, while being the only thing that tells an operator which
+    // width a bench run used. The sweep below needs 5000 and 10000 to work.
+    {
+      PulseCounter p;
+      assert(p.minPeriodUs() == PulseCounter::MIN_PERIOD_US);   // the default
+      static const uint32_t widths[] = { 0, 1, 999, 5000, 10000, 37, 100000 };
+      for (size_t i = 0; i < sizeof(widths)/sizeof(widths[0]); i++) {
+        p.setMinPeriodUs(widths[i]);
+        assert(p.minPeriodUs() == widths[i]);                   // exactly, not bucketed
+      }
+    }
+    // And an off-grid width must actually filter at that width: edges 6 ms
+    // apart survive a 5 ms window and are rejected by a 10 ms one.
+    {
+      auto spaced = [](uint32_t width) {
+        PulseCounter p; p.setMinPeriodUs(width);
+        for (int i = 0; i < 10; i++) p.feedEdge((uint32_t)i * 6000);
+        return p.total();
+      };
+      assert(spaced(5000) == 10);
+      assert(spaced(10000) == 5);   // every other one
+    }
+    printf("5b. clean input is width-invariant; the width is exact, not bucketed OK\n");
   }
 
   // 5c. Case B — THE SIGNATURE THE EXPERIMENT IS LOOKING FOR. Ringing that

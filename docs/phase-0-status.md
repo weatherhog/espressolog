@@ -1,4 +1,4 @@
-# Phase 0 status — as of 2026-10-07
+# Phase 0 status — as of 2026-10-08
 
 Phase 0a (scale logging, stages 0–6) is **complete and in production**.
 This file is the resume point: read it (and CLAUDE.md) before continuing.
@@ -7,7 +7,7 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
 
 | Piece | Where | State |
 |---|---|---|
-| **Firmware 0.9.0 BUILT, NOT FLASHED** (0.8.2 is what is on the board), detector 0a.6 | ESP32-S3 on a USB charger by the machine | both Bookoos bound: yield `aa:bb:cc:dd:ee:01`, dose `aa:bb:cc:dd:ee:02`. **The J5 tap is wired and `display on` is live** — reading the machine's display over the wire, `dropped=0` in normal operation. 0.8.0's parser, written blind against the 0e captures, **was validated against a real brew**: mode flipped `temp` → `timer`, counted `042/080/112/143/174/206` in tenths, returned to `temp 95 C`. **0.8.1 and 0.8.2 both add `beginCapture()`** — 0.8.1 was flashed, then `display.cpp` changed again, so the board briefly ran a 0.8.1 that no longer existed in the repo; bumped to 0.8.2 and reflashed rather than leave that ambiguity. No shot record carries either version. See 0e. |
+| **Firmware 0.9.0 FLASHED 2026-10-07; 0.9.1 BUILT, NOT FLASHED**, detector 0a.6. **Caveat: three different binaries shipped as "0.9.0"** — the `flowSetEnabled` behaviour change landed before the bump, so `shot.firmware_version` cannot separate them. Shots 110–112 are all excluded anyway. | ESP32-S3 on a USB charger by the machine | both Bookoos bound: yield `aa:bb:cc:dd:ee:01`, dose `aa:bb:cc:dd:ee:02`. **All three taps were fitted and live on 2026-10-08** — J5, J2 and J4 — and the breadboard was then disassembled; see the bench section. The display bus **drops ~1 % of edges** during a flush, cause open (an earlier reading of `dropped=0` was taken before the other taps existed). 0.8.0's parser, written blind against the 0e captures, **was validated against a real brew**: mode flipped `temp` → `timer`, counted `042/080/112/143/174/206` in tenths, returned to `temp 95 C`. **0.8.1 and 0.8.2 both add `beginCapture()`** — 0.8.1 was flashed, then `display.cpp` changed again, so the board briefly ran a 0.8.1 that no longer existed in the repo; bumped to 0.8.2 and reflashed rather than leave that ambiguity. No shot record carries either version. See 0e. |
 | Go server + SQLite + PWA | Proxmox LXC `espressolog`, Debian 13, `espressolog.lan` (DHCP-reserved) | systemd `espressolog.service`, db at `/var/lib/espressolog/espressolog.db` |
 | HTTPS | Caddy on the same LXC, `https://espresso.example.com` | Let's Encrypt via Cloudflare DNS-01; CF token in `/etc/caddy/env` |
 | DNS | AdGuard Home rewrite `espresso.example.com → espressolog.lan` | resolution is LAN-only; no public A record (challenge TXT only) |
@@ -129,7 +129,7 @@ Everything on the breadboard, all three T-pieces in the machine, firmware
 | **J4 first contact** | **no `E01`.** The 100 K + 220 K is energised and the machine has not noticed — the tap that faulted it on 2026-10-03 |
 | **Worst poll gap** | **10 ms** against ~400 ms presses. Polling stays; it goes into the perfboard |
 | **0d end to end** | `inlet_pulses` in `shot_sample` for the first time |
-| **K-factor** | **~5900 pulses/L measured**, provisional — see the 0d section |
+| **K-factor** | **5900–6500 pulses/L, n=2**, provisional — see the 0d section |
 
 **The 0d chain is proven by the data, not by inspection.** Shot 109 (fw
 0.8.2, no tap) stores `inlet_pulses` NULL; shots 110–112 (fw 0.9.0, tap live)
@@ -190,21 +190,45 @@ on 2026-10-03, and its corrected 8.2 K conditioning has never been re-tested,
 while the ESP tap at 100 K + 220 K now has been. So reuse the proven tap and
 vary the filter instead.
 
-Run the **same flush twice**, weighing both:
+**Sweep four widths, do not compare two.** The first version of this called
+for 2 ms against 20 ms and could not have worked — both outcomes give the
+same answer:
 
 | | |
 |---|---|
-| `flow filter 2000` | the shipped width |
-| `flow filter 20000` | wide enough to swallow ringing, far below the ~140 ms between real pulses at the measured rate |
+| a 20 ms window starts rejecting at | 50 Hz = **8.5 ml/s** |
+| rated ceiling 0.40 L/min | 25 ms — only **27 %** clear of the window |
+| hot-water draw at 10 ml/s | 17 ms — **below** it: every second pulse lost, a **50 %** drop |
+| the "it was ringing" verdict | a drop toward 2400/5915 = **41 %** |
 
-**Counts per gram agree** → the counts are water and ~5900 pulses/L stands.
-**The 20 ms count falls toward ~40 %** → we were counting ringing, and the
-true figure is near the datasheet's ~2400.
+A filter that is too wide and ringing that is real are indistinguishable at
+two points. The ~140 ms spacing quoted to justify 20 ms is **espresso** flow
+(1.2 ml/s); the experiment runs on a **flush**, which is unrestricted — and
+neither calibration flush's duration was recorded, so which regime they ran
+in is unknown.
 
-Host cases 5b and 5c pin both outcomes: clean input is width-invariant, and
-ringing that outlives the window inflates at 2 ms and is recovered at 20 ms.
-The filter is **not persisted** — a width left over from a bench run must not
-silently shape months of shot data, so a reboot restores 2 ms.
+**The sweep that does work:** `flow filter` at **2000, 5000, 10000, 20000**,
+one flush each, recording **weight and duration** every time.
+
+- Ringing dies within a few ms, so it is gone by ~5 ms and the count then
+  goes **flat** across 5 → 10 → 20 → **the remaining count is water**.
+- A filter eating real pulses **declines continuously**, and the duration
+  gives the pulse period, so you can predict where that starts rather than
+  discover it.
+
+Note pulses= **before and after each run and subtract**. `flow on` resets the
+glitch and drop counters but **not** `pulses=` — that is deliberate (the
+detector takes a difference across it) and the 0.9.1 command text wrongly
+told the operator otherwise.
+
+Host cases 5b and 5c pin both outcomes, and 5b now asserts the getter and
+uses off-grid widths — a setter that merely bucketed its argument into
+{0, 2000, 20000} passed the earlier version of both cases.
+
+The filter is **not persisted**: a width left from a bench run must not
+silently shape months of shot data, so a reboot restores 2 ms. Within a
+session it does shape every shot, and nothing in the record says which width
+produced it — which is why `flow filter` is refused during a shot.
 
 **The dropped-edge experiment, now runnable:** `display on` to zero the counters, one
 flush with the yield scale disconnected so nothing is spooled, then read. Low
@@ -338,10 +362,10 @@ Everything here runs on the breadboard with the machine closed.
    is the baseline that makes step 2 mean something.
 2. **Flow counting, the one thing host tests cannot prove.** Jumper
    **GPIO8 → GPIO6**, nothing else connected, then `flow on` and `selftest`.
-   It drives 500 pulses at 100 Hz. **That is ~2.5× the sensor's rated
-   ceiling and ~1.7× the fastest plausible real rate**, recomputed against
-   the measured ~5900 pulses/L (0.40 L/min → 39 Hz; a 10 ml/s hot-water draw
-   → 59 Hz). An earlier version said "four times", which came from the
+   It drives 500 pulses at 100 Hz. **That is 2.3–2.5× the sensor's rated
+   ceiling and 1.5–1.7× the fastest plausible real rate**, recomputed across
+   the measured 5900–6500 pulses/L (0.40 L/min → 39–43 Hz; a 10 ml/s
+   hot-water draw → 59–65 Hz). An earlier version said "four times", which came from the
    superseded ~2400 figure. It prints counted against expected. **Anything other than an
    exact match means the shot pulse count cannot be trusted**, and the
    glitch/drop counters say which half is at fault.
@@ -1113,10 +1137,10 @@ the display is back in temperature mode, so edges lost there cost nothing.
    | Output | **NPN open collector**, 0 VDC active, saturation <0.7 V | Daitron + Digmesa product pages, corroborated |
    | Signal load | max 20 mA | as above |
    | Supply | **+3.8 to +20 VDC**, <8 mA | **search summary of an unretrieved datasheet; another secondary source says +2.8 to +24 VDC** |
-   | K-factor | **~5900 pulses/L MEASURED 2026-10-08** (datasheet summaries said ~2400) | **two weighed flushes — see below** |
+   | K-factor | **5900–6500 pulses/L MEASURED 2026-10-08, n=2** (datasheet summaries said ~2400) | **two weighed flushes — see below** |
    | Accuracy | ± 2.0 % | product pages |
 
-   **MEASURED 2026-10-08: ~5900 pulses/L, 2.5× the sourced figure.** Two
+   **MEASURED 2026-10-08: 5900–6500 pulses/L from two runs, ~2.5× the sourced figure.** Two
    weighed flushes into a jug on the yield Bookoo, free flow, no basket:
    **164 counts / 25.2 g** and **1209 counts / 204.4 g**, i.e. 6508 and 5915
    pulses/L. Both rows are in `flowmeter_calibration`, the larger preferred.
@@ -1237,7 +1261,7 @@ the display is back in temperature mode, so edges lost there cost nothing.
    correctly before trusting the analyser.**
 
    **What 0d can and cannot deliver.** **Recompute these against the
-   measured ~5900 pulses/L** — at that figure each pulse is **~0.17 ml** and
+   measured 5900–6500 pulses/L** — at that figure each pulse is **~0.17 ml** and
    an espresso shot at ~2 ml/s pulses at **~12 Hz**, not 4.8. The numbers
    below were derived from the sourced ~2400 (0.42 ml, ~4.8 Hz, ceiling
    ~16 Hz) and have not been reworked; the resolution argument gets *better*

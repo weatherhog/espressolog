@@ -105,7 +105,10 @@ Share ground with the board's VSS. That's safe here — the 5 V rail
 comes from an IRM-03-5, which is an isolated module — provided the
 ESP32 also runs from an isolated supply (any USB phone charger).
 
-**Firmware DONE (0.9.0, 2026-10-07); the tap is NOT yet built.** Four
+**DONE 2026-10-08 — firmware and tap both.** All four lines were fitted,
+exercised against the real machine and logged correctly; lever B's conductor
+mapping went from plug inspection to functional in the same session. See
+`docs/phase-0-status.md`. Four
 polled, debounced lines, each press emitted with its backdated start and
 duration, and a hold past 2 s flagged as a timer reprogram — which is the
 machine rewriting its own configuration and the reason this machine's 1Cup
@@ -145,7 +148,11 @@ so nobody re-derives them:
 **Read `docs/phase-0-status.md` before touching J4.** The 2026-10-03 tap
 made the machine fault with `E01` mid-cycle — a hard invariant-1 violation.
 
-**Firmware DONE (0.9.0, 2026-10-07); the tap is NOT yet refitted.** Falling
+**DONE 2026-10-08 — firmware and tap both.** The J4 tap was refitted with
+the 100 K + 220 K divider, energised, and **produced no `E01`**: the
+invariant-1 risk from 2026-10-03 is retired. Pulses reached the database.
+What is still open is whether the counts are water or ringing — see the
+filter sweep in `docs/phase-0-status.md`. Falling
 edges on GPIO6 into a ring, a 2 ms glitch floor, and a count windowed to the
 shot so a hot-water draw cannot be attributed to a brew (the window opens at
 pour confirmation — CLAUDE.md has the two gaps that leaves). Off by
@@ -153,7 +160,7 @@ default behind `flow on`; `selftest` drives a known pulse train from GPIO8
 so the counting path is provable on the bench without the machine.
 
 **Calibrate empirically** — run water into a jug on the Bookoo, count pulses,
-divide. **DONE 2026-10-08: ~5900 pulses/L measured** over two weighed
+divide. **DONE 2026-10-08: 5900–6500 pulses/L measured, n=2** over two weighed
 flushes (both in `flowmeter_calibration`), which is 2.5× the ~2400 search
 summary — that figure came from a datasheet nobody could retrieve and is now
 folklore. The measurement is provisional until the analyser confirms the
@@ -230,7 +237,7 @@ instead of soldering to the board.
 
 | Item | Notes | ~€ |
 |---|---|---|
-| Resistor kit, E12 1/4 W | dividers and series protection | 8 |
+| ~~Resistor kit, E12 1/4 W~~ | **Not required** — see `shopping-list.md`: it covers no named value, and cheap kits are 5 % where every divider here wants 1 %. All of them are in stock. | — |
 | 30 AWG silicone hookup wire, 4 colours | flexible, survives vibration | 8 |
 | JST pigtails, assorted pitch | **after** identifying connectors | 8 |
 | Perfboard + pin headers | 6 |
@@ -246,13 +253,86 @@ instead of soldering to the board.
 | Headband magnifier | 15 |
 | Multimeter | (you have one) |
 
-### Deliberately not yet — Phase 1
+### Phase 1 — switch actuation, PROVISIONED ON THE PERFBOARD
 
-74HC123 or NE555, optocoupler, RC parts for the one-shot.
+**Decided 2026-10-08.** The operator chose to design actuation into the
+perfboard rather than retrofit it later, after the arguments below were put
+and reaffirmed. Retrofitting into a finished, glanded, cable-tied box is the
+cost that decided it.
 
-Don't order these now. Phase 0f might change your mind about whether
-brew-by-weight is even the right next step, and it would be a shame to
-have the parts sitting there arguing with the data.
+**This does not end Phase 0 by itself.** The board is Phase 0 while the drive
+section is unarmed; see the hardware disable below, which is what makes that
+a provable statement rather than a firmware claim.
+
+#### Topology, per actuated line
+
+```
+J2 pos 1 (+5 V common) ──┬───────────────────────┐
+                         │                  [photoMOS]
+J2 pos N (direction) ────┼──[150K]──┬── GPIO      │
+                         │       [220K]           │
+                         └──────────┴─────────────┘
+                                   GND     ← drive path, parallel to sense
+```
+
+A **photoMOS relay** (AQY212, TLP222A) across common↔direction is a genuine
+contact replacement: bidirectional, a few ohms on-resistance against R45's
+100 Ω, no saturation offset, optically isolated. It does what the lever does.
+
+**CLAUDE.md's "not an optocoupler" warning does not apply here.** That is
+about *sensing* — milliamps through the sense network would break the board's
+own threshold. On the drive path current is the point.
+
+#### The one-shot: 74HC221, not the 74HC123
+
+Holding a direction line past ~2 s **reprograms that direction's stored
+timer**, permanently and silently. So the pulse width must be bounded by
+hardware, not by firmware intent.
+
+**The '123 is retriggerable and does not do that.** A trigger oscillating
+faster than ~8 Hz restarts the pulse before it ends and holds the output high
+indefinitely — a boot loop or a floating pin is enough. The '221 is
+non-retriggerable: one bounded pulse per trigger, whatever the input does
+next. ~120 ms via its RC.
+
+The NE555's mirror-image trap (a trigger held low holds the output high)
+needs an RC+diode differentiator to avoid. The '221 does not.
+
+#### Scope: actuate two lines, sense four
+
+Brew-by-weight needs **1Cup and 2Cup** only — the board latches, so one pulse
+starts and a second stops. Steam and Hot Water gain nothing and double both
+the parts and the failure surface. **Sense all four, drive two.**
+
+One dual 74HC221 and two photoMOS.
+
+#### Two things that make it provably safe
+
+- **A hardware disable.** A jumper or DIP switch cutting power to the
+  photoMOS LEDs, so actuation is *physically* impossible in that position.
+  This is what lets "the board is still Phase 0" be a fact about the hardware.
+- **An arm gate.** AND the one-shot output with a second GPIO that firmware
+  must hold high, so one stuck or floating trigger pin cannot fire anything.
+
+#### What this changes in the harness
+
+**J2 position 1 must come to the board.** Today it deliberately does not — it
+is the supply and is never tapped. The drive path needs it as the switching
+source, so the J2 T-piece goes from four conductors to five, and that
+connector carries switching current rather than microamps. **Settle this
+before crimping the new cables.**
+
+#### The argument against, recorded rather than dropped
+
+0f measured **σ = 0.21 g/s on mean flow, 12.2 %**, and the project's own
+reading is that a controller resolving less than ~12 % is chasing noise. That
+figure bundles puck prep with the machine, and **0f has not been re-run with
+machine-sourced timing**. The original plan deliberately deferred these parts
+so 0f could inform the decision.
+
+That argument is unresolved, not refuted. Provisioning the board does not
+commit to populating it, and the go/no-go on *fitting and arming* the drive
+section should still wait for a 0f re-run.
 
 ---
 

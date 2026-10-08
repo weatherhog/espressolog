@@ -46,17 +46,33 @@ public:
   static constexpr uint32_t MIN_PERIOD_US = 2000;   // the default
 
   // RUNTIME-SETTABLE, for one specific experiment. The measured K-factor
-  // (~5900 pulses/L, 2.5x the datasheet summary) is consistent with two
+  // (5900-6500 pulses/L, ~2.5x the datasheet summary) is consistent with two
   // stories: the counts are real, or each real pulse rings past the filter
-  // and scores extra counts. Running the same flush at two filter widths
-  // separates them without touching the machine:
+  // and scores extra counts.
   //
-  //   ringing lives within a few ms of each transition, so a 20 ms window
-  //   rejects it; real pulses at the measured rate are ~140 ms apart, so a
-  //   20 ms window rejects none of them.
+  // SWEEP SEVERAL WIDTHS, DO NOT COMPARE TWO. The first version of this
+  // specified 2 ms against 20 ms and was unusable, because both outcomes
+  // produce the same signature:
   //
-  //   counts/gram agree  -> the 2 ms counts were water
-  //   20 ms count ~40 %  -> we were counting ringing
+  //   a 20 ms window starts rejecting real pulses at 50 Hz = 8.5 ml/s;
+  //   the sensor's rated ceiling (0.40 L/min) is 25 ms, only 27 % clear,
+  //   and a hot-water draw at 10 ml/s is 17 ms — BELOW the window, where a
+  //   20 ms filter counts every second pulse, i.e. a 50 % drop.
+  //   The "it was ringing" verdict is a drop toward 2400/5915 = 41 %.
+  //   Indistinguishable. And the two calibration flushes' durations were
+  //   never recorded, so which regime they ran in is unknown. The 140 ms
+  //   figure the first version quoted is ESPRESSO flow (1.2 ml/s); the
+  //   experiment runs on a flush, which is unrestricted.
+  //
+  // Sweep 2 / 5 / 10 / 20 ms and record each run's WEIGHT AND DURATION:
+  //
+  //   ringing dies within a few ms, so it is gone by ~5 ms and the count
+  //   then goes FLAT across 5 -> 10 -> 20.   A filter eating real pulses
+  //   declines CONTINUOUSLY, and the duration tells you the pulse period
+  //   so you can predict where that starts.
+  //
+  //   plateau after 5 ms   -> ringing removed, the remaining count is water
+  //   continuous decline   -> the filter is eating real flow
   //
   // The alternative was a logic analyser on `#` — which is the tap that
   // produced the E01 fault on 2026-10-03, and whose corrected conditioning

@@ -102,8 +102,16 @@ All four are wired, and both levers share conductor 1 as their common.
 **All four conductor→function assignments are now functional.** 1Cup/2Cup
 came from lever-operated continuity on 2026-10-04; Steam/Water was plug
 inspection until **2026-10-08**, when the 0c tap went live and each lever
-direction was watched driving its own line into its own GPIO. That was the
-weakest claim in this file and it is now the same grade as the rest.
+direction was watched driving its own line into its own GPIO.
+
+**It is not quite the same grade as lever A's, and the difference is worth
+keeping.** Lever A's mapping is one link: a lever closes, a continuity pair
+closes. Lever B's is three — the tap test fixes conductor→GPIO→firmware
+name, and the conductor→*function* step still leans on the 2026-10-04
+behavioural observations (B up runs the pump, B down drives the boiler to
+165 °C), which were observed rather than instrumented, plus the breadboard
+lead routing. The conclusion is sound — a swap of 2/5 would have logged
+`steam` for B up — but it is a three-link claim, not a one-link one.
 
 **Two consequences of lever B, found 2026-10-04 and not yet designed for:**
 
@@ -857,8 +865,9 @@ The risk was that a swap would make the firmware label a steam event as a
 water draw, breaking exactly the two things the four-line tap is for. It was
 settled not with the meter but with the tap itself: with all four dividers
 fitted and `switches on`, lever B up logged `water` and lever B down logged
-`steam`. Stronger than the planned continuity check, because it exercises
-the whole chain — conductor, divider, GPIO, firmware name.
+`steam`. It exercises more of the chain than the planned continuity check —
+conductor, divider, GPIO, firmware name — but it is a *longer* evidential
+chain for the identification itself; see the lever table above.
 
 **GPIO budget for the whole board: seven inputs.**
 
@@ -963,20 +972,41 @@ flow, no basket, fw 0.9.0 with the 100 K + 220 K divider:
 Both runs are in `flowmeter_calibration`; the 204.4 g one is preferred (at
 25 g, splash and start/stop edges are ~4 % of the measurement).
 
+**Quote it as 5900–6500 pulses/L from n=2, not as "5900".** The two runs
+disagree by **10 %**, which is 5× the sensor's rated ±2 % accuracy, and the
+~4 % small-sample argument does not account for the other 6 %. A third run
+at ~200 g would say whether the spread is the small sample or something
+real.
+
 **The 2400 figure was never verified** — a search summary of an unobtainable
-datasheet, sources spread 2386–2494, and its predecessor (1300) was 1.8 wrong for being the Ø1.50 mm row. Treat the measured number as the working
+datasheet, sources spread 2386–2494, and its predecessor (1300) was 1.8×
+wrong for being the Ø1.50 mm row. Treat the measured number as the working
 one and the datasheet number as folklore.
 
-**But the measurement is PROVISIONAL, for a reason worth keeping.** 1209
-counts is equally consistent with ~490 real pulses each ringing past the
-2 ms glitch window and scoring extra counts. What argues against that is the
-rejected:counted ratio holding at **3.32 and 3.34 across an 8× volume
-change** — independent environmental noise would wobble, ringing correlated
-with each real transition would not. Suggestive, not proof. **Settle it with
+**But the measurement is PROVISIONAL.** 1209 counts is equally consistent
+with ~490 real pulses each ringing past the 2 ms glitch window and scoring
+extra counts.
+
+**What rules out one class of error: a 35-second idle window, machine
+powered, logged ZERO counts and ZERO glitches.** So there is no free-running,
+flow-independent source on this line — the glitches only exist while the pump
+does. That is the strongest evidence this session produced about the counts
+and it was left out of the first write-up entirely.
+
+**What does NOT discriminate, recorded because it was argued and is wrong:**
+the rejected:counted ratio holding at 3.32 and 3.34 across an 8× volume
+change. Both runs were free flushes at the same flow rate, so **duration
+scaled 8× as well** — a *time*-proportional source produces exactly that
+constant ratio. The argument only works if the flow rate differs between
+runs, and it did not. Neither run's duration was recorded, which would have
+made the error visible.
+
+So the open question is narrowed, not closed: the noise is pump-correlated,
+but whether it is ringing around real pulses (counts correct) or hash that
+scores its own counts (counts inflated ~2.5×) is undecided. **Settle it with
 the logic analyser on `#`** (8.2 K series, one channel, ground to `T`) and
-compare its edge count against the firmware's before this is called the
-sensor's K-factor. Invariant 3 means nothing downstream bakes it in either
-way.
+compare its edge count against the firmware's. Invariant 3 means nothing
+downstream bakes the factor in either way.
 
 **J4 pinout — roles MEASURED 2026-10-04**, with a DC pen meter, at the
 window in the 2S T-piece lead, nothing attached:

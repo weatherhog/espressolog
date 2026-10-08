@@ -253,7 +253,7 @@ Full reasoning in `docs/phase-0-status.md`.
 
 Buy the load-bearing values as dedicated bags rather than relying on an
 assortment kit — **1 % metal film, 1/4 W**. Cheap E12 kits are 5 %, and
-while both dividers survive that (J4 +96 mV, 0c +110 mV), the margins are
+while both dividers survive that (J4 +271 mV, 0c +110 mV), the margins are
 tighter than they need to be for the sake of a few euro.
 
 | Value | Qty | Where |
@@ -266,7 +266,7 @@ tighter than they need to be for the sake of a few euro.
 | 8.2 kΩ (J4) | — | **J4 ANALYSER tap only: 8.2 kΩ, one channel, `#` only, no shunt.** The ESP32 tap at J4 is **100 K + 220 K** — see the 0d entry in `docs/phase-0-status.md`. Covered by the 8.2 kΩ bag above. |
 | **100 kΩ** | 10 | **0d J4 divider, series leg (×1)** — the chosen value since 2026-10-08. **In stock.** |
 | 120 kΩ | 0 | **NOT in stock.** Recorded as in stock on 2026-10-07 from a verbal report; the bag held 100 K and 150 K. Superseded by 100 kΩ, which has ~double the margin — not needed. |
-| E12 assortment kit, 1/4 W | 0 | **Not required.** It covers no named requirement, and cheap kits are 5 % where the rows above are 1 %. Both dividers survive 5 % (J4 +96 mV, 0c +110 mV), and 100 kΩ is already in stock. |
+| E12 assortment kit, 1/4 W | 0 | **Not required.** It covers no named requirement, and cheap kits are 5 % where the rows above are 1 %. Both dividers survive 5 % (J4 +271 mV, 0c +110 mV — the J4 figure was +96 mV while 120 K was specified), and 100 kΩ is already in stock. |
 
 Three of these are load-bearing — 0c is in CLAUDE.md, 0e and 0d are
 worked out in `docs/phase-0-status.md`. Repeated here because getting any

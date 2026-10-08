@@ -13,7 +13,7 @@
 #include "machine_io.h"
 #include <driver/gpio.h>
 
-const char* FIRMWARE_VERSION = "0.9.0";
+const char* FIRMWARE_VERSION = "0.9.1";
 const char* DETECTOR_VERSION = "0a.6";
 
 static ScaleManager scales;
@@ -82,16 +82,25 @@ static void IRAM_ATTR dbusIsr() {
   dbus_head = nxt;
 }
 
+// Idempotent, like flowSetEnabled and switchesSetEnabled. `display on` while
+// already on zeroes the frame and drop counters, which is the only way to get
+// a per-event figure out of them: both are free-running since boot and nothing
+// else resets them. 0.9.0 returned early here, so the written experiment for
+// the dropped-frame question — "run a flush and see whether dropped stays near
+// zero" — could not be performed at all without a reboot. That defect was
+// fixed in flowSetEnabled in the same commit and left standing in the one path
+// the open question depends on.
+//
+// Interrupt detached before the ring is zeroed, for the same race reason.
 static void displaySetEnabled(bool on) {
-  if (on == display_on) return;
+  if (display_on) detachInterrupt(digitalPinToInterrupt(DISPLAY_CLK_PIN));
   if (on) {
     pinMode(DISPLAY_CLK_PIN, INPUT);
     pinMode(DISPLAY_DATA_PIN, INPUT);
     dbus_head = dbus_tail = 0;
+    dbus_frames = dbus_dropped = 0;
     display_bus.beginCapture();   // drop the in-progress frame; see display.h
     attachInterrupt(digitalPinToInterrupt(DISPLAY_CLK_PIN), dbusIsr, RISING);
-  } else {
-    detachInterrupt(digitalPinToInterrupt(DISPLAY_CLK_PIN));
   }
   display_on = on;
 }
@@ -140,8 +149,17 @@ static void printDisplay(Stream& out) {
 
   const DisplayBus::Buttons& b = display_bus.buttons();
   out.printf(" | buttons=%s%s", b.left ? "L" : "-", b.right ? "R" : "-");
-  out.printf(" | frames=%lu dropped=%lu\n",
-             (unsigned long)dbus_frames, (unsigned long)dbus_dropped);
+  // UNITS DIFFER AND THEY ARE PRINTED SIDE BY SIDE: frames are completed
+  // frames (~66-133 bits each), dropped are individual ISR edges. Comparing
+  // them directly reads a ~1 % loss as a ~100 % one, which is exactly the
+  // mistake made on 2026-10-08. Labelled rather than left to the reader.
+  out.printf(" | frames=%lu dropped_edges=%lu (~%lu%% of bus)\n",
+             (unsigned long)dbus_frames, (unsigned long)dbus_dropped,
+             // 64-bit: dropped*100 overflows uint32 past ~43 M edges, which a
+             // long uptime reaches. ~100 bits/frame is the estimate (frames are
+             // 66, 67 or 133 merged), so the figure is indicative, not exact.
+             dbus_frames ? (unsigned long)(((uint64_t)dbus_dropped * 100ULL)
+                           / ((uint64_t)dbus_frames * 100ULL + dbus_dropped)) : 0UL);
 }
 
 // --------------------------------------------------- machine wiring (0c/0d)
@@ -164,7 +182,7 @@ static void printDisplay(Stream& out) {
 // resistor dividers in the hundreds of kilohms, and the ESP32's internal
 // resistors are ~45 kR — they would sit across the shunt leg and collapse the
 // level. The display bus carries the same warning for the same arithmetic.
-static constexpr uint8_t FLOW_PIN = 6;                      // J4 `#`, via 120K + 220K
+static constexpr uint8_t FLOW_PIN = 6;                      // J4 `#`, via 100K + 220K
 // Order matches SwitchBank::Line, NOT J2's connector order (J2 runs
 // +5V, Steam, 2Cup, 1Cup, Water — note 2Cup sits BEFORE 1Cup).
 static constexpr uint8_t SW_PINS[SwitchBank::N_LINES] = { 7, 15, 16, 17 };
@@ -196,8 +214,10 @@ static bool     flow_ever = false;
 // Same producer/consumer split as the display bus: the ISR stamps and
 // enqueues, loop() is the only consumer, and the glitch filter runs in the
 // pure class so the logic that ships is the logic the host tests exercise.
-// 64 entries is ~2.6 s at the fastest plausible real rate (~24 Hz, a
-// hot-water draw) against a 5 ms loop, so an overflow here does not mean
+// 64 entries is ~1.1 s at the fastest plausible real rate (~59 Hz, a
+// hot-water draw at the MEASURED ~5900 pulses/L — it was ~24 Hz against the
+// old ~2400 figure) and the loop drains every ~5 ms, so an overflow here
+// does not mean
 // "busy" — it means the line is carrying something that is not flow. That is
 // a bench-test result, which is why it is counted rather than smoothed.
 static constexpr uint16_t FLOW_RING = 64;
@@ -218,8 +238,8 @@ static void IRAM_ATTR flowIsr() {
 
 // IDEMPOTENT ON PURPOSE: `flow on` while already on still zeroes the
 // diagnostics, because that is how an operator gets a clean slate between
-// bench runs. 0.9.0 opened with `if (on == flow_on) return;`, so the reset
-// never ran in the one case anyone would type it for — the documented clean
+// bench runs. Up to 0.9.0 this opened with `if (on == flow_on) return;`, so
+// the reset never ran in the one case anyone would type it for — the documented clean
 // slate silently did nothing and a stale glitch count read as current.
 // Found at the bench 2026-10-08 while calibrating, after `flow on` left
 // glitches=1384 standing and the next reading was interpreted against it.
@@ -260,7 +280,11 @@ static void switchesSetEnabled(bool on) {
     // rewire made the first poll afterwards emit a release whose duration was
     // the hours in between — see SwitchBank::reset().
     switches.reset();
-    sw_last_poll = 0;   // the off period is not a loop() stall; see sw_max_gap
+    // Both, not just the first: sw_max_gap is only ever raised, so leaving it
+    // made `switches on` reset the debounce state but not the diagnostic the
+    // reset exists to give a clean slate for. 0.9.0 cleared only sw_last_poll
+    // and the write-up still called the path idempotent.
+    sw_last_poll = sw_max_gap = 0;
   }
   switches_on = on;
 }
@@ -473,9 +497,9 @@ static void printMachine(Stream& out) {
     out.println("# flow: off — 'flow on' once the J4 tap is wired."
                 " READ docs/phase-0-status.md FIRST: the 2026-10-03 tap faulted the machine (E01).");
   } else {
-    out.printf("# flow: pulses=%lu glitches=%lu dropped=%lu last=",
+    out.printf("# flow: pulses=%lu glitches=%lu dropped=%lu filter=%luus last=",
                (unsigned long)flow.total(), (unsigned long)flow.glitches(),
-               (unsigned long)flow_dropped);
+               (unsigned long)flow_dropped, (unsigned long)flow.minPeriodUs());
     if (!flow_ever) out.println("NEVER (nothing has pulsed since boot)");
     else out.printf("%lu ms ago\n", (unsigned long)(millis() - flow_last_ms));
     if (flow.glitches() > flow.total() / 4 && flow.glitches() > 20)
@@ -580,7 +604,7 @@ static void handleCommand(String line, Stream& out) {
   String arg = sp < 0 ? "" : line.substring(sp + 1);
 
   if (cmd == "help" || cmd == "h") {
-    out.println("# status|s  tare|t  raw|r  verbose|v  display [on|off]  flow [on|off]  switches [on|off]  pins  selftest [n] [hz]  ls  dump <file>  rm <file>  fake  net  scales  assign <yield|dose> <mac|last>  set <ssid|pass|endpoint> <val>  reboot");
+    out.println("# status|s  tare|t  raw|r  verbose|v  display [on|off]  flow [on|off|filter <us>]  switches [on|off]  pins  selftest [n] [hz]  ls  dump <file>  rm <file>  fake  net  scales  assign <yield|dose> <mac|last>  set <ssid|pass|endpoint> <val>  reboot");
   } else if (cmd == "status" || cmd == "s") {
     out.printf("# yield: state=%d mac=%s | dose: state=%d mac=%s\n",
                (int)scales.slotState(ScaleRole::YIELD), scales.slotMac(ScaleRole::YIELD).c_str(),
@@ -605,6 +629,25 @@ static void handleCommand(String line, Stream& out) {
     // Persisted in NVS exactly like `display`: the taps go in one at a time,
     // and a reboot must not silently re-enable an input whose wire is out.
     bool is_flow = (cmd == "flow");
+    if (is_flow && arg.startsWith("filter")) {
+      String v = arg.substring(6); v.trim();
+      if (v.length()) {
+        uint32_t us = (uint32_t)v.toInt();
+        if (us > 100000) {
+          out.println("# refused — a filter above 100 ms would reject real flow");
+        } else {
+          flow.setMinPeriodUs(us);
+          out.printf("# flow filter = %lu us%s\n", (unsigned long)us,
+                     us == 0 ? " (OFF — every edge counts)" : "");
+          out.println("# NOT persisted; a reboot restores 2000 us. Run 'flow on' to"
+                      " zero the counters before comparing.");
+        }
+      } else {
+        out.printf("# flow filter = %lu us (usage: flow filter <microseconds>)\n",
+                   (unsigned long)flow.minPeriodUs());
+      }
+      return;
+    }
     if (arg == "on" || arg == "off") {
       bool on = (arg == "on");
       // Writing NVS is a flash write of tens of ms, which invariant 2 forbids

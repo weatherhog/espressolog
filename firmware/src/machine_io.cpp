@@ -2,7 +2,7 @@
 
 // ---------------------------------------------------------------- 0d: flow
 bool PulseCounter::feedEdge(uint32_t t_us) {
-  if (have_last && (uint32_t)(t_us - last_us) < MIN_PERIOD_US) {
+  if (have_last && (uint32_t)(t_us - last_us) < min_period_us) {
     // Deliberately does NOT advance last_us: the window is measured from the
     // last REAL pulse, so noise can never push it far enough to reject the
     // next genuine one. Advancing it here would let a sustained train just

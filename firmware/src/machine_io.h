@@ -43,7 +43,29 @@ public:
   // count, the bench test must see it rather than have it quietly filtered.
   // Raising this floor to 11 ms to swallow mains hum would also swallow a
   // real 90 Hz signal, and would hide a bad tap instead of reporting it.
-  static constexpr uint32_t MIN_PERIOD_US = 2000;
+  static constexpr uint32_t MIN_PERIOD_US = 2000;   // the default
+
+  // RUNTIME-SETTABLE, for one specific experiment. The measured K-factor
+  // (~5900 pulses/L, 2.5x the datasheet summary) is consistent with two
+  // stories: the counts are real, or each real pulse rings past the filter
+  // and scores extra counts. Running the same flush at two filter widths
+  // separates them without touching the machine:
+  //
+  //   ringing lives within a few ms of each transition, so a 20 ms window
+  //   rejects it; real pulses at the measured rate are ~140 ms apart, so a
+  //   20 ms window rejects none of them.
+  //
+  //   counts/gram agree  -> the 2 ms counts were water
+  //   20 ms count ~40 %  -> we were counting ringing
+  //
+  // The alternative was a logic analyser on `#` — which is the tap that
+  // produced the E01 fault on 2026-10-03, and whose corrected conditioning
+  // has never been re-tested. This reuses the ESP tap, which has been.
+  //
+  // Deliberately NOT persisted in NVS: a filter width left over from a bench
+  // run must not silently shape months of shot data. A reboot restores 2 ms.
+  void setMinPeriodUs(uint32_t us) { min_period_us = us; }
+  uint32_t minPeriodUs() const { return min_period_us; }
 
   // One timestamped falling edge, in ISR arrival order. Returns true if it
   // was counted, false if the glitch filter ate it.
@@ -82,6 +104,7 @@ public:
   }
 
 private:
+  uint32_t min_period_us = MIN_PERIOD_US;
   uint32_t counted = 0;
   uint32_t rejected = 0;
   uint32_t last_us = 0;

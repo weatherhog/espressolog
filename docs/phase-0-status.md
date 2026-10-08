@@ -123,7 +123,7 @@ Everything on the breadboard, all three T-pieces in the machine, firmware
 
 | | |
 |---|---|
-| **`selftest`** | **500/500, 0 glitches, 0 ring drops** at 100 Hz — four times the fastest rate the sensor can produce. The one thing host tests cannot establish, because a real shot has no independent count to check against. |
+| **`selftest`** | **500/500, 0 glitches, 0 ring drops** at 100 Hz — ~2.5× the sensor's rated ceiling at the measured K-factor (not 4×, which came from the superseded ~2400). The one thing host tests cannot establish, because a real shot has no independent count to check against. |
 | **All four switches** | correct GPIO mapping, taps of 345–480 ms, no false reprogram |
 | **Lever B** | **plug inspection → functional.** B up logged `water`, B down logged `steam` |
 | **J4 first contact** | **no `E01`.** The 100 K + 220 K is energised and the machine has not noticed — the tap that faulted it on 2026-10-03 |
@@ -133,34 +133,82 @@ Everything on the breadboard, all three T-pieces in the machine, firmware
 
 **The 0d chain is proven by the data, not by inspection.** Shot 109 (fw
 0.8.2, no tap) stores `inlet_pulses` NULL; shots 110–112 (fw 0.9.0, tap live)
-store integers climbing monotonically from 0. That is exactly the distinction
-`SPOOL_FLAG_FLOW_TAP` exists for, and the one the server destroyed until
-2026-10-07 by binding NULL for every record. 110–112 are marked `excluded` —
+store integers. That is the distinction `SPOOL_FLAG_FLOW_TAP` exists for,
+and the one the server destroyed until 2026-10-07 by binding NULL for every
+record.
+
+**Shot 110 is the one that proves it.** Its 46 samples are all `0` — not
+NULL. A stored zero that *is* a measurement ("the tap was live and no water
+moved") is exactly what the flag buys, and without it that zero is
+indistinguishable from the placeholder. 111 and 112 climb monotonically from
+0 to 100 and 927. 110–112 are marked `excluded` —
 they are calibration flushes, not shots.
 
 **1027 of 1209 counts landed inside shot windows.** The missing ~180 is flow
 between cycles and before each pour confirmed, which is the documented
 two-gap behaviour and closes when 0c supplies the pump-start edge.
 
-### Opened: the display bus drops frames during a flush
+### Opened, and SMALLER than first written: the display bus drops ~1 % of edges
 
-**`frames=3677 dropped=5812`** — more lost than captured, accumulated during
-the calibration run, on a board that had rebooted since an earlier
-`dropped=20016`. So the first explanation (a hot-plugged GPIO4 floating and
-storming the ISR) does **not** cover it: something in a flush cycle stalls
-the display consumer repeatedly.
+**`frames=3677 dropped_edges=5812`.** The first write-up of this called it
+"more lost than captured" and made it the reason to stop work. **That was a
+units error of about two orders of magnitude.** `dbus_frames` counts
+completed frames (66, 67, or 133 bits merged); `dbus_dropped` counts
+individual ISR edges. 3677 frames is on the order of 250–490 k edges, so
+5812 dropped is **~1 %** of the bus. The serial line printed the two
+counters side by side unlabelled, which is what invited it; 0.9.1 prints
+`dropped_edges` with a percentage instead.
 
-This is a **0e correctness problem, not a diagnostic nuisance**:
-`boiler_temp_start_c` and `machine_timer_dl` both come off that bus.
+~1 % of digit readings lost in bursts is still worth closing —
+`boiler_temp_start_c` and `machine_timer_s` (the DB columns;
+`machine_timer_dl` on the wire) both come off this bus — but it
+is a defect to schedule, not a reason to stop.
 
-Leading suspect is the spool. Each cycle closes a record and writes it to
-LittleFS; a flash write blocks tens of ms against a ring holding ~50 ms of
-bus. That is invariant 2's harm landing just *after* the shot rather than
-during it — which the invariant does not currently forbid.
+**Two candidate causes, and the session's own data disfavours the first.**
 
-**The experiment that splits it:** run a flush with the yield scale
-disconnected, so no record is spooled. `dropped` near zero means the spool
-write; `dropped` climbing anyway means the flow ISR, and the fix differs.
+- *The spool's flash write.* Each cycle closes a record and writes to
+  LittleFS, blocking tens of ms against a ring holding ~50 ms of bus. But
+  `pollSwitches` runs in the same `loop()` and measured a **worst poll gap of
+  10 ms** across the whole session. A tens-of-ms stall would have shown
+  there and did not.
+- *A noisy GPIO4 firing far above 9.9 kHz.* Consistent with both readings,
+  and with the 2229 flow-ring drops measured on a floating lead the same
+  evening. **This is now the leading suspect**, against the first write-up.
+
+**What the data does NOT support:** that these drops accumulated *during the
+flush*. All three readings (835/0, 7545/20016, 3677/5812) are single
+cumulative samples since boot, with no before-flush value recorded. The
+counters were free-running and nothing could reset them — `displaySetEnabled`
+had the same early-return defect that was fixed in `flowSetEnabled` in the
+same commit. **0.9.1 makes it idempotent**, so `display on` now zeroes both
+counters and a per-event figure is obtainable.
+
+**Settling the K-factor without the analyser — `flow filter <us>`, 0.9.1.**
+The glitch window is now runtime-settable, because the obvious instrument is
+the wrong one: the logic analyser tap on `#` is what produced the `E01` fault
+on 2026-10-03, and its corrected 8.2 K conditioning has never been re-tested,
+while the ESP tap at 100 K + 220 K now has been. So reuse the proven tap and
+vary the filter instead.
+
+Run the **same flush twice**, weighing both:
+
+| | |
+|---|---|
+| `flow filter 2000` | the shipped width |
+| `flow filter 20000` | wide enough to swallow ringing, far below the ~140 ms between real pulses at the measured rate |
+
+**Counts per gram agree** → the counts are water and ~5900 pulses/L stands.
+**The 20 ms count falls toward ~40 %** → we were counting ringing, and the
+true figure is near the datasheet's ~2400.
+
+Host cases 5b and 5c pin both outcomes: clean input is width-invariant, and
+ringing that outlives the window inflates at 2 ms and is recovered at 20 ms.
+The filter is **not persisted** — a width left over from a bench run must not
+silently shape months of shot data, so a reboot restores 2 ms.
+
+**The dropped-edge experiment, now runnable:** `display on` to zero the counters, one
+flush with the yield scale disconnected so nothing is spooled, then read. Low
+`dropped_edges` implicates the spool; high implicates the ISR.
 
 ### Two defects the host tests could not have found
 
@@ -290,8 +338,11 @@ Everything here runs on the breadboard with the machine closed.
    is the baseline that makes step 2 mean something.
 2. **Flow counting, the one thing host tests cannot prove.** Jumper
    **GPIO8 → GPIO6**, nothing else connected, then `flow on` and `selftest`.
-   It drives 500 pulses at 100 Hz — four times the fastest plausible real
-   rate — and prints counted against expected. **Anything other than an
+   It drives 500 pulses at 100 Hz. **That is ~2.5× the sensor's rated
+   ceiling and ~1.7× the fastest plausible real rate**, recomputed against
+   the measured ~5900 pulses/L (0.40 L/min → 39 Hz; a 10 ml/s hot-water draw
+   → 59 Hz). An earlier version said "four times", which came from the
+   superseded ~2400 figure. It prints counted against expected. **Anything other than an
    exact match means the shot pulse count cannot be trusted**, and the
    glitch/drop counters say which half is at fault.
    *`selftest` is the only command that ever makes a pin an output. Unplug
@@ -305,25 +356,39 @@ Everything here runs on the breadboard with the machine closed.
    whether polling survives into the perfboard, and `dropped=0` on the
    display bus confirms the new ISR did not cost the old one anything.
 
-### What still needs the machine, and should be batched into one opening
+### What still needs the machine — ALL BUT ONE DONE 2026-10-08
 
-- **Meter lever B** — J2 positions 2 and 5 are plug inspection only. If they
-  are swapped the firmware labels steam as a water draw, which breaks the
-  two things the four-line tap is for. Two minutes with the meter.
-- **Fit J2 and J4, then `pins` before anything else.** Levels at rest decide
-  whether the dividers are right; at rest `flow` should read 1 and all four
-  switches 0. That is a measurement, not a calculation, and it is the thing
-  the perfboard is actually waiting on.
-- **J4 first contact is the risk.** The 100 K + 220 K has never been
-  energised, and the last J4 tap faulted the machine. Fit it, power on, *no
-  brew*, watch for `E01`. Then a flush. Then a shot. Not all three at once.
-- **Calibrate** — weigh water on the Bookoo against pulses, write the row
-  into `flowmeter_calibration`. **DONE 2026-10-08: ~5900 pulses/L measured**,
-  2.5× the ~2400 search summary, which was never a
-  datasheet.
-- Whether a **hot-water draw** pulses the meter at all. CLAUDE.md records
-  this as a prediction; nobody has traced the plumbing. First thing `#` can
-  answer once it is counting.
+**This list was stale within one session and is kept as a record of that.**
+Four of its five items were completed on 2026-10-08 and the first write-up
+of that session left this section untouched, so one file asserted both that
+lever B was plug-inspection-only and that it was functional, 200 lines apart.
+That is the repo's documented recurring defect reproduced inside a single
+file, by the commit that was documenting the fix for it.
+
+| was | now |
+|---|---|
+| Meter lever B (positions 2/5 plug inspection) | **DONE** — functional, see the bench section above |
+| Fit J2 and J4, then `pins` | **DONE** — all seven inputs read correctly |
+| J4 first contact, watch for `E01` | **DONE** — energised, no fault |
+| Calibrate against weighed water | **DONE** — 5900–6500 pulses/L, n=2, provisional |
+
+**Still open, and it needs the flowmeter counting during a lever-B draw:**
+whether a **hot-water draw** pulses the meter at all. CLAUDE.md records this
+as a prediction and nobody has traced the plumbing. 0d scopes its counting to
+shot boundaries either way, so nothing depends on the answer — but it decides
+whether a tap draw shows up as inlet flow.
+
+**Three measurements that now need the rig rebuilt.** The breadboard was
+disassembled on 2026-10-08 before these were taken, so they are no longer
+two-minute jobs — fold them into **perfboard bring-up**, which re-creates the
+same circuit anyway:
+
+- the **actual millivolts** at each divider junction with a lever held (we
+  proved the firmware reads `1`, never wrote down the margin)
+- the **dropped-edge experiment** (above), which needs `display on` to zero
+  the counters and one flush with the scale disconnected
+- the **logic analyser on `#`**, which is the only thing that settles whether
+  the measured K-factor counts water or ringing
 
 ## The J5 tap went live 2026-10-07, and two things came out of it
 
@@ -759,10 +824,10 @@ the display is back in temperature mode, so edges lost there cost nothing.
    | Position | Net | MCU pin | Evidence |
    |---|---|---|---|
    | **1** | **+5 V, switch common** | — | present in **all four** continuity pairs; **5.0 V** measured |
-   | 2 | Steam | PA10 | **plug inspection**; direction by analogy with lever A — not functionally verified |
+   | 2 | Steam | PA10 | **FUNCTIONAL 2026-10-08** — lever B down, logged `steam` through the fitted tap |
    | 3 | 2Cup | PB6 | lever A down |
    | 4 | 1Cup | PB5 | lever A up |
-   | 5 | Hot Water | PB4 | **plug inspection**; direction by analogy with lever A — not functionally verified |
+   | 5 | Hot Water | PB4 | **FUNCTIONAL 2026-10-08** — lever B up, logged `water` through the fitted tap |
 
    **Two findings that correct standing assumptions:**
 

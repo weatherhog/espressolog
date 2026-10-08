@@ -119,6 +119,60 @@ int main() {
     printf("5. silent-since-boot differs from merely idle OK\n");
   }
 
+  // 5b. The runtime-settable filter, which exists to settle whether the
+  //     measured ~5900 pulses/L counts water or ringing.
+  //
+  //     Case A, ringing that DIES inside the window (3 edges at 200 us
+  //     spacing): the 2 ms filter already cleans it, and widening to 20 ms
+  //     must not change the answer, because real pulses are 200 ms apart.
+  //     If a wider filter moved the count on clean input, the experiment
+  //     would be meaningless.
+  {
+    auto run = [](uint32_t width) {
+      PulseCounter p;
+      p.setMinPeriodUs(width);
+      for (int i = 0; i < 50; i++) {
+        uint32_t base = (uint32_t)i * 200000;              // 5 Hz
+        p.feedEdge(base);
+        for (int r = 1; r <= 3; r++) p.feedEdge(base + r * 200);
+      }
+      return p.total();
+    };
+    assert(run(PulseCounter::MIN_PERIOD_US) == 50);
+    assert(run(20000) == 50);
+    assert(run(0) == 200);          // filter off: every ringing edge scores
+    printf("5b. clean input is filter-width-invariant OK\n");
+  }
+
+  // 5c. Case B — THE SIGNATURE THE EXPERIMENT IS LOOKING FOR. Ringing that
+  //     outlives the window: edges every 1 ms for 3 ms. The window is
+  //     measured from the last COUNTED edge, so +1000 is rejected but +2000
+  //     is exactly 2000 us away and counts, inflating the total. A 20 ms
+  //     filter swallows the whole tail and recovers the true count.
+  //
+  //     This is what a flush will look like at two filter widths if the
+  //     ~5900 pulses/L figure is ringing rather than water — and it is the
+  //     case that broke the first draft of test 5b, which assumed 1 ms
+  //     ringing stayed inside a 2 ms window. It does not.
+  {
+    auto run = [](uint32_t width) {
+      PulseCounter p;
+      p.setMinPeriodUs(width);
+      for (int i = 0; i < 50; i++) {
+        uint32_t base = (uint32_t)i * 200000;
+        p.feedEdge(base);
+        for (int r = 1; r <= 3; r++) p.feedEdge(base + r * 1000);
+      }
+      return p.total();
+    };
+    uint32_t narrow = run(PulseCounter::MIN_PERIOD_US);
+    uint32_t wide   = run(20000);
+    assert(narrow == 100);          // inflated 2x by the surviving tail
+    assert(wide == 50);             // the truth
+    assert(narrow > wide);
+    printf("5c. ringing past the window inflates at 2 ms, recovered at 20 ms OK\n");
+  }
+
   // ------------------------------------------------------------ SwitchBank
   // 6. A short press: one event, backdated to the edge, not to confirmation.
   {

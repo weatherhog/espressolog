@@ -265,6 +265,7 @@ tighter than they need to be for the sake of a few euro.
 | 15 kΩ | 10 | 0e divider, ground leg, at the box (**×2** — `Disp-P4` stays unterminated). **In stock.** |
 | 150 kΩ | 10 | 0c switch divider, series leg (**×4** — all four J2 lines). **In stock 2026-10-07.** |
 | 220 kΩ | 10 | Ground leg: **×4 at J2** (1Cup, 2Cup, Steam, Water) **+ ×1 at J4** = **5**. **In stock.** |
+| **10 nF ceramic** | 10 | **NOT OPTIONAL — 3 needed: across the J4 220 K shunt and both J5 15 K shunts.** Added 2026-10-09: without them the J4 tap counts pump noise at ~8× the water, and the display ring drops 6086 edges at pump start. ~220 Hz low-pass against a ≤16 Hz signal. **Check stock.** |
 | 1 kΩ | 10 | 0d flowmeter, **at PA8/PA9 only** — the board side, after its own conditioning. **Never at J4.** **In stock.** |
 | 8.2 kΩ (J4) | — | **J4 ANALYSER tap only: 8.2 kΩ, one channel, `#` only, no shunt.** The ESP32 tap at J4 is **100 K + 220 K** — see the 0d entry in `docs/phase-0-status.md`. Covered by the 8.2 kΩ bag above. |
 | **100 kΩ** | 10 | **0d J4 divider, series leg (×1)** — the chosen value since 2026-10-08. **In stock.** |

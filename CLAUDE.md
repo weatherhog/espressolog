@@ -1026,78 +1026,109 @@ unverified" from 2026-10-04; it is now verified twice over.
 differ depending on medium and installation… we recommend to calibrate."*
 Invariant 3 already requires that.
 
-### The in-circuit measurement disagrees with the datasheet by 2.5×, and the reason is OPEN
+### THE J4 TAP AS BUILT MEASURES THE PUMP, NOT FLOW — settled 2026-10-09
 
-Two weighed free flushes into a jug on the yield Bookoo, fw 0.9.0,
-100 K + 220 K divider:
+Two shots, bracketed by idle, polled every 3 s. The bracket is the whole
+argument:
 
-| water | counts | glitches rejected | implied pulses/L |
-|---|---|---|---|
-| 25.2 g | 164 | 544 (3.32:1) | 6508 |
-| **204.4 g** | **1209** | **4032 (3.34:1)** | **5915** |
+| | pulses | glitches | flow ring dropped | display ring dropped |
+|---|---|---|---|---|
+| **40 s idle before** | 967 → 967 | 4988 → 4988 | 0 | 27748 (frozen) |
+| **pump running, 33 s** | 967 → **1717** | 4988 → **9371** | **629** | **+6086 at pump start** |
+| **45 s idle after** | 1728 → 1728 | 9371 → 9371 | 629 | 33998 (frozen) |
 
-Both rows are in `flowmeter_calibration`. **Do not treat 5900–6500 as this
-sensor's K-factor** — the datasheet says 2382 for this exact part number and
-orientation, and the excess is unexplained.
+**Not one count and not one glitch in 85 seconds of idle either side.** The
+instant the pump runs, both taps are swamped: ~22 Hz counted, ~128 Hz
+rejected, and **both ring buffers overflow** — the flow ring losing 629 edges
+and the display ring 6086 at pump start. It is the pump, not the heater, not
+the solenoid, not ambient.
 
-**LEADING HYPOTHESIS: the counts are pump-synchronous, not water.** A
-vibratory pump strokes once per mains cycle — **50 Hz**. Against that:
+**The counts are ~8× the water delivered, and it reproduces:**
 
-| run | counts ÷ 50 Hz | implied jug rate |
-|---|---|---|
-| 204.4 g | 24.2 s | 8.4 ml/s |
-| 25.2 g | 3.3 s | 7.7 ml/s |
+| | yield | counted | implied pulses/L | vs datasheet 2382 |
+|---|---|---|---|---|
+| shot 1 (machine failed to prime, air in the line) | 36.5 g | 752 | 20 600 | 8.6× |
+| shot 2 (primed, clean) | 37.9 g | 736 | 19 400 | 8.2× |
 
-Two runs an 8× volume apart imply **the same ~8 ml/s flush rate**, which is
-plausible for an unrestricted flush, with no free parameters. And the
-datasheet's **square wave at ~50 % duty** is not an output that produces 3.3
-rejected edges per counted one — that ratio was never a sensor signature.
+**Air was not the cause** — shot 2 was clean and agrees with shot 1 to 6 %.
+At the datasheet figure a 37.9 g shot should log ~90 pulses; 736 arrived.
+Roughly 600 of them are pump noise, and because the ring overflowed even 736
+is a **floor** on the edges that actually arrived.
 
-**Why the flush data cannot settle it, and nearly fooled us:** at ~8 ml/s,
-water at the measured 5915 p/L would give **47 Hz** against the pump's
-**50 Hz**. Three hertz apart. The flush regime is exactly where the two
-hypotheses overlap, which is why two careful weighed runs and a stable
-rejected:counted ratio looked like evidence and were not.
+**So there is no K-factor to extract from any in-circuit measurement taken so
+far, and the datasheet's 2382 stands unchallenged** — nothing we measured
+ever tested it. The two `flowmeter_calibration` rows are annotated in the
+database not to be used.
 
-**THE TEST IS A REAL SHOT**, because the rates separate there:
+**0d's binary signal is compromised too, as built.** "Water is flowing"
+cannot be read off a line that counts ~22 Hz of pump hash whether or not
+water moves.
 
-| | pump-synchronous | water @ 2382 | water @ 5915 |
-|---|---|---|---|
-| flush, ~8 ml/s | 50 Hz | 19 Hz | 47 Hz |
-| **shot, ~2 ml/s** | **50 Hz** | **4.8 Hz** | **11.8 Hz** |
+### The fix is one capacitor, and it belongs on the perfboard
 
-Count pulses across a real shot and **time it**. ~50/s means the signal is
-swamped by the pump; 5–12/s means it is water, and the figure says which K.
-No disassembly, no plumbing — pulses before, pulses after, and a stopwatch.
+The 100 K + 220 K divider presents roughly **73 kΩ** at the pin — an
+excellent antenna for capacitive coupling from a vibratory pump a few
+centimetres away. **Add 10 nF across the 220 K shunt**, giving an RC
+low-pass at ~220 Hz:
 
-**RECORD THE DURATION.** Three separate hypotheses have now died or survived
-on a number nobody wrote down. At a fixed flow rate every explanation here
-predicts the same counts; **rate is the only axis that separates them.**
+| | |
+|---|---|
+| real pulses | ≤16 Hz at the sensor's rated max flow — pass untouched |
+| pump hash | ~150 Hz of edges — crushed |
+| rise time | ~1.6 ms against a 62 ms pulse period — irrelevant |
 
-### Two hypotheses that are DEAD, recorded so nobody re-derives them
+**Do the same across the J5 shunts.** The display ring took 6086 dropped
+edges at pump start, which is the same mechanism on a different tap, and it
+is a 0e correctness problem because `boiler_temp_start_c` and
+`machine_timer_s` both come off that bus.
 
-**1. Recirculation through the bypass.** `I.2821` sits in the plumbing with a
-silicone hose to the tank-side T **and** PTFE in from the pump and out to the
-thermoblock (traced 2026-10-09). That is an **over-pressure valve**, not a
-permanent bypass: the high-pressure path runs through it and the silicone is
-only the relief leg. An OPV is **closed below its setpoint**, so a free flush
-never opens it — nothing was seen moving in that line — and **both
-calibration runs were free flushes.** There was no recirculation to count.
+This is a **perfboard requirement**, not an optional improvement, and it is
+the sort of thing only building the tap and running it under load reveals.
 
-The arithmetic fitted suspiciously well (both runs implied ~60 % bypass at
-K = 2382) which is exactly why it is written down: a mechanism that was not
-running reproduced the data.
+### What the flowmeter DID do that nothing else could
 
-**2. The rejected:counted ratio holding at 3.32 and 3.34 across an 8× volume
-change.** Both runs were free flushes at the same flow rate, so duration
-scaled 8× too and a time-proportional source reproduces that ratio exactly.
-It discriminates nothing. See the duration note above.
+The first attempt on 2026-10-09 failed to draw water from the tank. The lever
+was pressed, the display timer ran a full **19.3 s**, and the machine looked
+from every other signal exactly like it was brewing. **The flow count logged
+11 pulses.**
 
-**What the idle window does establish:** 35 seconds, machine powered, **zero
-counts and zero glitches**. So there is no free-running source — the counts
-exist only while the machine is active. That is **activity**-correlated, and
-does not separate the pump from the solenoid, the heater or the zero-cross
-triac.
+0c says a lever was pressed. The display says a timer ran. Only the flow
+count knew no water moved. That is the independent diagnostic 0d was for,
+demonstrated rather than argued — and it is the strongest case in this file
+for the tap being worth fixing rather than abandoned.
+
+**OPEN, and not explained:** if pump noise alone produces ~22 Hz, that
+19.3 s run should have logged ~400 counts, not 11. Something about the pump's
+behaviour differed when it could not draw water, and no account of it should
+be invented. Worth re-checking after the RC filter goes in.
+
+### Hypotheses that are DEAD, recorded so nobody re-derives them
+
+**1. Recirculation through the bypass.** `I.2821` has a silicone hose to the
+tank-side T **and** PTFE in from the pump and out to the thermoblock (traced
+2026-10-09). That is an **over-pressure valve**: the high-pressure path runs
+through it, the silicone is only the relief leg, and an OPV is closed below
+its setpoint. Both calibration flushes were free flushes, nothing was seen
+moving in that line, and there was no recirculation to count. The arithmetic
+fitted suspiciously well — both runs implied ~60 % bypass at K = 2382 — which
+is exactly why it is written down: **a mechanism that was not running
+reproduced the data.**
+
+**2. Pump-synchronous at exactly 50 Hz.** The flush data fitted "one count
+per pump stroke" with no free parameters (1209/50 = 24.2 s, 164/50 = 3.3 s,
+both implying the same ~8 ml/s). The shots came in at 22 Hz, not 50. The
+counts are pump-*driven* but not one-per-stroke.
+
+**3. The rejected:counted ratio as evidence.** It held at 3.32 and 3.34
+across an 8× volume change, which looked like a signature and is not: both
+runs were free flushes at the same flow rate, so duration scaled 8× too and
+any time-proportional source reproduces it. The ratio then moved to 5.8 on
+the shots, which is what it always was — a function of conditions, not of the
+sensor.
+
+**4. Air in the line.** Shot 1 ran after a priming failure and the datasheet
+names air as a measurement hazard, so this looked decisive. Shot 2 was clean
+and agreed to 6 %.
 
 **J4 pinout — roles MEASURED 2026-10-04**, with a DC pen meter, at the
 window in the 2S T-piece lead, nothing attached:
@@ -1229,7 +1260,7 @@ as you like; do not touch this.
 | Use | Conditioning |
 |---|---|
 | Analyser at J4 | **8.2 K series alone**, one channel, `#` only, ground to `T` |
-| ESP32 at J4 | **100 K + 220 K**, as derived above. **Never 150 K** — it is in stock, looks fine nominally, and fails at −45 mV. |
+| ESP32 at J4 | **100 K + 220 K + 10 nF across the shunt.** The capacitor is NOT optional — without it the tap counts pump noise at ~8× the water (2026-10-09). **Never 150 K** — it looks fine nominally and fails at −45 mV. |
 | At PA8/PA9 instead | **1 K series** — that is the *board* side, after its own conditioning. At J4 it would feed the raw sensor output into a 3.3 V GPIO. |
 
 ---
@@ -1244,8 +1275,15 @@ never baked in, and Digmesa's own datasheet recommends calibrating it.
 means is OPEN.** The J5 tap is
 wired to the ESP32 and `boiler_temp_start_c` / `machine_timer_s` land in
 the database off the machine's own display. Conditioning: 8.2 K series at
-the T-piece, 15 K shunt at the board, `ESD4`→GPIO4, `ESD1`→GPIO5, `VSS`
+the T-piece, 15 K shunt at the board, **plus 10 nF across each shunt** —
+added 2026-10-09 after the display ring dropped 6086 edges at pump start,
+the same pump-coupling that swamps J4. `ESD4`→GPIO4, `ESD1`→GPIO5, `VSS`
 ground direct, `Disp-P4` unterminated.
+
+**GPIO4 is the CLOCK and GPIO5 is the DATA, and getting it backwards is
+silent.** Swapped on 2026-10-09 during a rebuild: both lines still idled
+high, `pins` looked perfect, and `frames=0`. Zero frames with correct levels
+is the swapped-pair signature.
 
 **What `boiler_temp_start_c` actually means is narrower than migration
 008's comment claims.** Below ~88 °C the display tracks the real boiler and

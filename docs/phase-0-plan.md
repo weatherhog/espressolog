@@ -275,6 +275,18 @@ So: either invariant 1 gets an explicit carve-out in CLAUDE.md naming this
 section, or this section is recorded as pending one. It is currently pending.
 And note the claim does not survive the shorted-output case above.
 
+#### Noise: 10 nF across every shunt, J4 and J5
+
+**Measured requirement, 2026-10-09.** The dividers present ~73 kΩ (J4) at
+the pin, a few centimetres from a vibratory pump. With the pump running the
+J4 tap counted ~22 Hz of hash against ~2 Hz of real flow, both ring buffers
+overflowed, and the display bus dropped 6086 edges at pump start. At idle,
+85 seconds either side, both taps were perfectly silent.
+
+10 nF across each shunt gives ~220 Hz against a signal that never exceeds
+16 Hz. Three capacitors. Not an improvement — the taps do not work without
+them.
+
 #### Topology, per actuated line
 
 ```

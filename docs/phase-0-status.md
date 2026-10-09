@@ -341,6 +341,42 @@ not what gates the perfboard, and `machine_event`'s schema still assumes
 ONE lever (`direction` is `CHECK IN ('down','up')`), which cannot express
 "lever B up" versus "lever A up". That migration is its own job.
 
+## 2026-10-09 — the J4 tap measures the pump, and the datasheet arrived
+
+Two sessions in one day. The datasheet findings are in CLAUDE.md's 0d
+section; this is what the bench produced.
+
+**The bracket, from a single capture polled every 3 s:**
+
+| | pulses | glitches | flow ring | display ring |
+|---|---|---|---|---|
+| 40 s idle before | frozen | frozen | 0 dropped | frozen |
+| pump running 33 s | +736 | +4248 | **629 dropped** | **+6086 at start** |
+| 45 s idle after | frozen | frozen | 629 | frozen |
+
+Nothing at idle, everything while the pump runs, nothing after. Both taps.
+
+**Two shots agree and air was not the cause:** 752 counts / 36.5 g (after a
+priming failure) and 736 / 37.9 g (clean). ~8× what the datasheet predicts.
+**There is no K-factor to extract** — the counts are pump noise, and the
+ring overflowed so even 736 is a floor.
+
+**The fix is 10 nF across each shunt**, J4 and J5 both. ~220 Hz cutoff
+against a ≤16 Hz signal. A perfboard requirement, not an improvement.
+
+**What the flowmeter did that nothing else could:** the failed attempt ran
+the display timer a full 19.3 s with the lever pressed, looking from every
+other signal like a brew, and the flow count logged **11 pulses**. No water
+moved and only the flow count knew. That is 0d's independent diagnostic,
+demonstrated — and the reason to fix the tap rather than drop it.
+
+**Open:** if pump noise is ~22 Hz, that 19.3 s run should have logged ~400,
+not 11. No account of that should be invented. Re-check after the filter.
+
+**Also found:** GPIO4/5 swapped during the rebuild. Both lines idled high,
+`pins` looked perfect, `frames=0`. **Zero frames with correct levels is the
+swapped-pair signature** — worth knowing because the levels tell you nothing.
+
 ### The review round found three bugs the tests were shaped not to catch
 
 Recorded because the shape matters more than the bugs. All three passed a

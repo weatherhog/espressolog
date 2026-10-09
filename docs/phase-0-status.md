@@ -129,7 +129,7 @@ Everything on the breadboard, all three T-pieces in the machine, firmware
 | **J4 first contact** | **no `E01`.** The 100 K + 220 K is energised and the machine has not noticed — the tap that faulted it on 2026-10-03 |
 | **Worst poll gap** | **10 ms** against ~400 ms presses. Polling stays; it goes into the perfboard |
 | **0d end to end** | `inlet_pulses` in `shot_sample` for the first time |
-| **K-factor** | **5900–6500 pulses/L, n=2**, provisional — see the 0d section |
+| **K-factor** | datasheet says **2382 pulses/L**; in-circuit measured 5900–6500. **The 2.5× gap is unexplained** — see the 0d section |
 
 **The 0d chain is proven by the data, not by inspection.** Shot 109 (fw
 0.8.2, no tap) stores `inlet_pulses` NULL; shots 110–112 (fw 0.9.0, tap live)
@@ -218,18 +218,25 @@ up: at a fixed flow rate, a count proportional to *volume* and a count
 proportional to *time* are indistinguishable. Varying the rate separates them
 outright, and you already need to do it:
 
-| run | rate | pulses per gram if WATER | if TIME-PROPORTIONAL |
+**Measure pulses per SECOND, not per gram.** Per-gram is confounded on a
+shot: the inlet water splits between cup, puck retention and the 3-way dump,
+so the scale sees maybe 60 % of it. Per-second needs no volume at all.
+
+| | pump-synchronous (50 Hz) | water @ 2382 | water @ 5915 |
 |---|---|---|---|
-| free flush, no basket | ~8–10 ml/s | **X** | X |
-| a real shot, puck in | ~2 ml/s | **X** (same) | **~4–5× X** |
+| flush, ~8 ml/s | 50 Hz | 19 Hz | **47 Hz** |
+| **shot, ~2 ml/s** | **50 Hz** | **4.8 Hz** | **11.8 Hz** |
 
-Weigh both, count both. **Same pulses/gram → the counts are water** and
-5900–6500 pulses/L stands. **Far more per gram on the slow run → a
-time-proportional source** is scoring counts, and the K-factor is inflated by
-roughly the ratio.
+**The flush row is why two careful weighed runs settled nothing:** at that
+rate, water at the measured 5915 and the pump's 50 Hz are **three hertz
+apart**. The flush regime is exactly where the hypotheses overlap.
 
-This also needs no new hardware, and a real shot is an open item anyway —
-every run so far has been a flush.
+**On a shot they separate 4–10×.** ~50/s means the signal is swamped by the
+pump and the flowmeter is a worse pump detector than 0c already is. 5–12/s
+means it is water, and the figure says which K-factor is right.
+
+Pulses before, pulses after, and **a stopwatch**. No new hardware, and a real
+shot is an open item anyway — every run so far has been a flush.
 
 ### The width sweep, secondary
 
@@ -405,11 +412,12 @@ Everything here runs on the breadboard with the machine closed.
    is the baseline that makes step 2 mean something.
 2. **Flow counting, the one thing host tests cannot prove.** Jumper
    **GPIO8 → GPIO6**, nothing else connected, then `flow on` and `selftest`.
-   It drives 500 pulses at 100 Hz. **That is 2.3–2.5× the sensor's rated
-   ceiling and 1.5–1.7× the fastest plausible real rate**, recomputed across
-   the measured 5900–6500 pulses/L (0.40 L/min → 39–43 Hz; a 10 ml/s
-   hot-water draw → 59–65 Hz). An earlier version said "four times", which came from the
-   superseded ~2400 figure. It prints counted against expected. **Anything other than an
+   It drives 500 pulses at 100 Hz. **That is 6.3× the sensor's rated
+   ceiling**, from the datasheet: 0.40 L/min max flow × 2382 pulses/L =
+   **15.9 Hz**, and the sensor cannot physically exceed its rated flow. Two
+   intermediate versions of this line said "four times" and then "2.3–2.5×";
+   the second was computed against the disputed in-circuit 5915 and is
+   withdrawn. It prints counted against expected. **Anything other than an
    exact match means the shot pulse count cannot be trusted**, and the
    glitch/drop counters say which half is at fault.
    *`selftest` is the only command that ever makes a pin an output. Unplug
@@ -437,7 +445,7 @@ file, by the commit that was documenting the fix for it.
 | Meter lever B (positions 2/5 plug inspection) | **DONE** — functional, see the bench section above |
 | Fit J2 and J4, then `pins` | **DONE** — all seven inputs read correctly |
 | J4 first contact, watch for `E01` | **DONE** — energised, no fault |
-| Calibrate against weighed water | **DONE** — 5900–6500 pulses/L, n=2, provisional |
+| Calibrate against weighed water | **DONE but DISPUTED** — 5900–6500 measured against a datasheet 2382 |
 
 **Still open, and it needs the flowmeter counting during a lever-B draw:**
 whether a **hot-water draw** pulses the meter at all. CLAUDE.md records this
@@ -788,15 +796,33 @@ the display is back in temperature mode, so edges lost there cost nothing.
    floating near half-mains with a small leakage current: "isolated" is
    true, "quiet" is not.
 
-   **Cable-to-box connector: cut the 6S lead in half.** A balance extension
-   is complementary end to end by construction, so halving it gives a male
-   pigtail and a female pigtail that mate — you are re-joining the lead you
-   cut. Put the **female (socket) half on the machine side** so the pins
-   that can be live are shrouded. Use three conductors; cut the other four
-   back flush and heat-shrink them individually so they cannot bridge.
-   **The 5S is the practice piece** for the strip-and-solder — the pack has
-   one of each, so write the allocation down rather than rediscovering it
-   with a bag of cut leads.
+   **SUPERSEDED 2026-10-09 — one connector per harness, not one shared.**
+   This used to say "cut the 6S lead in half… use three conductors; cut the
+   other four back flush". That was sized when 0c was two lines. It is now
+   four, plus J2 position 1 for Phase 1, and the count no longer fits:
+
+   | harness | to the box |
+   |---|---|
+   | J5 | `VSS`, `ESD1`, `ESD4` — 3 |
+   | J2 | Steam, 2Cup, 1Cup, Water, **+5 V common** — 5 |
+   | J4 | `#`, `T` — 2 |
+   | | **10** |
+
+   A 6S balance lead carries **seven**, and the instruction to cut four back
+   flush would have destroyed capacity that is now needed.
+
+   **The scheme instead: a separate keyed connector per harness, and the pin
+   counts do the keying for free.** J5 is 4-pin, J2 is 5-pin, J4 is 3-pin, so
+   the three cables are **physically incapable of being cross-plugged** —
+   which matters, because plugging J2 into the J4 socket would put 5 V where
+   a flowmeter signal belongs. Standardising on one connector type would
+   throw that away.
+
+   Each cable carries its own series conditioning in its T-piece, so the box
+   side is always high-impedance and a swapped cable is a swap, not a
+   rebuild. **The 5S and 6S become practice pieces** for the
+   strip-and-solder — the pack holds one of each, so write the allocation
+   down rather than rediscovering it with a bag of cut leads.
 
    **Size the box for three harnesses.** 0c adds J2 and 0d adds J4; they
    all land here. A box that fits only this one is a job done twice.
@@ -1180,10 +1206,12 @@ the display is back in temperature mode, so edges lost there cost nothing.
    | Output | **NPN open collector**, 0 VDC active, saturation <0.7 V | Daitron + Digmesa product pages, corroborated |
    | Signal load | max 20 mA | as above |
    | Supply | **+3.8 to +20 VDC**, <8 mA | **search summary of an unretrieved datasheet; another secondary source says +2.8 to +24 VDC** |
-   | K-factor | **5900–6500 pulses/L MEASURED 2026-10-08, n=2** (datasheet summaries said ~2400) | **two weighed flushes — see below** |
+   | K-factor | **2382 pulses/L** for `#932-9525-B` Ø1.00 mm 0° | **the datasheet itself, retrieved 2026-10-09** |
    | Accuracy | ± 2.0 % | product pages |
 
-   **MEASURED 2026-10-08: 5900–6500 pulses/L from two runs, ~2.5× the sourced figure.** Two
+   **The datasheet (2026-10-09) says 2382 and the in-circuit measurement said
+   5900–6500. The gap is unexplained; CLAUDE.md has the live hypothesis
+   (pump-synchronous counting at 50 Hz) and the test.** Two
    weighed flushes into a jug on the yield Bookoo, free flow, no basket:
    **164 counts / 25.2 g** and **1209 counts / 204.4 g**, i.e. 6508 and 5915
    pulses/L. Both rows are in `flowmeter_calibration`, the larger preferred.
@@ -1303,12 +1331,13 @@ the display is back in temperature mode, so edges lost there cost nothing.
    never pulse, or a conductor was shorted. **Check D1 still reads
    correctly before trusting the analyser.**
 
-   **What 0d can and cannot deliver.** **Recompute these against the
-   measured 5900–6500 pulses/L** — at that figure each pulse is **~0.17 ml** and
-   an espresso shot at ~2 ml/s pulses at **~12 Hz**, not 4.8. The numbers
-   below were derived from the sourced ~2400 (0.42 ml, ~4.8 Hz, ceiling
-   ~16 Hz) and have not been reworked; the resolution argument gets *better*
-   at 12 Hz, so nothing here breaks, but do not quote the rates. (The 4 % K-factor spread shifts these
+   **What 0d can and cannot deliver. These figures were derived from the
+   sourced ~2400 and the datasheet now says 2382 — so they stand.** Each
+   pulse is **0.41 ml** (datasheet exactly), an espresso shot at ~2 ml/s
+   pulses at **~4.8 Hz**, and the ceiling is **15.9 Hz** at the rated max
+   flow of 0.40 L/min. An intermediate version of this paragraph recomputed
+   them against the disputed in-circuit 5915 and got ~12 Hz; that figure is
+   withdrawn. (The 4 % K-factor spread shifts these
    by far less than the retention estimate below, so it changes nothing
    here.) Inlet volume for a 36 g shot is
    *not* 36 ml — it is output plus puck retention plus the solenoid dump,

@@ -23,11 +23,14 @@ that *can* actuate are at the bottom, under "Deliberately not yet".
 T-piece is a strip-a-window-and-solder job, and if it goes wrong there is
 no second 4-pin lead in the bag.
 
-**The 5S is the practice piece, the 6S is the box connector.** Nothing on
-this machine is 6- or 7-pin, so those two have no connector job — but they
-have one job each, and the pack holds one of them. Practise the
-strip-and-solder on the 5S; the 6S gets cut in half to make the
-cable-to-box plug pair (`docs/phase-0-status.md`). Only then touch the 3S.
+**The 5S and 6S are both practice pieces.** Nothing on this machine is 6-
+or 7-pin. An earlier version made the 6S the shared cable-to-box connector;
+that is **superseded** — the box now takes **one keyed connector per
+harness** (J5 4-pin, J2 5-pin, J4 3-pin), which cannot be cross-plugged
+because the pin counts differ, and which the 6S's seven conductors could not
+have carried anyway against the ten now needed. See
+`docs/phase-0-status.md`. Practise the strip-and-solder on the 5S and 6S;
+only then touch the 3S.
 
 **Wire is 22 AWG silicone** (confirmed in the listing spec), so there is
 no PVC-to-silicone transition to engineer — the lead itself is rated for
@@ -123,7 +126,7 @@ has *n*+1 pins, which maps onto this machine exactly:
 **Count the pins, not the S.** The cell count is one less than the pin
 count, so the obvious-looking 2S is a 3-pin and will not fit J5. The mixed
 2S–6S pack beats singles — all three connectors for about €7, and the
-5S/6S become practice pieces. (Bought; see section 1.)
+5S/6S are practice pieces. (Bought; see section 1.)
 
 Build: plug in line, strip a window mid-cable, solder branch wires to the
 conductors you want, adhesive-lined heat-shrink over it. Unplugging
@@ -223,7 +226,7 @@ leave the machine unable to run.
 | — fallback — Ascaso display harness `I.4312` (spare) | 1 | 10–20 |
 
 **Bought**, as part of the mixed pack in section 1 — one 3S, no spare.
-Practise on the 5S first; the 6S becomes the cable-to-box connector.
+Practise on the 5S and 6S first; neither has a connector job (see section 1).
 
 A 3S balance extension, solder and heat-shrink is the whole T. Ascaso's own spare
 harness, **part `I.4312`** (mainboard is `I.3957`, matching the board

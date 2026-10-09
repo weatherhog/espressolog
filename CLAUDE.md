@@ -984,73 +984,120 @@ leading hypothesis involves ~12 mA through a clamp meant for signal-level
 currents. The machine's behaviour changed because of a Phase-0 tap, which
 invariant 1 forbids.
 
-The sensor is a **Digmesa FHKSC** (Ascaso `I.2560`, Digmesa `932-9525-B`):
-1.0 mm nozzle, **NPN open collector** (so `#` idles high on a board-side
-pull-up and pulses low), supply **+3.8 to +20 VDC** at <8 mA. The supply
-minimum is from a search summary of a datasheet that could not be retrieved
-(one source gives +2.8 V) and is not a verified hardware fact.
+**THE DATASHEET IS IN HAND — 2026-10-09.** `932-952x-Bxxx_GB_20V_V04.pdf`,
+Digmesa AG, Ipsach. It names our exact variant: **`#932-9525-B` = FHKSC,
+Ø 1.00 mm, 0°**. Three of these were read off the physical sensor the same
+day (`DIGMESA IPSACH / 932-9525-B / 14/01/20 / 1.0mm`), so the part is
+identified by label and by datasheet, not by inference.
 
-**MEASURED 2026-10-08: 5900–6500 pulses/L from two runs, ~2.5× the ~2400
-this file used to carry.** Two weighed flushes into a jug on the yield Bookoo, free
-flow, no basket, fw 0.9.0 with the 100 K + 220 K divider:
+That also closes the worn-label mystery: the marking first read as
+"DIMASE PSACH" is **DIGMESA IPSACH**.
 
-| water | counts | glitches rejected | pulses/L |
+| | |
+|---|---|
+| **K-factor** | **2382 pulses/L**, 0.41 g/pulse |
+| Flow range | **0.033 – 0.40 L/min** (0.55 – 6.67 ml/s) |
+| Pressure | **−1 to +0.3 bar** — a suction-side device |
+| Supply | **+3.8 to +20 VDC**, <8 mA |
+| Signal | open collector NPN, saturation <0.7 V, load max 20 mA, leakage max 10 µA |
+| Output | **square wave, ~50 % duty** |
+| Accuracy | ±2.0 %, repetition <±0.25 % |
+| Temperature | −10 to +65 °C |
+| Mounting | **horizontal, contacts facing up** — confirmed as installed, 2026-10-09 |
+
+**Two long-standing hedges in this file are now resolved:**
+
+- **"+2.8 V" was never this sensor.** It came from the **9NB nano brass**
+  datasheet, a different Digmesa product. +3.8 to +20 VDC is correct.
+- **The "2386 / 2476 / 2436 for 0° / 90° / 180° mounting orientation" note
+  was wrong about what those are.** They are not mounting positions of one
+  part — they are **separate part numbers** (`-B`, `-B90`, `-B180`, `-B270`),
+  each with its own measurement curve. Ours has no suffix, so 0°, so 2382.
+  Orientation matters enough that Digmesa sells four SKUs for it, which is
+  why the confirmed horizontal/contacts-up fitting is worth having recorded.
+
+**The datasheet also confirms the plumbing**, which the operator traced the
+same day: *"specially designed for coffee machines that use vibratory pumps…
+installed between the water container and the vibratory pump (on the suction
+side)."* CLAUDE.md carried "whether that water passes the flowmeter is
+unverified" from 2026-10-04; it is now verified twice over.
+
+**Digmesa still say to calibrate**: *"The number of pulses per litre may
+differ depending on medium and installation… we recommend to calibrate."*
+Invariant 3 already requires that.
+
+### The in-circuit measurement disagrees with the datasheet by 2.5×, and the reason is OPEN
+
+Two weighed free flushes into a jug on the yield Bookoo, fw 0.9.0,
+100 K + 220 K divider:
+
+| water | counts | glitches rejected | implied pulses/L |
 |---|---|---|---|
 | 25.2 g | 164 | 544 (3.32:1) | 6508 |
 | **204.4 g** | **1209** | **4032 (3.34:1)** | **5915** |
 
-Both runs are in `flowmeter_calibration`; the 204.4 g one is preferred (at
-25 g, splash and start/stop edges are ~4 % of the measurement).
+Both rows are in `flowmeter_calibration`. **Do not treat 5900–6500 as this
+sensor's K-factor** — the datasheet says 2382 for this exact part number and
+orientation, and the excess is unexplained.
 
-**Quote it as 5900–6500 pulses/L from n=2, not as "5900".** The two runs
-disagree by **10 %**, which is 5× the sensor's rated ±2 % accuracy, and the
-~4 % small-sample argument does not account for the other 6 %. A third run
-at ~200 g would say whether the spread is the small sample or something
-real.
+**LEADING HYPOTHESIS: the counts are pump-synchronous, not water.** A
+vibratory pump strokes once per mains cycle — **50 Hz**. Against that:
 
-**The 2400 figure was never verified** — a search summary of an unobtainable
-datasheet, sources spread 2386–2494, and its predecessor (1300) was 1.8×
-wrong for being the Ø1.50 mm row. Treat the measured number as the working
-one and the datasheet number as folklore.
+| run | counts ÷ 50 Hz | implied jug rate |
+|---|---|---|
+| 204.4 g | 24.2 s | 8.4 ml/s |
+| 25.2 g | 3.3 s | 7.7 ml/s |
 
-**But the measurement is PROVISIONAL.** 1209 counts is equally consistent
-with ~490 real pulses each ringing past the 2 ms glitch window and scoring
-extra counts.
+Two runs an 8× volume apart imply **the same ~8 ml/s flush rate**, which is
+plausible for an unrestricted flush, with no free parameters. And the
+datasheet's **square wave at ~50 % duty** is not an output that produces 3.3
+rejected edges per counted one — that ratio was never a sensor signature.
 
-**What rules out one class of error: a 35-second idle window, machine
-powered, logged ZERO counts and ZERO glitches.** So there is no free-running
-source on this line — the glitches exist only while the machine is doing
-something. Note that is **activity**-correlated, not specifically
-pump-correlated: the solenoid, the heater and the mains zero-cross triac are
-all equally "active during a flush and not at idle", and this datum does not
-separate them. That is the strongest evidence this session produced about the counts
-and it was left out of the first write-up entirely.
+**Why the flush data cannot settle it, and nearly fooled us:** at ~8 ml/s,
+water at the measured 5915 p/L would give **47 Hz** against the pump's
+**50 Hz**. Three hertz apart. The flush regime is exactly where the two
+hypotheses overlap, which is why two careful weighed runs and a stable
+rejected:counted ratio looked like evidence and were not.
 
-**What does NOT discriminate, recorded because it was argued and is wrong:**
-the rejected:counted ratio holding at 3.32 and 3.34 across an 8× volume
-change. Both runs were free flushes at the same flow rate, so **duration
-scaled 8× as well** — a *time*-proportional source produces exactly that
-constant ratio. The argument only works if the flow rate differs between
-runs, and it did not. Neither run's duration was recorded, which would have
-made the error visible.
+**THE TEST IS A REAL SHOT**, because the rates separate there:
 
-So the open question is narrowed, not closed: the noise is
-**activity**-correlated (see immediately above — pump, solenoid, heater and
-zero-cross triac are not separated by that datum), and whether it is ringing
-around real pulses (counts correct) or a source scoring its own counts
-(counts inflated ~2.5×) is undecided. **Settle it with the `flow filter` sweep** (0.9.1) — 2 / 5 / 10 / 20 ms, one
-flush each, weight and duration recorded; a plateau after 5 ms means the
-remaining count is water, a continuous decline means the filter is eating
-real pulses. `docs/phase-0-status.md` has the arithmetic and the reason a
-two-point comparison cannot work.
+| | pump-synchronous | water @ 2382 | water @ 5915 |
+|---|---|---|---|
+| flush, ~8 ml/s | 50 Hz | 19 Hz | 47 Hz |
+| **shot, ~2 ml/s** | **50 Hz** | **4.8 Hz** | **11.8 Hz** |
 
-**Prefer that over the logic analyser**, which was the original plan: the
-analyser tap on `#` (8.2 K series, one channel, ground to `T`) is the one
-that produced the `E01` invariant-1 violation on 2026-10-03, and its
-corrected conditioning has never been re-tested — whereas the ESP tap at
-100 K + 220 K now has been. Use the proven tap.
+Count pulses across a real shot and **time it**. ~50/s means the signal is
+swamped by the pump; 5–12/s means it is water, and the figure says which K.
+No disassembly, no plumbing — pulses before, pulses after, and a stopwatch.
 
-Invariant 3 means nothing downstream bakes the factor in either way.
+**RECORD THE DURATION.** Three separate hypotheses have now died or survived
+on a number nobody wrote down. At a fixed flow rate every explanation here
+predicts the same counts; **rate is the only axis that separates them.**
+
+### Two hypotheses that are DEAD, recorded so nobody re-derives them
+
+**1. Recirculation through the bypass.** `I.2821` sits in the plumbing with a
+silicone hose to the tank-side T **and** PTFE in from the pump and out to the
+thermoblock (traced 2026-10-09). That is an **over-pressure valve**, not a
+permanent bypass: the high-pressure path runs through it and the silicone is
+only the relief leg. An OPV is **closed below its setpoint**, so a free flush
+never opens it — nothing was seen moving in that line — and **both
+calibration runs were free flushes.** There was no recirculation to count.
+
+The arithmetic fitted suspiciously well (both runs implied ~60 % bypass at
+K = 2382) which is exactly why it is written down: a mechanism that was not
+running reproduced the data.
+
+**2. The rejected:counted ratio holding at 3.32 and 3.34 across an 8× volume
+change.** Both runs were free flushes at the same flow rate, so duration
+scaled 8× too and a time-proportional source reproduces that ratio exactly.
+It discriminates nothing. See the duration note above.
+
+**What the idle window does establish:** 35 seconds, machine powered, **zero
+counts and zero glitches**. So there is no free-running source — the counts
+exist only while the machine is active. That is **activity**-correlated, and
+does not separate the pump from the solenoid, the heater or the zero-cross
+triac.
 
 **J4 pinout — roles MEASURED 2026-10-04**, with a DC pen meter, at the
 window in the 2S T-piece lead, nothing attached:

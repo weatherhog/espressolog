@@ -162,7 +162,9 @@ default behind `flow on`; `selftest` drives a known pulse train from GPIO8
 so the counting path is provable on the bench without the machine.
 
 **Calibrate empirically** — run water into a jug on the Bookoo, count pulses,
-divide. **DONE 2026-10-08: 5900–6500 pulses/L measured, n=2** over two weighed
+divide. **The datasheet is in hand (2026-10-09): 2382 pulses/L for
+`#932-9525-B`, Ø1.00 mm, 0°** — our exact part and orientation. The in-circuit
+measurement said 5900–6500 over two weighed
 flushes (both in `flowmeter_calibration`), which is 2.5× the ~2400 search
 summary — that figure came from a datasheet nobody could retrieve and is now
 folklore. The measurement is provisional until the analyser confirms the

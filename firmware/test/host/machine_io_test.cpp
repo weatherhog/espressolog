@@ -51,7 +51,7 @@ int main() {
   SwitchBank::Event ev[8];
 
   // ---------------------------------------------------------- PulseCounter
-  // 1. An ordinary pour. ~2 ml/s at ~2400 pulses/L is ~5 Hz; every pulse
+  // 1. An ordinary pour. ~2 ml/s at the datasheet's 2382 pulses/L is ~4.8 Hz; every pulse
   //    counts and none is mistaken for bounce.
   {
     PulseCounter p;
@@ -120,7 +120,9 @@ int main() {
   }
 
   // 5b. The runtime-settable filter, which exists to settle whether the
-  //     measured 5900-6500 pulses/L counts water or ringing.
+  //     WITHDRAWN 5900-6500 figure counted water or ringing. What the
+  //     in-circuit counts measure is unresolved -- see CLAUDE.md 0d. The
+  //     filter mechanics below are still exercised correctly.
   //
   //     Case A, ringing that DIES inside the window (3 edges at 200 us
   //     spacing): the 2 ms filter already cleans it, and widening to 20 ms

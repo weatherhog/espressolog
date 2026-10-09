@@ -1026,7 +1026,7 @@ unverified" from 2026-10-04; it is now verified twice over.
 differ depending on medium and installation… we recommend to calibrate."*
 Invariant 3 already requires that.
 
-### WHAT THE J4 COUNTS ARE IS UNRESOLVED — 2026-10-09, two readings, neither holds
+### WHAT THE J4 COUNTS ARE IS UNRESOLVED — 2026-10-09, one reading refuted
 
 **An earlier version of this section concluded "the J4 tap measures the pump,
 not flow". That conclusion is WITHDRAWN.** It was contradicted by the
@@ -1054,10 +1054,10 @@ glitch appears in either idle stretch.
 |---|---|---|---|
 | shot 1 (machine failed to prime, air) | 36.5 g | 752 | 5.6 |
 | shot 2 (primed, clean) | 37.9 g | 736 | 5.8 |
-| **aborted — pump ran, NO water drawn** | **0 g** | **11** over 16.7 s | **7.8** |
+| **aborted — pump ran, NO water drawn** | **0 g** | **11** over 19.3 s | **7.8** |
 
 **The excess over the datasheet is ~5×, not ~8×.** The 8× figure divided by
-*yield*, and this file states elsewhere that yield is not inlet: the water
+*yield*, and `docs/phase-0-status.md` states that yield is not inlet: the water
 splits between cup, puck retention and the 3-way dump, and the scale sees
 perhaps 60 % of it. At that assumption inlet ≈ 63 ml, the datasheet predicts
 ~150 pulses, and 761/150 ≈ **5.1×**. The 60 % is an assumption, not a
@@ -1074,21 +1074,52 @@ measurement.
 | observed | **11** |
 | | **34× out** |
 
-And the *edge quality is unchanged* — 7.8 rejected per count on the aborted
-run against 5.8 on shot 2. Only the **burst rate** collapses, and it
-collapses exactly when water stops moving. **Capacitive coupling from a pump
-has no reason to care whether water flows.** A water-driven pulse train with
-dirty edges does precisely this.
+**The strongest form of this is the GLITCH RATE, which measures coupling at
+the pin directly:**
 
-#### The opposite reading does not work either
+| | glitches/s |
+|---|---|
+| shot 2, pump + water | 4248 / 33.2 s = **128.0** |
+| aborted, pump + no water | 86 / 19.3 s = **4.5** |
+| | **28.7× collapse** |
 
-"The counts are water." Then 22.17 Hz ÷ 2382 pulses/L = **9.31 ml/s through
-the meter**, against 1.14 g/s reaching the cup. That is above the sensor's
-rated maximum (6.67 ml/s) and well above what a vibratory pump delivers at
-brew pressure. So the simple water reading has its own quantitative problem.
+Rejected edges are the quantity most directly produced by electrical coupling,
+and they fall 29× when the only thing that changed is whether water moved.
 
-**Both readings are in trouble. The honest state is unresolved**, and this
-entry over-claimed in opposite directions within one day.
+**Two weaker supports, graded as such.** The glitch:count *ratio* (7.8 against
+5.8) is consistent with unchanged edge quality but carries little information
+at **n = 11** — Poisson gives 7.8 ± ~2.5. And "capacitive coupling has no
+reason to care whether water flows" is **too strong as stated**: a vibratory
+pump that cannot draw water is a different electrical load — stroke, current
+waveform and armature travel all change — so coupling amplitude is not
+invariant with hydraulic load. 29× is almost certainly too large to explain
+that way, but the claim does not hold in general.
+
+#### The water reading is NOT refuted — one earlier objection to it was circular
+
+An earlier version argued the water reading also fails, because 22 Hz ÷ 2382
+pulses/L = **9.31 ml/s through the meter** against 1.14 g/s to the cup, which
+is "above the sensor's rated maximum". **That objection does not work**, for
+three reasons this file supplies itself:
+
+- the rated range is where K is **specified**, not a hydraulic limit, as this
+  same entry now states — so exceeding it is not evidence of anything;
+- it is **circular**: if the flow really is above the rated range then 2382 is
+  not the applicable K, so dividing by 2382 to show it is out of range proves
+  nothing;
+- and the recirculation subsection below **predicts exactly that figure** —
+  under it the meter sees throughput rather than delivered volume.
+
+So the position is **one reading refuted (pump noise), the other unresolved**,
+not "neither holds". Water-plus-recirculation is a self-consistent account
+that this document supplies and an earlier version declined to credit.
+
+**Note the 11 is a lower bound too.** Shot 2 got a gap correction (+25 counts
+in the unsampled windows at pump start and stop); the aborted run has the same
+structure — 2.6 s of pump-on before the first sample, and no pre-run idle
+value recorded — and is quoted flat. It would take ~360 counts hiding in that
+2.6 s to overturn the refutation, so the conclusion survives, but the
+asymmetry is real.
 
 #### What the bracket does and does not establish
 
@@ -1103,8 +1134,16 @@ deleted this very caveat.
 #### Recirculation is back on the table FOR SHOTS
 
 It was killed on free-flush evidence — an OPV is closed below setpoint, and
-both calibration flushes were free flushes. **That reasoning does not extend
-to shots, which do reach setpoint**, and the 5× evidence comes from shots.
+both calibration flushes were free flushes. That reasoning was then applied to
+shots, where the 5× evidence actually comes from.
+
+**Whether a shot reaches the setpoint is UNKNOWN and must not be asserted.**
+An earlier version stated flatly that shots do. Nobody has read this machine's
+own 0–16 bar gauge (`I.4220`) during a pour, and the OPV's relief setpoint is
+unrecorded; a normal ~9 bar extraction need not reach a typical 12–15 bar
+relief. So recirculation is **re-opened, not reinstated** — and reading the
+gauge mid-shot belongs in the experiment list below, because it is the cheapest
+thing that would settle it.
 The meter is on the suction side (confirmed) and the relief leg returns to
 the tank-side T upstream of the meter branch, so on a shot the meter would
 see throughput rather than delivered volume. The ~9.3 ml/s figure is what
@@ -1119,6 +1158,25 @@ makes this worth re-testing rather than assuming.
 2. **Deliberately re-run the dry case** — pump on, no water drawn. If 11
    counts over 16.7 s reproduces, the counts track water and the withdrawn
    conclusion was backwards.
+
+#### Hypotheses that are DEAD, recorded so nobody re-derives them
+
+An earlier version of this entry deleted this block while the refuted
+arguments were still live in `docs/phase-0-status.md` and in the firmware.
+That is net information loss, and the opposite of this file's convention.
+
+1. **One count per pump stroke at exactly 50 Hz.** The flush data fitted it
+   with no free parameters (1209/50 = 24.2 s, 164/50 = 3.3 s, both implying
+   the same ~8 ml/s). **The shots came in at ~22 Hz.** Dead.
+2. **The rejected:counted ratio as a signature.** It held at 3.32 and 3.34
+   across an 8× volume change, which looked decisive. Both runs were free
+   flushes **at the same flow rate**, so duration scaled 8× too and any
+   time-proportional source reproduces it. It then moved to 5.8 on the shots.
+   It discriminates nothing.
+3. **Air in the line.** Shot 1 ran after a priming failure and the datasheet
+   names air as a measurement hazard, so this looked decisive. Shot 2 was
+   clean and agreed to 6 %.
+4. **The counts are pump noise** — see the refutation above. Dead at 39×.
 
 #### The capacitor is a CANDIDATE, not a measured requirement
 
@@ -1297,15 +1355,22 @@ specified 10 nF. Both parts were wrong:
   is a 69 µs time constant facing 36 µs clock highs — the clock never
   settles, and it would have presented as a wiring fault rather than a filter
   error. Corrected to 470 pF the same day.
-- **The drops are probably serial polling, not coupling.** They arrived as
-  one burst at pump start (+6086) then +164 across 30 s of pumping; shot 1
-  gave 6101 over a 37.6 s run against 6086 over 33.2 s — **constant, not
-  scaling with pump-on time**. 6086 edges is 1.88 s of bus at this file's own
-  3244 edges/s, and `docs/phase-0-status.md` already records *"`dropped`
-  counts edges, and serial polling causes them"* with a >158 ms stall
-  threshold. **That capture was polled over serial every 3 s.** And the
-  display decoded the timer cleanly 0.5 → 33.7 s throughout — a swamped bus
-  cannot do that.
+- **The drops are NOT coupling, and the actual cause is unidentified.** What
+  is established: they arrive as **one burst at pump start** (+6086) then
+  +164 across 30 s of pumping, and shot 1 gave a comparable figure over a
+  37.6 s run — **constant, not scaling with pump-on time**, which coupling
+  would. 6086 edges is 1.88 s of bus at this file's own 3244 edges/s, and the
+  display decoded the timer cleanly 0.5 → 33.7 s throughout, which a swamped
+  bus cannot do.
+
+  **But "serial polling" does not follow, and an earlier version asserted
+  it.** A 3 s poll would drop *periodically*, not in one burst — and the idle
+  rows of the table above were polled at the same cadence with the drop
+  counter **frozen**. What the evidence supports is "a one-off stall around
+  pour start"; candidates are the spool/BLE work at that moment or the serial
+  traffic, and they are not separated. **`worst poll gap` is the
+  discriminator and this repo already prints it** — record it on the next
+  capture.
 
 **`docs/phase-0-status.md` already carried ~470 pF for J5 before any of
 this**, as a *contingent second remedy* after raising the shunt to 16.4 K.

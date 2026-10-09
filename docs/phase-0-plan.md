@@ -284,9 +284,13 @@ And note the claim does not survive the shorted-output case above.
 #### Noise: a capacitor across every shunt — but NOT the same value
 
 **Measured SYMPTOM, 2026-10-09 — the remedy below is untested.** With the pump running, the J4 tap
-counted ~22 Hz of hash against ~2 Hz of real flow, both ring buffers
-overflowed, and the display bus dropped 6086 edges at pump start. At idle,
-85 seconds either side, both taps were perfectly silent.
+counted **~22 Hz against ~128 Hz rejected**, both ring buffers overflowed,
+and the display bus dropped 6086 edges at pump start. Across 13 idle samples
+either side, both taps were perfectly silent.
+
+**Do not read "hash" into those counts.** What they measure is unresolved —
+CLAUDE.md 0d carries the live account; a published reading that they were
+pump noise has been withdrawn.
 
 | tap | source Z | signal | fit | cutoff |
 |---|---|---|---|---|

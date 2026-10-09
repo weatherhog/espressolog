@@ -232,7 +232,7 @@ static bool     flow_ever = false;
 // enqueues, loop() is the only consumer, and the glitch filter runs in the
 // pure class so the logic that ships is the logic the host tests exercise.
 // 64 entries is ~1.1 s at the fastest plausible real rate (~59 Hz, a
-// hot-water draw at the MEASURED 5900-6500 pulses/L — it was ~24 Hz against the
+// hot-water draw at the WITHDRAWN 5900-6500 pulses/L; at the datasheet's 2382 it is ~16 Hz — it was ~24 Hz against the
 // old ~2400 figure) and the loop drains every ~5 ms, so an overflow here
 // does not mean
 // "busy" — it means the line is carrying something that is not flow. That is

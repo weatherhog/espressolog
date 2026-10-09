@@ -132,7 +132,7 @@ void ShotDetector::appendSample(uint32_t t, int32_t w) {
     return;
   }
   // Pulses since t=0, saturating rather than wrapping: uint16 holds ~27 L at
-  // the datasheet's ~2400 pulses/L against a few hundred per shot, so this
+  // the datasheet's 2382 pulses/L against a few hundred per shot, so this
   // only ever trips if the tap is counting something that is not flow — and
   // a pegged ceiling says that out loud where a wrap would read plausible.
   uint32_t d = pulse_now - pulse_base;

@@ -222,14 +222,21 @@ outright, and you already need to do it:
 shot: the inlet water splits between cup, puck retention and the 3-way dump,
 so the scale sees maybe 60 % of it. Per-second needs no volume at all.
 
-| | pump-synchronous (50 Hz) | water @ 2382 | water @ 5915 |
-|---|---|---|---|
-| flush, ~8 ml/s | 50 Hz | 19 Hz | **47 Hz** |
-| **shot, ~2 ml/s** | **50 Hz** | **4.8 Hz** | **11.8 Hz** |
+**THIS TEST HAS BEEN RUN — 2026-10-09 — and the table below is kept only as
+the prediction it made.** Two shots measured **~22 Hz**, which is none of the
+three columns. The 50 Hz column is **dead** (see CLAUDE.md 0d), the 5915
+column rests on a figure now withdrawn, and what the counts measure is
+unresolved. Do not re-run this expecting it to decide anything.
 
-**The flush row is why two careful weighed runs settled nothing:** at that
-rate, water at the measured 5915 and the pump's 50 Hz are **three hertz
-apart**. The flush regime is exactly where the hypotheses overlap.
+| | ~~pump-synchronous (50 Hz)~~ **dead** | water @ 2382 | ~~water @ 5915~~ **withdrawn** |
+|---|---|---|---|
+| flush, ~8 ml/s | 50 Hz | 19 Hz | 47 Hz |
+| **shot, ~2 ml/s** | 50 Hz | **4.8 Hz** | 11.8 Hz |
+| **MEASURED, two shots** | — | — | **~22 Hz** |
+
+The flush row is still worth keeping for why two careful weighed runs settled
+nothing: at that rate the two leading candidates were **three hertz apart**,
+so the flush regime is exactly where they overlap.
 
 **On a shot they separate 4–10×.** ~50/s means the signal is swamped by the
 pump and the flowmeter is a worse pump detector than 0c already is. 5–12/s
@@ -247,9 +254,11 @@ recorded.
 period exceeds every width swept plateaus identically, and two are live here:
 **100 Hz mains/triac coupling** (10 ms — which `machine_io.h` deliberately
 does *not* reject) and **one count per vibratory-pump stroke** (50 Hz, 20 ms).
-The session's own figures are consistent with ~50 Hz: at the flush rate this
-file computes, 1209 counts over ~24 s is ~50 Hz, and 164 over ~3 s is ~51 Hz.
-Nobody has checked that, and counts-per-second appears nowhere in the repo.
+
+**The 50 Hz pump-stroke reading is DEAD** — it fitted the flushes with no
+free parameters (1209 counts over ~24 s is ~50 Hz, 164 over ~3 s is ~51 Hz)
+and the shots came in at ~22 Hz. Kept here because it fitted well, which is
+exactly why it is worth recording as refuted.
 
 **20 ms is excluded as an anchor**, not swept for the verdict: it starts
 rejecting real pulses at 8.5 ml/s, inside the band a free flush runs at, so a
@@ -341,7 +350,7 @@ not what gates the perfboard, and `machine_event`'s schema still assumes
 ONE lever (`direction` is `CHECK IN ('down','up')`), which cannot express
 "lever B up" versus "lever A up". That migration is its own job.
 
-## 2026-10-09 — the J4 tap measures the pump, and the datasheet arrived
+## 2026-10-09 — the datasheet arrived, and what the J4 counts are is UNRESOLVED
 
 Two sessions in one day. The datasheet findings are in CLAUDE.md's 0d
 section; this is what the bench produced.
@@ -350,11 +359,16 @@ section; this is what the bench produced.
 
 | | pulses | glitches | flow ring | display ring |
 |---|---|---|---|---|
-| 40 s idle before | frozen | frozen | 0 dropped | frozen |
-| pump running 33 s | +736 | +4248 | **629 dropped** | **+6086 at start** |
-| 45 s idle after | frozen | frozen | 629 | frozen |
+| idle before, **7 samples** at a 3 s poll | frozen | frozen | 0 dropped | frozen |
+| pump running, 33.2 s sampled | +736 (**761** with the gaps) | +4248 | **629 dropped** | **+6086 at start**, then +164 |
+| idle after, **6 samples** | frozen | frozen | 629 | frozen |
 
-Nothing at idle, everything while the pump runs, nothing after. Both taps.
+Nothing in either idle stretch, everything while the pump runs. Both taps.
+**25 counts fall in the unsampled gaps** at pump start and stop, so 736 is
+what two in-shot samples bracket and 761 is the honest total — CLAUDE.md's
+0d entry carries the same figures. An earlier version of this table said
+"40 s / 45 s idle"; what is established is the **sample count**, not the
+duration.
 
 **Two shots agree and air was not the cause:** 752 counts / 36.5 g (after a
 priming failure) and 736 / 37.9 g (clean). That is **~5×** the datasheet once
@@ -388,9 +402,15 @@ moved and only the flow count knew. That is 0d's independent diagnostic,
 demonstrated — and the reason to fix the tap rather than drop it.
 
 **That is the refutation, not a curiosity** — an earlier version filed it as
-"open" while publishing the conclusion it contradicts. Note the span is the
-**interval** 2.6 → 19.3 s = 16.7 s, not 19.3 s; this file has a convention
-about that error.
+"open" while publishing the conclusion it contradicts.
+
+**The pump ran 19.3 s, not 16.7 s.** A later edit "corrected" this to the
+polled window under the interval-vs-final-value convention. That convention
+is about counting displayed steps from `001`; it does not apply here, because
+this file establishes the timer **is the machine's own pump-on to pump-off
+measurement** and starts at zero when the pump starts. 16.7 s was only when
+sampling began. The correction made the refutation weaker than it is: at
+19.3 s the prediction is **428 counts against 11 — 39×**.
 
 **Also found:** GPIO4/5 swapped during the rebuild. Both lines idled high,
 `pins` looked perfect, `frames=0`. **Zero frames with correct levels is the
@@ -469,7 +489,9 @@ Everything here runs on the breadboard with the machine closed.
    **GPIO8 → GPIO6**, nothing else connected, then `flow on` and `selftest`.
    It drives 500 pulses at 100 Hz. **That is 6.3× the sensor's rated
    ceiling**, from the datasheet: 0.40 L/min max flow × 2382 pulses/L =
-   **15.9 Hz**, and the sensor cannot physically exceed its rated flow. Two
+   **15.9 Hz**. That is the rate at the sensor's rated MAXIMUM FLOW, which is
+   the range over which K is specified and **not a hydraulic limit** — this
+   machine has already run it past. Two
    intermediate versions of this line said "four times" and then "2.3–2.5×";
    the second was computed against the disputed in-circuit 5915 and is
    withdrawn. It prints counted against expected. **Anything other than an
@@ -1254,9 +1276,7 @@ the display is back in temperature mode, so edges lost there cost nothing.
    Digmesa PDF URL for this family 301-redirects to HTML; the datasheet
    could not be retrieved on 2026-10-03.
 
-   | | |
-   |---|---|
-   | | | Source |
+   | Spec | Value | Source |
    |---|---|---|
    | Model | **Digmesa FHKSC**, three-pin | Ascaso-USA listing |
    | Ascaso part | `I.2560` | vendor listings |
@@ -1270,12 +1290,15 @@ the display is back in temperature mode, so edges lost there cost nothing.
    | Accuracy | ± 2.0 % | product pages |
 
    **The datasheet (2026-10-09) says 2382 and the in-circuit measurement said
-   5900–6500, and the shots ~5×. **What the counts measure is unresolved and
-   CLAUDE.md's 0d entry is the live account** — the 50 Hz reading quoted in
-   earlier versions of this line is dead.** Two
+   5900–6500, and the shots ~5×. **What the counts measure is unresolved**,
+   and CLAUDE.md's 0d entry is the live account — the 50 Hz reading quoted in
+   earlier versions of this line is dead. Two
    weighed flushes into a jug on the yield Bookoo, free flow, no basket:
    **164 counts / 25.2 g** and **1209 counts / 204.4 g**, i.e. 6508 and 5915
-   pulses/L. Both rows are in `flowmeter_calibration`, the larger preferred.
+   pulses/L. **Both rows are UNUSABLE as a K-factor** and are annotated to that effect in
+   the database's `notes` column. An earlier version said "the larger
+   preferred"; neither is preferred, because what the in-circuit counts
+   measure is unresolved. They are kept as a record of what was observed.
 
    **Provisional.** 1209 counts is equally consistent with ~490 real pulses
    each ringing past the 2 ms filter and scoring extra counts. Against that:
@@ -1307,7 +1330,12 @@ the display is back in temperature mode, so edges lost there cost nothing.
    flagged as secondary and honest, and then the freely available primary
    source was never fetched. Flagging weak sourcing is not a substitute
    for replacing it — which is why the table above now names which rows
-   are still only flagged. **Retrieving this datasheet is BLOCKED, not cheap.**
+   are still only flagged. **SUPERSEDED 2026-10-09 — the datasheet was retrieved.** What follows is the
+   record of why it took so long, and the "treat as permanently secondary"
+   instruction at the end of it no longer applies: the K-factor (2382) and
+   the supply minimum (+3.8 V) are now datasheet-grade.
+
+   **Retrieving this datasheet was BLOCKED, not cheap.**
    Every published URL for the `932-952x` family serves HTML rather than a
    PDF (`digmesa.com`, `shop.digmesa.com`), the Christian Berner mirror
    404s, and the Google cache is HTML — checked 2026-10-03 and again with

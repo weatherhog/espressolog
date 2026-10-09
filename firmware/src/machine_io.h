@@ -58,21 +58,25 @@ public:
   // real 90 Hz signal and hide a bad tap instead of reporting it.
   static constexpr uint32_t MIN_PERIOD_US = 2000;   // the default
 
-  // RUNTIME-SETTABLE, for one specific experiment. The measured K-factor
-  // (5900-6500 pulses/L, ~2.5x the datasheet summary) is consistent with two
-  // stories: the counts are real, or each real pulse rings past the filter
-  // and scores extra counts.
+  // RUNTIME-SETTABLE, for one specific experiment.
+  //
+  // CAUTION, 2026-10-09: everything below was written when the in-circuit
+  // figure (5900-6500 pulses/L) was believed to be a K-factor. It is not --
+  // see the header: what the counts measure is UNRESOLVED, and the two
+  // stories this sweep was built to separate are no longer the live ones.
+  // The sweep still works as a filter-width experiment; do not read its
+  // framing as current.
   //
   // SWEEP SEVERAL WIDTHS, DO NOT COMPARE TWO. The first version of this
   // specified 2 ms against 20 ms and was unusable, because both outcomes
   // produce the same signature:
   //
   //   a 20 ms window starts rejecting real pulses at 50 Hz = 7.7-8.5 ml/s
-  //   (across the measured 5900-6500 p/L); the sensor's rated ceiling
+  //   (across the withdrawn 5900-6500 p/L); the sensor's rated ceiling
   //   (0.40 L/min) is 23-25 ms, only 15-27 % clear, and a hot-water draw at
   //   10 ml/s is 15-17 ms — BELOW the window, where a 20 ms filter counts
   //   every second pulse, i.e. a 50 % drop.
-  //   The "it was ringing" verdict is a drop toward 2400/K = 37-41 %.
+  //   The "it was ringing" verdict is a drop toward 2382/K.
   //   Indistinguishable. And the two calibration flushes' durations were
   //   never recorded, so which regime they ran in is unknown. The 140 ms
   //   figure the first version quoted is ESPRESSO flow (1.2 ml/s); the
@@ -83,7 +87,7 @@ public:
   // anything whose period exceeds every width swept — and two such sources
   // are live here: 100 Hz mains/triac coupling (10 ms, which machine_io.h
   // deliberately does not reject) and one count per vibratory-pump stroke
-  // (50 Hz, 20 ms). The session's own numbers are consistent with ~50 Hz.
+  // (50 Hz, 20 ms) -- a reading now DEAD: the shots measured ~22 Hz.
   //
   // Sweep 2 / 5 / 10 ms, one flush each, WEIGHT AND DURATION recorded.
   // 20 ms is reported but NOT load-bearing: it starts rejecting real pulses
@@ -111,7 +115,7 @@ public:
   // comment here claimed a noise burst "costs at most one spurious count";
   // it does not. Sustained hash is counted once per MIN_PERIOD_US, so 50 ms
   // of 10 kHz noise yields 25 phantom pulses — about 10 ml of phantom water
-  // at ~2400 pulses/L. Measured against this class, not reasoned about.
+  // at the datasheet's 2382 pulses/L. Measured against this class.
   // `glitches()` is therefore a diagnostic, not a reassurance: a large
   // rejected count means the counted one is suspect too.
   bool feedEdge(uint32_t t_us);

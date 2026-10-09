@@ -361,8 +361,13 @@ priming failure) and 736 / 37.9 g (clean). ~8× what the datasheet predicts.
 **There is no K-factor to extract** — the counts are pump noise, and the
 ring overflowed so even 736 is a floor.
 
-**The fix is 10 nF across each shunt**, J4 and J5 both. ~220 Hz cutoff
-against a ≤16 Hz signal. A perfboard requirement, not an improvement.
+**The fix is a capacitor across each shunt — but two different values.**
+J4 takes **10 nF** (73.1 kΩ source, ≤16 Hz signal, 218 Hz cutoff). J5 takes
+**470 pF**, not 10 nF: it carries a 9.9 kHz clock with 36 µs high pulses
+against a 6.9 kΩ source, where 10 nF gives a 69 µs time constant and stops
+the bus decoding. The first write-up of this copied the J4 value across to
+J5 without checking that the two signals are four orders of magnitude apart
+in frequency. A perfboard requirement, not an improvement.
 
 **What the flowmeter did that nothing else could:** the failed attempt ran
 the display timer a full 19.3 s with the lever pressed, looking from every

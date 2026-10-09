@@ -275,17 +275,25 @@ So: either invariant 1 gets an explicit carve-out in CLAUDE.md naming this
 section, or this section is recorded as pending one. It is currently pending.
 And note the claim does not survive the shorted-output case above.
 
-#### Noise: 10 nF across every shunt, J4 and J5
+#### Noise: a capacitor across every shunt — but NOT the same value
 
-**Measured requirement, 2026-10-09.** The dividers present ~73 kΩ (J4) at
-the pin, a few centimetres from a vibratory pump. With the pump running the
-J4 tap counted ~22 Hz of hash against ~2 Hz of real flow, both ring buffers
+**Measured requirement, 2026-10-09.** With the pump running, the J4 tap
+counted ~22 Hz of hash against ~2 Hz of real flow, both ring buffers
 overflowed, and the display bus dropped 6086 edges at pump start. At idle,
 85 seconds either side, both taps were perfectly silent.
 
-10 nF across each shunt gives ~220 Hz against a signal that never exceeds
-16 Hz. Three capacitors. Not an improvement — the taps do not work without
-them.
+| tap | source Z | signal | fit | cutoff |
+|---|---|---|---|---|
+| J4 `#` | 73.1 kΩ | ≤16 Hz | **10 nF** × 1 | 218 Hz |
+| J5 `ESD1`/`ESD4` | 6.9 kΩ | **9.9 kHz clock** | **470 pF** × 2 | 49 kHz |
+
+**Do not use 10 nF on J5.** The first version of this section did, by copying
+the J4 value across. Against a 6.9 kΩ source that is a 69 µs time constant
+facing 36 µs high pulses — the clock never settles and the display bus stops
+decoding, which would present as a wiring fault rather than a filter error.
+
+Three capacitors, two values. Not an improvement — the taps do not work
+without them.
 
 #### Topology, per actuated line
 

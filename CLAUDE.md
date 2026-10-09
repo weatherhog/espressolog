@@ -1077,10 +1077,22 @@ low-pass at ~220 Hz:
 | pump hash | ~150 Hz of edges — crushed |
 | rise time | ~1.6 ms against a 62 ms pulse period — irrelevant |
 
-**Do the same across the J5 shunts.** The display ring took 6086 dropped
-edges at pump start, which is the same mechanism on a different tap, and it
-is a 0e correctness problem because `boiler_temp_start_c` and
-`machine_timer_s` both come off that bus.
+**J5 needs a capacitor too, but NOT 10 nF — 470 pF.** The display ring took
+6086 dropped edges at pump start, the same mechanism on a different tap. But
+the two taps carry signals **four orders of magnitude apart in frequency**,
+and the first version of this section copied the J4 value across without
+checking:
+
+| | source Z | signal | 10 nF gives | verdict |
+|---|---|---|---|---|
+| J4 | 73.1 kΩ | ≤16 Hz, high ~31 ms | 218 Hz, τ 731 µs | correct |
+| J5 | 6.9 kΩ | **9.9 kHz clock, high 36 µs** | 2.3 kHz, **τ 69 µs** | **destroys the bus** |
+
+A 69 µs time constant against a 36 µs high pulse never settles — 10 nF on J5
+would have stopped the display decoding entirely, and it would have looked
+like a wiring fault. **Use 470 pF** (τ 3.3 µs, 49 kHz): eleven time constants
+inside the shortest feature, and still kills everything above ~50 kHz. 1 nF
+is the upper limit; beyond that the margin on the 36 µs high goes.
 
 This is a **perfboard requirement**, not an optional improvement, and it is
 the sort of thing only building the tap and running it under load reveals.
@@ -1275,9 +1287,11 @@ never baked in, and Digmesa's own datasheet recommends calibrating it.
 means is OPEN.** The J5 tap is
 wired to the ESP32 and `boiler_temp_start_c` / `machine_timer_s` land in
 the database off the machine's own display. Conditioning: 8.2 K series at
-the T-piece, 15 K shunt at the board, **plus 10 nF across each shunt** —
+the T-piece, 15 K shunt at the board, **plus 470 pF across each shunt** —
 added 2026-10-09 after the display ring dropped 6086 edges at pump start,
-the same pump-coupling that swamps J4. `ESD4`→GPIO4, `ESD1`→GPIO5, `VSS`
+the same pump-coupling that swamps J4. **470 pF, NOT the 10 nF used at J4**:
+this bus is a 9.9 kHz clock with 36 µs high pulses against a 6.9 kΩ source,
+where 10 nF would give a 69 µs time constant and stop it decoding entirely. `ESD4`→GPIO4, `ESD1`→GPIO5, `VSS`
 ground direct, `Disp-P4` unterminated.
 
 **GPIO4 is the CLOCK and GPIO5 is the DATA, and getting it backwards is

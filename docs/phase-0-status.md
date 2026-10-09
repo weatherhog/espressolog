@@ -123,13 +123,13 @@ Everything on the breadboard, all three T-pieces in the machine, firmware
 
 | | |
 |---|---|
-| **`selftest`** | **500/500, 0 glitches, 0 ring drops** at 100 Hz — ~2.5× the sensor's rated ceiling at the measured K-factor (not 4×, which came from the superseded ~2400). The one thing host tests cannot establish, because a real shot has no independent count to check against. |
+| **`selftest`** | **500/500, 0 glitches, 0 ring drops** at 100 Hz — 6.3× the rate at the sensor's rated max flow (0.40 L/min × 2382 = 15.9 Hz). The one thing host tests cannot establish, because a real shot has no independent count to check against. |
 | **All four switches** | correct GPIO mapping, taps of 345–480 ms, no false reprogram |
 | **Lever B** | **plug inspection → functional.** B up logged `water`, B down logged `steam` |
 | **J4 first contact** | **no `E01`.** The 100 K + 220 K is energised and the machine has not noticed — the tap that faulted it on 2026-10-03 |
 | **Worst poll gap** | **10 ms** against ~400 ms presses. Polling stays; it goes into the perfboard |
-| **0d end to end** | `inlet_pulses` in `shot_sample` for the first time |
-| **K-factor** | datasheet says **2382 pulses/L**; in-circuit measured 5900–6500. **The 2.5× gap is unexplained** — see the 0d section |
+| 0d end to end | the PATH works — `inlet_pulses` reaches `shot_sample`. **What the numbers mean is unresolved**; see CLAUDE.md 0d |
+| **K-factor** | datasheet **2382 pulses/L** for our exact part. In-circuit counts are ~5× that and **what they are is unresolved** — see CLAUDE.md 0d |
 
 **The 0d chain is proven by the data, not by inspection.** Shot 109 (fw
 0.8.2, no tap) stores `inlet_pulses` NULL; shots 110–112 (fw 0.9.0, tap live)
@@ -357,17 +357,29 @@ section; this is what the bench produced.
 Nothing at idle, everything while the pump runs, nothing after. Both taps.
 
 **Two shots agree and air was not the cause:** 752 counts / 36.5 g (after a
-priming failure) and 736 / 37.9 g (clean). ~8× what the datasheet predicts.
-**There is no K-factor to extract** — the counts are pump noise, and the
-ring overflowed so even 736 is a floor.
+priming failure) and 736 / 37.9 g (clean). That is **~5×** the datasheet once
+inlet rather than yield is used (the scale sees maybe 60 % of the water; the
+rest is retention and the 3-way dump), not the ~8× an earlier version quoted
+by dividing by yield.
 
-**The fix is a capacitor across each shunt — but two different values.**
-J4 takes **10 nF** (73.1 kΩ source, ≤16 Hz signal, 218 Hz cutoff). J5 takes
-**470 pF**, not 10 nF: it carries a 9.9 kHz clock with 36 µs high pulses
-against a 6.9 kΩ source, where 10 nF gives a 69 µs time constant and stops
-the bus decoding. The first write-up of this copied the J4 value across to
-J5 without checking that the two signals are four orders of magnitude apart
-in frequency. A perfboard requirement, not an improvement.
+**What the counts ARE is unresolved — see CLAUDE.md.** A published reading
+that they were pump noise is **withdrawn**: the aborted attempt ran the pump
+16.7 s with no water and logged 11 counts where coupling predicts 370, and
+the edge quality was unchanged while only the rate collapsed. The opposite
+reading fails too — 22.2 Hz at the datasheet K implies 9.31 ml/s through the
+meter, above its rated maximum.
+
+**A capacitor is a CANDIDATE, not a measured requirement.** Nothing has been
+fitted; what was measured is the symptom. J4's 10 nF (73.1 kΩ, 218 Hz) is
+arithmetically sound but attenuates 150 Hz by only 1.69 dB — "crushed" was
+wrong — and could *raise* the glitch count by turning the falling edge into a
+~1.1 ms ramp through the noise band. J5's case is weaker still: those drops
+look like serial polling, not coupling (one burst at pump start, constant
+across two runs of different length, and this file already documents polling
+as the cause). If J5 ever gets one it is **470 pF, never 10 nF** — a
+2026-10-09 edit specified 10 nF, which against a 6.9 kΩ source is a 69 µs
+time constant facing 36 µs clock highs and would have stopped the bus
+decoding while presenting as a wiring fault.
 
 **What the flowmeter did that nothing else could:** the failed attempt ran
 the display timer a full 19.3 s with the lever pressed, looking from every
@@ -375,8 +387,10 @@ other signal like a brew, and the flow count logged **11 pulses**. No water
 moved and only the flow count knew. That is 0d's independent diagnostic,
 demonstrated — and the reason to fix the tap rather than drop it.
 
-**Open:** if pump noise is ~22 Hz, that 19.3 s run should have logged ~400,
-not 11. No account of that should be invented. Re-check after the filter.
+**That is the refutation, not a curiosity** — an earlier version filed it as
+"open" while publishing the conclusion it contradicts. Note the span is the
+**interval** 2.6 → 19.3 s = 16.7 s, not 19.3 s; this file has a convention
+about that error.
 
 **Also found:** GPIO4/5 swapped during the rebuild. Both lines idled high,
 `pins` looked perfect, `frames=0`. **Zero frames with correct levels is the
@@ -486,11 +500,16 @@ file, by the commit that was documenting the fix for it.
 | Meter lever B (positions 2/5 plug inspection) | **DONE** — functional, see the bench section above |
 | Fit J2 and J4, then `pins` | **DONE** — all seven inputs read correctly |
 | J4 first contact, watch for `E01` | **DONE** — energised, no fault |
-| Calibrate against weighed water | **DONE but DISPUTED** — 5900–6500 measured against a datasheet 2382 |
+| Calibrate against weighed water | **WITHDRAWN** — in-circuit counts are ~5× the datasheet and what they measure is unresolved |
 
 **Still open, and it needs the flowmeter counting during a lever-B draw:**
 whether a **hot-water draw** pulses the meter at all. CLAUDE.md records this
-as a prediction and nobody has traced the plumbing. 0d scopes its counting to
+as a prediction. **The plumbing IS traced (2026-10-09)** — tank → T-piece →
+flowmeter → pump, with the other T branch going to `I.2821`, an
+over-pressure valve whose relief leg returns upstream of the meter; and the
+datasheet confirms the part is designed to sit "between the water container
+and the vibratory pump (on the suction side)". What remains open is only
+whether a lever-B draw routes through it. 0d scopes its counting to
 shot boundaries either way, so nothing depends on the answer — but it decides
 whether a tap draw shows up as inlet flow.
 
@@ -1243,16 +1262,17 @@ the display is back in temperature mode, so edges lost there cost nothing.
    | Ascaso part | `I.2560` | vendor listings |
    | Digmesa part | `932-9525-B` | vendor listings |
    | Orifice | 1.0 mm, 5 mm barbed | vendor listings |
-   | Flow range | 0.033–0.40 L/min | **vendor listings; the datasheet reportedly gives min 0.05 L/min at Ø 1.00 mm — a 50 % disagreement at the low end, which matters for slow pre-infusion** |
+   | Flow range | **0.033–0.40 L/min** | **the datasheet, retrieved 2026-10-09.** Note this is the range over which K is *specified*, not a hydraulic limit |
    | Output | **NPN open collector**, 0 VDC active, saturation <0.7 V | Daitron + Digmesa product pages, corroborated |
    | Signal load | max 20 mA | as above |
-   | Supply | **+3.8 to +20 VDC**, <8 mA | **search summary of an unretrieved datasheet; another secondary source says +2.8 to +24 VDC** |
+   | Supply | **+3.8 to +20 VDC**, <8 mA | **the datasheet, retrieved 2026-10-09.** The "+2.8 V" that contradicted it was the 9NB nano brass — a different Digmesa product |
    | K-factor | **2382 pulses/L** for `#932-9525-B` Ø1.00 mm 0° | **the datasheet itself, retrieved 2026-10-09** |
    | Accuracy | ± 2.0 % | product pages |
 
    **The datasheet (2026-10-09) says 2382 and the in-circuit measurement said
-   5900–6500. The gap is unexplained; CLAUDE.md has the live hypothesis
-   (pump-synchronous counting at 50 Hz) and the test.** Two
+   5900–6500, and the shots ~5×. **What the counts measure is unresolved and
+   CLAUDE.md's 0d entry is the live account** — the 50 Hz reading quoted in
+   earlier versions of this line is dead.** Two
    weighed flushes into a jug on the yield Bookoo, free flow, no basket:
    **164 counts / 25.2 g** and **1209 counts / 204.4 g**, i.e. 6508 and 5915
    pulses/L. Both rows are in `flowmeter_calibration`, the larger preferred.
@@ -1264,21 +1284,20 @@ the display is back in temperature mode, so edges lost there cost nothing.
    independent noise looks like. Suggestive, not proof — put the analyser on
    `#` and compare edge counts before calling this the sensor's K-factor.
 
-   **The sourced figure below is folklore and stays only as provenance.**
-   Returns for the
-   `932-952x-Bxxx` sheet give **2386** at Ø 1.00 mm, but one gives
-   **2386 / 2476 / 2436 for 0° / 90° / 180° mounting orientation** and a
-   separate FHKSC source gives **2494** — ~4 % spread, and mounting
-   orientation is precisely the installation variable Digmesa's own
-   calibration warning covers. Quoting one to four significant figures
-   would be false precision. Invariant 3 means nothing depends on it.
+   **The search-summary figures are superseded and the framing was wrong.**
+   Summaries gave 2386 at Ø 1.00 mm, and one gave "2386 / 2476 / 2436 for
+   0° / 90° / 180° **mounting orientation**". Those are not orientations of
+   one part — they are **separate part numbers** (`-B`, `-B90`, `-B180`,
+   `-B270`), each with its own measurement curve. Ours carries no suffix, so
+   0°, so **2382**. Recorded because the wrong framing made a ~4 % "spread"
+   out of four distinct SKUs.
 
-   **The 3.8 V minimum is the most load-bearing unverified number in this
-   entry** — it is what upgrades the brownout hypothesis from speculation
-   to "supported". **One secondary source gives +2.8 V instead, and if
-   that is right then 3.3 V is in spec and the hypothesis loses its
-   mechanism.** Retrieving the PDF settles it; until then the hypothesis
-   is weaker than the paragraph below reads.
+   **The 3.8 V minimum is now SETTLED, and it settles in favour of the
+   brownout hypothesis.** This entry called it "the most load-bearing
+   unverified number" and warned that a secondary +2.8 V figure would remove
+   the mechanism. The datasheet says **+3.8 to +20 VDC**, and the +2.8 V came
+   from the 9NB nano brass, a different product. So 3.3 V IS below this
+   sensor's minimum and the brownout mechanism stands.
 
    An earlier draft of this section used **1300 pulses/L**, taken from a search summary and never
    checked against a datasheet — that is the Ø 1.50 mm figure (Digmesa's
@@ -1337,12 +1356,14 @@ the display is back in temperature mode, so edges lost there cost nothing.
    ~82 mA one. That makes the analyser's survival more likely; **D1 is
    still unchecked.**
 
-   **The number the hypothesis most needs has NOT checked out.** The 3.8 V
-   minimum is still a search summary of an unretrieved datasheet, and one
-   source gives 2.8 V — under which 3.3 V is in spec and the mechanism
-   disappears. An earlier draft of this paragraph said "every number it
-   needs has now checked out", fifty lines below the warning in this same
-   entry that forbade exactly that sentence.
+   **The number the hypothesis most needs HAS now checked out — 2026-10-09.**
+   The datasheet gives **+3.8 to +20 VDC**, so 3.3 V is below this sensor's
+   minimum and the brownout mechanism stands. The 2.8 V figure that would
+   have killed it came from the **9NB nano brass**, a different Digmesa
+   product. Two earlier drafts of this paragraph got it wrong in opposite
+   directions — one claimed "every number it needs has now checked out" on no
+   evidence, the other that it had not checked out at all. It had not, until
+   the PDF arrived; now it has.
 
    **A second probe arrangement now fits, and it is the more informative
    one.** `#` parks at **0.3 V — LOW**. In `-j4-null.sr`, D0 was steady

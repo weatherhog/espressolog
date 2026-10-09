@@ -1026,121 +1026,120 @@ unverified" from 2026-10-04; it is now verified twice over.
 differ depending on medium and installation… we recommend to calibrate."*
 Invariant 3 already requires that.
 
-### THE J4 TAP AS BUILT MEASURES THE PUMP, NOT FLOW — settled 2026-10-09
+### WHAT THE J4 COUNTS ARE IS UNRESOLVED — 2026-10-09, two readings, neither holds
 
-Two shots, bracketed by idle, polled every 3 s. The bracket is the whole
-argument:
+**An earlier version of this section concluded "the J4 tap measures the pump,
+not flow". That conclusion is WITHDRAWN.** It was contradicted by the
+session's own strongest datum, which the same text filed as an open curiosity
+instead of as the refutation. What follows separates what was measured from
+what was inferred, because the measurements are sound and the inference was
+not.
 
-| | pulses | glitches | flow ring dropped | display ring dropped |
+#### Measured
+
+Two shots and a failed attempt, polled every 3 s, bracketed by idle.
+
+| | pulses | glitches | flow ring | display ring |
 |---|---|---|---|---|
-| **40 s idle before** | 967 → 967 | 4988 → 4988 | 0 | 27748 (frozen) |
-| **pump running, 33 s** | 967 → **1717** | 4988 → **9371** | **629** | **+6086 at pump start** |
-| **45 s idle after** | 1728 → 1728 | 9371 → 9371 | 629 | 33998 (frozen) |
+| idle before (7 samples, ~20 s of samples) | 967 → 967 | 4988 → 4988 | 0 | 27748 frozen |
+| pump running, 33.2 s sampled | 981 → 1717 (**736**) | 5123 → 9371 (**4248**) | 0 → **629** | +6086 at start, then +164 |
+| idle after (6 samples) | 1728 → 1728 | 9371 → 9371 | 629 | 33998 frozen |
 
-**Not one count and not one glitch in 85 seconds of idle either side.** The
-instant the pump runs, both taps are swamped: ~22 Hz counted, ~128 Hz
-rejected, and **both ring buffers overflow** — the flow ring losing 629 edges
-and the display ring 6086 at pump start. It is the pump, not the heater, not
-the solenoid, not ambient.
+A further **25 counts** fall in the unsampled gaps at pump start and stop
+(967→981 and 1717→1728), so 736 is what two in-shot samples bracket and
+**761** is the honest total for the pump window. Not one count and not one
+glitch appears in either idle stretch.
 
-**The counts are ~8× the water delivered, and it reproduces:**
+| run | yield | counted | glitch:count |
+|---|---|---|---|
+| shot 1 (machine failed to prime, air) | 36.5 g | 752 | 5.6 |
+| shot 2 (primed, clean) | 37.9 g | 736 | 5.8 |
+| **aborted — pump ran, NO water drawn** | **0 g** | **11** over 16.7 s | **7.8** |
 
-| | yield | counted | implied pulses/L | vs datasheet 2382 |
-|---|---|---|---|---|
-| shot 1 (machine failed to prime, air in the line) | 36.5 g | 752 | 20 600 | 8.6× |
-| shot 2 (primed, clean) | 37.9 g | 736 | 19 400 | 8.2× |
+**The excess over the datasheet is ~5×, not ~8×.** The 8× figure divided by
+*yield*, and this file states elsewhere that yield is not inlet: the water
+splits between cup, puck retention and the 3-way dump, and the scale sees
+perhaps 60 % of it. At that assumption inlet ≈ 63 ml, the datasheet predicts
+~150 pulses, and 761/150 ≈ **5.1×**. The 60 % is an assumption, not a
+measurement.
 
-**Air was not the cause** — shot 2 was clean and agrees with shot 1 to 6 %.
-At the datasheet figure a 37.9 g shot should log ~90 pulses; 736 arrived.
-Roughly 600 of them are pump noise, and because the ring overflowed even 736
-is a **floor** on the edges that actually arrived.
+#### The reading that was published, and why it is dead
 
-**So there is no K-factor to extract from any in-circuit measurement taken so
-far, and the datasheet's 2382 stands unchallenged** — nothing we measured
-ever tested it. The two `flowmeter_calibration` rows are annotated in the
-database not to be used.
-
-**0d's binary signal is compromised too, as built.** "Water is flowing"
-cannot be read off a line that counts ~22 Hz of pump hash whether or not
-water moves.
-
-### The fix is one capacitor, and it belongs on the perfboard
-
-The 100 K + 220 K divider presents roughly **73 kΩ** at the pin — an
-excellent antenna for capacitive coupling from a vibratory pump a few
-centimetres away. **Add 10 nF across the 220 K shunt**, giving an RC
-low-pass at ~220 Hz:
+"The counts are pump noise at ~22 Hz." **The aborted run refutes it:**
 
 | | |
 |---|---|
-| real pulses | ≤16 Hz at the sensor's rated max flow — pass untouched |
-| pump hash | ~150 Hz of edges — crushed |
-| rise time | ~1.6 ms against a 62 ms pulse period — irrelevant |
+| pump ran (display timer 2.6 → 19.3 s, which this file establishes IS pump-on to pump-off) | 16.7 s observed |
+| pump-coupling at 22.17 Hz predicts | **370 counts** |
+| observed | **11** |
+| | **34× out** |
 
-**J5 needs a capacitor too, but NOT 10 nF — 470 pF.** The display ring took
-6086 dropped edges at pump start, the same mechanism on a different tap. But
-the two taps carry signals **four orders of magnitude apart in frequency**,
-and the first version of this section copied the J4 value across without
-checking:
+And the *edge quality is unchanged* — 7.8 rejected per count on the aborted
+run against 5.8 on shot 2. Only the **burst rate** collapses, and it
+collapses exactly when water stops moving. **Capacitive coupling from a pump
+has no reason to care whether water flows.** A water-driven pulse train with
+dirty edges does precisely this.
 
-| | source Z | signal | 10 nF gives | verdict |
-|---|---|---|---|---|
-| J4 | 73.1 kΩ | ≤16 Hz, high ~31 ms | 218 Hz, τ 731 µs | correct |
-| J5 | 6.9 kΩ | **9.9 kHz clock, high 36 µs** | 2.3 kHz, **τ 69 µs** | **destroys the bus** |
+#### The opposite reading does not work either
 
-A 69 µs time constant against a 36 µs high pulse never settles — 10 nF on J5
-would have stopped the display decoding entirely, and it would have looked
-like a wiring fault. **Use 470 pF** (τ 3.3 µs, 49 kHz): eleven time constants
-inside the shortest feature, and still kills everything above ~50 kHz. 1 nF
-is the upper limit; beyond that the margin on the 36 µs high goes.
+"The counts are water." Then 22.17 Hz ÷ 2382 pulses/L = **9.31 ml/s through
+the meter**, against 1.14 g/s reaching the cup. That is above the sensor's
+rated maximum (6.67 ml/s) and well above what a vibratory pump delivers at
+brew pressure. So the simple water reading has its own quantitative problem.
 
-This is a **perfboard requirement**, not an optional improvement, and it is
-the sort of thing only building the tap and running it under load reveals.
+**Both readings are in trouble. The honest state is unresolved**, and this
+entry over-claimed in opposite directions within one day.
 
-### What the flowmeter DID do that nothing else could
+#### What the bracket does and does not establish
 
-The first attempt on 2026-10-09 failed to draw water from the tank. The lever
-was pressed, the display timer ran a full **19.3 s**, and the machine looked
-from every other signal exactly like it was brewing. **The flow count logged
-11 pulses.**
+It separates **brewing from idle**. Nothing finer. The 3-way solenoid is
+energised for exactly the pump-run window and the pump triac fires for
+exactly that window; neither is separated by this experiment, and nobody
+established whether the heater fired during the idle stretches. The counts
+are **activity**-correlated. An earlier version asserted "it is the pump, not
+the heater, not the solenoid, not ambient" — that was a grade inflation which
+deleted this very caveat.
 
-0c says a lever was pressed. The display says a timer ran. Only the flow
-count knew no water moved. That is the independent diagnostic 0d was for,
-demonstrated rather than argued — and it is the strongest case in this file
-for the tap being worth fixing rather than abandoned.
+#### Recirculation is back on the table FOR SHOTS
 
-**OPEN, and not explained:** if pump noise alone produces ~22 Hz, that
-19.3 s run should have logged ~400 counts, not 11. Something about the pump's
-behaviour differed when it could not draw water, and no account of it should
-be invented. Worth re-checking after the RC filter goes in.
+It was killed on free-flush evidence — an OPV is closed below setpoint, and
+both calibration flushes were free flushes. **That reasoning does not extend
+to shots, which do reach setpoint**, and the 5× evidence comes from shots.
+The meter is on the suction side (confirmed) and the relief leg returns to
+the tank-side T upstream of the meter branch, so on a shot the meter would
+see throughput rather than delivered volume. The ~9.3 ml/s figure is what
+makes this worth re-testing rather than assuming.
 
-### Hypotheses that are DEAD, recorded so nobody re-derives them
+#### The experiment that separates them
 
-**1. Recirculation through the bypass.** `I.2821` has a silicone hose to the
-tank-side T **and** PTFE in from the pump and out to the thermoblock (traced
-2026-10-09). That is an **over-pressure valve**: the high-pressure path runs
-through it, the silicone is only the relief leg, and an OPV is closed below
-its setpoint. Both calibration flushes were free flushes, nothing was seen
-moving in that line, and there was no recirculation to count. The arithmetic
-fitted suspiciously well — both runs implied ~60 % bypass at K = 2382 — which
-is exactly why it is written down: **a mechanism that was not running
-reproduced the data.**
+1. **One shot and one free flush with the serial console DETACHED**, counts
+   read before and after, **durations recorded**. Detaching serial removes
+   the documented cause of display-ring drops (see the 0e entry) and gives
+   the second rate point that a single 22.2 Hz datum cannot provide.
+2. **Deliberately re-run the dry case** — pump on, no water drawn. If 11
+   counts over 16.7 s reproduces, the counts track water and the withdrawn
+   conclusion was backwards.
 
-**2. Pump-synchronous at exactly 50 Hz.** The flush data fitted "one count
-per pump stroke" with no free parameters (1209/50 = 24.2 s, 164/50 = 3.3 s,
-both implying the same ~8 ml/s). The shots came in at 22 Hz, not 50. The
-counts are pump-*driven* but not one-per-stroke.
+#### The capacitor is a CANDIDATE, not a measured requirement
 
-**3. The rejected:counted ratio as evidence.** It held at 3.32 and 3.34
-across an 8× volume change, which looked like a signature and is not: both
-runs were free flushes at the same flow rate, so duration scaled 8× too and
-any time-proportional source reproduces it. The ratio then moved to 5.8 on
-the shots, which is what it always was — a function of conditions, not of the
-sensor.
+**Nothing has been fitted and there is no before/after.** What was measured
+is the symptom. The J4 arithmetic is right — 73.1 kΩ source, 10 nF → 218 Hz,
+τ 731 µs, rise 1.6 ms against a ~31 ms half-period — but two things were
+overstated:
 
-**4. Air in the line.** Shot 1 ran after a priming failure and the datasheet
-names air as a measurement hazard, so this looked decisive. Shot 2 was clean
-and agreed to 6 %.
+- "pump hash ~150 Hz — crushed" is wrong. A single pole at 218 Hz attenuates
+  150 Hz by **1.69 dB**, i.e. ×0.83. Untouched. The argument that might work
+  is the 629 ring overflows, which imply bursts far above 12.8 kHz where a
+  218 Hz corner genuinely does kill them — but that has a competing
+  explanation and needs the before/after anyway.
+- An unexamined failure mode: 10 nF across 73 kΩ turns the falling edge into
+  a **~1.1 ms ramp** through the band residual noise lives in. ESP32-S3 pad
+  hysteresis is small, and a slow edge in noise is a classic multiple-
+  interrupt generator. **The capacitor could raise the glitch count.**
+
+It does not threaten invariant 1 — the cap blocks DC so the divider margins
+are untouched, the worst transient into the machine node is ~30 µA and an
+uncharged cap at connection draws ~43 µA.
 
 **J4 pinout — roles MEASURED 2026-10-04**, with a DC pen meter, at the
 window in the 2S T-piece lead, nothing attached:
@@ -1272,7 +1271,7 @@ as you like; do not touch this.
 | Use | Conditioning |
 |---|---|
 | Analyser at J4 | **8.2 K series alone**, one channel, `#` only, ground to `T` |
-| ESP32 at J4 | **100 K + 220 K + 10 nF across the shunt.** The capacitor is NOT optional — without it the tap counts pump noise at ~8× the water (2026-10-09). **Never 150 K** — it looks fine nominally and fails at −45 mV. |
+| ESP32 at J4 | **100 K + 220 K.** A 10 nF across the shunt is a **candidate, untested** — see the 0d entry; nothing has been fitted and it may raise the glitch count by slowing the edge. It does not threaten invariant 1 (DC blocked, ~30 µA worst transient). **Never 150 K** — it looks fine nominally and fails at −45 mV. |
 | At PA8/PA9 instead | **1 K series** — that is the *board* side, after its own conditioning. At J4 it would feed the raw sensor output into a 3.3 V GPIO. |
 
 ---
@@ -1287,12 +1286,31 @@ never baked in, and Digmesa's own datasheet recommends calibrating it.
 means is OPEN.** The J5 tap is
 wired to the ESP32 and `boiler_temp_start_c` / `machine_timer_s` land in
 the database off the machine's own display. Conditioning: 8.2 K series at
-the T-piece, 15 K shunt at the board, **plus 470 pF across each shunt** —
-added 2026-10-09 after the display ring dropped 6086 edges at pump start,
-the same pump-coupling that swamps J4. **470 pF, NOT the 10 nF used at J4**:
-this bus is a 9.9 kHz clock with 36 µs high pulses against a 6.9 kΩ source,
-where 10 nF would give a 69 µs time constant and stop it decoding entirely. `ESD4`→GPIO4, `ESD1`→GPIO5, `VSS`
+the T-piece, 15 K shunt at the board, `ESD4`→GPIO4, `ESD1`→GPIO5, `VSS`
 ground direct, `Disp-P4` unterminated.
+
+**A capacitor here is NOT currently justified, and a 2026-10-09 edit said it
+was.** That edit attributed 6086 dropped display edges to pump coupling and
+specified 10 nF. Both parts were wrong:
+
+- **10 nF would have stopped the bus decoding.** Against a 6.9 kΩ source it
+  is a 69 µs time constant facing 36 µs clock highs — the clock never
+  settles, and it would have presented as a wiring fault rather than a filter
+  error. Corrected to 470 pF the same day.
+- **The drops are probably serial polling, not coupling.** They arrived as
+  one burst at pump start (+6086) then +164 across 30 s of pumping; shot 1
+  gave 6101 over a 37.6 s run against 6086 over 33.2 s — **constant, not
+  scaling with pump-on time**. 6086 edges is 1.88 s of bus at this file's own
+  3244 edges/s, and `docs/phase-0-status.md` already records *"`dropped`
+  counts edges, and serial polling causes them"* with a >158 ms stall
+  threshold. **That capture was polled over serial every 3 s.** And the
+  display decoded the timer cleanly 0.5 → 33.7 s throughout — a swamped bus
+  cannot do that.
+
+**`docs/phase-0-status.md` already carried ~470 pF for J5 before any of
+this**, as a *contingent second remedy* after raising the shunt to 16.4 K.
+Prefer that passage. Re-measure with the serial console detached before
+fitting anything here.
 
 **GPIO4 is the CLOCK and GPIO5 is the DATA, and getting it backwards is
 silent.** Swapped on 2026-10-09 during a rebuild: both lines still idled

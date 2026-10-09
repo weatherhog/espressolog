@@ -265,8 +265,8 @@ tighter than they need to be for the sake of a few euro.
 | 15 kΩ | 10 | 0e divider, ground leg, at the box (**×2** — `Disp-P4` stays unterminated). **In stock.** |
 | 150 kΩ | 10 | 0c switch divider, series leg (**×4** — all four J2 lines). **In stock 2026-10-07.** |
 | 220 kΩ | 10 | Ground leg: **×4 at J2** (1Cup, 2Cup, Steam, Water) **+ ×1 at J4** = **5**. **In stock.** |
-| **10 nF ceramic** | 10 | **NOT OPTIONAL — ×1, across the J4 220 K shunt ONLY.** Without it the J4 tap counts pump noise at ~8× the water (2026-10-09). 218 Hz low-pass against a ≤16 Hz signal. **Check stock.** |
-| **470 pF ceramic** | 10 | **×2, across the two J5 15 K shunts.** NOT 10 nF — J5 carries a 9.9 kHz clock with 36 µs high pulses against a 6.9 kΩ source, where 10 nF gives a 69 µs time constant and stops the bus decoding altogether. 470 pF is 3.3 µs. **Check stock.** |
+| 10 nF ceramic | — | **CANDIDATE, do not buy yet.** ×1 across the J4 220 K shunt, 218 Hz. Nothing has been fitted and there is no before/after; it may raise the glitch count by slowing the falling edge to ~1.1 ms through the noise band. Decide after the re-measurement in `phase-0-status.md`. |
+| 470 pF ceramic | — | **CANDIDATE, weaker case than J4's.** ×2 across the J5 15 K shunts, **never 10 nF** (69 µs against 36 µs clock highs stops the bus decoding). But the J5 drops look like serial polling, not coupling. `phase-0-status.md` already carried this value as a contingent remedy after raising the shunt to 16.4 K. |
 | 1 kΩ | 10 | 0d flowmeter, **at PA8/PA9 only** — the board side, after its own conditioning. **Never at J4.** **In stock.** |
 | 8.2 kΩ (J4) | — | **J4 ANALYSER tap only: 8.2 kΩ, one channel, `#` only, no shunt.** The ESP32 tap at J4 is **100 K + 220 K** — see the 0d entry in `docs/phase-0-status.md`. Covered by the 8.2 kΩ bag above. |
 | **100 kΩ** | 10 | **0d J4 divider, series leg (×1)** — the chosen value since 2026-10-08. **In stock.** |

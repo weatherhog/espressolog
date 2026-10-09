@@ -25,24 +25,37 @@
 // 0d — flowmeter pulse counting.
 //
 // Raw pulses only, never millilitres (hard invariant 3). The ml/pulse factor
-// is calibrated against water on a Bookoo and lives in
-// `flowmeter_calibration`; the datasheet figure (~2400 pulses/L) comes from
-// search summaries of a datasheet nobody could retrieve, with sources
-// spread 2386-2494, so it is a sanity check and not a constant.
+// is calibrated against water and lives in `flowmeter_calibration`.
+//
+// THE DATASHEET IS IN HAND (2026-10-09): #932-9525-B, 1.00 mm, 0 deg,
+// 2382 pulses/L, 0.41 g/pulse, rated 0.033-0.40 L/min. The old "~2400 from
+// search summaries, spread 2386-2494" is retracted -- that spread was four
+// different PART NUMBERS (-B/-B90/-B180/-B270), not a tolerance. The rated
+// range is where K is SPECIFIED, not a hydraulic limit; this machine has
+// already run the sensor past it.
+//
+// WHAT THE IN-CIRCUIT COUNTS ARE IS UNRESOLVED -- see CLAUDE.md's 0d entry.
+// Two shots logged ~5x the datasheet; a published conclusion that they were
+// pump noise is WITHDRAWN (a dry pump run logged 11 counts where coupling
+// predicts 370). Derive nothing from in-circuit counts until it is settled.
 class PulseCounter {
 public:
-  // Glitch floor. Espresso flow is ~2 ml/s, i.e. ~5 Hz; the fastest thing
-  // this sensor sees is a hot-water draw, call it 10 ml/s or ~24 Hz, which
-  // is a 42 ms period. 2 ms rejects nothing real until 500 Hz (200 ml/s,
-  // absurd) and kills contact bounce and any triac hash that gets in.
+  // Glitch floor. Espresso flow is ~2 ml/s; at the datasheet's 2382 pulses/L
+  // that is ~4.8 Hz, and the rate at the sensor's rated max flow (0.40 L/min)
+  // is 15.9 Hz, a 63 ms period. 2 ms rejects nothing real until 500 Hz and
+  // kills contact bounce and any triac hash that gets in.
   //
-  // The machine's pump triac is random-phase and fires at mains zero cross,
-  // so 100 Hz coupling is the specific thing being guarded against here —
-  // 10 ms period, comfortably above this floor, so a burst of it would be
-  // COUNTED, not rejected. That is deliberate: if 100 Hz shows up in the
-  // count, the bench test must see it rather than have it quietly filtered.
-  // Raising this floor to 11 ms to swallow mains hum would also swallow a
-  // real 90 Hz signal, and would hide a bad tap instead of reporting it.
+  // THE BENCH TEST THIS COMMENT ASKED FOR HAS RUN (2026-10-09). It said:
+  // if 100 Hz mains coupling shows up it must be COUNTED rather than quietly
+  // filtered, so the bench can see it. What a shot actually produced was
+  // ~22 Hz counted against ~128 Hz REJECTED, plus 629 ring overflows -- i.e.
+  // the hash is bursty on a sub-2 ms scale, not a clean 100 Hz train. So this
+  // floor is doing more rejecting than the comment anticipated, and it is the
+  // constant most likely to need revisiting once the open question in the
+  // header is settled and any filtering is fitted at the pin.
+  //
+  // Still do not raise it to swallow mains hum: that would also swallow a
+  // real 90 Hz signal and hide a bad tap instead of reporting it.
   static constexpr uint32_t MIN_PERIOD_US = 2000;   // the default
 
   // RUNTIME-SETTABLE, for one specific experiment. The measured K-factor

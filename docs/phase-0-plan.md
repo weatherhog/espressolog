@@ -163,12 +163,18 @@ so the counting path is provable on the bench without the machine.
 
 **Calibrate empirically** — run water into a jug on the Bookoo, count pulses,
 divide. **The datasheet is in hand (2026-10-09): 2382 pulses/L for
-`#932-9525-B`, Ø1.00 mm, 0°** — our exact part and orientation. The in-circuit
-measurement said 5900–6500 over two weighed
-flushes (both in `flowmeter_calibration`), which is 2.5× the ~2400 search
-summary — that figure came from a datasheet nobody could retrieve and is now
-folklore. The measurement is provisional until the analyser confirms the
-counts are pulses rather than ringing; CLAUDE.md has the reasoning. Store raw pulses and the calibration separately
+`#932-9525-B`, Ø1.00 mm, 0°** — our exact part and orientation.
+
+**Do not calibrate from in-circuit counts until CLAUDE.md's 0d entry is
+resolved.** Two shots logged ~5× the datasheet, a published reading that the
+counts were pump noise has been withdrawn, and whether they track water is
+open. The flush figures below are superseded by that.
+
+The in-circuit flushes said 5900–6500 and two shots said ~5× the datasheet.
+**Neither is usable**: what the in-circuit counts measure is unresolved, a
+published reading that they were pump noise has been withdrawn, and CLAUDE.md
+0d carries the live account and the experiment that separates it. Store raw
+pulses and the calibration separately
 (`flowmeter_calibration`), never the converted millilitres.
 
 ### 0e — Integrate temperature
@@ -277,7 +283,7 @@ And note the claim does not survive the shorted-output case above.
 
 #### Noise: a capacitor across every shunt — but NOT the same value
 
-**Measured requirement, 2026-10-09.** With the pump running, the J4 tap
+**Measured SYMPTOM, 2026-10-09 — the remedy below is untested.** With the pump running, the J4 tap
 counted ~22 Hz of hash against ~2 Hz of real flow, both ring buffers
 overflowed, and the display bus dropped 6086 edges at pump start. At idle,
 85 seconds either side, both taps were perfectly silent.
@@ -292,8 +298,13 @@ the J4 value across. Against a 6.9 kΩ source that is a 69 µs time constant
 facing 36 µs high pulses — the clock never settles and the display bus stops
 decoding, which would present as a wiring fault rather than a filter error.
 
-Three capacitors, two values. Not an improvement — the taps do not work
-without them.
+**Neither value is a settled requirement.** An earlier version of this
+section called them "a measured requirement"; what was measured is the
+symptom, and no capacitor has been fitted. The J4 case has an unexamined
+failure mode (a ~1.1 ms edge through the noise band can *raise* the glitch
+count) and the J5 case rests on drops that look like serial polling rather
+than coupling. **Leave the footprints, decide after the re-measurement**
+described in `docs/phase-0-status.md`.
 
 #### Topology, per actuated line
 

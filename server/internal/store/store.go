@@ -239,7 +239,20 @@ func defaultContext(tx *sql.Tx, startedAt time.Time) (machineID, grinderID, epoc
 // fact. Unbounded, replaying an old capture after loading today's bag stamps
 // every recovered shot with today's coffee and marks it 'loaded', which reads
 // as authoritative.
-func defaultRecipe(tx *sql.Tx, epochID any, startedAt time.Time) (beanID, grindDial any) {
+// brewTemp and preinfusion are carried the same way as grindDial but WITHOUT
+// the epoch scope, because an epoch boundary is a burr change — it says
+// nothing about the PID setpoint or the pre-infusion time, which are machine
+// settings and survive it.
+//
+// Added 2026-10-12. Until then only grind_dial was carried, and the capture
+// screen made up the difference by PATCHing a seeded brew_temp_c and
+// preinfusion_s on every save whether or not anyone had touched them — which
+// is how 18 of 80 shots came to carry a dose labelled "a human confirmed
+// this" that nobody typed. Stopping the UI writing them left the two columns
+// with no source at all, so the carry-forward has to exist somewhere: here,
+// at ingest, where it is at least honest about being an inference and is
+// bounded by the shot's own start time.
+func defaultRecipe(tx *sql.Tx, epochID any, startedAt time.Time) (beanID, grindDial, brewTemp, preinfusion any) {
 	at := startedAt.UTC().Format(time.RFC3339)
 	var id int64
 	if tx.QueryRow(`SELECT id FROM bean
@@ -256,6 +269,18 @@ func defaultRecipe(tx *sql.Tx, epochID any, startedAt time.Time) (beanID, grindD
 			grindDial = dial
 		}
 	}
+	var t float64
+	if tx.QueryRow(`SELECT brew_temp_c FROM shot
+	                 WHERE brew_temp_c IS NOT NULL AND started_at <= ?
+	                 ORDER BY started_at DESC, id DESC LIMIT 1`, at).Scan(&t) == nil {
+		brewTemp = t
+	}
+	var pre float64
+	if tx.QueryRow(`SELECT preinfusion_s FROM shot
+	                 WHERE preinfusion_s IS NOT NULL AND started_at <= ?
+	                 ORDER BY started_at DESC, id DESC LIMIT 1`, at).Scan(&pre) == nil {
+		preinfusion = pre
+	}
 	return
 }
 
@@ -271,7 +296,7 @@ func insertShot(tx *sql.Tx, h *record.Header, samples []record.Sample, scaleID a
 		excludeReason = "reject: under 5 g"
 	}
 	machineID, grinderID, epochID := defaultContext(tx, startedAt)
-	beanID, grindDial := defaultRecipe(tx, epochID, startedAt)
+	beanID, grindDial, brewTemp, preinfusion := defaultRecipe(tx, epochID, startedAt)
 	// 'loaded' only if a bag actually was: an absent bean must stay NULL
 	// with no provenance rather than claim an attribution that never happened.
 	var beanSource any
@@ -299,17 +324,17 @@ func insertShot(tx *sql.Tx, h *record.Header, samples []record.Sample, scaleID a
 		INSERT INTO shot (
 			started_at, tz_offset_min, scale_id,
 			machine_id, grinder_id, grind_epoch_id,
-			bean_id, bean_source, grind_dial,
+			bean_id, bean_source, grind_dial, brew_temp_c, preinfusion_s,
 			stop_ms, stopped_by,
 			yield_at_stop_g, yield_final_g, settle_offset_g,
 			peak_flow_gps, mean_flow_gps, flow_win_start_ms, flow_win_end_ms,
 			boiler_temp_start_c, machine_timer_s, setpoint_touched,
 			detector_version, firmware_version,
 			excluded, exclude_reason, created_at
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		startedAt.Format(time.RFC3339), h.TzOffsetMin, scaleID,
 		machineID, grinderID, epochID,
-		beanID, beanSource, grindDial,
+		beanID, beanSource, grindDial, brewTemp, preinfusion,
 		h.StopMs, stoppedBy,
 		mg(h.YieldAtStopMg), mg(h.YieldFinalMg), mg(h.SettleOffsetMg),
 		mg(h.PeakFlowMgps), mg(h.MeanFlowMgps), h.FlowWinStartMs, h.FlowWinEndMs,

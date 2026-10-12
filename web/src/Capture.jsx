@@ -32,15 +32,29 @@ export default function Capture({ shots, beans, justSaved, onSaved }) {
   // defaults below (dial 2.4, temp 93) when the real settings were 7.9 and
   // 95. Comparing state against the seed is what makes "the user touched
   // this" expressible at all.
-  const grindSeed  = pending?.grind_dial ?? previous?.grind_dial ?? 2.4;
-  const doseSeed   = pending?.dose_ground_g ?? previous?.dose_ground_g ?? 18.0;
-  const preinfSeed = pending?.preinfusion_s ?? previous?.preinfusion_s ?? 0;
-  const tempSeed   = pending?.brew_temp_c ?? previous?.brew_temp_c ?? 93;
+  const [grind, setGrind] = useState(pending?.grind_dial ?? previous?.grind_dial ?? 2.4);
+  const [dose, setDose] = useState(pending?.dose_ground_g ?? previous?.dose_ground_g ?? 18.0);
+  const [preinf, setPreinf] = useState(pending?.preinfusion_s ?? previous?.preinfusion_s ?? 0);
+  const [temp, setTemp] = useState(pending?.brew_temp_c ?? previous?.brew_temp_c ?? 93);
 
-  const [grind, setGrind] = useState(grindSeed);
-  const [dose, setDose] = useState(doseSeed);
-  const [preinf, setPreinf] = useState(preinfSeed);
-  const [temp, setTemp] = useState(tempSeed);
+  // WHICH FIELDS THE OPERATOR ACTUALLY TOUCHED. Set in onChange and nowhere
+  // else, so it answers that question directly and cannot be wrong.
+  //
+  // A first attempt compared state against named seed consts instead, and it
+  // did not work: those consts recompute on every render while useState
+  // captures only on mount, and App keys this component on the shot's `id`,
+  // so a 30 s refresh that returns the SAME shot with CHANGED fields moves
+  // the seed and leaves the state. That is the normal case, not a corner —
+  // Spool::oldest() is a lexicographic minimum and "s-" sorts before "w-",
+  // so within a boot every shot record uploads before every weighing record.
+  // The sequence was: open Capture on a dose-less shot (seed = previous
+  // shot's dose) -> the grinder weighing arrives and the server sets the real
+  // measured dose -> refresh, no remount -> seed is now the measured value,
+  // state is still the guess -> save writes the guess over the measurement
+  // and stamps dose_source='manual'. The fix reintroduced the bug it was
+  // written to remove, one layer down.
+  const [touched, setTouched] = useState({});
+  const mark = (k, set) => (v) => { setTouched((t) => (t[k] ? t : { ...t, [k]: true })); set(v); };
   const [balance, setBalance] = useState(null);
   const [rating, setRating] = useState(null);
   const [notes, setNotes] = useState("");
@@ -115,9 +129,9 @@ export default function Capture({ shots, beans, justSaved, onSaved }) {
         // the column alone; an unconfirmed guess belongs nowhere, and NULL
         // is the honest value for "not recorded".
         const patch = {};
-        if (grind  !== grindSeed)  patch.grind_dial = grind;
-        if (preinf !== preinfSeed) patch.preinfusion_s = preinf;
-        if (temp   !== tempSeed)   patch.brew_temp_c = temp;
+        if (touched.grind)  patch.grind_dial = grind;
+        if (touched.preinf) patch.preinfusion_s = preinf;
+        if (touched.temp)   patch.brew_temp_c = temp;
         // Sent only when the user actually picked a bean, exactly as
         // dose_ground_g is handled below. Sending the hopper's value
         // unconditionally was wrong three ways: with no bag loaded it sent
@@ -135,7 +149,7 @@ export default function Capture({ shots, beans, justSaved, onSaved }) {
         // field is null, the seeded `dose` is a number, and `dose !== null`
         // is true on every save. The comparison that was meant to suppress
         // the write guaranteed it. Compare against the seed.
-        if (dose !== doseSeed) patch.dose_ground_g = dose;
+        if (touched.dose) patch.dose_ground_g = dose;
         // A PATCH with no recognised fields currently 500s server-side, and
         // an all-untouched save is now the common case.
         if (Object.keys(patch).length) await patchShot(pending.id, patch);
@@ -178,17 +192,17 @@ export default function Capture({ shots, beans, justSaved, onSaved }) {
         <Eyebrow>Confirm</Eyebrow>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 20, marginTop: 16 }}>
           <div><Eyebrow style={{ marginBottom: 8 }}>Grind</Eyebrow>
-            <Stepper value={grind} onChange={setGrind} step={0.1} /></div>
+            <Stepper value={grind} onChange={mark("grind", setGrind)} step={0.1} /></div>
           <div>
             <Eyebrow style={{ marginBottom: 8 }}>
               Dose{pending.dose_source === "measured" && <span style={{ color: T.flow }}> · from scale</span>}
             </Eyebrow>
-            <Stepper value={dose} onChange={setDose} step={0.1} unit="g" />
+            <Stepper value={dose} onChange={mark("dose", setDose)} step={0.1} unit="g" />
           </div>
           <div><Eyebrow style={{ marginBottom: 8 }}>Preinfusion</Eyebrow>
-            <Stepper value={preinf} onChange={setPreinf} step={0.5} unit="s" /></div>
+            <Stepper value={preinf} onChange={mark("preinf", setPreinf)} step={0.5} unit="s" /></div>
           <div><Eyebrow style={{ marginBottom: 8 }}>Brew temp</Eyebrow>
-            <Stepper value={temp} onChange={setTemp} step={0.5} unit="°C" /></div>
+            <Stepper value={temp} onChange={mark("temp", setTemp)} step={0.5} unit="°C" /></div>
         </div>
 
         <div style={{ marginTop: 24, paddingTop: 18, borderTop: `1px solid ${T.hair}` }}>

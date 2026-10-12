@@ -30,6 +30,29 @@
 -- than on "manual with no weighing", which would also catch a dose somebody
 -- genuinely typed on an unweighed shot.
 --
+-- WHAT IT WILL MISS, and it is most of the newer damage. A fabricated dose
+-- carries the PREVIOUS shot's measured value, and in the 2026-09-29 snapshot
+-- 29 of 48 measured doses (60 %) have two decimals or fewer. Any bogus row
+-- seeded from one of those is arithmetically indistinguishable from human
+-- input and survives this migration. The 17 rows here all carry 18.109 only
+-- because they were tagged in one batch from one seed; shots after the
+-- snapshot were each seeded from a different preceding dose, so expect
+-- roughly 60 % of that damage to remain. Cleaning it would need per-shot
+-- judgement, not a predicate -- and the capture screen no longer creates new
+-- cases, so the population is closed.
+--
+-- VERIFIED ON 80 ROWS, RUNS AGAINST MORE. The snapshot is 2026-09-29 at
+-- user_version 6; production is at 8 with ~30 more shots. Statement 2 rests
+-- on 2.4 / 93.0 / 0.0 being unique, checked on the snapshot only. BEFORE
+-- DEPLOYING, run this on a copy of the live database:
+--
+--   SELECT id, grind_dial, brew_temp_c, preinfusion_s, dose_ground_g
+--     FROM shot WHERE grind_dial=2.4 AND brew_temp_c=93.0 AND preinfusion_s=0.0
+--       AND dose_source='manual'
+--       AND NOT EXISTS (SELECT 1 FROM weighing w WHERE w.shot_id=shot.id);
+--
+-- If it returns anything but shot 3, statement 2 is nulling real data.
+--
 -- REVERSIBLE. The value removed here is 18.109 throughout, recoverable from
 -- shot 79. Shot 3's removed recipe is the literal 2.4 / 93 / 0 / 18.0.
 --

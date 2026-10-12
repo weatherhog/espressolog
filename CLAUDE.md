@@ -491,9 +491,11 @@ at all. That asymmetry is unexplained.
 **`Disp-P4` IS THE LINE THAT MUST NOT BE LOADED, AND THIS PARAGRAPH USED TO
 SAY THE OPPOSITE.** Until 2026-10-12 it read: *"This is the one J5 line where
 a careless connection could actuate the machine… The 8.2 K / 15 K divider is
-high-impedance and receive-only, so it is safe as specified."* Two defects, and
-together they were the only thing in this file that could produce an
-invariant-1 violation:
+high-impedance and receive-only, so it is safe as specified."* Two defects, and together they made this the
+only paragraph in this file that **invited** an invariant-1 violation rather
+than warning against one. (It is not the only invariant-1 hazard documented
+here — `selftest` driving GPIO8 and the Phase-1 photoMOS on J2 position 1 are
+both hazards, but both are flagged as such.)
 
 - **The antecedent was gone.** "This line" had drifted ~80 lines from the
   `Disp-P4` discussion it referred to, landing after a passage about display

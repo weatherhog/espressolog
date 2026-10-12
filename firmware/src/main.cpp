@@ -369,13 +369,41 @@ static void reportSwitch(const SwitchBank::Event& e) {
 // generous because the cost of being wrong is a stalled pour, while the
 // cost of being conservative is only that an upload waits a minute.
 static constexpr uint32_t BREW_GUARD_MS = 75000;
+// How fresh a display reading must be to be believed about the CURRENT state.
+// The bus emits a frame every ~41 ms, so 2 s is ~50 frames of slack and still
+// two orders of magnitude tighter than anything that could mask a brew.
+//
+// NOT MachineContextTracker::BOILER_MAX_AGE_US, which a draft of this borrowed
+// because it was the constant to hand. That one is a DATA-ATTRIBUTION bound —
+// "how old a pre-shot temperature may be and still be called this shot's",
+// deliberately generous at 60 s — and reusing it here coupled two unrelated
+// decisions and opened a recurring stall: DisplayBus::stale() compares
+// uint32_t micros(), which aliases every 71.58 min, so a last-seen TIMER frame
+// (machine switched off mid-brew while the ESP32 runs on its own supply)
+// made machineBusy() true for 60 s out of every 71.6 min, indefinitely.
+static constexpr uint32_t DISPLAY_FRESH_US = 2000000;
 static uint32_t last_brew_press_ms = 0;
 
 static bool machineBusy() {
-  // Trust the display only while it is actually being decoded. A stale bus
-  // would otherwise report whatever mode it last saw, forever.
-  if (display_on && !display_bus.stale(micros(), MachineContextTracker::BOILER_MAX_AGE_US))
-    return display_bus.reading().mode == DisplayBus::Mode::TIMER;
+  // Two independent signals, OR-ed. A draft returned early on the display,
+  // which made the switch fallback unreachable whenever the J5 tap was
+  // working — i.e. in the deployed configuration. That matters because
+  // CLAUDE.md records that the display does NOT run its timer during a
+  // hot-water draw, and lever B up runs the pump and pulses the flowmeter.
+  // So the display alone cannot see a Water draw, and the press alone cannot
+  // see a brew started before this boot.
+  if (display_on && !display_bus.stale(micros(), DISPLAY_FRESH_US) &&
+      display_bus.reading().mode == DisplayBus::Mode::TIMER)
+    return true;
+
+  // The press guard. Note SwitchBank emits an Event on RELEASE, so during the
+  // press itself — 345-480 ms by hand on this machine, longer for a reprogram
+  // hold — there is no event yet and the pump is already running. Ask for the
+  // live level too.
+  if (switches_on &&
+      (switches.pressed(0) || switches.pressed(1) || switches.pressed(3)))
+    return true;
+
   if (!last_brew_press_ms) return false;
   return (millis() - last_brew_press_ms) < BREW_GUARD_MS;
 }
@@ -395,7 +423,14 @@ static void pollSwitches() {
   while (switches.popEvent(e)) {
     // 1Cup, 2Cup and Water all run the pump. Remember when, because the
     // detector will not know for several seconds — see machineBusy().
-    if (e.line == 0 || e.line == 1 || e.line == 3) last_brew_press_ms = now;
+    // Backdate to the press, not the release: the pump started then.
+    // Ignore synthetic events — a line already high at the first poll was
+    // never witnessed going high, and this file refuses to treat that as
+    // evidence everywhere else (it forces `reprogram` false and prints
+    // `high?` rather than `PRESSED`). A floating line settling must not arm
+    // a 75 s upload block.
+    if (!e.synthetic && (e.line == 0 || e.line == 1 || e.line == 3))
+      last_brew_press_ms = e.pressed_at_ms;
     reportSwitch(e);
   }
 }
@@ -658,7 +693,7 @@ static void handleCommand(String line, Stream& out) {
   String arg = sp < 0 ? "" : line.substring(sp + 1);
 
   if (cmd == "help" || cmd == "h") {
-    out.println("# status|s  tare|t  raw|r  verbose|v  display [on|off]  flow [on|off|filter <us>]  switches [on|off]  pins  selftest [n] [hz]  ls  dump <file>  rm <file>  format yes  fake  net  scales  assign <yield|dose> <mac|last>  set <ssid|pass|endpoint> <val>  reboot");
+    out.println("# status|s  tare|t  raw|r  verbose|v  display [on|off]  flow [on|off|filter <us>]  switches [on|off]  pins  selftest [n] [hz]  ls  dump <file>  rm <file>  format  fake  net  scales  assign <yield|dose> <mac|last>  set <ssid|pass|endpoint> <val>  reboot");
   } else if (cmd == "status" || cmd == "s") {
     out.printf("# yield: state=%d mac=%s | dose: state=%d mac=%s\n",
                (int)scales.slotState(ScaleRole::YIELD), scales.slotMac(ScaleRole::YIELD).c_str(),
@@ -816,9 +851,19 @@ static void handleCommand(String line, Stream& out) {
     } else {
       out.println("# format: erasing…");
       bool ok = LittleFS.format();
-      spool_ok = ok && LittleFS.begin(false, "/littlefs", 10, "littlefs") && spool.begin();
+      // Re-probe UNCONDITIONALLY. A draft short-circuited on `ok`, so a
+      // format that failed before unmounting — wrong partition label, busy —
+      // left a perfectly healthy filesystem with spool_ok stuck false, and
+      // the device silently stopped persisting every shot until reboot. That
+      // is invariant 6 broken by the error path of the command that exists
+      // to protect it.
+      spool_ok = LittleFS.begin(false, "/littlefs", 10, "littlefs") && spool.begin();
       out.printf("# format: %s, spool %s\n", ok ? "done" : "FAILED",
                  spool_ok ? "ready" : "UNAVAILABLE");
+      // spool.begin() redraws boot_id and resets seq, so the server's
+      // (device, boot_id, seq) idempotency key changes here. Harmless after
+      // an erase, worth knowing.
+
     }
   } else if (cmd == "fake") {
     spoolFakeShot(out);
@@ -1029,6 +1074,19 @@ void loop() {
     }
   }
 
+  // POLL THE MACHINE BEFORE DECIDING WHETHER IT IS QUIET. These sat BELOW the
+  // decision until 2026-10-12, so `quiet` was computed from the PREVIOUS
+  // iteration's display reading — and with a ~41 ms frame period that leaves
+  // machineBusy() blind for roughly 50-150 ms after pump-on. One iteration in
+  // that window is all it takes, because tryUploadOldest() is synchronous
+  // with 3 s connect and 5 s response timeouts. A multi-second stall at pump
+  // start is precisely the dropped-edge signature this guard exists to
+  // prevent, so computing the guard from stale state defeated it at exactly
+  // the moment it mattered.
+  pollSwitches();
+  pollDisplay();
+  machineContextPoll();
+
   ShotState st = detector.state();
   // INVARIANT 2: never write flash or block on the network during a shot.
   //
@@ -1045,10 +1103,16 @@ void loop() {
   // ~6086 dropped display edges at pump start that docs/phase-0-status.md
   // records as unexplained — not proof, but it predicts that signature.
   //
-  // It is easy to hit: the yield scale's weighing episode ends when the
-  // first-drip creep exceeds RANGE_MG, which is usually BEFORE the shot
-  // detector confirms POURING, so the event is queued and flushed in the
-  // same loop iteration while the state is still ARMED.
+  // A DRAFT OF THIS COMMENT CLAIMED the yield scale's weighing episode ends
+  // during ARMED and so flushes flash mid-pour. That is wrong and should not
+  // be reasoned from: WeighingDetector requires w > MIN_WEIGHT_MG (5 g) to
+  // call a reading stable, while ARMED means |w| <= ARM_BAND_MG (0.5 g), so
+  // no yield weighing can complete in that state. The dose scale can emit
+  // during ARMED — lifting the dose cup after taring the yield scale — but
+  // that is a different trigger on a different scale and is not "easy".
+  //
+  // The breach does not need that story. net.tick()'s synchronous HTTP in a
+  // state that spans pump-on is sufficient on its own.
   bool quiet = (st == ShotState::IDLE || st == ShotState::ARMED) && !machineBusy();
 
   if (quiet && spool_ok) {
@@ -1061,9 +1125,6 @@ void loop() {
     }
   }
 
-  pollSwitches();
-  pollDisplay();
-  machineContextPoll();
   scales.tick(millis());
   // Network (and its flash reads) only while nothing is brewing.
   net.tick(millis(), quiet);

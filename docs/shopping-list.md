@@ -249,10 +249,13 @@ push-pull) and cross-couples the channels, which breaks the divider
 outright.
 
 `Disp-P4` is branched but **terminated at nothing** — a labelled test
-point, pending the button test. Sensing it through a divider is safe;
-**driving** it is the one connection on J5 that could actuate the machine,
-and its pull-up strength is unrecorded, so it gets no load until measured.
-Full reasoning in `docs/phase-0-status.md`.
+point. **Sensing it through a divider is NOT safe either**, which this
+paragraph said until 2026-10-12: its pull-up strength is unrecorded and it
+reaches the MCU through R32 = 100 K, so a 23.2 K divider can drag it under
+1 V and the MCU then reads a button held down permanently — a false signal
+fed into the machine continuously, which invariant 1 forbids. Driving it is
+worse again. It gets **no load at all**, which is what is built. Full
+reasoning in `docs/phase-0-status.md`; CLAUDE.md carries the same correction.
 
 **`ESD4` (pin 3) is the clock, `ESD1` (pin 2) the data** — settled
 2026-10-03, see CLAUDE.md.

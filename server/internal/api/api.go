@@ -21,6 +21,16 @@ import (
 
 const maxRecordBytes = 64 << 10 // header + 2048 samples is ~20 KB; 64 KB is generous
 
+// IngestMarker is set on every response the ingest handler produces, and on
+// nothing else. The device requires it before deleting its only copy of a
+// shot, because a 2xx alone does not prove the record reached this handler:
+// any unmatched path falls through to the SPA, which answers 200 with
+// index.html. The /api/ 404 guard closes that for API paths; this closes it
+// for an endpoint misconfigured to the site root, which that guard cannot
+// see. Belt and braces on the one path where being wrong is silent and
+// permanent.
+const IngestMarker = "X-Espressolog-Ingest"
+
 func New(st *store.Store, hub *live.Hub) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v1/ingest", ingest(st, hub))
@@ -42,6 +52,22 @@ func New(st *store.Store, hub *live.Hub) http.Handler {
 		}
 		w.Write([]byte("ok\n"))
 	})
+	// UNKNOWN /api/ PATHS MUST 404, NOT FALL THROUGH TO THE SPA.
+	//
+	// Without this, mux.Handle("/", …) below catches every unmatched request
+	// INCLUDING POSTs, and web.Handler()'s SPA fallback rewrites an unknown
+	// path to index.html and serves it with **200 OK**. A device posting to a
+	// mistyped or stale ingest route therefore reads 2xx, concludes the shot
+	// was stored, and deletes its only copy — at one record every ~2 s until
+	// the whole spool is gone, with no error logged anywhere.
+	//
+	// That is invariant 6 defeated by a typo in a config string. Found by
+	// pre-deploy review 2026-10-12, by probing a running server: a POST to
+	// /espressolog/api/v1/ingest returned 200 with an HTML body.
+	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "no such API endpoint", http.StatusNotFound)
+	})
+
 	mux.Handle("/", web.Handler())
 	return mux
 }
@@ -80,6 +106,7 @@ func ingest(st *store.Store, hub *live.Hub) http.HandlerFunc {
 		}
 		if res.Duplicate {
 			log.Printf("ingest: duplicate %s %08x-%d", deviceID, rec.Header.BootID, rec.Header.Seq)
+			w.Header().Set(IngestMarker, "1")
 			w.WriteHeader(http.StatusOK) // a retried lost 200 — already stored
 			return
 		}
@@ -91,6 +118,7 @@ func ingest(st *store.Store, hub *live.Hub) http.HandlerFunc {
 		note, _ := json.Marshal(map[string]any{"ev": "ingested", "type": rec.Header.RecordType,
 			"shot_id": res.ShotID, "weighing_id": res.WeighingID})
 		hub.Broadcast(note)
+		w.Header().Set(IngestMarker, "1")
 		w.WriteHeader(http.StatusCreated)
 	}
 }

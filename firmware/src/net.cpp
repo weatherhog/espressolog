@@ -152,9 +152,32 @@ bool Net::tryUploadOldest() {
   http.addHeader("Content-Type", "application/octet-stream");
   http.addHeader("X-Device-Id", WiFi.macAddress());
   http.addHeader("X-Record", record_id);
+  // A 2xx ALONE DOES NOT PROVE THE RECORD WAS STORED, so collect the marker
+  // the ingest handler sets and require it before deleting anything. The
+  // server's SPA fallback answers ANY unmatched path with 200 and
+  // index.html, so an endpoint with a typo, a stale prefix, or no path at
+  // all reads as success — and this function's next line is the only copy of
+  // the shot being erased, at one record per retry until the spool is empty.
+  // Probed on a running server 2026-10-12: POST to a wrong /api path
+  // returned 200 with an HTML body. The server now 404s unknown /api paths
+  // too; this covers an endpoint pointed at the site root, which that cannot.
+  static const char* kIngestMarker = "X-Espressolog-Ingest";
+  const char* collect[] = { kIngestMarker };
+  http.collectHeaders(collect, 1);
   int code = http.sendRequest("POST", &f, f.size());
+  bool from_ingest = http.header(kIngestMarker).length() > 0;
   http.end();
   f.close();
+
+  if (code >= 200 && code < 300 && !from_ingest) {
+    // Looks like success and is not. Keep the record and say so loudly —
+    // this is a configuration error, not a transient one, and retrying will
+    // not fix it, but deleting would be unrecoverable.
+    Serial.printf("# net: %s got %d from something that is NOT the ingest"
+                  " endpoint — check `endpoint`. Record KEPT.\n",
+                  path.c_str(), code);
+    return false;
+  }
 
   if (code >= 200 && code < 300) {
     // Delete only now: a lost 200 means a retry, and the server dedupes on

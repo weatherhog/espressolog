@@ -9,8 +9,29 @@ Currently **Phase 0: logging only.**
 
 Violating any of these is a bug, not a design choice.
 
-1. **Phase 0 never actuates anything.** No writes to any machine signal.
-   Every tap is high-impedance or passive. Read-only.
+1. **Phase 0 never actuates anything.** No current path exists from any
+   machine signal to any other, or to our board's supplies, that the
+   machine did not already have. Every *sense* tap is high-impedance or
+   passive.
+
+   **Drive hardware may be PRESENT on the board**, and from the perfboard
+   onward it is — see `docs/phase-0-plan.md`. It is permitted only while an
+   **open jumper in series with its OUTPUT** makes conduction physically
+   impossible: not merely unpowered, not merely un-commanded. **A disable
+   that only cuts a control input does not satisfy this**, because it does
+   not survive the controlled part failing short, which is the
+   characteristic MOSFET failure mode.
+
+   *Amended 2026-10-12.* The original read "No writes to any machine
+   signal. Every tap is high-impedance or passive. Read-only." That
+   sentence did two jobs: **"never actuates" is the goal, "high-impedance
+   or passive" is one implementation of it**, and the perfboard forces them
+   apart because a board can carry drive hardware and still be incapable of
+   driving. The amendment is *stricter* where it matters — it names the one
+   placement of the disable that survives a component failure — and it
+   makes "this board is still Phase 0" checkable by looking at the board
+   rather than by trusting the firmware.
+
 2. **Never write flash during a shot.** An ESP32 flash write blocks for
    tens of ms, which stalls the BLE stack and puts gaps in the curve.
    Buffer in RAM, write once when the pump stops.
@@ -689,7 +710,10 @@ Note also that every tap described above is a resistor on a logic line.
 Plumbing is a different risk class, and **whether invariant 1 covers it is
 undecided** — the invariant was written about electrical taps, and a tee,
 a leak or added dead volume all change what the machine does. Do not read
-"every tap is high-impedance or passive" as settling anything about water.
+"every sense tap is high-impedance or passive" as settling anything about
+water. **The 2026-10-12 amendment does not change this** — it recast the
+invariant around current paths, which is still an electrical notion. Water
+remains outside it.
 
 Part numbers below are from **Ascaso's own Dream PID parts diagram**,
 which is document-grade and the best mechanical source this project has
@@ -882,6 +906,11 @@ tap, and it is bounded at ≤50 mA by the machine's own R45. Note this is **not
 the J4 `+` net**, which the standalone read-only rule names and which remains
 untouchable; they are different conductors on different connectors that
 happen to share the IRM-03-5 rail.
+
+**Position 1 therefore rides in the Phase 0 harness, and invariant 1 now says
+what makes that safe** — an open jumper in series with each photoMOS *output*,
+so the conductor arrives at the board and dead-ends. See invariant 1 as
+amended 2026-10-12 and the actuation section of `docs/phase-0-plan.md`.
 
 The supporting arguments, neither settled: **Steam** drives the boiler to
 165 °C, which would contaminate `boiler_temp_start_dc` — though the display

@@ -270,16 +270,37 @@ perfboard rather than retrofit it later, after the arguments below were put
 and reaffirmed. Retrofitting into a finished, glanded, cable-tied box is the
 cost that decided it.
 
-**This needs a decision about hard invariant 1, which has not been made.**
-The invariant says *"Every tap is high-impedance or passive. Read-only."* A
-photoMOS across common↔direction is neither, except while its LED is
-unpowered. The argument that an open jumper in the LED supply makes actuation
-physically impossible is defensible — off-state leakage is nanoamps — but
-**the invariant as written grants no exception, and this section is not one.**
+**The invariant 1 decision is MADE — 2026-10-12. Invariant 1 was AMENDED,
+not exempted.** This section was pending that decision since 2026-10-08.
 
-So: either invariant 1 gets an explicit carve-out in CLAUDE.md naming this
-section, or this section is recorded as pending one. It is currently pending.
-And note the claim does not survive the shorted-output case above.
+The old wording — *"No writes to any machine signal. Every tap is
+high-impedance or passive. Read-only."* — did two jobs at once. **"Never
+actuates" is the goal; "high-impedance or passive" is one implementation of
+it.** The perfboard forces them apart, because a board can carry drive
+hardware and still be physically incapable of driving. A carve-out would have
+weakened the goal to rescue the mechanism. The amendment keeps the goal and
+replaces the mechanism with a stricter one:
+
+> Drive hardware may be **present** on the board only while an **open jumper
+> in series with its OUTPUT** makes conduction physically impossible — not
+> merely unpowered, not merely un-commanded. A disable that only cuts a
+> control input does not satisfy this, because it does not survive the
+> controlled part failing short.
+
+Read the full amended text in CLAUDE.md. Two things follow for this board:
+
+- **the disable moves from the LED supply to the drive leg** — see below;
+- **"the board is still Phase 0" becomes checkable by looking at it**, rather
+  than by trusting the firmware not to fire.
+
+**The chosen build, of three that were put:** populate the actuation parts and
+**bench-test them off-machine** against a dummy 100 Ω and a bench 5 V supply,
+then leave the output jumpers open. The alternative of laying out footprints
+and fitting nothing carries less residual risk, and was rejected because it
+seals an **unverified** layout into a box — and unverified things being wrong
+is where this project's actual defects have come from, not component failure.
+Phase 1 then costs two jumpers instead of a soldering iron and a re-crimped
+harness.
 
 #### Noise: a capacitor across every shunt — but NOT the same value
 
@@ -318,6 +339,10 @@ described in `docs/phase-0-status.md`.
   [photoMOS]        DRIVE. Closes common to the direction line.
       |             This is the lever, and nothing else connects here.
       |
+      o             JUMPER — OPEN THROUGHOUT PHASE 0. It sits in the OUTPUT,
+                    not in the LED supply: an open here is still an open when
+      o             the photoMOS fails SHORT. Amended invariant 1 requires
+      |             this placement, and nothing else on the board does.
       +-------------------------------------  J2 pos N, direction line
       |
   [150 K]           SENSE. Unchanged from 0c.
@@ -382,19 +407,49 @@ indefinitely: the stored timer is reprogrammed within 2 s and the pump does
 not stop. There is no fail-safe-open on this path — CLAUDE.md already records
 that opening the switch line cannot stop the machine.
 
-Mitigations worth designing in, none of them free:
-- a **series fuse or PTC** on the drive leg, so a shorted output becomes an
-  open one rather than a permanent press
+**IN PHASE 0 THIS FAILURE IS NOW CLOSED, by moving the disable.** The
+hardware disable below was specified on the **photoMOS LED supply**, which
+breaks the *control* path only — precisely the path a shorted output does not
+use. Put an **open jumper in series with the photoMOS OUTPUT** instead and a
+shorted part is still an open circuit. Same component, one position along,
+and it is what amended invariant 1 requires. Keep the LED-supply disable too
+if you like; it is not what makes the claim true.
+
+**In Phase 1, with the jumpers fitted, the failure is real and unmitigated.**
+Nothing below bounds it, and one suggestion that stood here for four days
+does not work:
+
+- ~~a **series fuse or PTC** on the drive leg, so a shorted output becomes an
+  open one~~ — **WRONG, and recorded rather than deleted.** A legitimate press
+  and a permanent short draw **identical** current: both are 5 V through R45's
+  100 Ω, ~50 mA, bounded by the machine's own resistor. No current-threshold
+  device can separate them. It would have to discriminate on **time** — pass
+  120 ms, open before the 2 s reprogram threshold — which is a narrow thermal
+  characteristic, not an off-the-shelf fuse or PTC.
+- **two photoMOS in series** per driven line, both off the same LED supply, so
+  both must fail short to actuate. This is the standard safety-chain move and
+  it is cheap: four parts instead of two.
 - a **watchdog relay** in the LED supply that firmware must keep re-arming,
-  so a crash de-energises the drive path rather than leaving it as it was
+  so a crash de-energises the drive path rather than leaving it as it was.
+  Note this shares the fuse's blind spot — it is on the control path, so it
+  does not bound a shorted output either.
 - at minimum, **record it as a known unmitigated failure** rather than let
-  "two things make it provably safe" stand as the whole story
+  "two things make it provably safe" stand as the whole story.
 
 #### Two things that bound the firmware-side failures
 
-- **A hardware disable.** A jumper or DIP switch cutting power to the
-  photoMOS LEDs, so actuation is *physically* impossible in that position.
-  This is what lets "the board is still Phase 0" be a fact about the hardware.
+- **A hardware disable — IN THE DRIVE LEG, not the LED supply.** A jumper or
+  DIP switch **in series with each photoMOS output**, so actuation is
+  *physically* impossible in that position. This is what lets "the board is
+  still Phase 0" be a fact about the hardware, and amended invariant 1
+  requires this placement specifically.
+
+  **This originally said "cutting power to the photoMOS LEDs", and that is
+  the weaker of the two.** Cutting the LED supply breaks the control path, so
+  it bounds firmware faults — a stuck GPIO, a boot loop, a crash — but it does
+  nothing about the output failing short, which is the characteristic MOSFET
+  failure and the one case this document already flags as unmitigated. A
+  jumper in the output bounds both, for the same part count.
 - **An arm gate.** AND the one-shot output with a second GPIO that firmware
   must hold high, so one stuck or floating trigger pin cannot fire anything.
 

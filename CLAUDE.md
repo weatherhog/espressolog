@@ -964,18 +964,22 @@ So the signal header is **3V3 at one end, GND at the other, all seven taps in
 between** — no ground return has to cross the board. That is a board reading
 beating a datasheet reading, which is the third time in this file.
 
-**The pin PITCH is NOT yet established, and it gates the whole mechanical
-build.** A caliper reading of **1.9 mm** was taken 2026-10-12. That is almost
-certainly the **gap between adjacent pins, not the pitch**: 2.54 mm pitch
-less a 0.64 mm square pin is **1.90 mm**, to the hundredth. But perfboard is
-2.54 mm, so if 1.9 mm were the real pitch no standard board fits and the
-mechanical plan changes entirely.
+**Pitch is 2.54 mm (0.1 in) — and the proof is that the board has been in a
+BREADBOARD since 0a.** A caliper reading of **1.9 mm** was taken 2026-10-12
+and briefly recorded as possibly the pitch. It is the **gap**: 2.54 mm pitch
+less a 0.64 mm square pin is 1.90 mm, to the hundredth.
 
-**Do not settle this by re-measuring one gap** — that is the measurement that
-is already ambiguous. Span **pin 1 centre to pin 11 centre**, which
-multiplies the difference by ten: **25.4 mm** at 0.1 in against **19.0 mm** at
-a true 1.9 mm pitch. Outside edge to outside edge is easier to grip and
-reads ~26.0 against ~19.6.
+The arithmetic is not what settles it. **Breadboards are 2.54 mm, the DevKitC-1
+has been seated in one through every bench session including 2026-10-08, and a
+1.9 mm part cannot mate with a 2.54 mm socket strip.** That is this file's own
+maxim — verify by mating, not by reading — and it was available the whole time
+the pitch was being treated as open.
+
+Recorded because the trap is live for anyone measuring a header: **calipers
+laid between two pins read the gap, and the gap on 0.1 in hardware is a
+plausible-looking 1.9 mm.** If a span ever does need checking, measure pin 1
+centre to pin 11 centre, which multiplies the difference tenfold — 25.4 mm
+against 19.0 mm — rather than re-measuring the one gap that is ambiguous.
 
 **GPIO8 is reserved and is the one pin this firmware ever drives.** The
 `selftest` command makes it an output to feed a known pulse train into

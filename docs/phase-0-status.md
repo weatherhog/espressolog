@@ -567,12 +567,16 @@ the far end of the signal header, two directly opposite it. The signal header
 is therefore 3V3 at one end, GND at the other, all seven taps between them,
 and no ground return crosses the board.
 
-**One mechanical fact is still open and it gates the build: the pin PITCH.**
-A caliper reading of 1.9 mm was taken 2026-10-12, which is almost certainly
-the gap between pins rather than the pitch — 2.54 mm pitch less a 0.64 mm
-square pin is 1.90 mm exactly. Perfboard is 2.54 mm, so the difference is not
-cosmetic. Settle it by spanning **pin 1 to pin 11**, not by re-measuring one
-gap: 25.4 mm at 0.1 in against 19.0 mm at a true 1.9 mm pitch.
+**Pitch is 2.54 mm, settled 2026-10-12 — by the breadboard, not by calipers.**
+A 1.9 mm caliper reading was briefly treated as possibly the pitch; it is the
+gap (2.54 less a 0.64 mm pin). What actually settles it is that the DevKitC-1
+has been seated in a 2.54 mm breadboard through every bench session, and a
+1.9 mm part cannot mate with a 2.54 mm socket strip. The trap is worth
+knowing: calipers laid between two pins read the gap, and on 0.1 in hardware
+that gap is a plausible-looking 1.9 mm.
+
+**So nothing mechanical is now outstanding.** Pin map, header geometry, power
+and ground positions and pitch are all board readings.
 
 ## The J5 tap went live 2026-10-07, and two things came out of it
 

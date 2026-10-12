@@ -378,10 +378,18 @@ by dividing by yield.
 
 **What the counts ARE is unresolved — see CLAUDE.md.** A published reading
 that they were pump noise is **withdrawn**: the aborted attempt ran the pump
-16.7 s with no water and logged 11 counts where coupling predicts 370, and
-the edge quality was unchanged while only the rate collapsed. The opposite
-reading fails too — 22.2 Hz at the datasheet K implies 9.31 ml/s through the
-meter, above its rated maximum.
+**19.3 s** with no water and logged 11 counts where coupling predicts **428**
+— 39× — and the glitch *rate* collapsed 128/s to 4.5/s, 29×, which is the
+quantity that measures coupling at the pin directly.
+
+**The opposite reading is NOT refuted, and this paragraph said it was until
+2026-10-12.** The objection quoted here — 22.2 Hz at the datasheet K implies
+9.31 ml/s, "above its rated maximum" — is **circular** and CLAUDE.md withdrew
+it: the rated range is where K is *specified*, not a hydraulic limit, and if
+the flow really is above that range then 2382 is not the applicable K, so
+dividing by 2382 to prove it is out of range proves nothing. Worse, the
+recirculation account *predicts* roughly that figure. So: one reading
+refuted, the other unresolved.
 
 **A capacitor is a CANDIDATE, not a measured requirement.** Nothing has been
 fitted; what was measured is the symptom. J4's 10 nF (73.1 kΩ, 218 Hz) is

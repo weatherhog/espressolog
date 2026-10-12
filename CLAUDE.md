@@ -1439,10 +1439,15 @@ measurement.
 
 | | |
 |---|---|
-| pump ran (display timer 2.6 → 19.3 s, which this file establishes IS pump-on to pump-off) | 16.7 s observed |
-| pump-coupling at 22.17 Hz predicts | **370 counts** |
+| pump ran | **19.3 s** — display timer 2.6 → 19.3, which this file establishes IS the pump-on to pump-off measurement |
+| pump-coupling at 22.17 Hz predicts | 22.17 × 19.3 = **428 counts** |
 | observed | **11** |
-| | **34× out** |
+| | **39× out** |
+
+*(This table read 16.7 s / 370 counts / 34× until 2026-10-12. 16.7 s came from
+a withdrawn "correction" that treated the display timer as something other
+than pump time; the retraction restored 19.3 s in the measured table 90 lines
+above but left this one, and the dry-run instruction below, un-swept.)*
 
 **The strongest form of this is the GLITCH RATE, which measures coupling at
 the pin directly:**
@@ -1526,8 +1531,9 @@ makes this worth re-testing rather than assuming.
    the documented cause of display-ring drops (see the 0e entry) and gives
    the second rate point that a single 22.2 Hz datum cannot provide.
 2. **Deliberately re-run the dry case** — pump on, no water drawn. If 11
-   counts over 16.7 s reproduces, the counts track water and the withdrawn
-   conclusion was backwards.
+   counts over **19.3 s** reproduces, the counts track water and the withdrawn
+   conclusion was backwards. **Coupling predicts 428 over that window**, so
+   anything under ~50 is decisive and anything over ~300 overturns it.
 
 #### Hypotheses that are DEAD, recorded so nobody re-derives them
 

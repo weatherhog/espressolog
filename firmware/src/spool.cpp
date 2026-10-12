@@ -25,7 +25,8 @@ bool Spool::nearlyFull() {
 size_t Spool::pendingCount() {
   size_t n = 0;
   File d = LittleFS.open(DIR);
-  for (File f = d.openNextFile(); f; f = d.openNextFile()) n++;
+  for (File f = d.openNextFile(); f; f = d.openNextFile())
+    if (!f.isDirectory()) n++;   // /spool/bad is a directory, not a record
   return n;
 }
 
@@ -145,9 +146,19 @@ bool Spool::remove(const String& name) {
 String Spool::oldest() {
   // Lexicographic min works within a boot; across boots order is arbitrary
   // but every file still gets its turn (stage 4 uploads until empty).
+  //
+  // SKIP DIRECTORIES. The quarantine path creates /spool/bad INSIDE /spool,
+  // and openNextFile() returns directories as well as files. "bad" sorts
+  // before both "s-" and "w-", so without this test the first quarantine
+  // wedges the queue permanently: oldest() returns /spool/bad forever,
+  // reading it yields 0 bytes, that re-triggers the quarantine branch, the
+  // rename fails, and the uploader backs off and repeats. Every later shot
+  // then sits on flash and never reaches the server — invariant 6, silently.
+  // Found by audit 2026-10-12; present since the quarantine path was added.
   String best;
   File d = LittleFS.open(DIR);
   for (File f = d.openNextFile(); f; f = d.openNextFile()) {
+    if (f.isDirectory()) continue;
     String n = String(f.name());
     if (best.isEmpty() || n < best) best = n;
   }
@@ -155,12 +166,24 @@ String Spool::oldest() {
 }
 
 void Spool::list(Stream& out) {
-  size_t n = 0, bytes = 0;
+  size_t n = 0, bytes = 0, quarantined = 0;
   File d = LittleFS.open(DIR);
   for (File f = d.openNextFile(); f; f = d.openNextFile()) {
+    if (f.isDirectory()) {
+      // Almost certainly /spool/bad. Count it separately and say so: a
+      // quarantined record is invisible otherwise, and until 2026-10-12 its
+      // mere existence stopped every upload.
+      File q = LittleFS.open(String(DIR) + "/" + f.name());
+      for (File qf = q.openNextFile(); qf; qf = q.openNextFile()) quarantined++;
+      continue;
+    }
     out.printf("# %s  %u bytes\n", f.name(), (unsigned)f.size());
     n++; bytes += f.size();
   }
+  if (quarantined)
+    out.printf("# %u QUARANTINED record(s) in %s/bad — these will never upload."
+               " Inspect with 'dump bad/<name>', then delete them.\n",
+               (unsigned)quarantined, DIR);
   out.printf("# %u record(s), %u bytes; fs %u/%u KB\n", (unsigned)n, (unsigned)bytes,
              (unsigned)(LittleFS.usedBytes() / 1024), (unsigned)(LittleFS.totalBytes() / 1024));
 }

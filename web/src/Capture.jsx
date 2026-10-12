@@ -21,10 +21,26 @@ export default function Capture({ shots, beans, justSaved, onSaved }) {
 
   // The dose prefers the shot's own value — stage 5 attributes it from the
   // grinder scale automatically, so it's usually already right.
-  const [grind, setGrind] = useState(pending?.grind_dial ?? previous?.grind_dial ?? 2.4);
-  const [dose, setDose] = useState(pending?.dose_ground_g ?? previous?.dose_ground_g ?? 18.0);
-  const [preinf, setPreinf] = useState(pending?.preinfusion_s ?? previous?.preinfusion_s ?? 0);
-  const [temp, setTemp] = useState(pending?.brew_temp_c ?? previous?.brew_temp_c ?? 93);
+  //
+  // THE SEEDS ARE NAMED because `save` compares against them. Seeding a
+  // field and then sending it unconditionally records a value nobody typed
+  // as though a human confirmed it — see the bean comment in `save`, which
+  // is the same lesson learned a release earlier and not applied here.
+  // Measured 2026-10-12: 18 of 80 shots carried dose_source='manual' with no
+  // weighing behind them, 17 of them the identical value 18.109 written in
+  // one batch-tagging session on 2026-09-28, and shot 3 carrying the literal
+  // defaults below (dial 2.4, temp 93) when the real settings were 7.9 and
+  // 95. Comparing state against the seed is what makes "the user touched
+  // this" expressible at all.
+  const grindSeed  = pending?.grind_dial ?? previous?.grind_dial ?? 2.4;
+  const doseSeed   = pending?.dose_ground_g ?? previous?.dose_ground_g ?? 18.0;
+  const preinfSeed = pending?.preinfusion_s ?? previous?.preinfusion_s ?? 0;
+  const tempSeed   = pending?.brew_temp_c ?? previous?.brew_temp_c ?? 93;
+
+  const [grind, setGrind] = useState(grindSeed);
+  const [dose, setDose] = useState(doseSeed);
+  const [preinf, setPreinf] = useState(preinfSeed);
+  const [temp, setTemp] = useState(tempSeed);
   const [balance, setBalance] = useState(null);
   const [rating, setRating] = useState(null);
   const [notes, setNotes] = useState("");
@@ -91,11 +107,17 @@ export default function Capture({ shots, beans, justSaved, onSaved }) {
       if (discard) {
         await patchShot(pending.id, { excluded: 1, exclude_reason: "discarded at capture" });
       } else {
-        const patch = {
-          grind_dial: grind,
-          preinfusion_s: preinf,
-          brew_temp_c: temp,
-        };
+        // SEND ONLY WHAT THE USER TOUCHED. Each of these was sent
+        // unconditionally until 2026-10-12, so opening this screen stamped
+        // the seeded value onto the shot — and for a shot with no weighing
+        // the server reads a dose arriving here as dose_source='manual',
+        // i.e. "a human confirmed this". Leaving a field alone must leave
+        // the column alone; an unconfirmed guess belongs nowhere, and NULL
+        // is the honest value for "not recorded".
+        const patch = {};
+        if (grind  !== grindSeed)  patch.grind_dial = grind;
+        if (preinf !== preinfSeed) patch.preinfusion_s = preinf;
+        if (temp   !== tempSeed)   patch.brew_temp_c = temp;
         // Sent only when the user actually picked a bean, exactly as
         // dose_ground_g is handled below. Sending the hopper's value
         // unconditionally was wrong three ways: with no bag loaded it sent
@@ -107,8 +129,16 @@ export default function Capture({ shots, beans, justSaved, onSaved }) {
         if (beanPick !== undefined && beanPick !== pending.bean_id) patch.bean_id = beanPick;
         // Only send the dose when the user actually corrected it — an
         // untouched scale-attributed value must keep dose_source='measured'.
-        if (dose !== pending.dose_ground_g) patch.dose_ground_g = dose;
-        await patchShot(pending.id, patch);
+        //
+        // This compared against `pending.dose_ground_g` until 2026-10-12,
+        // which looks right and is not: when the shot has no weighing that
+        // field is null, the seeded `dose` is a number, and `dose !== null`
+        // is true on every save. The comparison that was meant to suppress
+        // the write guaranteed it. Compare against the seed.
+        if (dose !== doseSeed) patch.dose_ground_g = dose;
+        // A PATCH with no recognised fields currently 500s server-side, and
+        // an all-untouched save is now the common case.
+        if (Object.keys(patch).length) await patchShot(pending.id, patch);
         const tasting = { notes: notes || null };
         if (balance) tasting.balance = balance;
         if (rating) tasting.overall = rating;

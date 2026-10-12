@@ -257,7 +257,7 @@ instead of soldering to the board.
 | Perfboard **7 × 9 cm** + **female** headers | 2.54 mm confirmed three ways; **7 × 9 not 5 × 7** — the devkit footprint is 11 × 22 holes and a 5 × 7 board has only ~27 rows. See `shopping-list.md` | 8 |
 | Heat-shrink assortment | | 5 |
 | Small ABS project box | mounts outside the machine | 6 |
-| 74HC221 (dual), **photoMOS ×4**, one-shot RC, **3 × 2-pin header** (no shunts) | **moved into this order 2026-10-12** — the build populates them behind open jumpers rather than leaving footprints. Counts decided; see `shopping-list.md` §7 | ~10 |
+| 74HC221 PDIP ×3, **AQY212EH DIP-4 ×8**, **2N7000 ×10**, **330 Ω**, one-shot caps, **3 × 2-pin header** (no shunts), DIP sockets | **moved into this order 2026-10-12** — the build populates them behind open jumpers rather than leaving footprints. Part numbers confirmed and the LED drive costed; `shopping-list.md` §7 is normative | ~25 |
 
 ### Tools, if you don't have them
 
@@ -573,7 +573,12 @@ does not work:
     both together make a press. Three consequences, all real:
 
     - **The two LEDs in a pair cannot share one drive.** Each needs its own
-      path. Free digital GPIOs are not the constraint — against the full
+      path — and since 2026-10-12 that is settled hardware, not just a
+      constraint: each photoMOS gets a **2N7000** with a 100 kΩ gate pulldown,
+      fed through **330 Ω** for ~6 mA. AQY212EH is guaranteed to operate only
+      at **3.0 mA** (typical 1.2 mA is not a design figure), and a 74HC221 at
+      3.3 V cannot source that reliably, so the transistor was needed for the
+      drive current regardless of the test. Free digital GPIOs are not the constraint — against the full
       board-read pinout in CLAUDE.md that is 1, 2, 9-14, 18, 21, 38-42 and 47
       (48 is the onboard LED; 35-37 are PSRAM-internal; 0, 3, 19, 20, 45, 46
       are strapping or native USB) — **the one-shot channels are**: a dual '221 gives two, enough for one per *line*, not one per

@@ -46,12 +46,26 @@
 -- on 2.4 / 93.0 / 0.0 being unique, checked on the snapshot only. BEFORE
 -- DEPLOYING, run this on a copy of the live database:
 --
+--   -- statement 2:
 --   SELECT id, grind_dial, brew_temp_c, preinfusion_s, dose_ground_g
 --     FROM shot WHERE grind_dial=2.4 AND brew_temp_c=93.0 AND preinfusion_s=0.0
 --       AND dose_source='manual'
 --       AND NOT EXISTS (SELECT 1 FROM weighing w WHERE w.shot_id=shot.id);
 --
--- If it returns anything but shot 3, statement 2 is nulling real data.
+--   -- statement 1, AND SAVE THE OUTPUT:
+--   SELECT id, dose_ground_g FROM shot
+--    WHERE dose_source='manual' AND dose_ground_g IS NOT NULL
+--      AND ROUND(dose_ground_g,2) != dose_ground_g;
+--
+-- If the first returns anything but shot 3, statement 2 is nulling real data.
+--
+-- SAVE THE SECOND RESULT SET SOMEWHERE. The "recoverable from shot 79" note
+-- below is true of the SNAPSHOT, where every matched row held 18.109. The
+-- predicate is generic, and this migration's own "WHAT IT WILL MISS" section
+-- explains that post-snapshot rows were each seeded from a DIFFERENT preceding
+-- dose — so on production it may null values that are neither 18.109 nor
+-- recoverable from anywhere else in the database. Those (id, dose) pairs are
+-- the only copy.
 --
 -- REVERSIBLE. The value removed here is 18.109 throughout, recoverable from
 -- shot 79. Shot 3's removed recipe is the literal 2.4 / 93 / 0 / 18.0.
@@ -59,12 +73,11 @@
 -- The leak itself is fixed in web/src/Capture.jsx (2026-10-12): every field
 -- is now compared against its seed and sent only when it differs.
 
-UPDATE shot
-   SET dose_ground_g = NULL,
-       dose_source   = NULL
- WHERE dose_source = 'manual'
-   AND dose_ground_g IS NOT NULL
-   AND ROUND(dose_ground_g, 2) != dose_ground_g;
+-- ORDER MATTERS. Statement 2 runs FIRST because statement 1 clears
+-- dose_source, and statement 2's predicate requires dose_source = 'manual'.
+-- Run the other way round, a row matching both would have its dose nulled and
+-- then be skipped, keeping the fabricated 2.4 / 93 / 0 recipe. No such row
+-- exists in the 2026-09-29 snapshot; one could exist in production.
 
 UPDATE shot
    SET dose_ground_g = NULL,
@@ -77,3 +90,10 @@ UPDATE shot
    AND preinfusion_s = 0.0
    AND dose_source   = 'manual'
    AND NOT EXISTS (SELECT 1 FROM weighing w WHERE w.shot_id = shot.id);
+
+UPDATE shot
+   SET dose_ground_g = NULL,
+       dose_source   = NULL
+ WHERE dose_source = 'manual'
+   AND dose_ground_g IS NOT NULL
+   AND ROUND(dose_ground_g, 2) != dose_ground_g;

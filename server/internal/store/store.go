@@ -269,21 +269,36 @@ func defaultRecipe(tx *sql.Tx, epochID any, startedAt time.Time) (beanID, grindD
 			grindDial = dial
 		}
 	}
-	// STOP AT A RECORDED SETPOINT EDIT. setpoint_touched is the machine's own
-	// statement that the brew temperature was being changed on that shot
-	// (CLAUDE.md: the display renders PrG and blinks at ~2.44 Hz; display.cpp
-	// latches it; migration 008 stores it). Carrying a temperature across it
-	// would assert a setpoint the machine told us had changed — the one case
-	// where this inference is known to be wrong.
+	// STOP AT A RECORDED PARAMETER EDIT, for BOTH values.
 	//
-	// It does NOT bound preinfusion_s: the flag says nothing about that.
+	// setpoint_touched latches on the display blanking twice inside
+	// BLINK_WINDOW_US, plus `PrG`. A draft of this called it "the machine's
+	// own statement that the brew temperature was being changed" and therefore
+	// exempted preinfusion_s. That is wrong twice over: CLAUDE.md's SET UP
+	// table lists `Pr` (pre-infusion, 0-5 s) as a parameter edited by the same
+	// gesture and rendered by the same blanking, so the flag is evidence of a
+	// parameter edit IN GENERAL — at least as informative about preinfusion as
+	// about temperature. Exempting it carried preinfusion across exactly the
+	// event the guard exists to stop.
+	//
+	// COMPARE started_at, NOT id. A draft used `id > (SELECT MAX(id) ...)`,
+	// and id is INGEST order while started_at is PULL order. They diverge as
+	// documented normal behaviour: the spool uploads in filename order,
+	// Spool::oldest() says "across boots order is arbitrary", and a WiFi
+	// outage — the whole reason the spool exists — delivers a backlog out of
+	// chronological sequence. Measured: a shot pulled before an edit but
+	// ingested after it carried a pre-edit setpoint straight across.
+	//
+	// AND USE >=, NOT >. The edit shot itself holds the NEW value, and it is
+	// the only row that does. Excluding it meant brew_temp_c went NULL on the
+	// edit shot and stayed NULL on every shot after it forever, since nothing
+	// downstream would ever have a value to carry. Measured.
+	since := `COALESCE((SELECT MAX(started_at) FROM shot
+	                     WHERE setpoint_touched = 1 AND started_at <= ?), '')`
 	var t float64
 	if tx.QueryRow(`SELECT brew_temp_c FROM shot
 	                 WHERE brew_temp_c IS NOT NULL AND started_at <= ?
-	                   AND started_at >= ?
-	                   AND id > COALESCE(
-	                         (SELECT MAX(id) FROM shot
-	                           WHERE setpoint_touched = 1 AND started_at <= ?), 0)
+	                   AND started_at >= ? AND started_at >= `+since+`
 	                 ORDER BY started_at DESC, id DESC LIMIT 1`,
 		at, staleFloor(startedAt), at).Scan(&t) == nil {
 		brewTemp = t
@@ -291,9 +306,9 @@ func defaultRecipe(tx *sql.Tx, epochID any, startedAt time.Time) (beanID, grindD
 	var pre float64
 	if tx.QueryRow(`SELECT preinfusion_s FROM shot
 	                 WHERE preinfusion_s IS NOT NULL AND started_at <= ?
-	                   AND started_at >= ?
+	                   AND started_at >= ? AND started_at >= `+since+`
 	                 ORDER BY started_at DESC, id DESC LIMIT 1`,
-		at, staleFloor(startedAt)).Scan(&pre) == nil {
+		at, staleFloor(startedAt), at).Scan(&pre) == nil {
 		preinfusion = pre
 	}
 	return
@@ -307,9 +322,17 @@ func defaultRecipe(tx *sql.Tx, epochID any, startedAt time.Time) (beanID, grindD
 // unbounded would move fabrication from the UI to the server and drop its
 // audit trail on the way.
 //
-// 14 days is long enough to cover a holiday and short enough that a setting
-// nobody has confirmed in a fortnight degrades to NULL — "not recorded",
-// which is the honest answer.
+// 14 days is long enough to cover a holiday and short enough that a long gap
+// degrades to NULL.
+//
+// BE CLEAR WHAT THIS DOES NOT DO, because a draft claimed it: it does NOT
+// bound "time since a human confirmed the value". insertShot writes the
+// INFERRED value into the new row, so the next ingest reads an inference as
+// its source and the clock measures the gap between consecutive SHOTS. For
+// anyone pulling several a day the bound never fires and one confirmation
+// propagates indefinitely, indistinguishable from a confirmed value because
+// there is no brew_temp_source column. The parameter-edit guard above is the
+// real protection; this is only a staleness floor for a long silence.
 const recipeMaxAge = 14 * 24 * time.Hour
 
 func staleFloor(startedAt time.Time) string {

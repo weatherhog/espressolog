@@ -502,10 +502,16 @@ both hazards, but both are flagged as such.)
   blinking. A reader met it with no referent and attached it to J5 generally.
 - **The conclusion is backwards for `Disp-P4` specifically.** It is
   **bidirectional** and reaches the MCU through R32 = 100 K. `docs/phase-0-status.md`
-  is explicit: if that pull-up is weak, **a 23.2 K divider drags the line under
-  1 V and the MCU sees a button held down permanently** — not actuation, but a
-  false signal fed into the machine continuously, which invariant 1 still
-  forbids. `docs/shopping-list.md` specifies `Disp-P4` as branched through
+  records that **a 23.2 K divider could drag it under 1 V if that pull-up is
+  weak**, feeding a false level into the machine continuously.
+
+  **Grade that mechanism honestly**: the "MCU sees a button held down" wording
+  it was first written with is wrong, because this same file establishes
+  (2026-10-03, 344 s of live bus) that `Disp-P4` is **not** the button line —
+  the buttons are bits 49/58 of the 67-bit frames, and `Disp-P4` moves only in
+  the ~204 ms after rails-up. What is actually true is narrower and still
+  sufficient: **its pull-up strength is unrecorded, so the consequence of
+  loading it is unknown.** That is reason enough to fit nothing. `docs/shopping-list.md` specifies `Disp-P4` as branched through
   8.2 K and **terminated at nothing**, and that is the built configuration.
 
 **So: the 8.2 K / 15 K divider is correct on `ESD1` and `ESD4`, and the 15 K
@@ -1920,8 +1926,17 @@ zero-friction and correctness at once. User corrections set
 
 State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
 
-- **ARMED** — weight within ±0.5 g of zero and stable for 1 s (i.e. tared
-  with the cup on)
+- **ARMED** — **stable at ANY value for 1 s.** `ARM_BAND_MG` (0.5 g) is a
+  **flatness** band measured against the current reading, not a band around
+  zero: the mean over that second becomes the baseline the curve is measured
+  against, because a tare is just a baseline the scale applied for you. The
+  un-tared cup-swap workflow depends on this.
+
+  **This line said "weight within ±0.5 g of zero (i.e. tared with the cup
+  on)" until 2026-10-12**, which is stale against detector 0a.6 — and it was
+  load-bearing: it is where the false premise came from that wrongly withdrew
+  a real invariant-2 finding in `main.cpp`. An un-tared cup of any mass can be
+  ARMED, so a 5 g-threshold weighing episode CAN complete in that state.
 - **POURING** — `dw/dt > 0.3 g/s` sustained 300 ms. Backdate `t=0` to the
   crossing.
 - **stop** — `dw/dt < 0.1 g/s` for 1.5 s. `stop_ms` = when it first

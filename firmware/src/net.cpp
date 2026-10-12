@@ -105,15 +105,6 @@ void Net::tick(uint32_t now, bool detector_quiet) {
     next_upload_ms = now + 2000;
     return;
   }
-  // Track whether we keep failing on the same record — see net.h stuck_n.
-  String oldest_now = spool ? spool->oldest() : String();
-  if (oldest_now.length() && oldest_now == stuck_path) {
-    // same file as last time
-  } else {
-    stuck_path = oldest_now;
-    stuck_n = 0;
-  }
-
   if (tryUploadOldest()) {
     stuck_n = 0;
     stuck_path = "";
@@ -122,7 +113,7 @@ void Net::tick(uint32_t now, bool detector_quiet) {
   } else {
     next_upload_ms = now + backoff_ms;
     backoff_ms = min(backoff_ms * 2, BACKOFF_MAX_MS);
-    if (stuck_path.length() && ++stuck_n % 20 == 0)
+    if (stuck_path.length() && ++stuck_n % 20 == 0)   // see tryUploadOldest
       Serial.printf("# net: STUCK — %s has failed %lu times in a row and is"
                     " blocking every record behind it. %u pending. Inspect it"
                     " with 'dump %s'.\n",
@@ -134,6 +125,10 @@ void Net::tick(uint32_t now, bool detector_quiet) {
 
 bool Net::tryUploadOldest() {
   String path = spool->oldest();
+  // Head-of-line tracking rides on the oldest() call we already make, rather
+  // than a second directory walk per tick — oldest() is an O(files) LittleFS
+  // scan and the counter exists precisely for when the spool is backing up.
+  if (path != stuck_path) { stuck_path = path; stuck_n = 0; }
   if (path.isEmpty()) return false;
 
   File f = LittleFS.open(path, "r");
@@ -223,7 +218,11 @@ bool Net::tryUploadOldest() {
   // answers 503 there, and this no longer trusts 400 either.
   //
   // Everything else 4xx is about the path, the proxy or the moment: retry.
-  if (code == 422) {
+  // Require the marker here too. Quarantine is a one-way door — nothing
+  // re-uploads from /spool/bad and `format` destroys it — so it must be as
+  // well guarded as deletion is. A 422 from anything that is not this
+  // server's ingest handler is not a verdict on this record.
+  if (code == 422 && from_ingest) {
     Serial.printf("# net: %s rejected with %d, quarantining\n", path.c_str(), code);
     LittleFS.mkdir("/spool/bad");
     LittleFS.rename(path, "/spool/bad/" + path.substring(path.lastIndexOf('/') + 1));
@@ -241,4 +240,12 @@ void Net::status(Stream& out) {
              timeValid() ? "synced" : "not synced",
              ws_up ? "connected" : "down",
              endpoint.c_str());
+  // Surface the head-of-line condition HERE, not only as a periodic Serial
+  // line. The 0d experiment plan calls for running with the console detached,
+  // and a stalled queue is invisible otherwise — the device looks healthy and
+  // simply stops delivering shots.
+  if (stuck_n)
+    out.printf("# net: STUCK — %s has failed %lu times in a row and is blocking"
+               " the queue behind it.\n", stuck_path.c_str(),
+               (unsigned long)stuck_n);
 }

@@ -57,11 +57,16 @@ export default function Capture({ shots, beans, justSaved, onSaved }) {
   // Only count it when the value actually MOVES. Stepper clamps at its floor
   // (`+Math.max(min, v).toFixed(2)`), so pressing "–" on a Preinfusion already
   // at 0 calls onChange(0) — an identical value that would otherwise mark the
-  // field touched and PATCH it. Worse on the Dose, where UpdateShot stamps
-  // dose_source='manual' on the mere PRESENCE of the key, so "+ then –" back
-  // to the starting value would flip a measured dose to manual without
-  // changing the number. That is the provenance corruption migration 009 is
-  // cleaning up, re-created by two taps.
+  // field touched and PATCH it.
+  //
+  // WHAT IT DOES NOT CLOSE, and a draft claimed it did: "+ then –" back to the
+  // starting value. The second press moves relative to the CURRENT value, so
+  // `touched` stays set and the save still sends the field — on the Dose that
+  // flips a measured value to dose_source='manual' without changing the
+  // number, because UpdateShot stamps 'manual' on the mere PRESENCE of the
+  // key. Catching that needs a comparison against the SEED, which this
+  // deliberately abandoned because the seed moves. Only the clamped no-op is
+  // closed here.
   const mark = (k, set, cur) => (v) => {
     if (v !== cur) setTouched((t) => (t[k] ? t : { ...t, [k]: true }));
     set(v);

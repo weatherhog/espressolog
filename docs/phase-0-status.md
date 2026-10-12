@@ -3,6 +3,20 @@
 Phase 0a (scale logging, stages 0–6) is **complete and in production**.
 This file is the resume point: read it (and CLAUDE.md) before continuing.
 
+## DEPLOY THE SERVER BEFORE FLASHING THE FIRMWARE — 2026-10-12
+
+0.9.3 requires an `X-Espressolog-Ingest` header before it will delete an
+uploaded record, and only a server built from this tree sets it. Flash first
+and every `201` arrives unmarked: the device keeps the record, logs *"NOT the
+ingest endpoint"*, and head-of-line blocks the whole queue. It is loud on
+serial and shows up as "no new shots on the server", so it will be caught —
+but the spool fills at ~490 records and then `writeShot` starts refusing, and
+that loses shots.
+
+Order: `make deploy` (which runs migration 009), confirm `/healthz`, then
+`pio run -t upload`. Back up the database first — 009 is irreversible and its
+header carries two dry-run queries to run against a copy beforehand.
+
 ## What runs where
 
 | Piece | Where | State |
@@ -865,8 +879,10 @@ the display is back in temperature mode, so edges lost there cost nothing.
    An earlier draft left `Disp-P4` untapped as the cautious choice. It is
    the opposite: this T-piece is on the critical path for the `Disp-P4`
    button test, so a tap that omits it needs a *second* tap built into the
-   only 3S lead there is. Sensing the line through a divider is explicitly
-   safe per CLAUDE.md — the hazard is driving it.
+   only 3S lead there is. **Sensing it through a divider is NOT "explicitly
+   safe per CLAUDE.md"**, which this said until 2026-10-12 — CLAUDE.md now
+   says the opposite and `docs/shopping-list.md` agrees: fit no load at all.
+   Branch it, leave the far end open.
 
    **Why it is branched but not terminated.** `ESD1`/`ESD4` idle on known
    4.7K pull-ups, so a 23.2K divider leaves them at 4.16 V and still

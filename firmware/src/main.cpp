@@ -370,69 +370,68 @@ static void reportSwitch(const SwitchBank::Event& e) {
 // cost of being conservative is only that an upload waits a minute.
 static constexpr uint32_t BREW_GUARD_MS = 75000;
 // How fresh a display reading must be to be believed about the CURRENT state.
-// The bus emits a frame every ~41 ms, so 2 s is ~50 frames of slack and still
-// two orders of magnitude tighter than anything that could mask a brew.
+// The bus frames every ~41 ms, so 2 s is ~50 frames of slack.
 //
-// NOT MachineContextTracker::BOILER_MAX_AGE_US, which a draft of this borrowed
-// because it was the constant to hand. That one is a DATA-ATTRIBUTION bound —
-// "how old a pre-shot temperature may be and still be called this shot's",
-// deliberately generous at 60 s — and reusing it here coupled two unrelated
-// decisions and opened a recurring stall: DisplayBus::stale() compares
-// uint32_t micros(), which aliases every 71.58 min, so a last-seen TIMER frame
-// (machine switched off mid-brew while the ESP32 runs on its own supply)
-// made machineBusy() true for 60 s out of every 71.6 min, indefinitely.
+// NOT MachineContextTracker::BOILER_MAX_AGE_US, which a draft borrowed because
+// it was the constant to hand. That is a DATA-ATTRIBUTION bound — "how old a
+// pre-shot temperature may be and still be called this shot's", deliberately
+// 60 s — and reusing it coupled two unrelated decisions.
 //
-// NOTE the aliasing is REDUCED, NOT REMOVED. stale() still subtracts unsigned
-// micros(), so the same last-seen TIMER frame still makes this true for 2 s
-// out of every 71.58 min. Harmless at 2 s, and fixing it properly belongs in
-// DisplayBus rather than here — but it is a live mechanism, not a closed one.
+// The micros() aliasing in DisplayBus::stale() is REDUCED, NOT REMOVED: a
+// last-seen TIMER frame still reads fresh for 2 s out of every 71.58 min.
+// Nothing below may take an irreversible action on that, which is why the
+// press guards are no longer cleared here — see machineBusy().
 static constexpr uint32_t DISPLAY_FRESH_US = 2000000;
-static uint32_t last_brew_press_ms = 0;
+static uint32_t last_press_ms[SwitchBank::N_LINES] = {0};
 
+static bool pressGuard(uint8_t line, uint32_t now) {
+  return last_press_ms[line] && (now - last_press_ms[line]) < BREW_GUARD_MS;
+}
+
+// Is the pump running? The detector cannot say — it is scale-driven and reads
+// IDLE/ARMED from pump-on until first drip plus POUR_HOLD_MS, which is exactly
+// the window invariant 2 cares about. The machine answers, per line.
 static bool machineBusy() {
   uint32_t now = millis();
-
-  // 1. The display, when it is fresh. Mode::TIMER IS the machine's own
-  //    pump-on to pump-off window, so this needs no guard at either end.
   bool display_fresh = display_on && !display_bus.stale(micros(), DISPLAY_FRESH_US);
-  if (display_fresh && display_bus.reading().mode == DisplayBus::Mode::TIMER)
-    return true;
 
-  // 2. A lever held RIGHT NOW. SwitchBank only emits an Event on release, so
-  //    for the 345-480 ms of the press itself the pump is running and the
-  //    event path knows nothing.
-  //
-  //    TWO BOUNDS, both learned the hard way. `stable` includes a level
-  //    ADOPTED at the first poll and never witnessed going high — a floating
-  //    unwired line, a reboot with a lever held, one stuck divider leg — and
-  //    a draft trusted it with no upper bound. That latched `quiet` false
-  //    forever: no weighing ever reaches flash, no record ever uploads, and
-  //    Net::tick returns before configTzTime so every spooled record gets
-  //    time_valid = 0. Silently, with nothing logged. This file refuses to
-  //    treat an unwitnessed level as evidence everywhere else; so does this.
+  // A lever held RIGHT NOW, whichever it is. SwitchBank emits an Event only on
+  // RELEASE, so for the 345-480 ms of the press the pump runs and the event
+  // path knows nothing. Two bounds: `stable` includes a level ADOPTED at the
+  // first poll and never witnessed going high (a floating unwired line, a
+  // reboot with a lever held), which a draft trusted unbounded and which
+  // latched `quiet` false forever; and heldMs caps it.
   if (switches_on) {
-    for (uint8_t i : {0, 1, 3})
+    for (uint8_t i : {SwitchBank::ONE_CUP, SwitchBank::TWO_CUP, SwitchBank::HOT_WATER})
       if (switches.pressed(i) && !switches.pressedSynthetic(i) &&
           switches.heldMs(i, now) < BREW_GUARD_MS)
         return true;
   }
 
-  // 3. The press guard — a FALLBACK, and only where the display genuinely
-  //    cannot help. A draft OR-ed this unconditionally, so every 1Cup press
-  //    blocked flash and uploads for the full 75 s even though the display
-  //    tap was sitting there reporting that the timer had stopped ~10 s in.
-  //    That is ~65 s of needless block per shot, over exactly the minute when
-  //    cups come off, dose cups go on and the grinder runs — and `pending_w`
-  //    holds 8 events before it starts dropping them on the floor.
+  // BREW (1Cup/2Cup). When the display is fresh it is authoritative in BOTH
+  // directions: Mode::TIMER is the machine's own pump-on to pump-off window,
+  // and a fresh reading that is NOT TIMER means the pump has stopped. Only
+  // without a usable display does the timer-less press guard apply — a draft
+  // OR-ed it unconditionally and blocked uploads for the full 75 s after every
+  // 1Cup press, ~65 s of it needless.
+  if (display_fresh) {
+    if (display_bus.reading().mode == DisplayBus::Mode::TIMER) return true;
+  } else if (pressGuard(SwitchBank::ONE_CUP, now) || pressGuard(SwitchBank::TWO_CUP, now)) {
+    return true;
+  }
+
+  // HOT WATER. **The display can never help here**, fresh or not: CLAUDE.md
+  // records that the machine does NOT run its shot timer during a lever-B
+  // draw. So this guard applies unconditionally.
   //
-  //    So: when the display is fresh it owns the answer, and a reading that
-  //    is no longer TIMER means the pump has stopped. Only when the display
-  //    cannot see the event at all does the timer-less guard apply — which
-  //    CLAUDE.md says is exactly the hot-water case, since the display does
-  //    not run its timer during a lever-B draw.
-  if (display_fresh) { last_brew_press_ms = 0; return false; }
-  if (!last_brew_press_ms) return false;
-  return (now - last_brew_press_ms) < BREW_GUARD_MS;
+  // A draft returned false early whenever the display was fresh, which reads
+  // as "the display has the answer" but actually means "the display is
+  // alive" — and during a hot-water draw it is very much alive, showing
+  // boiler temperature at 41 ms a frame. That made the Water fallback dead
+  // code in the deployed configuration, re-opening the exact hole the commit
+  // before it had fixed. Hot water runs the pump and pulses the suction-side
+  // flowmeter, so a stall here still overflows the 64-entry flow ring.
+  return pressGuard(SwitchBank::HOT_WATER, now);
 }
 
 static void pollSwitches() {
@@ -456,8 +455,8 @@ static void pollSwitches() {
     // evidence everywhere else (it forces `reprogram` false and prints
     // `high?` rather than `PRESSED`). A floating line settling must not arm
     // a 75 s upload block.
-    if (!e.synthetic && (e.line == 0 || e.line == 1 || e.line == 3))
-      last_brew_press_ms = e.pressed_at_ms;
+    if (!e.synthetic && e.line < SwitchBank::N_LINES && e.line != SwitchBank::STEAM)
+      last_press_ms[e.line] = e.pressed_at_ms;
     reportSwitch(e);
   }
 }
@@ -1135,16 +1134,34 @@ void loop() {
   // ~6086 dropped display edges at pump start that docs/phase-0-status.md
   // records as unexplained — not proof, but it predicts that signature.
   //
-  // A DRAFT OF THIS COMMENT CLAIMED the yield scale's weighing episode ends
-  // during ARMED and so flushes flash mid-pour. That is wrong and should not
-  // be reasoned from: WeighingDetector requires w > MIN_WEIGHT_MG (5 g) to
-  // call a reading stable, while ARMED means |w| <= ARM_BAND_MG (0.5 g), so
-  // no yield weighing can complete in that state. The dose scale can emit
-  // during ARMED — lifting the dose cup after taring the yield scale — but
-  // that is a different trigger on a different scale and is not "easy".
+  // IT IS EASY TO HIT, and a draft of this comment WITHDREW that on a false
+  // premise — then this review put it back. The withdrawal said "ARMED means
+  // |w| <= ARM_BAND_MG (0.5 g) so no 5 g weighing can complete there". Wrong:
+  // ARM_BAND_MG is a FLATNESS band, not a band around zero. `detector.cpp`
+  // compares each ring entry against the CURRENT reading (`e.w > w + BAND`)
+  // and says so in its own words — "ARMED (0a.3): stable at ANY value for
+  // 1 s" — because a tare is just a baseline the scale applied for you, and
+  // the un-tared cup-swap workflow depends on it.
   //
-  // The breach does not need that story. net.tick()'s synchronous HTTP in a
-  // state that spans pump-on is sufficient on its own.
+  // So: an un-tared cup of any mass sits still for a second -> the
+  // WeighingDetector episode is stable AND the detector is ARMED; the pump
+  // starts and the first drips break the episode (RANGE_MG = 0.3 g) while
+  // tryPourOnset still needs >300 mg/s for 300 ms, which pre-infusion drips
+  // need not meet. emit() fires, queueWeighing() queues, and the flush writes
+  // LittleFS mid-pre-infusion. That is the breach, and it is reachable.
+  //
+  // ROOT CAUSE OF THE FALSE PREMISE: CLAUDE.md's "Shot detection" section
+  // still describes ARMED as "weight within +/-0.5 g of zero... tared with
+  // the cup on", which is stale against detector 0a.6. Corrected there too.
+  //
+  // NOTE `ARMED` IS DELIBERATELY STILL IN `quiet` BELOW. Removing it would
+  // block every upload for as long as a cup sits on the scale, which is most
+  // of the day. machineBusy() is what separates "armed and idle" from "armed
+  // and the pump is running" — so with NO tap enabled (display_on and
+  // switches_on both default false and are NVS-persisted) this guard returns
+  // false and the pre-fix behaviour is restored. That is not a bug being
+  // hidden: with no machine signal there is nothing to distinguish them with.
+  // It does mean the invariant-2 fix is conditional on a tap being live.
   bool quiet = (st == ShotState::IDLE || st == ShotState::ARMED) && !machineBusy();
 
   if (quiet && spool_ok) {

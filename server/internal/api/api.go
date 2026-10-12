@@ -21,8 +21,9 @@ import (
 
 const maxRecordBytes = 64 << 10 // header + 2048 samples is ~20 KB; 64 KB is generous
 
-// IngestMarker is set on every response the ingest handler produces, and on
-// nothing else. The device requires it before deleting its only copy of a
+// IngestMarker is set on the ingest handler's two success paths and on its
+// 422, i.e. on every response the DEVICE acts upon irreversibly (delete, or
+// quarantine). It is set nowhere else. The device requires it before deleting its only copy of a
 // shot, because a 2xx alone does not prove the record reached this handler:
 // any unmatched path falls through to the SPA, which answers 200 with
 // index.html. The /api/ 404 guard closes that for API paths; this closes it
@@ -61,9 +62,12 @@ func New(st *store.Store, hub *live.Hub) http.Handler {
 	// was stored, and deletes its only copy — at one record every ~2 s until
 	// the whole spool is gone, with no error logged anywhere.
 	//
-	// That is invariant 6 defeated by a typo in a config string. Found by
-	// pre-deploy review 2026-10-12, by probing a running server: a POST to
-	// /espressolog/api/v1/ingest returned 200 with an HTML body.
+	// That is invariant 6 defeated by a typo in a config string.
+	//
+	// NOTE THIS GUARD COVERS /api/<typo> ONLY. The example that found it — a
+	// POST to /espressolog/api/v1/ingest — does NOT begin with /api/ and still
+	// returns 200 with an HTML body. What covers that is IngestMarker below;
+	// these are two different holes and need both patches.
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no such API endpoint", http.StatusNotFound)
 	})
@@ -99,6 +103,11 @@ func ingest(st *store.Store, hub *live.Hub) http.HandlerFunc {
 			// 4xx on purpose: the firmware quarantines the file instead of
 			// retrying a record the server will never accept.
 			log.Printf("ingest: reject from %s: %v", r.Header.Get("X-Device-Id"), err)
+			// The marker goes on this one too: 422 is the only status the
+			// device treats as a verdict, and quarantine is a one-way door.
+			// Without it, a 422 from anything else — a different service on
+			// that port, a future proxy — bins a good shot.
+			w.Header().Set(IngestMarker, "1")
 			http.Error(w, "decode: "+err.Error(), http.StatusUnprocessableEntity)
 			return
 		}

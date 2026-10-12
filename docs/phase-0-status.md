@@ -576,37 +576,41 @@ given GPIO6's 736 counts. And the functional chain is a *longer* evidential
 chain than a silkscreen read, not a higher-graded one; calling it "a higher
 grade" inverted this repo's own standard. See CLAUDE.md's GPIO budget table.
 
-**GND is on the signal header — board reading, 2026-10-12.** This section
+**GND is on the signal column — board reading, 2026-10-12.** This section
 previously said Espressif's layout put it on the opposite header and called
-that the layout's one awkward fact. The board carries **three** GNDs: one at
-the far end of the signal header, two directly opposite it. The signal header
-is therefore 3V3 at one end, GND at the other, all seven taps between them,
-and no ground return crosses the board. **The census is a visual scan, not an
-exhaustive pass over all 44 positions**, and it is the premise of that last
-clause — worth re-checking before the layout is committed. Note also that no
-*tap* draws from 3V3: every divider is fed from a machine signal and returns
-to GND. The rail is still needed for the '221 and the photoMOS LEDs.
+that the layout's one awkward fact. It is on both. The signal column runs
+**3V3 at one end, GND at the other, all seven taps between**, so no ground
+return crosses the board — the one claim here that has survived every
+revision.
 
-**Pitch is 2.54 mm, settled 2026-10-12 — by the breadboard, not by calipers.**
-A 1.9 mm caliper reading was briefly treated as possibly the pitch; it is the
-gap (2.54 less a 0.635 mm post = 1.905 mm). What actually settles it is that the DevKitC-1
-has been seated in a 2.54 mm breadboard through every bench session, and a
-1.9 mm part cannot mate with a 2.54 mm socket strip. The trap is worth
-knowing: calipers laid between two pins read the gap, and on 0.1 in hardware
-that gap is a plausible-looking 1.9 mm.
+**ROW-TO-ROW SPACING: 10 pitches, 1.0 in, 25.4 mm — MEASURED 2026-10-12.**
+Seated in an 830-point breadboard, one header in column **A**, the other in
+**I**; J stays free. That closes the last mechanical unknown, after the item
+was briefly lost to a paragraph rewrite and restored.
 
-**One mechanical fact IS outstanding: the ROW-TO-ROW header spacing**, in
-0.1 in holes — the gap *between* the two headers. The breadboard argument
-constrains it to an **integer number of holes** (both rows seat on the grid),
-so what is open is only which integer. `docs/shopping-list.md` narrows it
-further: a DevKitC-1 straddles a standard board leaving no rows beside it.
+**The header is 22 pins — rows 42 to 63, 3V3 at 42 — which is a third
+independent confirmation of the 2.54 mm pitch**: 22 pins occupying 22 rows,
+one per row, which no other pitch produces. *(A first reading gave 42–64 and
+23 pins; corrected by the operator within minutes, after the 23-pin version
+had reached a commit message.)*
 
-**It was recorded as open on 2026-10-12, deleted the same day by a paragraph
-rewrite, and then covered over by a claim that "nothing mechanical is now
-outstanding."** A `grep` for it returned zero hits repo-wide. That is net
-information loss by rewrite — this document's own named defect — committed by
-the sequence of commits that was documenting an instance of it. Restored here
-and in CLAUDE.md. **Count the holes.**
+**Two things the same seating did correct:**
+
+- **There are four GNDs, not three.** Third revision of that census, each
+  from a closer look, which is why a review had flagged it as a visual scan
+  standing as the premise of a layout claim. Three located: row 63 on the
+  signal column, rows 42 and 63 opposite. The fourth is not. **Enumerate all
+  44 positions once** rather than counting by eye again.
+- **`docs/shopping-list.md`'s "leaves no rows beside it" is refuted** — J is
+  free. That line was used twice to argue the spacing was already partly
+  constrained.
+
+**And the pitch argument's stated evidence was wrong.** A pushed commit said
+the devkit "has been seated in a 2.54 mm breadboard through every bench
+session". Through the bench work the ESP was **off the breadboard, wired in**,
+with only the divider junctions on it — which this repo's own shopping list
+had recommended. The pitch conclusion stands on the 2026-10-12 seating alone.
+An assumed history is not an observation.
 
 ## The J5 tap went live 2026-10-07, and two things came out of it
 

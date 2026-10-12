@@ -1101,26 +1101,17 @@ exploit.** Confirmed on the board in hand, 2026-10-12:
 | 11 | GPIO18 — gap |
 | **12** | **GPIO8** — selftest, header side only |
 
-**GND IS ON THE SIGNAL HEADER — read off the board 2026-10-12, and it
+**GND IS ON THE SIGNAL COLUMN — read off the board 2026-10-12, and it
 overturns the published layout.** Espressif's pinout put GND on the opposite
-header only, which this file recorded as the layout's one awkward fact. The
-board in hand carries **three** GND pins: **one at the far end of the signal
-header**, and **two on the other header, opposite that end**. *(On a 2 × 22
-grid only one position is strictly opposite any other, so "two directly
-opposite" cannot be literal — read it as the facing end. The census is a
-visual scan and is the premise of the no-crossing claim below; re-check it
-over all 44 positions before the layout is committed.)*
+header only, which this file recorded as the layout's one awkward fact. It is
+on both. See the geometry entry below for the count, which has now been
+revised twice, and for the second published-layout departure found the same
+day.
 
-So the signal header is **3V3 at one end, GND at the other, all seven taps in
-between** — no ground return has to cross the board. A board reading beating a
-document-grade source, which this file has seen before. *(An earlier draft
-said "the third time in this file" and its commit message said "a listing" —
-two different source grades, and the tally was uncheckable. Dropped rather
-than defended.)*
-
-**The three-GND census is a visual scan, not an exhaustive one**, and it is
-the premise of "no ground return crosses the board". Worth a second pass over
-all 44 positions before the layout is committed.
+A board reading beating a document-grade source, which this file has seen
+before. *(An earlier draft said "the third time in this file" and its commit
+message said "a listing" — two different source grades, and the tally was
+uncheckable. Dropped rather than defended.)*
 
 **NO TAP DRAWS FROM 3V3.** The position table calls positions 1-2 "the
 divider supply" and that is wrong — every divider here is fed from a
@@ -1132,18 +1123,49 @@ The perfboard carries a populated 74HC221, which needs VCC and GND, and the
 photoMOS LED supply runs from our 3.3 V logic. "A rail nothing connects to"
 was true of the taps and false of the board.
 
-**PARTLY OPEN, and it was briefly lost entirely: the ROW-TO-ROW header
-spacing.** Recorded as outstanding on 2026-10-12, deleted by a paragraph
-rewrite the same day, then covered over by a claim that nothing mechanical
-remained — net information loss by rewrite, the defect this file names
-elsewhere.
+**ROW-TO-ROW SPACING: 10 pitches — 1.0 in, 25.4 mm. MEASURED 2026-10-12** by
+seating the devkit in an 830-point breadboard and reading the columns: one
+header in **A**, the other in **I**. A→E is 4 pitches, the 0.3 in channel is
+3, F→I is 3. **Column J stays free; nothing is free on the A side.**
 
-**The breadboard constrains it more than a draft of this paragraph allowed.**
-If the devkit seats in a 2.54 mm breadboard then *both* rows land on the
-0.1 in grid, so the gap is necessarily **an integer number of holes**. What is
-open is only *which* integer — and `docs/shopping-list.md` narrows it further,
-recording that a DevKitC-1 straddles a standard board leaving no rows beside
-it. **Count the holes**; it is one number, not an open question of kind.
+That closes the last mechanical unknown. It had been recorded as open on
+2026-10-12, deleted the same day by a paragraph rewrite, and covered over by a
+claim that nothing mechanical remained — net information loss by rewrite,
+restored, and now answered.
+
+**`docs/shopping-list.md` predicted "no rows beside it" and that is REFUTED** —
+one row (J) is free. The line is corrected there. It had been used twice to
+argue the spacing was already partly constrained.
+
+**The header is 22 pins, and that is a third independent confirmation of the
+2.54 mm pitch.** The devkit spans breadboard rows **42 to 63** — 22 positions
+for 22 pins, one pin per row, with **3V3 at row 42** at one end. If the pitch
+were anything but 2.54 mm the pin count and the row count could not agree.
+
+*(A first reading of this gave rows 42–64 and a 23-pin header, which would
+have made the board depart from the published 2 × 22 layout. The operator
+corrected it to 63 within minutes. Recorded only because the 23-pin reading
+briefly reached a commit message.)*
+
+**There are FOUR GND pins, not three.** An earlier count said three; a fourth
+was noticed on 2026-10-12 when the board was seated and read properly. Three
+are located: **row 63 on the signal column** (far end from 3V3), and **rows 42
+and 63 on the opposite column**. The fourth is not. This is the third
+successive revision of the GND census, each from a closer look, so
+**enumerate all 44 positions once** before the layout is committed rather than
+counting by eye a fourth time.
+
+**Stop citing Espressif's published pinout for this board.** It was used as
+the comparison for the silkscreen check and then contradicted the same day on
+GND placement; a second apparent contradiction (the 23-pin header) turned out
+to be a misread of this file's own making. Neither direction is reliable here.
+**The pin map holds because the operator read the silkscreen**, which is
+exactly why that distinction was worth drawing, and the layout should be
+driven by the board in hand and nothing else.
+
+The signal column is still **3V3 at one end, GND at the other, all seven taps
+between** — row 42 and row 64 confirm it directly — so no ground return has to
+cross the board. That claim survives every revision above.
 
 **Pitch is 2.54 mm (0.1 in) — and the proof is that the board has been in a
 BREADBOARD since 0a.** A caliper reading of **1.9 mm** was taken 2026-10-12
@@ -1152,11 +1174,19 @@ less a 0.635 mm square post (0.025 in) is **1.905 mm**. *(An earlier draft
 rounded the post to 0.64 first and then called the 1.90 agreement "to the
 hundredth" — a precision the inputs do not carry.)*
 
-The arithmetic is not what settles it. **Breadboards are 2.54 mm, the DevKitC-1
-has been seated in one through every bench session including 2026-10-08, and a
-1.9 mm part cannot mate with a 2.54 mm socket strip.** That is this file's own
-maxim — verify by mating, not by reading — and it was available the whole time
-the pitch was being treated as open.
+The arithmetic is not what settles it. **Breadboards are 2.54 mm and the
+devkit seats in one — observed 2026-10-12.** A 1.9 mm part cannot mate with a
+2.54 mm socket strip, so the pitch is settled by mating, which is this file's
+own maxim.
+
+**Mind the provenance, because a pushed commit got it wrong.** That commit
+said the devkit "has been seated in a 2.54 mm breadboard **through every bench
+session**". It has not: through the bench work the ESP was **off the
+breadboard, connected by wires**, and only the divider junctions were in it —
+which `docs/shopping-list.md` had already recommended. The evidence is the
+2026-10-12 seating and nothing earlier. Conclusion unchanged, evidence
+corrected: an assumed history is not an observation, which is the same error
+this file logged twice on 2026-10-12 alone.
 
 Recorded because the trap is live for anyone measuring a header: **calipers
 laid between two pins read the gap, and the gap on 0.1 in hardware is a

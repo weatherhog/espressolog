@@ -254,10 +254,10 @@ instead of soldering to the board.
 | ~~Resistor kit, E12 1/4 W~~ | **Not required** — see `shopping-list.md`: it covers no named value, and cheap kits are 5 % where every divider here wants 1 %. All of them are in stock. | — |
 | 30 AWG silicone hookup wire, 4 colours | flexible, survives vibration | 8 |
 | JST pigtails, assorted pitch | **after** identifying connectors | 8 |
-| Perfboard **7 × 9 cm** + **female** headers | 2.54 mm confirmed three ways; **7 × 9 not 5 × 7** — the devkit footprint is 11 × 22 holes and a 5 × 7 board has only ~27 rows. See `shopping-list.md` | 8 |
+| Perfboard **7 × 9 cm ×2** + **female** headers ×5 + sockets | 2.54 mm confirmed by mating; **7 × 9 for soldering room, not because 5 × 7 "does not fit"** — see CLAUDE.md, where that arithmetic is corrected. `shopping-list.md` is normative on parts and prices | 15 |
 | Heat-shrink assortment | | 5 |
-| Small ABS project box | mounts outside the machine | 6 |
-| 74HC221 PDIP ×3, **AQY212EH DIP-4 ×8**, **2N7000 ×10**, **330 Ω**, one-shot caps, **3 × 2-pin header** (no shunts), DIP sockets | **moved into this order 2026-10-12** — the build populates them behind open jumpers rather than leaving footprints. Part numbers confirmed and the LED drive costed; `shopping-list.md` §7 is normative | ~25 |
+| ~~Small ABS project box~~ **PRINTED** | the 120 × 80 size was chosen for a 5 × 7 board and **would not have fitted** the 70 × 90 one. See `shopping-list.md` | 0 |
+| **`CD74HC221E`** ×3, **AQY212EH DIP-4 ×8**, **BC547/2N3904 ×10**, **330 Ω**, one-shot caps, **3 × 2-pin header** (no shunts), DIP sockets | **moved into this order 2026-10-12** — the build populates them behind open jumpers rather than leaving footprints. `shopping-list.md` is normative on part numbers and prices; **this file is normative on counts and placement** | ~25 |
 
 ### Tools, if you don't have them
 
@@ -451,9 +451,12 @@ the parts and the failure surface. **Sense all four, drive two.**
 
 One dual 74HC221 and **four photoMOS** — two in series per driven line,
 decided 2026-10-12; see the failure analysis above. **Phase 1 needs a separate
-drive path per photoMOS** for the per-device test, which this scope line does
-not yet cost: one '221 channel per *line* is enough for normal operation but
-not for the test, and the GPIO budget for the arm gates is unresolved.
+drive path per photoMOS** for the per-device test. **Partly costed since
+2026-10-12**: the driver transistors and their resistors are specified (see
+below and `docs/shopping-list.md`), and the GPIO budget is **not** the
+constraint. What remains unpriced is **one-shot channels** — a dual '221 gives
+two, enough for one per *line*, not one per *device* — so a second '221 or a
+different gating scheme. Three '221s are on the order, which covers it.
 
 #### The failure neither mechanism bounds
 
@@ -574,15 +577,31 @@ does not work:
 
     - **The two LEDs in a pair cannot share one drive.** Each needs its own
       path — and since 2026-10-12 that is settled hardware, not just a
-      constraint: each photoMOS gets a **2N7000** with a 100 kΩ gate pulldown,
-      fed through **330 Ω** for ~6 mA. AQY212EH is guaranteed to operate only
-      at **3.0 mA** (typical 1.2 mA is not a design figure), and a 74HC221 at
-      3.3 V cannot source that reliably, so the transistor was needed for the
-      drive current regardless of the test. Free digital GPIOs are not the constraint — against the full
-      board-read pinout in CLAUDE.md that is 1, 2, 9-14, 18, 21, 38-42 and 47
-      (48 is the onboard LED; 35-37 are PSRAM-internal; 0, 3, 19, 20, 45, 46
-      are strapping or native USB) — **the one-shot channels are**: a dual '221 gives two, enough for one per *line*, not one per
-      device. A second '221, or a different gating scheme, is unpriced.
+      constraint: each photoMOS gets a **BC547 or 2N3904** with an 8.2 kΩ
+      base resistor and a 100 kΩ base-emitter resistor, fed through **330 Ω**
+      for ~6 mA. AQY212EH is guaranteed to operate only at **3.0 mA**
+      (typical 1.2 mA is not a design figure). **The transistor's reason is
+      this test, not the drive current** — a draft claimed "a 74HC221 at 3.3 V
+      cannot source that reliably, so the transistor was needed regardless",
+      which over-claims: `CD74HC221E` lists 5.2 mA drive, and at 3.3 V the
+      part still delivers ~4.5 mA into this LED, half again over the 3.0 mA
+      guarantee. It can drive it; it cannot do so with the margin the
+      5–10 mA recommendation wants. **And not a 2N7000** — V_GS(th) 0.8–3.0 V
+      leaves a worst-case part 0.2 V of overdrive from 3.3 V logic. 
+
+      **Free GPIOs are not the constraint.** Against CLAUDE.md's pinout:
+      1, 2, 9-14, 18, 21, 39-42 and 47, with **38 or 48 free depending on
+      board revision** (35-37 are PSRAM-internal; 0, 3, 19, 20, 45, 46 are
+      strapping or native USB; 43/44 are the UART0 console, which
+      `platformio.ini` names as the fallback flashing port, so treat them as
+      spoken for). **A draft listed 38 as free and 48 as the onboard LED** —
+      that is the v1.0 assignment, and Espressif moved the RGB LED to
+      **GPIO38 on v1.1**, which inverts it. CLAUDE.md records the
+      one-second test.
+
+      **The one-shot channels ARE the constraint**: a dual '221 gives two,
+      enough for one per *line*, not one per device. A second '221 or a
+      different gating scheme is unpriced; three are on the order.
     - **Each test path must still be one-shot bounded.** If a per-device drive
       is a bare GPIO, the ~120 ms ceiling does not exist and a stuck test pin
       holds the line past 2 s. And if the pair is fired by **two independent**

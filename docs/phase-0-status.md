@@ -378,9 +378,12 @@ by dividing by yield.
 
 **What the counts ARE is unresolved — see CLAUDE.md.** A published reading
 that they were pump noise is **withdrawn**: the aborted attempt ran the pump
-**19.3 s** with no water and logged 11 counts where coupling predicts **428**
-— 39× — and the glitch *rate* collapsed 128/s to 4.5/s, 29×, which is the
-quantity that measures coupling at the pin directly.
+**19.3 s** with no water, of which **16.7 s was sampled**, and logged 11
+counts where coupling predicts **370** over that window — **34×**. The glitch
+*rate* collapsed 128/s to 5.15/s on consistent windows, **25×**, which is the
+quantity that measures coupling at the pin directly. (Both ratios were briefly
+quoted as 39× and 29× by dividing a prediction over the full pump-on duration
+by an observation made over the sampled window. CLAUDE.md is normative.)
 
 **The opposite reading is NOT refuted, and this paragraph said it was until
 2026-10-12.** The objection quoted here — 22.2 Hz at the datasheet K implies
@@ -412,13 +415,21 @@ demonstrated — and the reason to fix the tap rather than drop it.
 **That is the refutation, not a curiosity** — an earlier version filed it as
 "open" while publishing the conclusion it contradicts.
 
-**The pump ran 19.3 s, not 16.7 s.** A later edit "corrected" this to the
-polled window under the interval-vs-final-value convention. That convention
-is about counting displayed steps from `001`; it does not apply here, because
-this file establishes the timer **is the machine's own pump-on to pump-off
-measurement** and starts at zero when the pump starts. 16.7 s was only when
-sampling began. The correction made the refutation weaker than it is: at
-19.3 s the prediction is **428 counts against 11 — 39×**.
+**The pump ran 19.3 s; 16.7 s of it was sampled. BOTH numbers are real and
+each belongs in its own place.** An edit once "corrected" 19.3 to 16.7 under
+the interval-vs-final-value convention — that convention is about counting
+displayed steps from `001` and does not apply, because this file establishes
+the timer **is the machine's own pump-on to pump-off measurement**, starting
+at zero when the pump starts. So **19.3 s is the pump-on duration**.
+
+**But 16.7 s is the window the 11 counts were observed over**, because the
+first sample came 2.6 s after pump-on. A 2026-10-12 sweep put 19.3 s into the
+refutation table and left the observation at 11 — a prediction over one window
+divided by an observation over another, giving an overstated 428 / 39×.
+**The honest form is 22.17 × 16.7 = 370 against 11, i.e. 34×**, with the
+counts in the unsampled 2.6 s unknown and ~360 needed there to overturn it.
+The same mismatch inflated the glitch-rate collapse to 29×; on consistent
+windows it is 25×. CLAUDE.md is normative on all of these.
 
 **Also found:** GPIO4/5 swapped during the rebuild. Both lines idled high,
 `pins` looked perfect, `frames=0`. **Zero frames with correct levels is the

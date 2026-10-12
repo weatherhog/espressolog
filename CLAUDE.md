@@ -1082,21 +1082,22 @@ wiring by *label* from wiring by *position*. The operator confirmed the
 silkscreen order on 2026-10-12, and since each GPIO exists at exactly one
 header position, the two together identify every pin both ways round.
 
-**The reference used for that check was Espressif's published layout, and the
-very next finding overturned part of it** — see the GND entry below. The
-published pinout is therefore a weak reference *for this clone*. It does not
-break the argument, because the operator read the board's own labels and the
-published layout only supplied the expected order to compare against. But the
-position table below came from the **same signal-header-only pass** that
-missed the GND placement, so it carries that pass's limits.
+**The reference used for that check was Espressif's published layout, and it
+holds up.** A draft here said the layout had been "overturned the same day on
+GND placement" and graded it "a weak reference *for this clone*". Wrong on
+both counts — the full 44-position enumeration **agrees with the published
+table everywhere**, so the comparison is sound and this check is better
+supported than that draft claimed.
 
 **The seven are contiguous on one header, which the perfboard layout should
 exploit.** Confirmed on the board in hand, 2026-10-12:
 
-**FULL PINOUT, READ OFF THE BOARD 2026-10-12. This replaces Espressif's
-published layout as the reference for this clone — use nothing else.** Both
-columns enumerated end to end, 22 positions each, position 1 at the 3V3 end
-(breadboard row 42) and position 22 at the far end (row 63).
+**FULL PINOUT — READ OFF THE BOARD 2026-10-12 AND CONFIRMED AGAINST
+ESPRESSIFS PUBLISHED v1.1 TABLE.** Both columns enumerated end to end, 22
+positions each, position 1 at the 3V3 end (breadboard row 42) and position 22
+at the far end (row 63). **The two agree at all 44 positions.** A draft of
+this heading said the board read "replaces Espressif's published layout —
+use nothing else"; see the retraction below.
 
 | Pos | Signal column | | Opposite column |
 |---|---|---|---|
@@ -1115,19 +1116,36 @@ columns enumerated end to end, 22 positions each, position 1 at the 3V3 end
 | 13 | GPIO3 † | | GPIO35 ‡ |
 | 14 | GPIO46 † | | GPIO0 † |
 | 15 | GPIO9 | | GPIO45 † |
-| 16 | GPIO10 | | GPIO48 — onboard RGB LED |
+| 16 | GPIO10 | | GPIO48 ◆ |
 | 17 | GPIO11 | | GPIO47 |
 | 18 | GPIO12 | | GPIO21 |
-| 19 | GPIO13 ◦ | | GPIO20 † |
+| 19 | GPIO13 | | GPIO20 † |
 | 20 | GPIO14 | | GPIO19 † |
 | 21 | **5Vin** | | **GND** |
 | 22 | **GND** | | **GND** |
 
 † strapping or native-USB, avoid. ‡ **GPIO35-37 are octal-PSRAM internal on
 this N16R8 module** — physically present on the header and unusable; do not
-even probe them. ◦ the source read "12 12" at positions 18-19; 13 is inferred
-from the sequence and from GPIO13 having to be somewhere. **Confirm before
-anyone uses it.**
+even probe them.
+
+◆ **WHICH PIN DRIVES THE ONBOARD RGB LED IS UNRESOLVED AND IS A BOARD-REVISION
+QUESTION.** Espressif put it on **GPIO48 on v1.0 and GPIO38 on v1.1**, and both
+revisions are sold. A draft of this table annotated position 16 "GPIO48 —
+onboard RGB LED" **inside a table headed "read off the board"** — but an LED
+net is not silkscreened, so that is the one row that cannot have come from the
+board read. It was recollection of the v1.0 layout.
+
+**It is already being spent**: `docs/phase-0-plan.md`'s free-GPIO list offers
+38 and excludes 48. If this clone is v1.1-alike that is exactly inverted.
+**One-second test: if the onboard status LED lights on the current firmware,
+it is GPIO48; if it has always been dark, it is GPIO38.** `main.cpp` hedges
+correctly ("boards with the LED on a different pin simply stay dark"); this
+file and `main.cpp:377` both assert 48 flatly. Record which.
+
+*(Position 19 carried a "◦" flag until 2026-10-12: the operator's transcription
+read "12 12" at positions 18-19 and GPIO13 was inferred. **Espressif's table
+gives position 19 = GPIO13**, so the inference is confirmed — by the very
+document a draft of this entry told the reader to stop consulting.)*
 
 **Two things this corrects about earlier working notes**, both from the
 published layout rather than the board: GPIO19 and GPIO20 are on the
@@ -1137,17 +1155,11 @@ GPIO14 to the last position. The repo's own table only ever claimed positions
 1-12, which are correct — the error was in the fuller recollection used to
 reason about free pins.
 
-**GND IS ON THE SIGNAL COLUMN — read off the board 2026-10-12, and it
-overturns the published layout.** Espressif's pinout put GND on the opposite
-header only, which this file recorded as the layout's one awkward fact. It is
-on both. See the geometry entry below for the count, which has now been
-revised twice, and for the second published-layout departure found the same
-day.
-
-A board reading beating a document-grade source, which this file has seen
-before. *(An earlier draft said "the third time in this file" and its commit
-message said "a listing" — two different source grades, and the tally was
-uncheckable. Dropped rather than defended.)*
+**GND is on the signal column — and the published layout said so all along.**
+A draft of this entry claimed the board read "overturns the published layout"
+and called it "a board reading beating a document-grade source". **It did not
+beat it; it reproduced it.** Espressif's own v1.1 user guide gives J1-22 = `G`.
+The enumeration above agrees with that document at all 44 positions.
 
 **NO TAP DRAWS FROM 3V3.** The position table calls positions 1-2 "the
 divider supply" and that is wrong — every divider here is fed from a
@@ -1173,10 +1185,12 @@ restored, and now answered.
 one row (J) is free. The line is corrected there. It had been used twice to
 argue the spacing was already partly constrained.
 
-**The header is 22 pins, and that is a third independent confirmation of the
-2.54 mm pitch.** The devkit spans breadboard rows **42 to 63** — 22 positions
-for 22 pins, one pin per row, with **3V3 at row 42** at one end. If the pitch
-were anything but 2.54 mm the pin count and the row count could not agree.
+**The header is 22 pins, spanning breadboard rows 42 to 63** — one pin per
+row, 3V3 at row 42. **Call this a consistency check, not a third independent
+confirmation**, which a draft did: a header that is not 2.54 mm cannot seat in
+the breadboard at all, so the row count is undefined in the counterfactual.
+It is the *mating* argument restated from the same seating, on the same day.
+Worth having; not a separate observation.
 
 *(A first reading of this gave rows 42–64 and a 23-pin header, which would
 have made the board depart from the published 2 × 22 layout. The operator
@@ -1203,26 +1217,48 @@ other end of that row") read as though all of them were on the *opposite*
 column, which would have refuted it. The enumeration settles it: there is a
 GND at the far end of the taps' own column.
 
-**5Vin is at signal-column position 21**, which was not previously recorded
-anywhere. It is adjacent to that GND, and it is *our* 5 V rail, not the
-machine's — do not confuse it with the J4 `+` net, which is read-only.
+**5Vin is at signal-column position 21.** It is *our* 5 V rail, not the
+machine's — do not confuse it with the J4 `+` net, which is read-only. (A
+draft called this "not previously recorded anywhere"; it is in Espressif's
+published table as J1-21.)
 
-**Stop citing Espressif's published pinout for this board.** It was used as
-the comparison for the silkscreen check and then contradicted the same day on
-GND placement; a second apparent contradiction (the 23-pin header) turned out
-to be a misread of this file's own making. Neither direction is reliable here.
-**The pin map holds because the operator read the silkscreen**, which is
-exactly why that distinction was worth drawing, and the layout should be
-driven by the board in hand and nothing else.
+**It sits directly beside the GND at 22, and that is a solder hazard, not a
+convenience.** On hand-wired perfboard with a ground bus down that column, one
+bridge between 21 and 22 shorts the devkit's USB 5 V to ground. Leave the gap
+or route the bus away.
 
-The signal column is still **3V3 at one end, GND at the other, all seven taps
-between** — row 42 and row 63 confirm it directly — so no ground return has to
-cross the board. That claim survives every revision above.
+**THE PUBLISHED PINOUT IS CORROBORATED, NOT REPLACED — and a draft of this
+entry said the opposite.** It instructed the reader to *"stop citing
+Espressif's published pinout for this board… Neither direction is reliable
+here."* That rested on two supposed departures and **both were mine**:
+
+| Alleged departure | Actually |
+|---|---|
+| a 23-pin header (rows 42-64) | a misread of row 63, retracted in the same commit |
+| GND on the signal column | **J1-22 is `G` in Espressif's table.** The "departure" was my recollection of the layout, which put GPIO19/20 at J1 positions 13-14 where the real document has 3/46 |
+
+The published layout therefore has a **clean record** against this clone, and
+the 2026-10-12 enumeration **strengthens** the pin map by agreeing with it.
+The lesson is the inverse of the one that got written down and pushed: **the
+unreliable source was my memory of the document, not the document.**
+
+Checked against `docs.espressif.com/projects/esp-dev-kits/` →
+`esp32s3/esp32-s3-devkitc-1/user_guide_v1.1.html`, 2026-10-12.
+
+The signal column runs **3V3 at position 1, GND at position 22, all seven taps
+between**, so **no ground return has to cross the board** — the claim that has
+survived every revision above.
+
+**But "between" does not mean "adjacent".** The taps are at positions 4-10 and
+that column's GND is at 22, so each divider's ground leg runs 12-18 pitches
+(~30-46 mm). The nearest ground to the taps is the *opposite* column's position
+1. The no-crossing claim is literally true; do not read it as a short return.
 
 **COUNTING TRAP: breadboard columns are not perfboard holes, and the
 difference is the channel.** A to I looks like 9 columns and *is* 9 columns —
 but it is **10 pitches**, because the single visual step from E to F is the
-0.3 in channel, worth **3 pitches of missing holes**, not one. Perfboard has
+0.3 in channel — **worth 3 pitches, not 1** (it spans 3 pitches and contains
+2 missing hole positions). Perfboard has
 no channel, so the same devkit lands on columns 0 and 10 there:
 
 | | columns you can see | pitches |
@@ -1238,13 +1274,34 @@ underneath the devkit between the two pin rows. That underneath space is real
 estate — the dividers can live there if the devkit is socketed high enough,
 which is the reason `docs/shopping-list.md` specifies **female** headers.
 
-**Size the board from the hole count, not the centimetre label.** 5 × 7 cm is
-~19 × 27 holes and the devkit alone eats **22 of the 27 rows**, leaving five
-for four J2 dividers, the J4 divider, two J5 resistors, a 74HC221 and four
-photoMOS. It does not fit. **7 × 9 cm** (~27 × 35) leaves 16 × 13 clear.
-**Count the holes on the board you actually receive** — some "5 × 7" boards
-are 18 × 24 — because a published figure has now been wrong about hardware in
-hand twice in one day.
+**Size the board from the hole count, not the centimetre label**, and do the
+accounting properly — **a draft of this paragraph got it backwards**:
+
+| | holes | devkit pin field | free beside it | free underneath |
+|---|---|---|---|---|
+| 5 × 7 cm | 19 × 27 = 513 | 11 × 22 | **8 × 27 = 216** | 9 × 22 = 198 |
+| 7 × 9 cm | 27 × 35 = 945 | 11 × 22 | **16 × 35 = 560** | 9 × 22 = 198 |
+
+That draft said 5 × 7 "does not fit" because "the devkit eats 22 of the 27
+rows, leaving five" — which treats the devkit's **11-column** footprint as if
+it spanned the full 19-column width. It does not. And it quoted 7 × 9 as
+"16 × 13 clear" — a corner rectangle of 208 holes, **fewer than the 216 a
+5 × 7 offers beside the devkit**. By its own metric the draft argued against
+its own conclusion.
+
+**7 × 9 is still the right buy**, for soldering room rather than necessity:
+560 contiguous holes against 216, with the actuation block, four J2 dividers,
+the J4 divider and two J5 resistors to place. But "5 × 7 does not fit" is not
+what the numbers say.
+
+**Footprint is the pin field, not the outline.** 11 × 22 holes is 25.4 ×
+53.3 mm of *pins*; the PCB overhangs at both ends (module/antenna one end,
+USB and buttons the other) by roughly 5 mm each, so the body covers ~25 rows.
+Budget rows against the outline.
+
+**Count the holes on the board you actually receive.** Commodity "7 × 9"
+protoboards are often ~24 × 34 rather than 27 × 35, and "5 × 7" ones 18 × 24 —
+and the hedge should be applied to both, not just to the one being rejected.
 
 **Pitch is 2.54 mm (0.1 in) — and the proof is that the board has been in a
 BREADBOARD since 0a.** A caliper reading of **1.9 mm** was taken 2026-10-12
@@ -1440,23 +1497,31 @@ measurement.
 | | |
 |---|---|
 | pump ran | **19.3 s** — display timer 2.6 → 19.3, which this file establishes IS the pump-on to pump-off measurement |
-| pump-coupling at 22.17 Hz predicts | 22.17 × 19.3 = **428 counts** |
+| **sampled** window | **16.7 s** — the first sample came 2.6 s after pump-on, and no pre-run idle value was recorded |
+| pump-coupling at 22.17 Hz predicts, over the sampled window | 22.17 × 16.7 = **370 counts** |
 | observed | **11** |
-| | **39× out** |
+| | **34× out** |
 
-*(This table read 16.7 s / 370 counts / 34× until 2026-10-12. 16.7 s came from
-a withdrawn "correction" that treated the display timer as something other
-than pump time; the retraction restored 19.3 s in the measured table 90 lines
-above but left this one, and the dry-run instruction below, un-swept.)*
+**Divide by the SAMPLED window, not the pump-on duration.** This table read
+16.7 s / 370 / 34× until 2026-10-12, then a sweep "corrected" it to
+19.3 s / 428 / 39× — which fixed the label and broke the ratio, because the 11
+counts were only ever observed across 16.7 s. Right duration, wrong
+denominator; the pre-sweep version had the right denominator with the wrong
+name for it. **Counts in the unsampled 2.6 s are unknown, and ~360 would have
+to be hiding there to overturn this.**
 
 **The strongest form of this is the GLITCH RATE, which measures coupling at
 the pin directly:**
 
 | | glitches/s |
 |---|---|
-| shot 2, pump + water | 4248 / 33.2 s = **128.0** |
-| aborted, pump + no water | 86 / 19.3 s = **4.5** |
-| | **28.7× collapse** |
+| shot 2, pump + water | 4248 / 33.2 s **sampled** = **128.0** |
+| aborted, pump + no water | 86 / 16.7 s **sampled** = **5.15** |
+| | **24.9× collapse** |
+
+*(This table divided the aborted run by 19.3 s and shot 2 by its sampled
+33.2 s until 2026-10-12 — mismatched denominators, giving 4.5/s and 28.7×.
+Consistent windows give 5.15/s and 24.9×. The conclusion is unaffected.)*
 
 Rejected edges are the quantity most directly produced by electrical coupling,
 and they fall 29× when the only thing that changed is whether water moved.
@@ -1531,9 +1596,17 @@ makes this worth re-testing rather than assuming.
    the documented cause of display-ring drops (see the 0e entry) and gives
    the second rate point that a single 22.2 Hz datum cannot provide.
 2. **Deliberately re-run the dry case** — pump on, no water drawn. If 11
-   counts over **19.3 s** reproduces, the counts track water and the withdrawn
-   conclusion was backwards. **Coupling predicts 428 over that window**, so
-   anything under ~50 is decisive and anything over ~300 overturns it.
+   counts reproduces, the counts track water and the withdrawn conclusion was
+   backwards. **Sample the WHOLE pump-on window this time** — baseline before
+   the lever, first sample at the lever — which is what the 2026-10-09 run
+   could not do and why its 11 is a lower bound. Over a full 19.3 s run,
+   coupling predicts **428**; over a 16.7 s sampled window, **370**.
+
+   **Thresholds, and they are judgement calls rather than derived**: under
+   ~50 counts is decisive for water (an order below either prediction); over
+   ~300 brings the coupling reading back. Between those, nothing is settled.
+   At n ≈ 11 the Poisson spread is ±3.3, so the interesting ambiguity sits far
+   below 300 — a result of 40 or 80 would need thinking about, not dismissing.
 
 #### Hypotheses that are DEAD, recorded so nobody re-derives them
 
@@ -1552,7 +1625,9 @@ That is net information loss, and the opposite of this file's convention.
 3. **Air in the line.** Shot 1 ran after a priming failure and the datasheet
    names air as a measurement hazard, so this looked decisive. Shot 2 was
    clean and agreed to 6 %.
-4. **The counts are pump noise** — see the refutation above. Dead at 39×.
+4. **The counts are pump noise** — see the refutation above. Dead at **34×**
+   on consistent windows (370 predicted against 11 observed over the same
+   16.7 s), with the glitch rate collapsing 25× alongside it.
 
 #### The capacitor is a CANDIDATE, not a measured requirement
 

@@ -11,8 +11,8 @@ not on what is soldered to the board.
 bench-tests the actuation parts **now**, behind open jumpers, rather than
 leaving footprints. So the §"Deliberately not yet" block at the bottom is
 **no longer deliberate-not-yet** — those parts move into the Phase 0 order,
-at **4 × photoMOS and 3 × 2-pin header**, both decided 2026-10-12 and costed
-in §7.
+at **8 × photoMOS (4 in service, 4 spare) and 3 × 2-pin header**, decided
+2026-10-12, with the LED drive costed in §7 for the first time.
 
 ---
 
@@ -277,7 +277,7 @@ tighter than they need to be for the sake of a few euro.
 | 1 kΩ | 10 | 0d flowmeter, **at PA8/PA9 only** — the board side, after its own conditioning. **Never at J4.** **In stock.** |
 | 8.2 kΩ (J4) | — | **J4 ANALYSER tap only: 8.2 kΩ, one channel, `#` only, no shunt.** The ESP32 tap at J4 is **100 K + 220 K** — see the 0d entry in `docs/phase-0-status.md`. Covered by the 8.2 kΩ bag above. |
 | **330 Ω (or 390 Ω)** | 20 | **PhotoMOS LED drive, ×4 — NOT IN STOCK, added 2026-10-12.** AQY212EH is guaranteed to operate at 3.0 mA and wants 5–10 mA; 330 Ω from 3.3 V gives ~6 mA. **Do not substitute the in-stock 1 kΩ** — it gives ~2 mA, above typical and below guaranteed, which is the one range that works on the bench and fails in service. 680 Ω if driving from 5 V instead. |
-| **100 kΩ** | 10 | **0d J4 divider, series leg (×1)** — the chosen value since 2026-10-08. Also the **2N7000 gate pulldowns (×4)** added 2026-10-12, so the LED is off when the board is unpowered or a '221 output floats. **In stock.** |
+| **100 kΩ** | 10 | **0d J4 divider, series leg (×1)** — the chosen value since 2026-10-08. Also the **base-emitter resistors (×4)** for the LED drivers, added 2026-10-12: with the '221 pulled from its socket — a deliberate third disable — four bases would otherwise float with the rail up. **In stock.** |
 | 120 kΩ | 0 | **NOT in stock.** Recorded as in stock on 2026-10-07 from a verbal report; the bag held 100 K and 150 K. Superseded by 100 kΩ, which has ~double the margin — not needed. |
 | E12 assortment kit, 1/4 W | 0 | **Not required.** It covers no named requirement, and cheap kits are 5 % where the rows above are 1 %. Both dividers survive 5 % (J4 +271 mV, 0c +110 mV — the J4 figure was +96 mV while 120 K was specified), and 100 kΩ is already in stock. |
 
@@ -323,7 +323,13 @@ because the machine caught it:
 | **XH board headers: 3, 4 and 5 pin** | 3 | **×5 each, decided 2026-10-12.** The perfboard gets one socket per harness: **3-pin J4** (`B3B-XH-A`), **4-pin J5** (`B4B-XH-A`), **5-pin J2** (`B5B-XH-A`). **The pin counts self-key** — nothing can be cross-plugged, so do not standardise them to one size for tidiness. Side-entry `S`-series if the printed box has a side gland; decide before designing the box. **Gender:** the board takes the **male** headers and the cable end takes the **female** housing from the pre-crimped kit — XH has no cable-mount male part at all, which is why the machine end still needs balance extension leads. |
 | Perfboard **7 × 9 cm** ×2 + **FEMALE** pin headers ×5 | 6 | The dividers want to live on a board, not in mid-air. **Female** so the ESP32 sockets in and comes out — soldering the devkit down means it cannot be swapped or easily reflashed. **Size settled 2026-10-12: 7 × 9, not 5 × 7.** The devkit's footprint is 11 columns × 22 rows (pin rows 10 pitches apart, 22 pins long) and a 5 × 7 board is only ~27 rows, so the devkit alone would take 22 of them. Count the holes on what arrives; centimetre labels vary. **Buy 2 boards** — the dividers can live in the 9 free columns *under* the socketed devkit, which is tight soldering with the actuation block on the same board, and a second board is cheaper than discovering that with copper committed. **Buy 5 header strips**: 1×40 is the standard item, you cut each to 22 (losing the position you cut through), you need two, and female strips do not snap cleanly like male ones so the first one is practice. |
 | Second mixed balance-lead pack | 7 | **Insurance.** The 4S is the only lead that fits J2 and there is no spare if a strip-and-solder goes wrong. The T-pieces are the most laborious part of the build and the pack is seven euro. |
-| ~~ABS project box, ~120 x 80 x 40 mm~~ **PRINTED, not bought** | 0 | ESP32 mounts **outside** the machine. **The 120 × 80 size is WRONG and would not have fitted** — it was chosen when the perfboard was assumed 5 × 7; the board is now **70 × 90 mm**, and a 120 × 80 external box has ~112 × 72 of interior. Operator is printing one instead: **~110 × 100 × 40 internal**, sized for the board plus connector height plus wire bend radius, and for **three** harnesses (J5, J2's five wires and four dividers, J4). **PETG or ASA, not PLA** — it lives beside an espresso machine and PLA softens around 60 °C. |
+| ~~ABS project box, ~120 x 80 x 40 mm~~ **PRINTED, not bought** | 0 | ESP32 mounts **outside** the machine. **The 120 × 80 size is WRONG and would not have fitted** — it was chosen when the perfboard was assumed 5 × 7; the board is now **70 × 90 mm**, and a 120 × 80 external box has ~112 × 72 of interior. Operator is printing one instead: **~110 × 100 × 40 internal**, **but decide
+the one-board-or-two question BEFORE printing** — this list says buy two
+boards because the dividers under a socketed devkit are tight soldering
+alongside the actuation block. Two 70 × 90 boards side by side need ≥180 mm,
+and stacking them over a socketed devkit will not fit in 40 mm of height. The
+box is the item with lead time, so it should not be the thing that forces the
+layout. Sized as sized for the board plus connector height plus wire bend radius, and for **three** harnesses (J5, J2's five wires and four dividers, J4). **PETG or ASA, not PLA** — it lives beside an espresso machine and PLA softens around 60 °C. |
 | Cable gland or grommet | 3 | Where the harness leaves the case |
 | Nylon cable ties / adhesive tie mounts | 4 | Keep the tap away from the boiler and off moving parts |
 
@@ -339,7 +345,7 @@ power the ESP32 from the machine.
 | Item | ~€ | Notes |
 |---|---|---|
 | **Multimeter** | 25–40 | **Already ordered.** Continuity beep and auto-range are what matter; a **K-type thermocouple** would also settle the ambient-at-J5 question empirically. Its absence cost two full evenings of guessing at connectors from photographs. |
-| Digital calipers | 15 | The *only* measurement that separates JST XH from EH is depth — 5.7 vs 3.8 mm. Identifying this by eye failed three times. |
+| ~~Digital calipers~~ **owned** | 0 | The *only* measurement that separates JST XH from EH is depth — 5.7 vs 3.8 mm. Identifying this by eye failed three times. |
 | Headband magnifier | 15 | |
 | Flux pen + 0.5 mm solder | 12 | |
 | Temperature-controlled iron, fine tip | 40–60 | Only if the current one is not adjustable |
@@ -360,21 +366,24 @@ build decision populates and bench-tests these **now**, behind open jumpers,
 rather than leaving footprints — so they belong in the Phase 0 order. See
 `docs/phase-0-plan.md` and hard invariant 1 as amended.
 
-**`docs/phase-0-plan.md` is normative on the counts and placement.** This list
-carries the numbers so you can order; if the two disagree, the plan wins.
+**`docs/phase-0-plan.md` is normative on the counts and placement, and THIS
+list is normative on part numbers and prices.** Split that way because the two
+files briefly each declared the other authoritative for the same parts, which
+leaves a disagreement with no resolution rule — and they had already drifted
+apart on the transistor, the drive-current claim and the box.
 
 ### What to order — part numbers confirmed 2026-10-12
 
 | Part | Qty | Why this one |
 |---|---|---|
-| **AQY212EH, DIP-4** | **8** | 4 in service, 4 spare. **Confirmed against distributor data 2026-10-12**: DIP-4 through-hole, SPST-NO **AC/DC**, 60 V / 550 mA, 5000 Vrms. The AC/DC type is the back-to-back two-MOSFET output the plan's body-diode failure analysis assumes, so that analysis now rests on the right structure. Most listings are **SOP-4 surface-mount** — check the photo shows four long legs. |
-| **74HC221, PDIP-16** | 3 | `SN74HC221N` is scarce (TI retiring PDIP). Equivalents: **`CD74HC221E`**, `74HC221N` (NXP/Nexperia), `MC74HC221AN`, `TC74HC221AP`, `HD74HC221P`. The `N`/`E`/`P` suffixes are through-hole; `D`/`PW`/`NS` are SMD. |
-| **2N7000, TO-92** | 10 | **LED drivers, one per photoMOS.** See below — not optional. |
+| **AQY212EH, DIP-4** | **8** | 4 in service, 4 spare. **Distributor-listing grade, 2026-10-12** (Distrelec, Farnell, Conrad agree): DIP-4 through-hole, SPST-NO **AC/DC**, 60 V / 550 mA, 5000 Vrms, LED operate 3.0 mA max / 5–10 mA recommended. **That is vendor-listing grade, not datasheet-in-hand** — this repo has sellers printing "JST EH" for parts that are plainly XH, and its maxim is verify by mating. A draft used it to upgrade the plan's body-diode analysis to "rests on the right structure" while the plan still grades that *inferred*; **fetch Panasonic's datasheet** and settle it at the grade the plan asks for. Most listings are **SOP-4 surface-mount** — check the photo shows four long legs. |
+| **`CD74HC221E`, PDIP-16** | 3 | **Verified 2026-10-12** against TI and Farnell: dual monostable, PDIP-16, 2–6 V, non-retriggerable ("once triggered, the outputs are independent of further trigger inputs"), active lifecycle, 5.2 mA output drive. `SN74HC221N` is scarce — TI is retiring PDIP. **A draft also listed `MC74HC221AN`, `TC74HC221AP` and `HD74HC221P` as equivalents; none could be verified**, and the nearest real hit, `MM74HC221AN`, is obsolete. Those were recollection. The `N`/`E`/`P` suffixes are through-hole; `D`/`PW`/`NS` are SMD. |
+| **BC547 or 2N3904, TO-92** | 10 | **LED drivers, one per photoMOS.** **NOT the 2N7000**, which a draft of this row specified: its V_GS(th) is 0.8–3.0 V, so a worst-case part driven from 3.3 V logic has **0.2 V of overdrive** and R_DS(on) is only characterised at V_GS = 4.5/10 V. That is the same works-on-the-bench-fails-in-service trap as the 1 kΩ below, in the part bought to avoid it. A bipolar has no threshold lottery — 0.7 V of V_BE, cleared with enormous margin. **Base resistor 8.2 kΩ and base-emitter 100 kΩ, both in stock.** |
 | **330 Ω or 390 Ω, 1 %** | 20 | **The one resistor value not in stock.** See the LED arithmetic below. |
 | **2-pin male header** | 3 | the disables. **Buy no shunts** — open is the specified state and a loose shunt in the box is a hazard. Cut from a 1×40 male strip. |
 | DIP-16 socket | 3 | wire the socket, verify, *then* insert the '221 — 16 hand-wired joints with no heat near the part. Pulling the IC is also a third disable, stronger than an open jumper. |
 | Machined **round-pin** SIP socket strip 1×40 | 2 | **DIP-4 sockets are not a stocked item.** Cut 2-way pieces, two per photoMOS, 0.3 in apart. Soldering the photoMOS directly is acceptable if you cannot get these: a socket contact going intermittent fails **open**, which is the safe direction here. |
-| Film capacitors, ~0.47 / 1 / 2.2 µF | few | one-shot RC. **Do not fix the value yet** — `t ≈ 0.7 · R · C`, so ~1 µF with 150 kΩ from stock gives ~120 ms, but the **minimum latching press width is unmeasured** and CLAUDE.md says measure before choosing. |
+| Film capacitors, ~0.47 / 1 / 2.2 µF | few | one-shot RC. **Do not fix the value yet.** `t_W = 0.7 · R_x · C_x` **characterised at V_CC = 4.5 V** — and this build runs the '221 at **3.3 V**, where the coefficient is not guaranteed; Fairchild's version of the same part documents `PW = R·C` with no 0.7 at all, and part-to-part spread is ±5 %. At 150 kΩ from stock, 1 µF gives **105 ms**, not the ~120 ms a draft stated (120 ms needs 1.14 µF, or 171 kΩ at 1 µF). **Measure the pulse on the bench**, and only after the minimum latching press width is known. Minimum R_x ≈ 500 Ω. |
 
 ### The LED drive, which this list did not previously cost at all
 
@@ -386,18 +395,26 @@ Two consequences:
   `(3.3 − 1.2 V_F − 0.1 V_ds) / 1 kΩ ≈ 2 mA` — **above typical, below
   guaranteed**, the worst place to sit: it works on the bench and fails on
   some units. **330 Ω gives ~6 mA**; 680 Ω if you drive the LEDs from 5 V.
-- **Do not drive the LEDs from the '221 directly.** A 74**HC** input needs
+- **The '221's supply decides its input threshold.** A 74**HC** input needs
   VIH = 0.7 × VCC, so at 5 V that is 3.5 V against an ESP32's ~3.2 V output —
-  it does not reliably meet it. Run the '221 at **3.3 V** (VIH 2.3 V) or buy
-  **74HCT221** (VIH fixed at 2.0 V). At 3.3 V the '221's own output drive is
-  a few mA, which is marginal into an LED wanting 5–10 — hence the 2N7000 per
-  device. **That transistor is needed anyway**, because the per-device test
-  requires each LED on its own drive path rather than two in series. One part,
-  two independent reasons.
-- **Put a 100 kΩ gate pulldown on each 2N7000** (in stock). With the board
-  unpowered or a '221 output floating, a bare gate can drift and turn the LED
-  on. The pulldown makes "off" the unpowered state by construction — the same
-  principle as the jumpers, one stage further down the chain.
+  it does not reliably meet it. Run the '221 at **3.3 V** (VIH 2.31 V) or buy
+  **74HCT221** (VIH fixed at 2.0 V). You cannot do both: HCT is only specified
+  at 4.5–5.5 V.
+- **A transistor per LED, and the honest reason is the test, not the
+  current.** A draft said "a 74HC221 at 3.3 V cannot source 3.0 mA, so the
+  transistor was needed for the drive current regardless of the test". **That
+  is an over-claim** — HC guarantees ±4 mA at 4.5 V and `CD74HC221E` lists
+  5.2 mA; at 3.3 V, sinking 6 mA through ~100 Ω of output impedance costs
+  ~0.6 V and still leaves ~4.5 mA, half again over the 3.0 mA guarantee. The
+  '221 *can* drive this LED directly; it just cannot do it with the margin the
+  5–10 mA recommendation wants. **The sufficient reason is the per-device
+  test**, which needs each LED on its own path.
+- **Base-emitter resistor, 100 kΩ, in stock.** A draft justified the
+  equivalent part with "the board unpowered… a bare gate can drift and turn
+  the LED on" — **vacuous**: with the board unpowered there is no 3.3 V on the
+  LED's 330 Ω feed either, so nothing conducts. **The real case is one this
+  build creates**: pulling the '221 from its socket, which this list makes a
+  deliberate third disable, leaves four bases floating **with the rail up**.
 
 ### Still not costed
 
@@ -448,19 +465,31 @@ Connectors are **bought** — the mixed balance-lead pack was €6.99 and
 should cover J5, J2 and J4, pending the seat check in section 1.
 
 Still outstanding: adhesive-lined heat-shrink, PTFE sleeving, perfboard,
-project box and cable gland — **~€80 all in**, revised 2026-10-12. The
-earlier ~€42 predates the box upsize (now printed, so €0), the spare
-perfboard, the photoMOS going from 2 to 8, the XH board headers, the sockets
-and the LED-drive parts. Breakdown: board, headers and sockets ~€9; XH
-connectors and the pre-crimped kit ~€13; balance-lead pack €7; actuation
-(74HC221 ×3, AQY212EH ×8, 2N7000, 330 Ω, caps) ~€25; consumables (PTFE
-sleeving, adhesive heat-shrink, 30 AWG silicone wire, gland, tie mounts)
-~€26.
+cable gland, XH board headers, sockets and the §7 actuation parts —
+**~€83 all in**, revised 2026-10-12. **The project box is NOT on this list:
+it is printed, €0.** The superseded figure was **~€40** (a draft said €42),
+and it predates the box, the second perfboard, the photoMOS **spares** taking
+the order from 4 to 8 (the in-service count was 4 before and is 4 now), the XH
+board headers, the sockets and the LED-drive parts.
+
+| | ~€ |
+|---|---|
+| perfboard ×2, female strips ×5, DIP-16 and SIP sockets | 15 |
+| XH board headers (€3) + pre-crimped kit (€10) | 13 |
+| second balance-lead pack | 7 |
+| actuation: `CD74HC221E` ×3, AQY212EH ×8, BC547 ×10, 330 Ω, caps | 25 |
+| consumables: PTFE sleeving 8, adhesive heat-shrink 6, 30 AWG silicone wire 8, gland 3, tie mounts 4 | 29 |
+| **total** | **~€89** |
+
+*(A draft quoted €9 for the board group and €26 for consumables, giving €80;
+the board row had not been re-costed after it grew to two boards and five
+strips, and the consumables row omitted the 30 AWG wire, which has no row in
+§5 at all and is priced only in `docs/phase-0-plan.md`.)*
 
 **Every resistor this project needs is now in hand (2026-10-08).** 8.2 K,
 15 K, 100 K, 150 K, 220 K and 1 K are all in stock; the E12 kit is Qty 0 and
 not needed. **The perfboard build IS now gated on parts**, which it was not
-before 2026-10-12: it needs a 74HC221, photoMOS, 2N7000s, 330 Ω, XH board
+before 2026-10-12: it needs a `CD74HC221E`, photoMOS, BC547s, 330 Ω, XH board
 headers, sockets and perfboard — none of them bought.
 
 **Note what changed:** 0d was specified as 120 K, which this list claimed was
@@ -468,10 +497,14 @@ in stock on 2026-10-07. It was not — the bag held 100 K and 150 K. 0d now
 uses **100 K**, which is better here (see CLAUDE.md), and **150 K must not be
 substituted at J4** — it fails at −45 mV.
 
-What is left to buy is for the **perfboard stage, not the bench**: perfboard,
-cable gland, adhesive-lined heat-shrink, PTFE sleeving, XH connectors,
-sockets and the §7 actuation parts. **~€80**; the box is printed, not bought.
-The whole breadboard bench sequence can be done without any of it.
+What is left to buy is for the **perfboard stage, not the bench**: perfboard
+×2, female header strips, DIP-16 and SIP sockets, XH board headers, the
+pre-crimped kit, a second balance-lead pack, cable gland, tie mounts,
+adhesive-lined heat-shrink, PTFE sleeving, 30 AWG silicone wire and the §7
+actuation parts. **~€89**; the box is printed, not bought. The whole
+breadboard bench sequence can be done without any of it. *(Earlier versions
+of this sentence and the breakdown above listed different subsets and
+different totals; both now match the table in §Rough total.)*
 
 **0d is no longer gated on firmware.** It was, for about an hour: the
 counter landed in 0.9.0 (`PulseCounter`, `flowIsr`, `sample_t.inlet_pulses`
@@ -483,5 +516,6 @@ and the calibration weigh-off.
 
 Add calipers (~€15) if you want the connector
 question settled by measurement rather than re-derived from photographs.
-The pre-crimped kit (~€10) and the Ascaso `I.4312` harness (~€15) only if
+The pre-crimped kit (~€10, **counted in the total above as a firm line
+item** — an earlier closing line offered it as contingent) and the Ascaso `I.4312` harness (~€15) only if
 a balance lead disappoints.

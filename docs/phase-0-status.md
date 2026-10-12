@@ -560,13 +560,19 @@ silkscreen order against Espressif's published layout on 2026-10-12, which
 rules out the one alternative the functional chain cannot exclude - wiring by
 position rather than by label. See CLAUDE.md's GPIO budget table.
 
-**Two physical facts the perfboard layout still needs, and neither is
-electrical:** the row-to-row header spacing in 0.1 in holes, and which header
-carries GND. Espressif's layout puts it on the **opposite** header from all
-seven signal pins, which would be the layout's one awkward fact — but the
-2026-10-12 check covered the signal header only, so that is a datasheet
-reading, not a board reading. The seven being contiguous at positions 4-10
-is the layout's one piece of luck.
+**GND is on the signal header — board reading, 2026-10-12.** This section
+previously said Espressif's layout put it on the opposite header and called
+that the layout's one awkward fact. The board carries **three** GNDs: one at
+the far end of the signal header, two directly opposite it. The signal header
+is therefore 3V3 at one end, GND at the other, all seven taps between them,
+and no ground return crosses the board.
+
+**One mechanical fact is still open and it gates the build: the pin PITCH.**
+A caliper reading of 1.9 mm was taken 2026-10-12, which is almost certainly
+the gap between pins rather than the pitch — 2.54 mm pitch less a 0.64 mm
+square pin is 1.90 mm exactly. Perfboard is 2.54 mm, so the difference is not
+cosmetic. Settle it by spanning **pin 1 to pin 11**, not by re-measuring one
+gap: 25.4 mm at 0.1 in against 19.0 mm at a true 1.9 mm pitch.
 
 ## The J5 tap went live 2026-10-07, and two things came out of it
 

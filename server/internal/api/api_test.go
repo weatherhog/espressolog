@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -70,19 +71,26 @@ func TestUnknownAPIPathsDoNotLookLikeSuccess(t *testing.T) {
 	}
 }
 
-// The guard above covers /api/ only. An endpoint misconfigured to the site
-// root still reaches the SPA and still answers 200 — which is exactly why the
-// marker exists and why the device must require it rather than trust 2xx.
-func TestSiteRootStillAnswers200AndIsWhyTheMarkerExists(t *testing.T) {
+// The /api/ guard covers paths under /api/ only. An endpoint misconfigured to
+// the site root still reaches the SPA and still answers 200 with HTML — which
+// is exactly why the marker exists and why the device must require it rather
+// than trust 2xx.
+//
+// A first version of this test ended with a condition the guard above had
+// already made unreachable, and never asserted the 200 its name promises. It
+// could not have failed.
+func TestSiteRootAnswers200WithoutTheMarker(t *testing.T) {
 	h := newTestHandler(t)
-	w := do(t, h, "POST", "/espressolog/api/v1/ingest", []byte("x"))
-	if w.Header().Get(IngestMarker) != "" {
-		t.Fatalf("a non-ingest path set %s", IngestMarker)
-	}
-	// Whatever status the SPA fallback gives, the absence of the marker is
-	// what must keep the device from deleting. Assert that directly.
-	if w.Code >= 200 && w.Code < 300 && w.Header().Get(IngestMarker) != "" {
-		t.Fatal("2xx with a marker from a path that is not ingest")
+	for _, path := range []string{"/espressolog/api/v1/ingest", "/", "/anything"} {
+		w := do(t, h, "POST", path, []byte("x"))
+		if w.Code != http.StatusOK {
+			t.Errorf("POST %s returned %d, want 200 — if the SPA fallback stops "+
+				"answering 2xx here the marker is no longer load-bearing and this "+
+				"test should be revisited, not deleted", path, w.Code)
+		}
+		if w.Header().Get(IngestMarker) != "" {
+			t.Errorf("POST %s carried %s — the device would delete the shot", path, IngestMarker)
+		}
 	}
 }
 
@@ -168,5 +176,40 @@ func TestEmptyPatchIsAnError(t *testing.T) {
 	}
 	if strings.Contains(w.Body.String(), "<html") {
 		t.Error("PATCH to a real route fell through to the SPA")
+	}
+}
+
+// THE CONTRACT THE FIRMWARE DEPENDS ON, and nothing covered it until
+// 2026-10-12: a SUCCESSFUL ingest must carry the marker. Deleting the header
+// from the 201 path left all seven other tests green — verified by mutation.
+//
+// If it is ever lost (a refactor, middleware, a proxy that strips unknown
+// response headers), 0.9.3 takes the `2xx && !from_ingest` branch, keeps the
+// record, and head-of-line blocks the queue until the spool fills and
+// writeShot starts refusing. Invariant 6, from one deleted line.
+func TestSuccessfulIngestCarriesTheMarker(t *testing.T) {
+	raw, err := os.ReadFile("../record/testdata/shot-fw040-timevalid.bin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := newTestHandler(t)
+
+	w := do(t, h, "POST", "/api/v1/ingest", raw)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("first ingest returned %d, want 201", w.Code)
+	}
+	if w.Header().Get(IngestMarker) == "" {
+		t.Errorf("a 201 did not carry %s — the device keeps the record and the "+
+			"queue stalls behind it", IngestMarker)
+	}
+
+	// The duplicate path too: a retried upload after a lost response must also
+	// be deletable, or the record can never leave the spool.
+	w2 := do(t, h, "POST", "/api/v1/ingest", raw)
+	if w2.Code != http.StatusOK {
+		t.Fatalf("duplicate ingest returned %d, want 200", w2.Code)
+	}
+	if w2.Header().Get(IngestMarker) == "" {
+		t.Errorf("a duplicate 200 did not carry %s", IngestMarker)
 	}
 }

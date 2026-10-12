@@ -277,6 +277,28 @@ func defaultRecipe(tx *sql.Tx, epochID any, startedAt time.Time, thisShotEditedA
 			grindDial = dial
 		}
 	}
+	// KNOWN GAP, and it is not closable here: this guard only works when the
+	// edit record is THE ONE BEING INGESTED or already in the table. Reverse
+	// the arrival order and it is bypassed — a shot pulled AFTER the edit but
+	// ingested BEFORE it carries the pre-edit value (there is no edit row yet
+	// to stop at), and every later shot then finds that row sitting at
+	// started_at > the edit and carries the stale value forward indefinitely.
+	//
+	// "Across boots order is arbitrary" cuts both ways and only one direction
+	// is handled. The root cause is that the carry is STAMPED at ingest and
+	// nothing re-evaluates it, and there is no brew_temp_source column, so an
+	// inference cannot be told from a confirmation and cannot be retroactively
+	// unwritten. Closing it needs one of:
+	//
+	//   (a) compute the carry at READ time (a view) instead of stamping it, or
+	//   (b) add brew_temp_source / preinfusion_source = 'inferred', and have
+	//       the ingest of a setpoint_touched record NULL any later-pulled
+	//       'inferred' rows.
+	//
+	// Both are schema changes and neither belongs in a deploy that is already
+	// running an irreversible migration. TestRecipeCarryKnownGapOnReversedArrival
+	// documents the case and will start failing the moment it is fixed.
+	//
 	// STOP AT A RECORDED PARAMETER EDIT, for BOTH values.
 	//
 	// KNOW WHAT THE FLAG ACTUALLY RECORDS BEFORE TRUSTING THIS GUARD.
@@ -319,7 +341,13 @@ func defaultRecipe(tx *sql.Tx, epochID any, startedAt time.Time, thisShotEditedA
 	since := `COALESCE((SELECT MAX(started_at) FROM shot
 	                     WHERE setpoint_touched = 1 AND started_at <= ?), '')`
 	if thisShotEditedAParameter {
-		return // the settings this shot ran with are unknown; NULL says so
+		// Only brew_temp_c and preinfusion_s: beanID and grindDial are already
+		// assigned above and stay. setpoint_touched latches on the machine's
+		// DISPLAY, and CLAUDE.md's SET UP menu holds no grinder parameter, so
+		// an edit says nothing about the dial or the bag. (A draft's comment
+		// here said "the settings this shot ran with are unknown", which reads
+		// as though all four go NULL.)
+		return
 	}
 	var t float64
 	if tx.QueryRow(`SELECT brew_temp_c FROM shot

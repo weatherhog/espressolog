@@ -8,10 +8,15 @@
 # DisplayBus is pure logic too, and its test frames are real ones recorded
 # off the machine (analysis/captures/), not synthetic bit patterns.
 CXX ?= clang++
-# -UNDEBUG is not optional: every suite here asserts with bare assert(), and
-# several do work inside the assert. Building with -DNDEBUG would compile the
-# checks away and all four suites would pass vacuously. Flagged by the
-# 2026-10-12 audit; each file also carries its own #undef NDEBUG.
+# -UNDEBUG and the per-file #undef NDEBUG are belt and braces, NOT a fix for a
+# live hole — a draft of this comment claimed the latter. NDEBUG was never
+# defined by this Makefile, so every assertion has always been compiled in and
+# nothing changed behaviour. What they defend against is a future
+# `make CXXFLAGS=-O2 -DNDEBUG`, which would otherwise silently compile away
+# every check (several of these suites do work inside the assert, so the
+# suites would not merely weaken, they would stop testing) and report a green
+# run. The per-file #undef survives a command-line CXXFLAGS override; this
+# flag does not.
 CXXFLAGS = -std=c++17 -Wall -UNDEBUG
 
 test: detector_test display_test machine_context_test machine_io_test armed_test

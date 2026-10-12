@@ -225,7 +225,24 @@ export default function Capture({ shots, beans, justSaved, onSaved }) {
               to erase. Nothing is written untouched, so this is now a
               labelling problem rather than a data one, but presenting a
               made-up number as the current setting is how it became a data
-              problem the first time. */}
+              problem the first time.
+
+              AND NOTE WHAT THIS STILL CANNOT SAY. Since 2026-10-12 the server
+              carries brew_temp_c and preinfusion_s forward at ingest, so `col`
+              is normally non-null and `unrecorded` is false — meaning a SERVER
+              INFERENCE renders here with no badge at all, under a heading that
+              says Confirm. There is no brew_temp_source column to distinguish
+              it from a value a human typed. That is the same provenance
+              problem migration 009 exists to undo, moved from this screen to
+              the server rather than removed. Fixing it properly needs the
+              source columns; see defaultRecipe in server/internal/store. */}
+          {/* FINDING: once `touched[k]` is set this ignores every later server
+              value for that field, so the lost-update window is narrowed, not
+              closed. Tap the dose once on a dose-less shot, let the grinder
+              weighing land, save — and the guess still overwrites the
+              measurement. `moved` surfaces that rather than silently losing
+              it; closing it properly means deciding whose value wins, which
+              is a product question, not a bug fix. */}
           {[
             { k: "grind",  label: "Grind",       v: grind,  set: setGrind,  col: pending.grind_dial,    step: 0.1, unit: undefined },
             { k: "dose",   label: "Dose",        v: dose,   set: setDose,   col: pending.dose_ground_g, step: 0.1, unit: "g" },
@@ -234,6 +251,9 @@ export default function Capture({ shots, beans, justSaved, onSaved }) {
           ].map(({ k, label, v, set, col, step, unit }) => {
             const shown = touched[k] ? v : (col ?? v);
             const unrecorded = !touched[k] && col == null;
+            // The server wrote a different value while this field was being
+            // edited — almost always a grinder weighing landing on the dose.
+            const moved = touched[k] && col != null && col !== v;
             return (
               <div key={k}>
                 <Eyebrow style={{ marginBottom: 8 }}>
@@ -242,6 +262,8 @@ export default function Capture({ shots, beans, justSaved, onSaved }) {
                     <span style={{ color: T.flow }}> &middot; from scale</span>}
                   {unrecorded &&
                     <span style={{ color: T.inkSoft }}> &middot; not recorded</span>}
+                  {moved &&
+                    <span style={{ color: T.flow }}> &middot; scale says {col}</span>}
                 </Eyebrow>
                 <Stepper value={shown} onChange={mark(k, set, shown)} step={step} unit={unit} />
               </div>

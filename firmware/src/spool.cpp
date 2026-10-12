@@ -183,7 +183,9 @@ void Spool::list(Stream& out) {
       // quarantined record is invisible otherwise, and until 2026-10-12 its
       // mere existence stopped every upload.
       File q = LittleFS.open(String(DIR) + "/" + f.name());
-      for (File qf = q.openNextFile(); qf; qf = q.openNextFile()) quarantined++;
+      // Filter directories here too, so this agrees with quarantinedCount().
+      for (File qf = q.openNextFile(); qf; qf = q.openNextFile())
+        if (!qf.isDirectory()) quarantined++;
       continue;
     }
     out.printf("# %s  %u bytes\n", f.name(), (unsigned)f.size());

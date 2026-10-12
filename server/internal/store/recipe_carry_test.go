@@ -268,3 +268,41 @@ func TestRecipeCarryHonoursAConfirmationOnTheEditShot(t *testing.T) {
 			"gate the carry at ingest, not to exclude the row", temp)
 	}
 }
+
+// KNOWN GAP, documented rather than hidden. "Across boots order is arbitrary"
+// cuts both ways: the guard handles a shot pulled BEFORE an edit arriving
+// after it, but not a shot pulled AFTER an edit arriving BEFORE it. The carry
+// is stamped at ingest and nothing re-evaluates it, so the pre-edit value
+// lands on that row and then propagates forward through it for ever.
+//
+// This test asserts the CORRECT behaviour and is skipped. Closing the gap
+// (see defaultRecipe's comment: read-time carry, or *_source columns) makes it
+// pass, at which point delete the Skip.
+func TestRecipeCarryKnownGapOnReversedArrival(t *testing.T) {
+	t.Skip("known gap: the carry is stamped at ingest and cannot be retroactively " +
+		"unwritten without a provenance column — see defaultRecipe")
+
+	st := openTestStore(t)
+	base := time.Date(2026, 10, 2, 8, 0, 0, 0, time.UTC)
+
+	// A pre-edit shot, confirmed by hand.
+	p := ingestAt(t, st, 1, base.Add(-48*time.Hour), false)
+	setRecipe(t, st, p, 93, 0)
+
+	// Pulled AFTER the edit, but ingested BEFORE it (the backlog arrives out
+	// of order). No edit row exists yet, so this inherits 93.
+	ingestAt(t, st, 2, base.Add(24*time.Hour), false)
+
+	// The edit record finally arrives. Its own row is correctly NULLed.
+	ingestAt(t, st, 3, base, true)
+
+	// But the shot above still holds 93 at started_at > the edit, so this one
+	// finds it and carries the superseded setpoint forward.
+	next := ingestAt(t, st, 4, base.Add(48*time.Hour), false)
+	temp, _ := recipeOf(t, st, next)
+
+	if temp.Valid {
+		t.Errorf("brew_temp_c = %v, want NULL: a pre-edit setpoint reached a shot "+
+			"pulled after the edit, via a row ingested before it", temp.Float64)
+	}
+}

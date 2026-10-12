@@ -124,7 +124,8 @@ void Net::tick(uint32_t now, bool detector_quiet) {
     // ONLY BLAME THE RECORD WHEN THE FAILURE WAS ABOUT THE RECORD.
     //
     // stuck_n counts consecutive failures of any kind — a 503, a server that
-    // is simply down, WiFi gone, LittleFS.open failing. A draft announced all
+    // is simply down, LittleFS.open failing. (Not WiFi being down: tick()
+    // returns above when !wifiUp(), so those never reach the counter.) A draft announced all
     // of them as "%s is blocking every record behind it. Inspect it with
     // 'dump %s'", so during an ordinary two-hour outage the operator was told
     // a blameless shot was poisoning the queue. The plausible next action is
@@ -170,6 +171,7 @@ bool Net::tryUploadOldest() {
       p.header_len < SPOOL_HEADER_LEN_V1 || f.size() < p.header_len) {
     f.close();
     Serial.printf("# net: %s is not a valid record, quarantining\n", path.c_str());
+    last_failure_was_about_the_record = true;
     LittleFS.mkdir("/spool/bad");
     LittleFS.rename(path, "/spool/bad/" + path.substring(path.lastIndexOf('/') + 1));
     return false;
@@ -219,6 +221,18 @@ bool Net::tryUploadOldest() {
     last_failure_was_about_the_record = true;   // configuration, not weather
     return false;
   }
+
+  // CLASSIFY THE FAILURE BEFORE REPORTING IT. A draft set this on exactly one
+  // path (2xx-without-marker), so 400, 403, 413 and a bare 422 all reported
+  // "the server or the network is unreachable" — and net.h names 413
+  // specifically as the case that stalls the queue until the spool fills. The
+  // one failure the counter exists to surface was the one it blamed on the
+  // weather, telling the operator to wait out a condition that never clears.
+  //
+  // 408 and 429 are the genuinely transient 4xx; everything else at or above
+  // 400 is about this request or this record and will not fix itself.
+  if (code >= 400 && code != 408 && code != 429)
+    last_failure_was_about_the_record = true;
 
   if (code >= 200 && code < 300) {
     // Delete only now: a lost 200 means a retry, and the server dedupes on
@@ -272,7 +286,10 @@ void Net::status(Stream& out) {
   // line. The 0d experiment plan calls for running with the console detached,
   // and a stalled queue is invisible otherwise — the device looks healthy and
   // simply stops delivering shots.
-  // Same floor as the periodic serial line: one WiFi blip is not a stall.
+  // A lower floor than the periodic serial line on purpose. That one speaks
+  // at 20 consecutive failures, which at BACKOFF_MAX_MS is ~19 minutes; this
+  // is a command the operator typed, so answer it sooner. (A draft claimed
+  // the two had "the same floor" — they do not, and should not.)
   if (stuck_n >= 5)
     out.printf("# net: %s has failed %lu times in a row — %s\n",
                stuck_path.c_str(), (unsigned long)stuck_n,

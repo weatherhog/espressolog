@@ -37,25 +37,64 @@ int main() {
     printf("2. tared scale at 0 g reaches ARMED OK\n");
   }
 
-  // 3. Flatness, not magnitude, is what ARM_BAND_MG bounds: a reading drifting
-  //    by more than the band does NOT arm, however small it is.
+  // 3. FLATNESS is what ARM_BAND_MG bounds, and finding a case that proves it
+  //    takes care. Two earlier attempts did not:
+  //
+  //      a 2 g/s ramp          -> ends in POURING, so "not ARMED" holds with
+  //                               the flatness check DELETED (verified)
+  //      one step past the band -> also trips pour onset, same problem
+  //
+  //    The reason is structural and worth knowing: ARM_BAND_MG is 500 mg
+  //    across a 1 s window, i.e. an effective 500 mg/s, which is ABOVE the
+  //    300 mg/s pour threshold. Any MONOTONIC drift fast enough to break
+  //    flatness is therefore also fast enough to be detected as a pour. The
+  //    flatness check only does unique work where pour onset cannot see:
+  //    a reading that moves a lot without going anywhere.
+  //
+  //    So: oscillate. Spread 800 mg breaks the band; net flow is ~0 so no
+  //    pour is detected. IDLE with the check, ARMED without it.
   {
     ShotDetector d;
-    for (uint32_t t = 0; t <= 2000; t += 100) d.feed(t, (int32_t)(t * 2));  // 2 mg/ms = 2 g/s
-    assert(d.state() != ShotState::ARMED);
-    printf("3. a drifting reading does not arm OK\n");
+    for (uint32_t t = 0; t <= 3000; t += 100)
+      d.feed(t, 20000 + ((t / 100) % 2 ? 400 : -400));
+    assert(d.state() == ShotState::IDLE);
+    printf("3. an oscillating reading does not arm (spread > band, no net flow) OK\n");
   }
 
-  // 4. THE ONE THAT MATTERS FOR INVARIANT 2: the weighing threshold (5 g) and
-  //    the arming band (0.5 g) are not mutually exclusive, because they are
-  //    not measured against the same thing. A mass above the weighing
-  //    threshold is ARMED, so a weighing episode CAN complete in that state --
-  //    which is why main.cpp must not treat ARMED as quiet.
+  // 4. THE ONE THAT MATTERS FOR INVARIANT 2, and it has to be DEMONSTRATED.
+  //    A first version asserted only "18 g is ARMED" and never touched
+  //    WeighingDetector, so its claim -- that a weighing episode can complete
+  //    while the detector is ARMED -- was reasoning wearing a test's clothes.
+  //    That claim is the entire justification for narrowing the quiet window,
+  //    so run the real sequence.
+  //
+  //    An un-tared dose cup sits still (stable, and above MIN_WEIGHT_MG), then
+  //    the first drips arrive at 200 mg/s. That breaks the weighing episode's
+  //    RANGE_MG (300 mg) -- which is what makes it EMIT -- while staying under
+  //    tryPourOnset's 300 mg/s, so the shot detector has not reached POURING.
+  //    The event is queued and, if `quiet` were true, flushed to flash mid
+  //    pre-infusion.
   {
-    ShotDetector d;
-    feedStable(d, 18000, 0, 2000);   // a dose cup, well over 5 g
-    assert(d.state() == ShotState::ARMED);
-    printf("4. 18 g is ARMED -- ARMED is not mutually exclusive with a weighing OK\n");
+    ShotDetector shot;
+    WeighingDetector weigh;
+    int32_t w = 18000;
+    bool completed = false, armed_at_completion = false;
+
+    for (uint32_t t = 0; t <= 4000; t += 100) {
+      if (t > 1500) w += 20;                      // 200 mg/s of drips
+      shot.feed(t, w);
+      bool shot_active = shot.state() == ShotState::POURING ||
+                         shot.state() == ShotState::SETTLING;
+      if (weigh.feed(t, w, shot_active)) {
+        completed = true;
+        armed_at_completion = (shot.state() == ShotState::ARMED);
+        break;
+      }
+    }
+    assert(completed);              // the episode really did finish
+    assert(armed_at_completion);    // ...with the shot detector still ARMED
+    printf("4. a weighing episode COMPLETES while the detector is ARMED OK\n");
+    printf("   (so ARMED is not quiet -- main.cpp must not flush flash there)\n");
   }
 
   printf("\nall armed tests passed\n");

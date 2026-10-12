@@ -871,7 +871,12 @@ static void handleCommand(String line, Stream& out) {
     // any mount failure, destroying every unsent shot. Needed once on a
     // blank partition; never otherwise.
     if (detector.state() != ShotState::IDLE) {
-      out.println("# format: REFUSED — a shot is in progress.");
+      // ARMED is the ordinary resting state with a cup on the scale (it is
+      // "stable at ANY value", see armed_test), so say which it is rather
+      // than claiming a shot is running when one usually is not.
+      out.printf("# format: REFUSED — detector is %s. Take the cup off the"
+                 " scale (or wait for the shot to finish) and retry.\n",
+                 stateName(detector.state()));
     } else if (arg != "yes") {
       // Count the quarantined records too. pendingCount() deliberately skips
       // /spool/bad, so a draft of this prompt — the one thing between the

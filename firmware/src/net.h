@@ -28,6 +28,18 @@ private:
   bool tz_configured = false;
   uint32_t next_upload_ms = 0;
   uint32_t backoff_ms = 5000;
+  // Consecutive failures on the SAME record. Narrowing quarantine to 422
+  // alone (2026-10-12) was the right call for the data — a 404 or a 503 now
+  // keeps the shot instead of binning it — but it removed the only escape
+  // from head-of-line blocking: Spool::oldest() returns the same record
+  // forever, so one the server will never accept (a 413, or a 2xx without
+  // the ingest marker) stalls every record behind it until the spool fills
+  // and writeShot starts refusing new shots at 90 %. That is invariant 6
+  // again, just slower and quieter. This counter exists so the condition is
+  // at least VISIBLE; it does not skip ahead, because skipping risks
+  // uploading out of order and the right answer is for a human to look.
+  uint32_t stuck_n = 0;
+  String   stuck_path;
 
   static constexpr uint32_t BACKOFF_MIN_MS = 5000;
   static constexpr uint32_t BACKOFF_MAX_MS = 60000;

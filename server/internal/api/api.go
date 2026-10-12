@@ -76,7 +76,17 @@ func ingest(st *store.Store, hub *live.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		raw, err := io.ReadAll(io.LimitReader(r.Body, maxRecordBytes+1))
 		if err != nil {
-			http.Error(w, "read: "+err.Error(), http.StatusBadRequest)
+			// 503, NOT 400. This fires when the connection drops mid-body —
+			// a WiFi hiccup next to a vibratory pump and a triac — which says
+			// nothing about the record and will succeed on retry. It returned
+			// 400 until 2026-10-12, and the device quarantines 4xx verdicts,
+			// so one dropped association permanently binned a shot into
+			// /spool/bad where nothing re-uploads it. Invariant 6, on an
+			// ordinary network glitch.
+			//
+			// 422 is the only status this handler uses as a verdict on the
+			// record's content, and it is the only one the device quarantines.
+			http.Error(w, "read: "+err.Error(), http.StatusServiceUnavailable)
 			return
 		}
 		if len(raw) > maxRecordBytes {

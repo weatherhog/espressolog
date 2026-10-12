@@ -125,6 +125,9 @@ public:
   bool dump(const String& name, Stream& out);   // header summary + sample CSV
   String oldest();                              // "" if empty (stage 4 upload order)
   size_t pendingCount();
+  // Records sitting in /spool/bad. They never upload and `format` destroys
+  // them, so anything that asks "how much would I lose" must count these too.
+  size_t quarantinedCount();
   bool nearlyFull();
 
 private:

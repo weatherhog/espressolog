@@ -54,7 +54,18 @@ export default function Capture({ shots, beans, justSaved, onSaved }) {
   // and stamps dose_source='manual'. The fix reintroduced the bug it was
   // written to remove, one layer down.
   const [touched, setTouched] = useState({});
-  const mark = (k, set) => (v) => { setTouched((t) => (t[k] ? t : { ...t, [k]: true })); set(v); };
+  // Only count it when the value actually MOVES. Stepper clamps at its floor
+  // (`+Math.max(min, v).toFixed(2)`), so pressing "–" on a Preinfusion already
+  // at 0 calls onChange(0) — an identical value that would otherwise mark the
+  // field touched and PATCH it. Worse on the Dose, where UpdateShot stamps
+  // dose_source='manual' on the mere PRESENCE of the key, so "+ then –" back
+  // to the starting value would flip a measured dose to manual without
+  // changing the number. That is the provenance corruption migration 009 is
+  // cleaning up, re-created by two taps.
+  const mark = (k, set, cur) => (v) => {
+    if (v !== cur) setTouched((t) => (t[k] ? t : { ...t, [k]: true }));
+    set(v);
+  };
   const [balance, setBalance] = useState(null);
   const [rating, setRating] = useState(null);
   const [notes, setNotes] = useState("");
@@ -192,17 +203,28 @@ export default function Capture({ shots, beans, justSaved, onSaved }) {
         <Eyebrow>Confirm</Eyebrow>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 20, marginTop: 16 }}>
           <div><Eyebrow style={{ marginBottom: 8 }}>Grind</Eyebrow>
-            <Stepper value={grind} onChange={mark("grind", setGrind)} step={0.1} /></div>
+            <Stepper value={grind} onChange={mark("grind", setGrind, grind)} step={0.1} /></div>
           <div>
             <Eyebrow style={{ marginBottom: 8 }}>
               Dose{pending.dose_source === "measured" && <span style={{ color: T.flow }}> · from scale</span>}
             </Eyebrow>
-            <Stepper value={dose} onChange={mark("dose", setDose)} step={0.1} unit="g" />
+            {/* Show what the SERVER has until the operator touches the field.
+                The seeds are captured on mount and App keys this component on
+                the shot id, so when a grinder weighing lands mid-edit the
+                refresh updates `pending` without remounting: `dose` would
+                still render the previous shot's guess, directly under a badge
+                saying "from scale". The save is already correct — nothing is
+                written untouched — but an operator seeing a wrong number
+                labelled measured will nudge it to fix it, and that writes the
+                guess and stamps it manual. Exactly the original bug, by hand. */}
+            <Stepper value={touched.dose ? dose : (pending.dose_ground_g ?? dose)}
+                     onChange={mark("dose", setDose, touched.dose ? dose : (pending.dose_ground_g ?? dose))}
+                     step={0.1} unit="g" />
           </div>
           <div><Eyebrow style={{ marginBottom: 8 }}>Preinfusion</Eyebrow>
-            <Stepper value={preinf} onChange={mark("preinf", setPreinf)} step={0.5} unit="s" /></div>
+            <Stepper value={preinf} onChange={mark("preinf", setPreinf, preinf)} step={0.5} unit="s" /></div>
           <div><Eyebrow style={{ marginBottom: 8 }}>Brew temp</Eyebrow>
-            <Stepper value={temp} onChange={mark("temp", setTemp)} step={0.5} unit="°C" /></div>
+            <Stepper value={temp} onChange={mark("temp", setTemp, temp)} step={0.5} unit="°C" /></div>
         </div>
 
         <div style={{ marginTop: 24, paddingTop: 18, borderTop: `1px solid ${T.hair}` }}>

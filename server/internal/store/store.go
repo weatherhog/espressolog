@@ -269,19 +269,51 @@ func defaultRecipe(tx *sql.Tx, epochID any, startedAt time.Time) (beanID, grindD
 			grindDial = dial
 		}
 	}
+	// STOP AT A RECORDED SETPOINT EDIT. setpoint_touched is the machine's own
+	// statement that the brew temperature was being changed on that shot
+	// (CLAUDE.md: the display renders PrG and blinks at ~2.44 Hz; display.cpp
+	// latches it; migration 008 stores it). Carrying a temperature across it
+	// would assert a setpoint the machine told us had changed — the one case
+	// where this inference is known to be wrong.
+	//
+	// It does NOT bound preinfusion_s: the flag says nothing about that.
 	var t float64
 	if tx.QueryRow(`SELECT brew_temp_c FROM shot
 	                 WHERE brew_temp_c IS NOT NULL AND started_at <= ?
-	                 ORDER BY started_at DESC, id DESC LIMIT 1`, at).Scan(&t) == nil {
+	                   AND started_at >= ?
+	                   AND id > COALESCE(
+	                         (SELECT MAX(id) FROM shot
+	                           WHERE setpoint_touched = 1 AND started_at <= ?), 0)
+	                 ORDER BY started_at DESC, id DESC LIMIT 1`,
+		at, staleFloor(startedAt), at).Scan(&t) == nil {
 		brewTemp = t
 	}
 	var pre float64
 	if tx.QueryRow(`SELECT preinfusion_s FROM shot
 	                 WHERE preinfusion_s IS NOT NULL AND started_at <= ?
-	                 ORDER BY started_at DESC, id DESC LIMIT 1`, at).Scan(&pre) == nil {
+	                   AND started_at >= ?
+	                 ORDER BY started_at DESC, id DESC LIMIT 1`,
+		at, staleFloor(startedAt)).Scan(&pre) == nil {
 		preinfusion = pre
 	}
 	return
+}
+
+// How far back an inferred machine setting may reach. Without this the carry
+// is unbounded: a shot ingested a YEAR after the last recorded value inherits
+// it, and unlike bean_id and dose_ground_g there is no *_source column, so an
+// inferred temperature is indistinguishable from a confirmed one. That is the
+// very distinction migration 009 exists to restore, so leaving the carry
+// unbounded would move fabrication from the UI to the server and drop its
+// audit trail on the way.
+//
+// 14 days is long enough to cover a holiday and short enough that a setting
+// nobody has confirmed in a fortnight degrades to NULL — "not recorded",
+// which is the honest answer.
+const recipeMaxAge = 14 * 24 * time.Hour
+
+func staleFloor(startedAt time.Time) string {
+	return startedAt.UTC().Add(-recipeMaxAge).Format(time.RFC3339)
 }
 
 func insertShot(tx *sql.Tx, h *record.Header, samples []record.Sample, scaleID any, startedAt time.Time, now string) (int64, error) {

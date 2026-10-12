@@ -381,31 +381,58 @@ static constexpr uint32_t BREW_GUARD_MS = 75000;
 // uint32_t micros(), which aliases every 71.58 min, so a last-seen TIMER frame
 // (machine switched off mid-brew while the ESP32 runs on its own supply)
 // made machineBusy() true for 60 s out of every 71.6 min, indefinitely.
+//
+// NOTE the aliasing is REDUCED, NOT REMOVED. stale() still subtracts unsigned
+// micros(), so the same last-seen TIMER frame still makes this true for 2 s
+// out of every 71.58 min. Harmless at 2 s, and fixing it properly belongs in
+// DisplayBus rather than here — but it is a live mechanism, not a closed one.
 static constexpr uint32_t DISPLAY_FRESH_US = 2000000;
 static uint32_t last_brew_press_ms = 0;
 
 static bool machineBusy() {
-  // Two independent signals, OR-ed. A draft returned early on the display,
-  // which made the switch fallback unreachable whenever the J5 tap was
-  // working — i.e. in the deployed configuration. That matters because
-  // CLAUDE.md records that the display does NOT run its timer during a
-  // hot-water draw, and lever B up runs the pump and pulses the flowmeter.
-  // So the display alone cannot see a Water draw, and the press alone cannot
-  // see a brew started before this boot.
-  if (display_on && !display_bus.stale(micros(), DISPLAY_FRESH_US) &&
-      display_bus.reading().mode == DisplayBus::Mode::TIMER)
+  uint32_t now = millis();
+
+  // 1. The display, when it is fresh. Mode::TIMER IS the machine's own
+  //    pump-on to pump-off window, so this needs no guard at either end.
+  bool display_fresh = display_on && !display_bus.stale(micros(), DISPLAY_FRESH_US);
+  if (display_fresh && display_bus.reading().mode == DisplayBus::Mode::TIMER)
     return true;
 
-  // The press guard. Note SwitchBank emits an Event on RELEASE, so during the
-  // press itself — 345-480 ms by hand on this machine, longer for a reprogram
-  // hold — there is no event yet and the pump is already running. Ask for the
-  // live level too.
-  if (switches_on &&
-      (switches.pressed(0) || switches.pressed(1) || switches.pressed(3)))
-    return true;
+  // 2. A lever held RIGHT NOW. SwitchBank only emits an Event on release, so
+  //    for the 345-480 ms of the press itself the pump is running and the
+  //    event path knows nothing.
+  //
+  //    TWO BOUNDS, both learned the hard way. `stable` includes a level
+  //    ADOPTED at the first poll and never witnessed going high — a floating
+  //    unwired line, a reboot with a lever held, one stuck divider leg — and
+  //    a draft trusted it with no upper bound. That latched `quiet` false
+  //    forever: no weighing ever reaches flash, no record ever uploads, and
+  //    Net::tick returns before configTzTime so every spooled record gets
+  //    time_valid = 0. Silently, with nothing logged. This file refuses to
+  //    treat an unwitnessed level as evidence everywhere else; so does this.
+  if (switches_on) {
+    for (uint8_t i : {0, 1, 3})
+      if (switches.pressed(i) && !switches.pressedSynthetic(i) &&
+          switches.heldMs(i, now) < BREW_GUARD_MS)
+        return true;
+  }
 
+  // 3. The press guard — a FALLBACK, and only where the display genuinely
+  //    cannot help. A draft OR-ed this unconditionally, so every 1Cup press
+  //    blocked flash and uploads for the full 75 s even though the display
+  //    tap was sitting there reporting that the timer had stopped ~10 s in.
+  //    That is ~65 s of needless block per shot, over exactly the minute when
+  //    cups come off, dose cups go on and the grinder runs — and `pending_w`
+  //    holds 8 events before it starts dropping them on the floor.
+  //
+  //    So: when the display is fresh it owns the answer, and a reading that
+  //    is no longer TIMER means the pump has stopped. Only when the display
+  //    cannot see the event at all does the timer-less guard apply — which
+  //    CLAUDE.md says is exactly the hot-water case, since the display does
+  //    not run its timer during a lever-B draw.
+  if (display_fresh) { last_brew_press_ms = 0; return false; }
   if (!last_brew_press_ms) return false;
-  return (millis() - last_brew_press_ms) < BREW_GUARD_MS;
+  return (now - last_brew_press_ms) < BREW_GUARD_MS;
 }
 
 static void pollSwitches() {
@@ -845,9 +872,14 @@ static void handleCommand(String line, Stream& out) {
     if (detector.state() != ShotState::IDLE) {
       out.println("# format: REFUSED — a shot is in progress.");
     } else if (arg != "yes") {
-      out.printf("# format: ERASES EVERYTHING on the spool, including %u pending"
-                 " record(s). There is no undo. Type 'format yes' to proceed.\n",
-                 (unsigned)(spool_ok ? spool.pendingCount() : 0));
+      // Count the quarantined records too. pendingCount() deliberately skips
+      // /spool/bad, so a draft of this prompt — the one thing between the
+      // operator and an irreversible erase — undercounted exactly the records
+      // that are already in trouble and that format also destroys.
+      out.printf("# format: ERASES EVERYTHING on the spool: %u pending record(s)"
+                 " and %u quarantined. There is no undo. Type 'format yes'.\n",
+                 (unsigned)(spool_ok ? spool.pendingCount() : 0),
+                 (unsigned)(spool_ok ? spool.quarantinedCount() : 0));
     } else {
       out.println("# format: erasing…");
       bool ok = LittleFS.format();

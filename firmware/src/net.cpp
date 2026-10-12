@@ -105,12 +105,30 @@ void Net::tick(uint32_t now, bool detector_quiet) {
     next_upload_ms = now + 2000;
     return;
   }
+  // Track whether we keep failing on the same record — see net.h stuck_n.
+  String oldest_now = spool ? spool->oldest() : String();
+  if (oldest_now.length() && oldest_now == stuck_path) {
+    // same file as last time
+  } else {
+    stuck_path = oldest_now;
+    stuck_n = 0;
+  }
+
   if (tryUploadOldest()) {
+    stuck_n = 0;
+    stuck_path = "";
     backoff_ms = BACKOFF_MIN_MS;
     next_upload_ms = now;            // more pending? next pass takes it
   } else {
     next_upload_ms = now + backoff_ms;
     backoff_ms = min(backoff_ms * 2, BACKOFF_MAX_MS);
+    if (stuck_path.length() && ++stuck_n % 20 == 0)
+      Serial.printf("# net: STUCK — %s has failed %lu times in a row and is"
+                    " blocking every record behind it. %u pending. Inspect it"
+                    " with 'dump %s'.\n",
+                    stuck_path.c_str(), (unsigned long)stuck_n,
+                    (unsigned)(spool ? spool->pendingCount() : 0),
+                    stuck_path.c_str());
   }
 }
 
@@ -195,11 +213,17 @@ bool Net::tryUploadOldest() {
   // moved a perfectly good record into /spool/bad, where NOTHING ever
   // re-uploads it. One wrong endpoint could silently bin a whole backlog.
   //
-  // The server returns 422 for a record it could not decode and 400 for a
-  // malformed request; those are about this record and retrying really is
-  // futile. Everything else 4xx is about the path, the proxy or the moment,
-  // so treat it like a 5xx and keep trying.
-  if (code == 400 || code == 422) {
+  // **422 ONLY.** That is the single status the ingest handler uses as a
+  // verdict on this record's content ("decode: …"). A draft of this also
+  // quarantined 400 on the stated grounds that it meant "malformed request";
+  // it does not — the server returned 400 when io.ReadAll failed, i.e. when
+  // the connection dropped mid-POST, which is a WiFi hiccup and succeeds on
+  // retry. Quarantining it binned a good shot on an ordinary glitch, which
+  // is the failure class this whole change exists to close. The server now
+  // answers 503 there, and this no longer trusts 400 either.
+  //
+  // Everything else 4xx is about the path, the proxy or the moment: retry.
+  if (code == 422) {
     Serial.printf("# net: %s rejected with %d, quarantining\n", path.c_str(), code);
     LittleFS.mkdir("/spool/bad");
     LittleFS.rename(path, "/spool/bad/" + path.substring(path.lastIndexOf('/') + 1));

@@ -22,6 +22,15 @@ bool Spool::nearlyFull() {
   return LittleFS.usedBytes() * 10 > LittleFS.totalBytes() * 9;
 }
 
+size_t Spool::quarantinedCount() {
+  size_t n = 0;
+  File d = LittleFS.open(String(DIR) + "/bad");
+  if (!d || !d.isDirectory()) return 0;
+  for (File f = d.openNextFile(); f; f = d.openNextFile())
+    if (!f.isDirectory()) n++;
+  return n;
+}
+
 size_t Spool::pendingCount() {
   size_t n = 0;
   File d = LittleFS.open(DIR);

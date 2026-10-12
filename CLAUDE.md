@@ -9,28 +9,69 @@ Currently **Phase 0: logging only.**
 
 Violating any of these is a bug, not a design choice.
 
-1. **Phase 0 never actuates anything.** No current path exists from any
-   machine signal to any other, or to our board's supplies, that the
-   machine did not already have. Every *sense* tap is high-impedance or
-   passive.
+1. **Phase 0 never actuates anything.** No machine signal is driven, and
+   nothing on our board adds a current path between two machine signals.
+
+   **Sense taps are exempt, and the exemption carries the threshold**: a
+   tap may run from a machine signal to our ground provided it is
+   **high-impedance or passive**. Every divider here is — microamps
+   against the machine's own milliamps.
+
+   *That sentence was briefly written as an absolute on 2026-10-12 — "no
+   current path … to our board's supplies" — which forbade **every tap
+   already fitted**, the J4 100 K + 220 K included, and also broke the
+   standing defence of the filter capacitors ("the cap blocks DC") and of
+   the GPIO15–18 power-up pulse. The threshold has to stay attached to the
+   rule, not sit in a sentence after it.*
 
    **Drive hardware may be PRESENT on the board**, and from the perfboard
    onward it is — see `docs/phase-0-plan.md`. It is permitted only while an
-   **open jumper in series with its OUTPUT** makes conduction physically
-   impossible: not merely unpowered, not merely un-commanded. **A disable
-   that only cuts a control input does not satisfy this**, because it does
-   not survive the controlled part failing short, which is the
-   characteristic MOSFET failure mode.
+   **open jumper in series with its OUTPUT** leaves it unable to conduct:
+   not merely unpowered, not merely un-commanded. **A disable that only
+   cuts a control input does not satisfy this**, because it does not
+   survive the controlled part failing short, which is the characteristic
+   MOSFET failure mode.
 
-   *Amended 2026-10-12.* The original read "No writes to any machine
-   signal. Every tap is high-impedance or passive. Read-only." That
-   sentence did two jobs: **"never actuates" is the goal, "high-impedance
-   or passive" is one implementation of it**, and the perfboard forces them
-   apart because a board can carry drive hardware and still be incapable of
-   driving. The amendment is *stricter* where it matters — it names the one
-   placement of the disable that survives a component failure — and it
-   makes "this board is still Phase 0" checkable by looking at the board
-   rather than by trusting the firmware.
+   **Fit BOTH disables.** The output jumper is what makes the claim true.
+   A second jumper in the photoMOS **LED supply** is what makes "firmware
+   has demonstrably never commanded a fire" true *before* the output jumper
+   is ever fitted — otherwise a latent firmware fault stays invisible for
+   all of Phase 0 and surfaces the instant Phase 1 begins. They sit in
+   different electrical domains (machine 5 V against our 3.3 V logic), so
+   one contaminated pad cannot close both. Remove the LED disable last.
+
+   **"Open jumper" is not "physically impossible", and an earlier draft of
+   this clause said it was.** It makes conduction require a deliberate,
+   visible mechanical act. A shunt fitted in error, a solder splash, swarf
+   or a dropped washer closes it. That is far stronger than firmware intent
+   and weaker than an absent component — and **checking it means opening
+   the box**, which the finished build is glanded and cable-tied shut.
+
+   **GPIO8, the one pin this firmware drives, satisfies this by
+   construction on the perfboard**: it lands on a header with no trace to
+   anything. A path to the machine exists only while the operator has
+   deliberately fitted the selftest jumper to GPIO6, which is why "unplug
+   J4 first" is an **operational** rule rather than a structural one. It is
+   the weaker kind of guarantee, and it is bounded to a test nobody runs by
+   accident. On the breadboard, where that jumper was semi-permanent, it
+   was weaker still.
+
+   *Amended 2026-10-12, re-drafted the same day after review.* The original
+   read "No writes to any machine signal. Every tap is high-impedance or
+   passive. Read-only." That sentence did two jobs: **"never actuates" is
+   the goal, "high-impedance or passive" is one implementation of it**, and
+   the perfboard forces them apart because a board can carry drive hardware
+   and still be unable to drive.
+
+   **The net is not simply "stricter", and the first draft claimed it was.**
+   On the drive path it is stricter: it names the one placement of the
+   disable that survives a component failure, which nothing previously did.
+   But it also **licenses a build that `docs/phase-0-plan.md` itself grades
+   as the higher-residual-risk of the two options considered** — parts
+   fitted behind jumpers, rather than footprints with nothing in them. The
+   trade is more residual risk for a verified layout, taken because
+   unverified things being wrong is where this project's defects have
+   actually come from. State it that way, not as a free improvement.
 
 2. **Never write flash during a shot.** An ESP32 flash write blocks for
    tens of ms, which stalls the BLE stack and puts gaps in the curve.
@@ -188,12 +229,25 @@ must use a hardware one-shot so firmware can *trigger* but never *hold*.
 **The pulse width's UPPER bound is sound and its LOWER bound is not
 established.** ~120 ms is comfortably under the ~2 s reprogram threshold, and
 no RC tolerance gets near it. But nothing has established the shortest press
-this board actually latches: every press ever measured on this machine was
-**345–480 ms** (2026-10-08), by hand. A one-shot that is too short produces a
-drive path that silently does nothing — and the sense tap would still show
-the pulse, so it would look like it worked. **Measure the minimum before
-choosing the RC**: press-and-release progressively shorter with the tap
-watching, and find where the machine stops responding.
+this board actually latches.
+
+**The "345–480 ms, every press ever measured on this machine" figure may not
+be presses at all — flagged 2026-10-12, UNRESOLVED.** It traces to the
+2026-10-08 bench row "All four switches | correct GPIO mapping, taps of
+345–480 ms", and the bench sequence for that step
+(`docs/phase-0-status.md`) reads *"jumper each of GPIO7/15/16/17 to 3V3 and
+back"* — **touches on the ESP32 header, not lever presses on the machine.**
+If that is what they were, the figure describes how fast a hand moves a
+jumper and says **nothing** about what this control board latches, which is
+the only thing this paragraph needs it for.
+
+Either way the conclusion is unchanged — the minimum is unestablished and
+must be measured — but the figure should not be quoted as machine behaviour
+until someone confirms which it was. **Settle it the same way regardless:**
+press-and-release progressively shorter *on the levers*, with the tap
+watching, and find where the machine stops responding. A one-shot that is too
+short produces a drive path that silently does nothing — and the sense tap
+would still show the pulse, so it would look like it worked.
 
 **Use the 74HC221, NOT the 74HC123 this file used to name.** The '123 is
 **retriggerable**: a new trigger edge restarts the pulse, so a GPIO
@@ -902,15 +956,28 @@ never tapped **for sensing**.
 **Phase 1 changes that.** The actuation design (`docs/phase-0-plan.md`) needs
 position 1 at the board as the switching source — a photoMOS closes it to a
 direction line, which is what the lever does. That is a drive path, not a
-tap, and it is bounded at ≤50 mA by the machine's own R45. Note this is **not
+tap. It is **bounded** at ≤50 mA by the machine's own R45 — but that bound is
+not the operating point: a press pulls the line high through the board's
+pull-down (**not determined, ≥~50 kΩ**), so the real figure is ~100 µA, the
+same order as the sense dividers. Note this is **not
 the J4 `+` net**, which the standalone read-only rule names and which remains
 untouchable; they are different conductors on different connectors that
 happen to share the IRM-03-5 rail.
 
-**Position 1 therefore rides in the Phase 0 harness, and invariant 1 now says
-what makes that safe** — an open jumper in series with each photoMOS *output*,
-so the conductor arrives at the board and dead-ends. See invariant 1 as
-amended 2026-10-12 and the actuation section of `docs/phase-0-plan.md`.
+**Position 1 therefore rides in the Phase 0 harness — and that BUYS a new
+failure mode rather than merely being made safe.** An earlier draft of this
+paragraph said the output jumper "makes that safe". It does not: the jumper
+covers the *photoMOS path*, and nothing covers the *conductor*. Position 1 is
++5 V through R45 running down a cable into the box, 2.54 mm from four
+direction lines; a whisker, a chafed gland, a solder bridge or swarf starts a
+cycle and reprograms the stored timer within 2 s. **That path did not exist
+while pos 1 stayed out of the harness.**
+
+Net Phase-0 actuation risk goes **up** with this decision. It is still the
+right call — see the build argument in `docs/phase-0-plan.md` — but it is a
+trade, and the mitigations are physical (jumper on the **pos-1 side**, pos 1
+segregated in the harness, the existing sense divider used as a bridge
+detector), not textual. See invariant 1 as amended 2026-10-12.
 
 The supporting arguments, neither settled: **Steam** drives the boiler to
 165 °C, which would contaminate `boiler_temp_start_dc` — though the display
@@ -952,32 +1019,64 @@ before the perfboard is drilled" for four days while the bench section 200
 lines away recorded the evidence that closed it. Same stale-line defect this
 file documents elsewhere.
 
-What closes it is **functional, not visual** — a higher grade than the
-silkscreen check that was asked for. The operator chose each header pin by
-reading its label, so if the pin marked `16` were not die GPIO16, the
-firmware (which names GPIO16 steam) would have been polling an unconnected
-pad and lever B down could not have logged `steam`. It logged.
+What closes it is **functional evidence combined with the visual check** —
+neither alone. The operator chose each header pin by reading its label, so if
+the pin marked `16` were not die GPIO16, the firmware (which names GPIO16
+steam) would have been polling an unconnected pad and lever B down could not
+have logged `steam`. It logged.
+
+**Do NOT call the functional chain "a higher grade" than the silkscreen read,
+as a first draft of this paragraph did.** By this file's own standard — see
+the lever A/B discussion above — a silkscreen read is a **one-link**
+observation of exactly the claim being made (what is printed beside this
+pin). The functional chain is longer: operator picked by label (recalled, not
+recorded) → wire landed → firmware name → log line. It exercises more, and
+that makes it a *longer* evidential chain, not a better-graded one. The
+conclusion is sound because the two **combine**; the grade language was
+inflated.
 
 | GPIO | What confirmed it, 2026-10-08/09 |
 |---|---|
 | 4, 5 | the bus **decoded frames**. A swapped pair gives `frames=0` — this file's own documented signature — so this fixes *which is which*, not merely that both are right |
 | 6 | **736 counts** across shot 2, and `selftest` 500/500 at 100 Hz |
-| 7, 15 | lever A, logged as "correct GPIO mapping, taps of 345-480 ms" |
+| 7, 15 | **jumpered to 3V3 at the header and back**, logged as "correct GPIO mapping, taps of 345-480 ms" |
 | 16, 17 | lever B down logged `steam`, up logged `water` |
-| 8 | `selftest` drove it into GPIO6 and counted 500/500 |
+| 8 | `selftest` into GPIO6 — **not independent, see below** |
 
-**The visual check still had one job, and it was done 2026-10-12**: the
-functional chain alone cannot distinguish wiring by *label* from wiring by
-*position*. The operator confirmed the silkscreen order against Espressif's
-published DevKitC-1 layout, and since each GPIO exists at exactly one header
-position, the two together identify every pin both ways round.
+**Two honest limits on that table.**
+
+**Row 8 is not independent evidence.** `selftest` drives one die pin into
+another through a physical jumper; if the pins labelled 6 and 8 were swapped,
+the jumper still joins die 6 to die 8 and 500/500 still passes. Row 8 is
+non-circular only given row 6. The rows are a mutually-supporting system, not
+six parallel confirmations.
+
+**Rows 7/15 came from jumper touches on the ESP header, not from lever A.**
+An earlier draft of this table said "lever A". The bench sequence
+(`docs/phase-0-status.md`, step 3) is *"jumper each of GPIO7/15/16/17 to 3V3
+and back"*. For the label→die question that is **better** evidence — fewer
+links — but it says nothing about the J2 conductor, and the source row it
+quotes is labelled "All four switches", not lever A.
+
+**The visual check's job**: the functional chain alone cannot distinguish
+wiring by *label* from wiring by *position*. The operator confirmed the
+silkscreen order on 2026-10-12, and since each GPIO exists at exactly one
+header position, the two together identify every pin both ways round.
+
+**The reference used for that check was Espressif's published layout, and the
+very next finding overturned part of it** — see the GND entry below. The
+published pinout is therefore a weak reference *for this clone*. It does not
+break the argument, because the operator read the board's own labels and the
+published layout only supplied the expected order to compare against. But the
+position table below came from the **same signal-header-only pass** that
+missed the GND placement, so it carries that pass's limits.
 
 **The seven are contiguous on one header, which the perfboard layout should
 exploit.** Confirmed on the board in hand, 2026-10-12:
 
 | Header position | Label |
 |---|---|
-| 1-2 | 3V3, 3V3 — the divider supply |
+| 1-2 | 3V3, 3V3 — **not a divider supply**, see below |
 | 3 | RST |
 | **4-10** | **GPIO4, 5, 6, 7, 15, 16, 17** — all seven, unbroken |
 | 11 | GPIO18 — gap |
@@ -990,13 +1089,38 @@ board in hand carries **three** GND pins: **one at the far end of the signal
 header**, and **two directly opposite it** on the other header.
 
 So the signal header is **3V3 at one end, GND at the other, all seven taps in
-between** — no ground return has to cross the board. That is a board reading
-beating a datasheet reading, which is the third time in this file.
+between** — no ground return has to cross the board. A board reading beating a
+document-grade source, which this file has seen before. *(An earlier draft
+said "the third time in this file" and its commit message said "a listing" —
+two different source grades, and the tally was uncheckable. Dropped rather
+than defended.)*
+
+**The three-GND census is a visual scan, not an exhaustive one**, and it is
+the premise of "no ground return crosses the board". Worth a second pass over
+all 44 positions before the layout is committed.
+
+**NOTHING ON THIS BOARD DRAWS FROM 3V3.** The position table calls positions
+1-2 "the divider supply" and that is simply wrong — every divider here is fed
+from a **machine** signal and returns to GND (J2: 150 K from the direction
+line; J4: 100 K from `#`; J5: 8.2 K at the T-piece). 3V3 carries zero tap
+current. Its only Phase-0 use is as a **stimulus** in the bench jumper test.
+Anyone laying out from that row would route a rail nothing connects to.
+
+**STILL OPEN, and it was briefly lost: the ROW-TO-ROW header spacing**, in
+0.1 in holes. It was recorded as outstanding on 2026-10-12, deleted by a
+paragraph rewrite the same day, and then covered over by a claim that nothing
+mechanical remained — net information loss by rewrite, which is the defect
+this file names elsewhere. The breadboard argument fixes the **pitch along**
+each header at 2.54 mm; it says nothing about the gap **between** the two
+headers, which is the dimension that decides whether the DevKitC-1 straddles
+the perfboard. Count the holes.
 
 **Pitch is 2.54 mm (0.1 in) — and the proof is that the board has been in a
 BREADBOARD since 0a.** A caliper reading of **1.9 mm** was taken 2026-10-12
 and briefly recorded as possibly the pitch. It is the **gap**: 2.54 mm pitch
-less a 0.64 mm square pin is 1.90 mm, to the hundredth.
+less a 0.635 mm square post (0.025 in) is **1.905 mm**. *(An earlier draft
+rounded the post to 0.64 first and then called the 1.90 agreement "to the
+hundredth" — a precision the inputs do not carry.)*
 
 The arithmetic is not what settles it. **Breadboards are 2.54 mm, the DevKitC-1
 has been seated in one through every bench session including 2026-10-08, and a
@@ -1006,9 +1130,19 @@ the pitch was being treated as open.
 
 Recorded because the trap is live for anyone measuring a header: **calipers
 laid between two pins read the gap, and the gap on 0.1 in hardware is a
-plausible-looking 1.9 mm.** If a span ever does need checking, measure pin 1
-centre to pin 11 centre, which multiplies the difference tenfold — 25.4 mm
-against 19.0 mm — rather than re-measuring the one gap that is ambiguous.
+plausible-looking 1.9 mm.** If a span ever does need checking, measure across
+**ten pitches** rather than one gap, which multiplies the difference tenfold.
+**Measure outer edge of pin 1 to outer edge of pin 11**, not centre to centre:
+calipers land on pin faces and cannot find centres, so a centre-to-centre
+instruction reproduces the very jaw-placement ambiguity being warned about.
+
+| | 0.1 in pitch | a true 1.9 mm pitch |
+|---|---|---|
+| centre to centre (not measurable) | 25.40 mm | 19.00 mm |
+| **outer edge to outer edge** | **26.04 mm** | **19.64 mm** |
+
+*(10 × pitch + one 0.635 mm post. An earlier draft deleted the outer-edge row,
+leaving only the instruction that calipers cannot execute.)*
 
 **GPIO8 is reserved and is the one pin this firmware ever drives.** The
 `selftest` command makes it an output to feed a known pulse train into
@@ -1030,8 +1164,10 @@ Two things worth knowing about the chosen pins:
 - **GPIO15–18 emit a brief (~60 µs) low pulse at power-up**, and three of
   the five switch/flow pins are in that range. Harmless here — through the 150 K
   series leg the pin can sink at most ~33 µA from a line driven through
-  R45's 100 Ω — but invariant 1 says every tap is "high-impedance **or
-  passive**", and a pin that briefly drives is not passive. **The series
+  R45's 100 Ω — but invariant 1 says every *sense* tap is "high-impedance
+  **or passive**", and a pin that briefly drives is not passive. (The
+  2026-10-12 amendment keeps that phrase and keeps it applying here; it is
+  quoted as current wording.) **The series
   resistor is what makes it so**, which is one more reason it belongs at
   the machine end and is not optional.
 - **GPIO11–18 share ADC2, unusable while Wi-Fi is up**, and 15/16/17 are

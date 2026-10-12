@@ -13,9 +13,13 @@ vary when you change nothing.
 
 ## Guiding rules
 
-1. **Nothing in Phase 0 touches an output.** Every tap is high-impedance
-   or passive. If a wire comes loose the machine behaves exactly as it
-   does today.
+1. **Nothing in Phase 0 drives a machine signal.** Every *sense* tap is
+   high-impedance or passive. If a wire comes loose the machine behaves
+   exactly as it does today. From the perfboard onward the actuation parts
+   are **present but jumpered open** — see hard invariant 1 in CLAUDE.md,
+   amended 2026-10-12, and the actuation section below. This rule used to
+   read "nothing touches an output", which the same file's own topology
+   section has contradicted since 2026-10-08.
 2. **Electronics live outside the machine.** A small box behind or beside
    it, with a thin cable in. Inside is hot, damp and full of triacs.
 3. **Photograph before touching.** DIP switch positions, connector
@@ -250,9 +254,10 @@ instead of soldering to the board.
 | ~~Resistor kit, E12 1/4 W~~ | **Not required** — see `shopping-list.md`: it covers no named value, and cheap kits are 5 % where every divider here wants 1 %. All of them are in stock. | — |
 | 30 AWG silicone hookup wire, 4 colours | flexible, survives vibration | 8 |
 | JST pigtails, assorted pitch | **after** identifying connectors | 8 |
-| Perfboard + pin headers | 6 |
-| Heat-shrink assortment | 5 |
+| Perfboard + pin headers | 2.54 mm, confirmed against the board | 6 |
+| Heat-shrink assortment | | 5 |
 | Small ABS project box | mounts outside the machine | 6 |
+| 74HC221 (dual), photoMOS ×2 **or ×4**, one-shot RC, disable jumpers | **moved into this order 2026-10-12** — the build decision populates them behind open jumpers rather than leaving footprints. Counts unresolved, see `shopping-list.md` §7 | ~8 |
 
 ### Tools, if you don't have them
 
@@ -294,8 +299,16 @@ Read the full amended text in CLAUDE.md. Two things follow for this board:
   than by trusting the firmware not to fire.
 
 **The chosen build, of three that were put:** populate the actuation parts and
-**bench-test them off-machine** against a dummy 100 Ω and a bench 5 V supply,
-then leave the output jumpers open. The alternative of laying out footprints
+**bench-test them off-machine**, then leave the output jumpers open.
+
+**Build the dummy to match the real circuit, not the discredited one.**
+5 V → 100 Ω → photoMOS → ground — the obvious rig — is exactly the
+ground-referenced topology this document rejects below, and it exercises the
+part at ~500× the real current while testing the wrong thing. Use
+**5 V → 100 Ω → photoMOS → 50 kΩ → ground with a voltmeter on the node**: that
+reproduces the press loop, confirms the node actually reaches a logic high
+against the board's pull-down, and exercises the sense divider's readback at
+the same time. The alternative of laying out footprints
 and fitting nothing carries less residual risk, and was rejected because it
 seals an **unverified** layout into a box — and unverified things being wrong
 is where this project's actual defects have come from, not component failure.
@@ -335,14 +348,17 @@ described in `docs/phase-0-status.md`.
 
 ```
   J2 pos 1 — +5 V switch common (through R45, 100 R, on the control board)
+      |             The switch common. Nothing else connects here.
       |
-  [photoMOS]        DRIVE. Closes common to the direction line.
-      |             This is the lever, and nothing else connects here.
+      o             JUMPER (a) — OPEN THROUGHOUT PHASE 0, and on THIS side of
+                    the photoMOS: an open here is still an open when the part
+      o             fails SHORT, and it leaves the live machine conductor
+      |             dead-ending on a bare pad rather than resting on a
+  [photoMOS]        semiconductor terminal. Invariant 1 requires this.
       |
-      o             JUMPER — OPEN THROUGHOUT PHASE 0. It sits in the OUTPUT,
-                    not in the LED supply: an open here is still an open when
-      o             the photoMOS fails SHORT. Amended invariant 1 requires
-      |             this placement, and nothing else on the board does.
+      |             DRIVE. Closes common to the direction line.
+      |             Its LED supply carries jumper (b) — see the disables
+      |             section. Both are wanted; they are not nested.
       +-------------------------------------  J2 pos N, direction line
       |
   [150 K]           SENSE. Unchanged from 0c.
@@ -361,15 +377,24 @@ have held the direction line high permanently (pump running, stored timer
 reprogrammed inside 2 s) and drawn ~50 mA continuously through R45 off a 3 W
 supply. The prose was right and the drawing was not.
 
-**Current budget**, which the earlier version asserted without stating: with
-the photoMOS closed, the only path is +5 V → R45 (100 R) → direction line, so
-the current is bounded at **≤50 mA / 250 mW** against the IRM-03-5's 3 W.
-Comfortable, and it is bounded by the machine's own resistor rather than by
-anything on our board.
+**Current budget.** With the photoMOS closed, the only path is +5 V → R45
+(100 R) → direction line → **the board's own pull-down**, so the current is
+**bounded** at ≤50 mA / 250 mW against the IRM-03-5's 3 W, and bounded by the
+machine's resistor rather than by anything of ours.
+
+**That bound is NOT the operating point, and this document read it as one.**
+50 mA requires the direction line at 0 V — a dead short to ground, which is
+the discredited topology above, not a press. A real press pulls the line
+**high**. `docs/phase-0-status.md` records the pull-down as **not determined,
+anything from ~50 kΩ upward**, so a press draws **≤ ~100 µA** — the same order
+as the 13.5 µA sense dividers, not milliamps. Finish the measurement if the
+number ever matters: `R_pulldown = 100 × (5 − V)/V` needs a millivolt reading
+across the closed switch.
 
 A **photoMOS relay** (AQY212, TLP222A) across common↔direction is a genuine
-contact replacement: bidirectional, a few ohms on-resistance against R45's
-100 Ω, no saturation offset, optically isolated. It does what the lever does.
+contact replacement: bidirectional, no saturation offset, optically isolated.
+It does what the lever does. Its on-resistance is irrelevant here — a few ohms
+against a loop of ≥50 kΩ, not against R45's 100 Ω as first written.
 
 **CLAUDE.md's "not an optocoupler" warning does not apply here.** That is
 about *sensing* — milliamps through the sense network would break the board's
@@ -396,7 +421,9 @@ Brew-by-weight needs **1Cup and 2Cup** only — the board latches, so one pulse
 starts and a second stops. Steam and Hot Water gain nothing and double both
 the parts and the failure surface. **Sense all four, drive two.**
 
-One dual 74HC221 and two photoMOS.
+One dual 74HC221 and two photoMOS — **or four, if the series-redundancy
+mitigation above is taken. That is unresolved and gates the parts order**;
+`docs/shopping-list.md` carries the same open question.
 
 #### The failure neither mechanism bounds
 
@@ -420,15 +447,66 @@ Nothing below bounds it, and one suggestion that stood here for four days
 does not work:
 
 - ~~a **series fuse or PTC** on the drive leg, so a shorted output becomes an
-  open one~~ — **WRONG, and recorded rather than deleted.** A legitimate press
-  and a permanent short draw **identical** current: both are 5 V through R45's
-  100 Ω, ~50 mA, bounded by the machine's own resistor. No current-threshold
-  device can separate them. It would have to discriminate on **time** — pass
-  120 ms, open before the 2 s reprogram threshold — which is a narrow thermal
-  characteristic, not an off-the-shelf fuse or PTC.
-- **two photoMOS in series** per driven line, both off the same LED supply, so
-  both must fail short to actuate. This is the standard safety-chain move and
-  it is cheap: four parts instead of two.
+  open one~~ — **WRONG, and recorded rather than deleted.** Three independent
+  reasons, the first of which corrects a figure this document got wrong:
+
+  **The press current is ~100 µA, not 50 mA.** A legitimate press and a
+  permanent short draw **identical** current, because they are the same
+  circuit — that much holds whatever the magnitude. But the magnitude matters
+  for this mitigation, and the first draft of this bullet put it at ~50 mA.
+  That figure belongs to the **discredited ground-rail topology** above, not
+  to normal operation. A real press pulls the direction line **high**
+  (CLAUDE.md, measured); the loop is 5 V → R45 (100 Ω) → the board's own
+  pull-down, which `docs/phase-0-status.md` records as **not determined,
+  anything from ~50 kΩ upward**. So ≤ ~100 µA. If 50 mA flowed, the whole 5 V
+  would drop across R45 and the line would sit at 0 V — the press would not
+  register at all.
+
+  **At ~100 µA nothing in the fuse or PPTC catalogue responds**, which kills
+  the mitigation harder than the original argument did. Even granting the
+  wrong current, no current-threshold device separates a press from a short;
+  it would have to discriminate on **time**, and 120 ms to 2 s is a **16:1
+  window** — wide, not narrow as first written. Small PPTCs at several times
+  hold current do trip in 0.1–0.5 s. What actually defeats a thermal device
+  here is that its trip point is a steep function of ambient, and this board
+  lives next to a boiler.
+
+  **A PPTC self-resets**, so even a perfect one opens, cools, re-closes and
+  presses again — an unbounded press *train* instead of one permanent press.
+  Worse than the failure it mitigates, and that rules the device class out on
+  its own.
+
+  **And a fuse was never going to deliver what it promised.** One opening at,
+  say, 1 s has already permitted a press long enough to start a cycle, and
+  CLAUDE.md records that opening the switch line cannot stop the machine. It
+  prevents the *reprogramming*, not a spurious shot.
+- **the readback that already exists, and is free.** The 150 K/220 K **sense
+  divider sits on the same direction line**. If the line reads high when
+  firmware commanded nothing, a device has failed — an undetected accumulating
+  fault becomes a detected one. **Redundancy without detection is not a safety
+  chain**, it only buys the probability that two failures pile up unnoticed
+  over the machine's life. This costs nothing and is not yet in the firmware.
+- **two photoMOS in series** per driven line, both off the same LED supply.
+  Cheap — four parts instead of two — but weaker than it first appears, and
+  the first draft of this bullet overstated it as "both must fail short":
+  - **Two *partial* failures suffice.** An AQY212/TLP222A output is two
+    MOSFETs, sources common, body diodes opposed — that is what makes it
+    bidirectional. The drive here is **DC of fixed polarity** (pos 1 = +5 V),
+    so one shorted FET leaves the other's body diode forward-biased and the
+    device conducts at ~0.6 V. Two such half-failures give ~1.2 V of drop and
+    still leave ~3.8 V at the direction line, above the STM32's VIH.
+    *(Inferred from the standard photoMOS output topology; not checked
+    against the AQY212 datasheet in hand.)*
+  - **Common cause.** Two identical parts from the same reel, in series, off
+    the same LED supply, in the same thermal environment, seeing the same
+    surge history on the same node. A surge on J2 — the plausible cause of an
+    output short — presents across the pair. "Standard safety-chain move"
+    normally implies *diverse* redundancy; this is its weakest form.
+  - **UNDECIDED: two photoMOS or four.** Four is the robust answer and it
+    contradicts the "Phase 1 costs two jumpers, not a soldering iron"
+    rationale that chose this build — fitting two now bakes in exactly the
+    retrofit the decision existed to avoid. `docs/shopping-list.md` and the
+    scope section below both still say two. **Resolve before ordering.**
 - a **watchdog relay** in the LED supply that firmware must keep re-arming,
   so a crash de-energises the drive path rather than leaving it as it was.
   Note this shares the fuse's blind spot — it is on the control path, so it
@@ -438,18 +516,30 @@ does not work:
 
 #### Two things that bound the firmware-side failures
 
-- **A hardware disable — IN THE DRIVE LEG, not the LED supply.** A jumper or
-  DIP switch **in series with each photoMOS output**, so actuation is
-  *physically* impossible in that position. This is what lets "the board is
-  still Phase 0" be a fact about the hardware, and amended invariant 1
-  requires this placement specifically.
+- **TWO hardware disables, not one.** An intermediate draft replaced the
+  LED-supply jumper with a drive-leg jumper; they are not nested and both are
+  wanted.
 
-  **This originally said "cutting power to the photoMOS LEDs", and that is
-  the weaker of the two.** Cutting the LED supply breaks the control path, so
-  it bounds firmware faults — a stuck GPIO, a boot loop, a crash — but it does
-  nothing about the output failing short, which is the characteristic MOSFET
-  failure and the one case this document already flags as unmitigated. A
-  jumper in the output bounds both, for the same part count.
+  **(a) In the drive leg** — a jumper or DIP switch in series with each
+  photoMOS output, on the **pos-1 side** of the part. This is what makes "the
+  board is still Phase 0" a fact about the hardware, and amended invariant 1
+  requires this placement specifically. It is what the LED-supply disable
+  cannot do: survive the output failing short.
+
+  **(b) In the LED supply** — which the drive-leg jumper cannot replace,
+  because with the output open and the LEDs live, **firmware is free to
+  energise them throughout Phase 0 and nothing ever reveals it.** The fault
+  then surfaces at the instant the Phase-1 jumper is fitted: line driven,
+  timer reprogrammed within 2 s. The LED disable makes "firmware has
+  demonstrably never commanded a fire" true by construction, which is exactly
+  the evidence wanted *before* fitting (a). It also puts the two opens in
+  **different electrical domains** — machine 5 V against our 3.3 V logic — so
+  one contaminated pad, flux residue or swarf cannot close both. **Remove it
+  last.**
+
+  Note (a) is not a firmware-side bound at all, despite this list's heading:
+  it bounds everything while open and nothing once fitted. (b) and the arm
+  gate are the firmware-side ones.
 - **An arm gate.** AND the one-shot output with a second GPIO that firmware
   must hold high, so one stuck or floating trigger pin cannot fire anything.
 
@@ -458,8 +548,34 @@ does not work:
 **J2 position 1 must come to the board.** Today it deliberately does not — it
 is the supply and is never tapped. The drive path needs it as the switching
 source, so the J2 T-piece goes from four conductors to five, and that
-connector carries switching current rather than microamps. **Settle this
-before crimping the new cables.**
+connector carries the switch common. **Not "switching current rather than
+microamps"**, as this said until 2026-10-12 — the press loop is ~100 µA, the
+same order as the sense dividers.
+
+**SETTLED 2026-10-12: position 1 rides in the Phase 0 harness** (see CLAUDE.md
+invariant 1 as amended). **That decision creates a failure mode that did not
+previously exist, and the jumper does NOT cover it.** The output jumper makes
+the *photoMOS path* safe; it does nothing about the conductor. Position 1 is
++5 V through R45, crimped into a 5-way JST, run down a cable through a gland,
+and landed on a perfboard 2.54 mm from four direction-line conductors. A
+whisker at the crimp, chafe in the gland, a solder bridge or swarf in the box
+bridges it to 1Cup — the machine starts a cycle, and a solid bridge reprograms
+the stored timer within 2 s.
+
+So **net Phase-0 actuation risk goes UP** with this decision, not down, and an
+earlier sentence in CLAUDE.md claimed the jumper made it safe. Mitigate by
+construction, not by text:
+
+- put the jumper on the **pos-1 side** of the photoMOS rather than the pos-N
+  side. It satisfies "in series with the output" identically and blocks a
+  shorted part identically, but leaves the live machine conductor dead-ending
+  on a bare jumper pad instead of resting permanently on a semiconductor
+  terminal. Strictly less exposure, zero cost;
+- keep pos 1 **physically segregated** in the harness and on the board — its
+  own conductor run, maximum spacing from the four direction lines, and no
+  shared via column;
+- the sense divider on each direction line is already a **detector** for this:
+  a line reading high with nothing commanded means a bridge or a failed part.
 
 #### The argument against, recorded rather than dropped
 

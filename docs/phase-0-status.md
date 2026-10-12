@@ -551,32 +551,51 @@ same circuit anyway:
 re-confirmed 2026-10-12.** CLAUDE.md carried "they have not been checked
 against the clone DevKitC-1's silkscreen; do that before the perfboard is
 drilled" for four days, 200 lines from the bench table that closed it. The
-evidence is functional rather than visual: all four switches logged their own
-names, the bus decoded frames (a swapped pair gives `frames=0`), GPIO6
-counted 736, and `selftest` ran 500/500 through GPIO8. Each wire was landed
-on a pin the operator picked by reading its label, so the chain fixes
-label to die, not merely die to firmware. The operator confirmed the
-silkscreen order against Espressif's published layout on 2026-10-12, which
-rules out the one alternative the functional chain cannot exclude - wiring by
-position rather than by label. See CLAUDE.md's GPIO budget table.
+The functional evidence and the visual check **combine** — neither closes it
+alone. Functional: all four switches logged their own names, the bus decoded
+frames (a swapped pair gives `frames=0`), GPIO6 counted 736. Each wire was
+landed on a pin the operator picked by reading its label, so the chain fixes
+label to die, not merely die to firmware. Visual: the operator confirmed the
+silkscreen order on 2026-10-12, ruling out the one alternative the functional
+chain cannot exclude — wiring by position rather than by label.
+
+**Two caveats that an earlier draft of this paragraph left out.** `selftest`
+through GPIO8 is **not independent** — it drives one die pin into another
+through a jumper, so a 6/8 label swap passes it too; it is non-circular only
+given GPIO6's 736 counts. And the functional chain is a *longer* evidential
+chain than a silkscreen read, not a higher-graded one; calling it "a higher
+grade" inverted this repo's own standard. See CLAUDE.md's GPIO budget table.
 
 **GND is on the signal header — board reading, 2026-10-12.** This section
 previously said Espressif's layout put it on the opposite header and called
 that the layout's one awkward fact. The board carries **three** GNDs: one at
 the far end of the signal header, two directly opposite it. The signal header
 is therefore 3V3 at one end, GND at the other, all seven taps between them,
-and no ground return crosses the board.
+and no ground return crosses the board. **The census is a visual scan, not an
+exhaustive pass over all 44 positions**, and it is the premise of that last
+clause — worth re-checking before the layout is committed. Note also that
+**nothing on this board draws from 3V3**: every divider is fed from a machine
+signal and returns to GND.
 
 **Pitch is 2.54 mm, settled 2026-10-12 — by the breadboard, not by calipers.**
 A 1.9 mm caliper reading was briefly treated as possibly the pitch; it is the
-gap (2.54 less a 0.64 mm pin). What actually settles it is that the DevKitC-1
+gap (2.54 less a 0.635 mm post = 1.905 mm). What actually settles it is that the DevKitC-1
 has been seated in a 2.54 mm breadboard through every bench session, and a
 1.9 mm part cannot mate with a 2.54 mm socket strip. The trap is worth
 knowing: calipers laid between two pins read the gap, and on 0.1 in hardware
 that gap is a plausible-looking 1.9 mm.
 
-**So nothing mechanical is now outstanding.** Pin map, header geometry, power
-and ground positions and pitch are all board readings.
+**One mechanical fact IS outstanding: the ROW-TO-ROW header spacing**, in
+0.1 in holes — the gap *between* the two headers, which decides whether the
+DevKitC-1 straddles the perfboard. The breadboard argument fixes the pitch
+*along* each header and says nothing about the gap between them.
+
+**It was recorded as open on 2026-10-12, deleted the same day by a paragraph
+rewrite, and then covered over by a claim that "nothing mechanical is now
+outstanding."** A `grep` for it returned zero hits repo-wide. That is net
+information loss by rewrite — this document's own named defect — committed by
+the sequence of commits that was documenting an instance of it. Restored here
+and in CLAUDE.md. **Count the holes.**
 
 ## The J5 tap went live 2026-10-07, and two things came out of it
 

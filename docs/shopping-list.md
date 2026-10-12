@@ -3,9 +3,18 @@
 Supersedes the parts tables in `docs/phase-0-plan.md`, which were written
 before the connectors were identified and before the multimeter broke.
 
-Everything here is **Phase 0: read-only**. Hard invariant 1 — nothing on
-this list can drive a machine signal, and that is deliberate. The parts
-that *can* actuate are at the bottom, under "Deliberately not yet".
+Everything here is **Phase 0: read-only** in what it can *do*. Hard
+invariant 1, as amended 2026-10-12, turns on whether a signal can be driven,
+not on what is soldered to the board.
+
+**That changes this list, and the change is not yet costed.** The 2026-10-08
+build decision populates and bench-tests the actuation parts **now**, behind
+two open jumpers, rather than leaving footprints. So the §"Deliberately not
+yet" block at the bottom is **no longer deliberate-not-yet** — those parts
+move into the Phase 0 order. Two things to settle before anyone buys:
+**two photoMOS per driven line or four** (see the plan's failure analysis),
+and **two jumpers or four** — this list says "a jumper", and the design now
+wants one in each drive leg plus one in the LED supply.
 
 ---
 
@@ -344,11 +353,28 @@ not optional.
 
 ---
 
-## 7. Deliberately not yet — Phase 1
+## 7. No longer "deliberately not yet" — Phase 1 parts, fitted in Phase 0
 
-**74HC221** (dual, non-retriggerable monostable), **2 × photoMOS relay**
-(AQY212 / TLP222A), RC parts for the one-shot, and a jumper or DIP switch
-for the hardware disable.
+**This heading said "Deliberately not yet" until 2026-10-12.** The 2026-10-08
+build decision populates and bench-tests these **now**, behind open jumpers,
+rather than leaving footprints — so they belong in the Phase 0 order. See
+`docs/phase-0-plan.md` and hard invariant 1 as amended.
+
+**74HC221** (dual, non-retriggerable monostable), **photoMOS relays**
+(AQY212 / TLP222A), RC parts for the one-shot, and jumpers or DIP switches
+for the hardware disables.
+
+**Two quantities are UNRESOLVED and both must be settled before ordering:**
+
+- **photoMOS: 2 or 4.** One per driven line, or two in series per line as a
+  redundancy chain. Four is more robust but contradicts the "Phase 1 costs two
+  jumpers, not a soldering iron" rationale that chose this build — fitting two
+  now bakes in exactly the retrofit the decision existed to avoid. The plan's
+  failure analysis also grades the chain weaker than it first looks (two
+  *partial* failures suffice, and the parts share a common cause).
+- **jumpers: 2 or 4.** This list said "a jumper", singular. The design wants
+  one in **each drive leg** (2) plus one in the **LED supply** — and the LED
+  one may be a single shared jumper or one per line.
 
 These are the parts that let the firmware *trigger* the machine while being
 physically incapable of *holding* the line — which matters because holding

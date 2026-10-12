@@ -231,23 +231,26 @@ established.** ~120 ms is comfortably under the ~2 s reprogram threshold, and
 no RC tolerance gets near it. But nothing has established the shortest press
 this board actually latches.
 
-**The "345–480 ms, every press ever measured on this machine" figure may not
-be presses at all — flagged 2026-10-12, UNRESOLVED.** It traces to the
-2026-10-08 bench row "All four switches | correct GPIO mapping, taps of
-345–480 ms", and the bench sequence for that step
-(`docs/phase-0-status.md`) reads *"jumper each of GPIO7/15/16/17 to 3V3 and
-back"* — **touches on the ESP32 header, not lever presses on the machine.**
-If that is what they were, the figure describes how fast a hand moves a
-jumper and says **nothing** about what this control board latches, which is
-the only thing this paragraph needs it for.
+**The 345–480 ms figure IS machine presses — confirmed by the operator
+2026-10-12, after a review questioned it.** Every press ever measured on this
+machine was **345–480 ms** (2026-10-08), by hand on the levers.
 
-Either way the conclusion is unchanged — the minimum is unestablished and
-must be measured — but the figure should not be quoted as machine behaviour
-until someone confirms which it was. **Settle it the same way regardless:**
-press-and-release progressively shorter *on the levers*, with the tap
-watching, and find where the machine stops responding. A one-shot that is too
-short produces a drive path that silently does nothing — and the sense tap
-would still show the pulse, so it would look like it worked.
+**It was questioned for a good reason, and the reason is worth keeping.** The
+written bench sequence for that step (`docs/phase-0-status.md`) reads *"jumper
+each of GPIO7/15/16/17 to 3V3 and back"* — header touches, which would say
+nothing about what this control board latches. **The session used the levers
+instead.** So the *procedure* and what was *done* diverge, and anyone reading
+the procedure as evidence of what happened will reach the wrong conclusion, as
+a 2026-10-12 review did. Fix the procedure or annotate it; do not cite it
+against the operator's account.
+
+Nothing about the conclusion changes either way: **nobody has pressed
+deliberately shorter**, so the shortest press this board latches is still
+unestablished. A one-shot that is too short produces a drive path that
+silently does nothing — and the sense tap would still show the pulse, so it
+would look like it worked. **Measure the minimum before choosing the RC**:
+press-and-release progressively shorter on the levers, with the tap watching,
+and find where the machine stops responding.
 
 **Use the 74HC221, NOT the 74HC123 this file used to name.** The '123 is
 **retriggerable**: a new trigger edge restarts the pulse, so a GPIO
@@ -1039,7 +1042,7 @@ inflated.
 |---|---|
 | 4, 5 | the bus **decoded frames**. A swapped pair gives `frames=0` — this file's own documented signature — so this fixes *which is which*, not merely that both are right |
 | 6 | **736 counts** across shot 2, and `selftest` 500/500 at 100 Hz |
-| 7, 15 | **jumpered to 3V3 at the header and back**, logged as "correct GPIO mapping, taps of 345-480 ms" |
+| 7, 15 | **lever A**, logged as "correct GPIO mapping, taps of 345-480 ms" — same full chain as 16/17 |
 | 16, 17 | lever B down logged `steam`, up logged `water` |
 | 8 | `selftest` into GPIO6 — **not independent, see below** |
 
@@ -1051,12 +1054,16 @@ the jumper still joins die 6 to die 8 and 500/500 still passes. Row 8 is
 non-circular only given row 6. The rows are a mutually-supporting system, not
 six parallel confirmations.
 
-**Rows 7/15 came from jumper touches on the ESP header, not from lever A.**
-An earlier draft of this table said "lever A". The bench sequence
-(`docs/phase-0-status.md`, step 3) is *"jumper each of GPIO7/15/16/17 to 3V3
-and back"*. For the label→die question that is **better** evidence — fewer
-links — but it says nothing about the J2 conductor, and the source row it
-quotes is labelled "All four switches", not lever A.
+**Rows 7/15 were briefly "corrected" to jumper touches, and that was wrong.**
+A 2026-10-12 review read the written bench procedure — *"jumper each of
+GPIO7/15/16/17 to 3V3 and back"* — and inferred the taps were header touches.
+I applied that as a correction. **The operator confirms they were lever
+presses on the machine.** The procedure records what was planned; the levers
+are what happened. Restored, and the divergence is now recorded in the
+pulse-width section above so the procedure is not cited this way again.
+
+So GPIO7/15 carry the **same full chain as 16/17** — J2 conductor, divider,
+header pin, die, firmware name — and all four switches sit at one grade.
 
 **The visual check's job**: the functional chain alone cannot distinguish
 wiring by *label* from wiring by *position*. The operator confirmed the

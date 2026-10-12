@@ -503,6 +503,15 @@ Everything here runs on the breadboard with the machine closed.
    watching the serial log. Each touch should print one `# switch …` line
    with a plausible duration, never several. Hold one past 2 s and confirm
    the `REPROGRAM` warning fires.
+
+   **WHAT WAS ACTUALLY DONE ON 2026-10-08 WAS LEVER PRESSES, NOT JUMPER
+   TOUCHES** — operator, confirmed 2026-10-12. This step is the *plan*; the
+   levers are the *event*. A 2026-10-12 review read this text as evidence
+   that the recorded 345–480 ms taps were header touches and concluded the
+   figure said nothing about the machine, which would have undermined the
+   one-shot pulse-width design. **Do not cite this procedure as a record of
+   what happened.** Levers are the better test anyway — they exercise the J2
+   conductor and the divider, which a header jumper skips.
 4. Leave it running an hour with the scales connected and pull the usual
    shots. Then `status`: **worst poll gap** is the number that decides
    whether polling survives into the perfboard, and `dropped=0` on the

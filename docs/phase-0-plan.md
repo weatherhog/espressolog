@@ -502,11 +502,17 @@ does not work:
     surge history on the same node. A surge on J2 — the plausible cause of an
     output short — presents across the pair. "Standard safety-chain move"
     normally implies *diverse* redundancy; this is its weakest form.
-  - **UNDECIDED: two photoMOS or four.** Four is the robust answer and it
-    contradicts the "Phase 1 costs two jumpers, not a soldering iron"
-    rationale that chose this build — fitting two now bakes in exactly the
-    retrofit the decision existed to avoid. `docs/shopping-list.md` and the
-    scope section below both still say two. **Resolve before ordering.**
+  - **UNDECIDED: two photoMOS or four. Resolve before ordering** —
+    `docs/shopping-list.md` and the scope section below both still say two.
+
+    **An earlier draft of this bullet contradicted itself** — it said four
+    "contradicts the Phase 1 costs two jumpers rationale" and then, in the
+    same sentence, that fitting *two* is what bakes in the retrofit. The
+    second clause is the right one. **Four does not contradict the build
+    rationale; it is what the rationale implies.** Fitting the parts now
+    exists so Phase 1 is not a soldering job, and building two and later
+    wanting four is exactly that soldering job. There is no cost on that
+    axis — only the price of two more parts.
 - a **watchdog relay** in the LED supply that firmware must keep re-arming,
   so a crash de-energises the drive path rather than leaving it as it was.
   Note this shares the fuse's blind spot — it is on the control path, so it

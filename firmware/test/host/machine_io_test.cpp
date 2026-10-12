@@ -22,6 +22,7 @@
 // threshold, and the queue. What is left for the bench is only the part that
 // genuinely needs voltage — whether the dividers land inside VIH/VIL and
 // whether the pulse train on GPIO6 is the flowmeter or the pump triac.
+#undef NDEBUG   // these suites assert with bare assert(); see the Makefile
 #include "../../src/machine_io.h"
 #include <cstdio>
 #include <cassert>

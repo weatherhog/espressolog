@@ -252,8 +252,12 @@ outright.
 point. **Sensing it through a divider is NOT safe either**, which this
 paragraph said until 2026-10-12: its pull-up strength is unrecorded and it
 reaches the MCU through R32 = 100 K, so a 23.2 K divider can drag it under
-1 V and the MCU then reads a button held down permanently — a false signal
-fed into the machine continuously, which invariant 1 forbids. Driving it is
+1 V — and **what that does is UNKNOWN**, which is the honest reason to fit
+nothing. (This said "the MCU then reads a button held down permanently" until
+2026-10-12. CLAUDE.md retracts that wording: this repo's own 2026-10-03
+result, 344 s of live bus, establishes that `Disp-P4` is **not** the button
+line — the buttons are bits 49/58 of the 67-bit frames. The conclusion is
+unchanged; only the mechanism was wrong.) Driving it is
 worse again. It gets **no load at all**, which is what is built. Full
 reasoning in `docs/phase-0-status.md`; CLAUDE.md carries the same correction.
 

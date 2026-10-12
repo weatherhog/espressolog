@@ -5,6 +5,7 @@
 // green suite could not see: a previous shot's timer leaking into the next
 // one, and setpoint_touched staying true for the rest of the boot. Both
 // would have silently poisoned the first real field data in these columns.
+#undef NDEBUG   // these suites assert with bare assert(); see the Makefile
 #include "../../src/machine_context.h"
 #include <cstdio>
 #include <cassert>

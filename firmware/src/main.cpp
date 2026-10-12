@@ -127,6 +127,20 @@ static void machineContextPoll() {
   machine_ctx.onReading(display_bus.reading(), display_bus.setpointTouched());
 }
 
+// How fresh a display reading must be to be believed about the CURRENT state.
+// The bus frames every ~41 ms, so 2 s is ~50 frames of slack.
+//
+// NOT MachineContextTracker::BOILER_MAX_AGE_US, which a draft borrowed because
+// it was the constant to hand. That is a DATA-ATTRIBUTION bound — "how old a
+// pre-shot temperature may be and still be called this shot's", deliberately
+// 60 s — and reusing it coupled two unrelated decisions.
+//
+// The micros() aliasing in DisplayBus::stale() is REDUCED, NOT REMOVED: a
+// last-seen TIMER frame still reads fresh for 2 s out of every 71.58 min.
+// Nothing below may take an irreversible action on that, which is why the
+// press guards are no longer cleared here — see machineBusy().
+static constexpr uint32_t DISPLAY_FRESH_US = 2000000;
+
 static void printDisplay(Stream& out) {
   if (!display_on) {
     out.println("# display bus off — 'display on' once the J5 tap is wired");
@@ -145,7 +159,7 @@ static void printDisplay(Stream& out) {
   if (display_bus.adjusting())       out.print(" ADJUSTING");
   if (display_bus.programming())     out.print(" PrG");
   if (display_bus.setpointTouched()) out.print(" SETPOINT-TOUCHED");
-  if (display_bus.stale(micros(), 2000000)) out.print(" (STALE)");
+  if (display_bus.stale(micros(), DISPLAY_FRESH_US)) out.print(" (STALE)");
 
   const DisplayBus::Buttons& b = display_bus.buttons();
   out.printf(" | buttons=%s%s", b.left ? "L" : "-", b.right ? "R" : "-");
@@ -369,19 +383,7 @@ static void reportSwitch(const SwitchBank::Event& e) {
 // generous because the cost of being wrong is a stalled pour, while the
 // cost of being conservative is only that an upload waits a minute.
 static constexpr uint32_t BREW_GUARD_MS = 75000;
-// How fresh a display reading must be to be believed about the CURRENT state.
-// The bus frames every ~41 ms, so 2 s is ~50 frames of slack.
-//
-// NOT MachineContextTracker::BOILER_MAX_AGE_US, which a draft borrowed because
-// it was the constant to hand. That is a DATA-ATTRIBUTION bound — "how old a
-// pre-shot temperature may be and still be called this shot's", deliberately
-// 60 s — and reusing it coupled two unrelated decisions.
-//
-// The micros() aliasing in DisplayBus::stale() is REDUCED, NOT REMOVED: a
-// last-seen TIMER frame still reads fresh for 2 s out of every 71.58 min.
-// Nothing below may take an irreversible action on that, which is why the
-// press guards are no longer cleared here — see machineBusy().
-static constexpr uint32_t DISPLAY_FRESH_US = 2000000;
+
 static uint32_t last_press_ms[SwitchBank::N_LINES] = {0};
 
 static bool pressGuard(uint8_t line, uint32_t now) {

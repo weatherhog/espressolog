@@ -73,11 +73,19 @@
 -- The leak itself is fixed in web/src/Capture.jsx (2026-10-12): every field
 -- is now compared against its seed and sent only when it differs.
 
--- ORDER MATTERS. Statement 2 runs FIRST because statement 1 clears
--- dose_source, and statement 2's predicate requires dose_source = 'manual'.
--- Run the other way round, a row matching both would have its dose nulled and
--- then be skipped, keeping the fabricated 2.4 / 93 / 0 recipe. No such row
--- exists in the 2026-09-29 snapshot; one could exist in production.
+-- ORDER MATTERS, and the two are named by PREDICATE below rather than by
+-- number, because they were reordered on 2026-10-12 and "statement 1" then
+-- meant two different things depending on which draft you were reading. On an
+-- irreversible production migration that is a real reading hazard.
+--
+--   THE LITERAL-TRIPLE UPDATE  (shot 3's fabricated recipe)  runs FIRST
+--   THE 3-DECIMAL UPDATE       (the copied doses)            runs SECOND
+--
+-- That order is required: the 3-decimal update clears dose_source, and the
+-- literal-triple update's predicate requires dose_source = 'manual'. The
+-- other way round, a row matching both would have its dose nulled and then be
+-- skipped, keeping the fabricated 2.4 / 93 / 0 recipe. No such row exists in
+-- the 2026-09-29 snapshot; one could exist in production.
 
 UPDATE shot
    SET dose_ground_g = NULL,

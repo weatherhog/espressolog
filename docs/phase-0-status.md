@@ -14,7 +14,27 @@ but the spool fills at ~490 records and then `writeShot` starts refusing, and
 that loses shots.
 
 Order: `make deploy` (which runs migration 009), confirm `/healthz`, then
-`pio run -t upload`. Back up the database first — 009 is irreversible and its
+`pio run -t upload`.
+
+**0.9.3's invariant-2 guard needs `switches on`, not just `display on`.**
+`machineBusy()` asks the machine whether the pump is running, and it has two
+sources: the display's `Mode::TIMER` and the switch lines. Both are
+NVS-persisted booleans that default off. With only the display tap live, a
+framing gap longer than 2 s during pre-infusion makes the guard fall through
+to switch state that nothing is writing, and it returns false mid-pour — and
+this repo records one burst of ~6086 dropped display edges at pump start,
+which its own comment calls 1.88 s of bus. That is ~120 ms of margin on a
+number measured once. **Enable both taps, or accept that the guard is
+best-effort.**
+
+**And know what the hot-water guard costs.** A lever-B draw blocks flash
+writes, uploads and SNTP for a flat `BREW_GUARD_MS` (75 s) after the lever is
+released, because the display never shows a timer for one so there is nothing
+to tell the firmware the pump stopped. 75 s is sized from 2Cup's *unknown*
+stored brew duration — borrowed reasoning, not a measurement of a water draw.
+The cost is bounded (`pending_w` holds 8 weighings before it drops them) and
+the fix is a bench measurement: **does lever B latch, and how long is a
+typical draw?** Until then it is deliberately conservative. Back up the database first — 009 is irreversible and its
 header carries two dry-run queries to run against a copy beforehand.
 
 ## What runs where
@@ -888,9 +908,11 @@ the display is back in temperature mode, so edges lost there cost nothing.
    4.7K pull-ups, so a 23.2K divider leaves them at 4.16 V and still
    reading high. **What pulls `Disp-P4` high is not recorded**, and the
    schematic path to the MCU runs through R32 = 100K. If that pull-up is
-   weak, a 23.2K divider drags the line under 1 V and the MCU sees a button
-   held down permanently — not actuation, but a false signal fed into the
-   machine continuously, which invariant 1 still forbids. The 0b capture
+   weak, a 23.2K divider drags the line under 1 V — and **what the MCU then
+   does with it is UNKNOWN.** (This said "the MCU sees a button held down
+   permanently" until 2026-10-12, and was contradicted six lines below by this
+   file's own "DONE 2026-10-03 — `Disp-P4` is not the button line". CLAUDE.md
+   carries the retraction; the conclusion, fit nothing, is unchanged.) The 0b capture
    only proves the line tolerates an analyser's near-infinite input
    impedance; it says nothing about 23K.
 

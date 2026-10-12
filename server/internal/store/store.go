@@ -252,7 +252,15 @@ func defaultContext(tx *sql.Tx, startedAt time.Time) (machineID, grinderID, epoc
 // with no source at all, so the carry-forward has to exist somewhere: here,
 // at ingest, where it is at least honest about being an inference and is
 // bounded by the shot's own start time.
-func defaultRecipe(tx *sql.Tx, epochID any, startedAt time.Time) (beanID, grindDial, brewTemp, preinfusion any) {
+// thisShotEditedAParameter: the incoming record's own setpoint_touched. A shot
+// that recorded an edit must NOT be stamped with the pre-edit settings, and
+// the bound below cannot see that on its own — defaultRecipe runs before this
+// row exists, so the MAX(started_at) subquery finds no edit to stop at and
+// carries the superseded value onto the very shot that reports the change.
+// Every later shot then inherits it THROUGH that row, defeating the guard
+// entirely. Found 2026-10-12 by the first test ever written for this function,
+// after four rounds of human review had passed over it.
+func defaultRecipe(tx *sql.Tx, epochID any, startedAt time.Time, thisShotEditedAParameter bool) (beanID, grindDial, brewTemp, preinfusion any) {
 	at := startedAt.UTC().Format(time.RFC3339)
 	var id int64
 	if tx.QueryRow(`SELECT id FROM bean
@@ -270,6 +278,21 @@ func defaultRecipe(tx *sql.Tx, epochID any, startedAt time.Time) (beanID, grindD
 		}
 	}
 	// STOP AT A RECORDED PARAMETER EDIT, for BOTH values.
+	//
+	// KNOW WHAT THE FLAG ACTUALLY RECORDS BEFORE TRUSTING THIS GUARD.
+	// `main.cpp` calls clearSetpointTouched() on the transition into POURING,
+	// deliberately ("a new shot starts with a clean slate, otherwise one tweak
+	// at the start of a session condemns every shot after it"). So the flag
+	// that reaches this column means "a parameter was edited BETWEEN pour
+	// start and shot completion" — while the display is showing the brew
+	// timer. An edit made between shots, which is the realistic case, is
+	// latched and then cleared at the next pour start and never lands on any
+	// row. In practice this guard therefore fires rarely.
+	//
+	// That is a firmware-side question, not a reason to drop the guard: when
+	// the flag IS set it is the machine's own word that a setting moved, and
+	// carrying across it would be wrong. But do not read a database full of
+	// setpoint_touched = 0 as "no edits ever happened".
 	//
 	// setpoint_touched latches on the display blanking twice inside
 	// BLINK_WINDOW_US, plus `PrG`. A draft of this called it "the machine's
@@ -295,6 +318,9 @@ func defaultRecipe(tx *sql.Tx, epochID any, startedAt time.Time) (beanID, grindD
 	// downstream would ever have a value to carry. Measured.
 	since := `COALESCE((SELECT MAX(started_at) FROM shot
 	                     WHERE setpoint_touched = 1 AND started_at <= ?), '')`
+	if thisShotEditedAParameter {
+		return // the settings this shot ran with are unknown; NULL says so
+	}
 	var t float64
 	if tx.QueryRow(`SELECT brew_temp_c FROM shot
 	                 WHERE brew_temp_c IS NOT NULL AND started_at <= ?
@@ -351,7 +377,7 @@ func insertShot(tx *sql.Tx, h *record.Header, samples []record.Sample, scaleID a
 		excludeReason = "reject: under 5 g"
 	}
 	machineID, grinderID, epochID := defaultContext(tx, startedAt)
-	beanID, grindDial, brewTemp, preinfusion := defaultRecipe(tx, epochID, startedAt)
+	beanID, grindDial, brewTemp, preinfusion := defaultRecipe(tx, epochID, startedAt, h.SetpointTouched())
 	// 'loaded' only if a bag actually was: an absent bean must stay NULL
 	// with no provenance rather than claim an attribution that never happened.
 	var beanSource any
@@ -387,7 +413,12 @@ func insertShot(tx *sql.Tx, h *record.Header, samples []record.Sample, scaleID a
 			detector_version, firmware_version,
 			excluded, exclude_reason, created_at
 		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-		startedAt.Format(time.RFC3339), h.TzOffsetMin, scaleID,
+		// .UTC() to match every READ site. Equivalent today only because
+		// Ingest hands this an already-UTC time; the moment anything passes a
+		// zoned one, stored strings gain "+02:00" and MAX(started_at) — which
+		// the parameter-edit guard above now depends on — stops being
+		// chronological.
+		startedAt.UTC().Format(time.RFC3339), h.TzOffsetMin, scaleID,
 		machineID, grinderID, epochID,
 		beanID, beanSource, grindDial, brewTemp, preinfusion,
 		h.StopMs, stoppedBy,

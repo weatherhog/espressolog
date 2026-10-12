@@ -8,13 +8,18 @@
 # DisplayBus is pure logic too, and its test frames are real ones recorded
 # off the machine (analysis/captures/), not synthetic bit patterns.
 CXX ?= clang++
-CXXFLAGS = -std=c++17 -Wall
+# -UNDEBUG is not optional: every suite here asserts with bare assert(), and
+# several do work inside the assert. Building with -DNDEBUG would compile the
+# checks away and all four suites would pass vacuously. Flagged by the
+# 2026-10-12 audit; each file also carries its own #undef NDEBUG.
+CXXFLAGS = -std=c++17 -Wall -UNDEBUG
 
-test: detector_test display_test machine_context_test machine_io_test
+test: detector_test display_test machine_context_test machine_io_test armed_test
 	./detector_test
 	./display_test
 	./machine_context_test
 	./machine_io_test
+	./armed_test
 
 detector_test: detector_test.cpp ../../src/detector.cpp ../../src/detector.h
 	$(CXX) $(CXXFLAGS) -o $@ detector_test.cpp ../../src/detector.cpp
@@ -28,9 +33,12 @@ machine_context_test: machine_context_test.cpp ../../src/machine_context.h ../..
 machine_io_test: machine_io_test.cpp ../../src/machine_io.cpp ../../src/machine_io.h
 	$(CXX) $(CXXFLAGS) -o $@ machine_io_test.cpp ../../src/machine_io.cpp
 
+armed_test: armed_test.cpp ../../src/detector.cpp ../../src/detector.h
+	$(CXX) $(CXXFLAGS) -o $@ armed_test.cpp ../../src/detector.cpp
+
 replay: replay.cpp ../../src/detector.cpp ../../src/detector.h
 	$(CXX) $(CXXFLAGS) -o $@ replay.cpp ../../src/detector.cpp
 
 clean:
-	rm -f detector_test display_test machine_context_test machine_io_test replay
+	rm -f detector_test display_test machine_context_test machine_io_test armed_test replay
 .PHONY: test clean

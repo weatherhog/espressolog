@@ -40,6 +40,10 @@ private:
   // uploading out of order and the right answer is for a human to look.
   uint32_t stuck_n = 0;
   String   stuck_path;
+  // Was the most recent failure a verdict on THIS record (a misdirected
+  // endpoint, a refusal) rather than the network being down? Only the former
+  // justifies telling the operator that the record is blocking the queue.
+  bool     last_failure_was_about_the_record = false;
 
   static constexpr uint32_t BACKOFF_MIN_MS = 5000;
   static constexpr uint32_t BACKOFF_MAX_MS = 60000;

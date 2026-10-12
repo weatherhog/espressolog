@@ -4,6 +4,7 @@
 // analysis/captures/, recorded off the machine on 2026-09-28 while the
 // display showed 95 degrees and then ran its shot timer during a flush.
 // Synthetic frames would only prove the decoder agrees with itself.
+#undef NDEBUG   // these suites assert with bare assert(); see the Makefile
 #include "../../src/display.h"
 #include <cstdio>
 #include <cstring>

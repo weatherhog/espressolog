@@ -101,6 +101,14 @@ void Net::tick(uint32_t now, bool detector_quiet) {
   if (spool->oldest().isEmpty()) {
     // Nothing pending is the normal state, not a failure — check again soon
     // and don't let it inflate the failure backoff.
+    //
+    // CLEAR THE STUCK STATE HERE TOO. tryUploadOldest() is the only other
+    // place that clears it, and this branch returns before reaching it — so a
+    // head record that was quarantined, `rm`'d or formatted away left
+    // `net status` reporting a file that no longer exists as blocking an
+    // empty queue, for ever.
+    stuck_n = 0;
+    stuck_path = "";
     backoff_ms = BACKOFF_MIN_MS;
     next_upload_ms = now + 2000;
     return;
@@ -113,22 +121,41 @@ void Net::tick(uint32_t now, bool detector_quiet) {
   } else {
     next_upload_ms = now + backoff_ms;
     backoff_ms = min(backoff_ms * 2, BACKOFF_MAX_MS);
-    if (stuck_path.length() && ++stuck_n % 20 == 0)   // see tryUploadOldest
-      Serial.printf("# net: STUCK — %s has failed %lu times in a row and is"
-                    " blocking every record behind it. %u pending. Inspect it"
-                    " with 'dump %s'.\n",
-                    stuck_path.c_str(), (unsigned long)stuck_n,
-                    (unsigned)(spool ? spool->pendingCount() : 0),
-                    stuck_path.c_str());
+    // ONLY BLAME THE RECORD WHEN THE FAILURE WAS ABOUT THE RECORD.
+    //
+    // stuck_n counts consecutive failures of any kind — a 503, a server that
+    // is simply down, WiFi gone, LittleFS.open failing. A draft announced all
+    // of them as "%s is blocking every record behind it. Inspect it with
+    // 'dump %s'", so during an ordinary two-hour outage the operator was told
+    // a blameless shot was poisoning the queue. The plausible next action is
+    // `rm`, which means a diagnostic that can cause the data loss it exists
+    // to prevent.
+    if (stuck_path.length() && ++stuck_n % 20 == 0) {
+      if (last_failure_was_about_the_record)
+        Serial.printf("# net: STUCK — %s has failed %lu times in a row and the"
+                      " server keeps refusing THIS record, so it is blocking the"
+                      " %u behind it. Inspect it with 'dump %s'.\n",
+                      stuck_path.c_str(), (unsigned long)stuck_n,
+                      (unsigned)(spool ? spool->pendingCount() : 0),
+                      stuck_path.c_str());
+      else
+        Serial.printf("# net: %u record(s) pending, %lu consecutive upload"
+                      " failures — still retrying. Nothing is wrong with %s;"
+                      " the server or the network is unreachable.\n",
+                      (unsigned)(spool ? spool->pendingCount() : 0),
+                      (unsigned long)stuck_n, stuck_path.c_str());
+    }
   }
 }
 
 bool Net::tryUploadOldest() {
   String path = spool->oldest();
-  // Head-of-line tracking rides on the oldest() call we already make, rather
-  // than a second directory walk per tick — oldest() is an O(files) LittleFS
-  // scan and the counter exists precisely for when the spool is backing up.
+  // Head-of-line tracking. (A draft claimed this "rides on the oldest() call
+  // we already make"; it does not — Net::tick calls oldest() separately for
+  // its empty check, so there are still two directory walks per tick. The
+  // placement is fine, the justification was wrong.)
   if (path != stuck_path) { stuck_path = path; stuck_n = 0; }
+  last_failure_was_about_the_record = false;
   if (path.isEmpty()) return false;
 
   File f = LittleFS.open(path, "r");
@@ -189,6 +216,7 @@ bool Net::tryUploadOldest() {
     Serial.printf("# net: %s got %d from something that is NOT the ingest"
                   " endpoint — check `endpoint`. Record KEPT.\n",
                   path.c_str(), code);
+    last_failure_was_about_the_record = true;   // configuration, not weather
     return false;
   }
 
@@ -244,8 +272,11 @@ void Net::status(Stream& out) {
   // line. The 0d experiment plan calls for running with the console detached,
   // and a stalled queue is invisible otherwise — the device looks healthy and
   // simply stops delivering shots.
-  if (stuck_n)
-    out.printf("# net: STUCK — %s has failed %lu times in a row and is blocking"
-               " the queue behind it.\n", stuck_path.c_str(),
-               (unsigned long)stuck_n);
+  // Same floor as the periodic serial line: one WiFi blip is not a stall.
+  if (stuck_n >= 5)
+    out.printf("# net: %s has failed %lu times in a row — %s\n",
+               stuck_path.c_str(), (unsigned long)stuck_n,
+               last_failure_was_about_the_record
+                 ? "the server keeps refusing THIS record; it is blocking the queue"
+                 : "still retrying; the server or network is unreachable");
 }

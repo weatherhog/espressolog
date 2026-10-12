@@ -22,9 +22,8 @@ export default function Capture({ shots, beans, justSaved, onSaved }) {
   // The dose prefers the shot's own value — stage 5 attributes it from the
   // grinder scale automatically, so it's usually already right.
   //
-  // THE SEEDS ARE NAMED because `save` compares against them. Seeding a
-  // field and then sending it unconditionally records a value nobody typed
-  // as though a human confirmed it — see the bean comment in `save`, which
+  // Seeding a field and then sending it unconditionally records a value
+  // nobody typed as though a human confirmed it — see the bean comment in `save`, which
   // is the same lesson learned a release earlier and not applied here.
   // Measured 2026-10-12: 18 of 80 shots carried dose_source='manual' with no
   // weighing behind them, 17 of them the identical value 18.109 written in
@@ -207,29 +206,47 @@ export default function Capture({ shots, beans, justSaved, onSaved }) {
 
         <Eyebrow>Confirm</Eyebrow>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 20, marginTop: 16 }}>
-          <div><Eyebrow style={{ marginBottom: 8 }}>Grind</Eyebrow>
-            <Stepper value={grind} onChange={mark("grind", setGrind, grind)} step={0.1} /></div>
-          <div>
-            <Eyebrow style={{ marginBottom: 8 }}>
-              Dose{pending.dose_source === "measured" && <span style={{ color: T.flow }}> · from scale</span>}
-            </Eyebrow>
-            {/* Show what the SERVER has until the operator touches the field.
-                The seeds are captured on mount and App keys this component on
-                the shot id, so when a grinder weighing lands mid-edit the
-                refresh updates `pending` without remounting: `dose` would
-                still render the previous shot's guess, directly under a badge
-                saying "from scale". The save is already correct — nothing is
-                written untouched — but an operator seeing a wrong number
-                labelled measured will nudge it to fix it, and that writes the
-                guess and stamps it manual. Exactly the original bug, by hand. */}
-            <Stepper value={touched.dose ? dose : (pending.dose_ground_g ?? dose)}
-                     onChange={mark("dose", setDose, touched.dose ? dose : (pending.dose_ground_g ?? dose))}
-                     step={0.1} unit="g" />
-          </div>
-          <div><Eyebrow style={{ marginBottom: 8 }}>Preinfusion</Eyebrow>
-            <Stepper value={preinf} onChange={mark("preinf", setPreinf, preinf)} step={0.5} unit="s" /></div>
-          <div><Eyebrow style={{ marginBottom: 8 }}>Brew temp</Eyebrow>
-            <Stepper value={temp} onChange={mark("temp", setTemp, temp)} step={0.5} unit="°C" /></div>
+          {/* Every field renders the SERVER's value until the operator touches
+              it, and says so when the server has none.
+
+              Two bugs motivate this. The seeds are captured on mount and App
+              keys this component on the shot id, so a refresh that updates
+              `pending` without remounting left the stepper showing a stale
+              guess — under a badge reading "from scale", in the dose's case.
+              The save was already correct, but an operator seeing a wrong
+              number labelled measured will nudge it to fix it, which writes
+              the guess and stamps it manual: the original bug, by hand.
+
+              And when the column is genuinely NULL — a new database, a
+              14-day gap, a shot after a recorded setpoint edit — the stepper
+              falls back to a hard-coded literal (grind 2.4, temp 93,
+              preinfusion 0) and renders it under a heading that says
+              Confirm. Those literals are exactly what migration 009 exists
+              to erase. Nothing is written untouched, so this is now a
+              labelling problem rather than a data one, but presenting a
+              made-up number as the current setting is how it became a data
+              problem the first time. */}
+          {[
+            { k: "grind",  label: "Grind",       v: grind,  set: setGrind,  col: pending.grind_dial,    step: 0.1, unit: undefined },
+            { k: "dose",   label: "Dose",        v: dose,   set: setDose,   col: pending.dose_ground_g, step: 0.1, unit: "g" },
+            { k: "preinf", label: "Preinfusion", v: preinf, set: setPreinf, col: pending.preinfusion_s, step: 0.5, unit: "s" },
+            { k: "temp",   label: "Brew temp",   v: temp,   set: setTemp,   col: pending.brew_temp_c,   step: 0.5, unit: "\u00b0C" },
+          ].map(({ k, label, v, set, col, step, unit }) => {
+            const shown = touched[k] ? v : (col ?? v);
+            const unrecorded = !touched[k] && col == null;
+            return (
+              <div key={k}>
+                <Eyebrow style={{ marginBottom: 8 }}>
+                  {label}
+                  {k === "dose" && pending.dose_source === "measured" &&
+                    <span style={{ color: T.flow }}> &middot; from scale</span>}
+                  {unrecorded &&
+                    <span style={{ color: T.inkSoft }}> &middot; not recorded</span>}
+                </Eyebrow>
+                <Stepper value={shown} onChange={mark(k, set, shown)} step={step} unit={unit} />
+              </div>
+            );
+          })}
         </div>
 
         <div style={{ marginTop: 24, paddingTop: 18, borderTop: `1px solid ${T.hair}` }}>

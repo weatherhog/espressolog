@@ -1,4 +1,5 @@
 // Host-side smoke test for ShotDetector: synthetic 10 Hz curves.
+#undef NDEBUG   // these suites assert with bare assert(); see the Makefile
 #include "../../src/detector.h"
 #include <cstdio>
 #include <cmath>

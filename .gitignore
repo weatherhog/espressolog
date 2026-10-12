@@ -37,3 +37,4 @@ analysis/espressolog.db-wal
 .claude/worktrees/
 firmware/test/host/machine_context_test
 firmware/test/host/machine_io_test
+firmware/test/host/armed_test

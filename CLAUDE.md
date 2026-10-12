@@ -32,13 +32,16 @@ Violating any of these is a bug, not a design choice.
    survive the controlled part failing short, which is the characteristic
    MOSFET failure mode.
 
-   **Fit BOTH disables.** The output jumper is what makes the claim true.
-   A second jumper in the photoMOS **LED supply** is what makes "firmware
-   has demonstrably never commanded a fire" true *before* the output jumper
-   is ever fitted — otherwise a latent firmware fault stays invisible for
-   all of Phase 0 and surfaces the instant Phase 1 begins. They sit in
-   different electrical domains (machine 5 V against our 3.3 V logic), so
-   one contaminated pad cannot close both. Remove the LED disable last.
+   **THREE jumpers, in two electrical domains — decided 2026-10-12.** Two
+   in the drive legs, one per driven line, on the **pos-1 side** of that
+   line's photoMOS pair; and one **shared in the photoMOS LED supply**. The
+   drive-leg jumpers are what make the claim true. The LED jumper is what
+   makes "firmware has demonstrably never commanded a fire" true *before*
+   a drive-leg jumper is ever fitted — otherwise a latent firmware fault
+   stays invisible for all of Phase 0 and surfaces the instant Phase 1
+   begins. Machine 5 V against our 3.3 V logic, so one contaminated pad
+   cannot close both. **Remove the LED one last.** Use 2-pin headers with
+   no shunt, not DIP switches: bare pins are the most visible open state.
 
    **"Open jumper" is not "physically impossible", and an earlier draft of
    this clause said it was.** It makes conduction require a deliberate,

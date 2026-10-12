@@ -257,7 +257,7 @@ instead of soldering to the board.
 | Perfboard + pin headers | 2.54 mm, confirmed against the board | 6 |
 | Heat-shrink assortment | | 5 |
 | Small ABS project box | mounts outside the machine | 6 |
-| 74HC221 (dual), photoMOS ×2 **or ×4**, one-shot RC, disable jumpers | **moved into this order 2026-10-12** — the build decision populates them behind open jumpers rather than leaving footprints. Counts unresolved, see `shopping-list.md` §7 | ~8 |
+| 74HC221 (dual), **photoMOS ×4**, one-shot RC, **3 × 2-pin header** (no shunts) | **moved into this order 2026-10-12** — the build populates them behind open jumpers rather than leaving footprints. Counts decided; see `shopping-list.md` §7 | ~10 |
 
 ### Tools, if you don't have them
 
@@ -421,9 +421,11 @@ Brew-by-weight needs **1Cup and 2Cup** only — the board latches, so one pulse
 starts and a second stops. Steam and Hot Water gain nothing and double both
 the parts and the failure surface. **Sense all four, drive two.**
 
-One dual 74HC221 and two photoMOS — **or four, if the series-redundancy
-mitigation above is taken. That is unresolved and gates the parts order**;
-`docs/shopping-list.md` carries the same open question.
+One dual 74HC221 and **four photoMOS** — two in series per driven line,
+decided 2026-10-12; see the failure analysis above. **Phase 1 needs a separate
+drive path per photoMOS** for the per-device test, which this scope line does
+not yet cost: one '221 channel per *line* is enough for normal operation but
+not for the test, and the GPIO budget for the arm gates is unresolved.
 
 #### The failure neither mechanism bounds
 
@@ -486,33 +488,58 @@ does not work:
   fault becomes a detected one. **Redundancy without detection is not a safety
   chain**, it only buys the probability that two failures pile up unnoticed
   over the machine's life. This costs nothing and is not yet in the firmware.
-- **two photoMOS in series** per driven line, both off the same LED supply.
-  Cheap — four parts instead of two — but weaker than it first appears, and
-  the first draft of this bullet overstated it as "both must fail short":
+- **two photoMOS in series per driven line — DECIDED 2026-10-12, four parts.**
+  The pair genuinely requires **two** failures: for it to conduct, *each*
+  device needs an internal short in the polarity-relevant FET, and one healthy
+  device blocks whatever the other does. Against a single-device failure whose
+  consequence is **unrecoverable** — the stored timer is reprogrammed within
+  2 s and this file already records that opening the switch line cannot stop
+  the machine — two more parts at ~€1.50 each is not a close call. Detection
+  alone does not help here: it tells you after the damage.
+
+  **There is no tension with the build rationale, and an earlier draft claimed
+  there was.** Fitting the parts now exists so Phase 1 is not a soldering job.
+  Building two and later wanting four *is* that soldering job. Four is what
+  the rationale implies; the only cost is the price of two parts.
+
+  Three things the pair does not fix, recorded rather than smoothed over:
+
   - **Two *partial* failures suffice.** An AQY212/TLP222A output is two
     MOSFETs, sources common, body diodes opposed — that is what makes it
     bidirectional. The drive here is **DC of fixed polarity** (pos 1 = +5 V),
     so one shorted FET leaves the other's body diode forward-biased and the
     device conducts at ~0.6 V. Two such half-failures give ~1.2 V of drop and
-    still leave ~3.8 V at the direction line, above the STM32's VIH.
+    still leave ~3.8 V at the direction line, above the STM32's VIH. So the
+    chain needs two *half*-failures, not two full shorts.
     *(Inferred from the standard photoMOS output topology; not checked
     against the AQY212 datasheet in hand.)*
-  - **Common cause.** Two identical parts from the same reel, in series, off
-    the same LED supply, in the same thermal environment, seeing the same
-    surge history on the same node. A surge on J2 — the plausible cause of an
-    output short — presents across the pair. "Standard safety-chain move"
-    normally implies *diverse* redundancy; this is its weakest form.
-  - **UNDECIDED: two photoMOS or four. Resolve before ordering** —
-    `docs/shopping-list.md` and the scope section below both still say two.
+  - **Common cause.** Two identical parts from the same reel, in series, in
+    the same thermal environment, seeing the same surge history on the same
+    node. A surge on J2 — the plausible cause of an output short — presents
+    across the pair. "Standard safety-chain move" normally implies *diverse*
+    redundancy; this is its weakest form.
+  - **THE PAIR HIDES ITS OWN FIRST FAILURE, and this is the part that
+    constrains the layout.** One device shorts, the healthy one still blocks,
+    the line stays low, and **nothing is visible** — including to the sense
+    divider, which is why that readback does not cover the pair. You find out
+    when the second device goes, by which point the redundancy that was
+    supposed to protect you has been absent for an unknown length of time.
 
-    **An earlier draft of this bullet contradicted itself** — it said four
-    "contradicts the Phase 1 costs two jumpers rationale" and then, in the
-    same sentence, that fitting *two* is what bakes in the retrofit. The
-    second clause is the right one. **Four does not contradict the build
-    rationale; it is what the rationale implies.** Fitting the parts now
-    exists so Phase 1 is not a soldering job, and building two and later
-    wanting four is exactly that soldering job. There is no cost on that
-    axis — only the price of two more parts.
+    **What catches it is a per-device test**: energise device 1's LED alone —
+    the line must stay low, because device 2 blocks. Then device 2 alone. Only
+    both together make a press. Two consequences, both real:
+
+    - **The two LEDs in a pair cannot share one drive.** Each needs its own
+      path, which is a one-shot-channel and GPIO-budget question that Phase 1
+      has not costed. Note GPIO1, 2, 9 and 10 are free; the seven taps plus
+      GPIO8 are not.
+    - **The test is not free when it finds something.** If device 1 has
+      already failed short, energising device 2 alone *is* a press — bounded
+      by the one-shot to ~120 ms, so no reprogram, but the board latches and a
+      full cycle runs. The spurious cycle is itself the alarm, and that is an
+      acceptable price for detecting a silently-absent safety chain; it should
+      not be described as a non-actuating test. Running it off-machine during
+      bring-up avoids the cost entirely and is the better first pass.
 - a **watchdog relay** in the LED supply that firmware must keep re-arming,
   so a crash de-energises the drive path rather than leaving it as it was.
   Note this shares the fuse's blind spot — it is on the control path, so it
@@ -522,30 +549,31 @@ does not work:
 
 #### Two things that bound the firmware-side failures
 
-- **TWO hardware disables, not one.** An intermediate draft replaced the
-  LED-supply jumper with a drive-leg jumper; they are not nested and both are
-  wanted.
+- **THREE jumpers, in two electrical domains — DECIDED 2026-10-12.** An
+  intermediate draft replaced the LED-supply jumper with a drive-leg jumper;
+  they are not nested and both are wanted.
 
-  **(a) In the drive leg** — a jumper or DIP switch in series with each
-  photoMOS output, on the **pos-1 side** of the part. This is what makes "the
-  board is still Phase 0" a fact about the hardware, and amended invariant 1
-  requires this placement specifically. It is what the LED-supply disable
-  cannot do: survive the output failing short.
+  | # | Where | Why it cannot be dropped |
+  |---|---|---|
+  | 2 | **one per driven line, in the drive leg**, on the **pos-1 side** of that line's photoMOS pair | the only thing that survives an output failing short — amended invariant 1 requires this placement by name. One per *line* covers both devices in the pair; per-device jumpers buy nothing |
+  | 1 | **shared, in the photoMOS LED supply** | with the drive legs open and the LEDs live, firmware can energise them throughout Phase 0 and **nothing ever reveals it** — the fault surfaces the instant a drive-leg jumper is fitted. This makes "firmware has demonstrably never commanded a fire" true by construction, which is the evidence wanted *before* fitting the others. **Remove it last.** |
 
-  **(b) In the LED supply** — which the drive-leg jumper cannot replace,
-  because with the output open and the LEDs live, **firmware is free to
-  energise them throughout Phase 0 and nothing ever reveals it.** The fault
-  then surfaces at the instant the Phase-1 jumper is fitted: line driven,
-  timer reprogrammed within 2 s. The LED disable makes "firmware has
-  demonstrably never commanded a fire" true by construction, which is exactly
-  the evidence wanted *before* fitting (a). It also puts the two opens in
-  **different electrical domains** — machine 5 V against our 3.3 V logic — so
-  one contaminated pad, flux residue or swarf cannot close both. **Remove it
-  last.**
+  **The two domains are the point.** The drive-leg jumpers sit on machine 5 V,
+  the LED jumper on our 3.3 V logic, so one contaminated pad, solder splash or
+  swarf cannot close both. A single jumper, wherever placed, is one fault from
+  closed.
 
-  Note (a) is not a firmware-side bound at all, despite this list's heading:
-  it bounds everything while open and nothing once fitted. (b) and the arm
-  gate are the firmware-side ones.
+  **Use 2-pin headers with NO shunt fitted — not DIP switches.** The
+  invariant's whole virtue is being checkable by eye, and bare pins with
+  nothing on them is the most visible open state there is; a DIP position is
+  small and easy to misread. **Keep spare shunts out of the box** so a dropped
+  one cannot close anything, and note the check means opening a glanded,
+  cable-tied enclosure.
+
+  Note the drive-leg jumpers are not firmware-side bounds at all, despite this
+  list's heading: they bound everything while open and nothing once fitted.
+  The LED jumper and the arm gate are the firmware-side ones.
+
 - **An arm gate.** AND the one-shot output with a second GPIO that firmware
   must hold high, so one stuck or floating trigger pin cannot fire anything.
 

@@ -7,14 +7,12 @@ Everything here is **Phase 0: read-only** in what it can *do*. Hard
 invariant 1, as amended 2026-10-12, turns on whether a signal can be driven,
 not on what is soldered to the board.
 
-**That changes this list, and the change is not yet costed.** The 2026-10-08
-build decision populates and bench-tests the actuation parts **now**, behind
-two open jumpers, rather than leaving footprints. So the §"Deliberately not
-yet" block at the bottom is **no longer deliberate-not-yet** — those parts
-move into the Phase 0 order. Two things to settle before anyone buys:
-**two photoMOS per driven line or four** (see the plan's failure analysis),
-and **two jumpers or four** — this list says "a jumper", and the design now
-wants one in each drive leg plus one in the LED supply.
+**That changes this list.** The 2026-10-08 build decision populates and
+bench-tests the actuation parts **now**, behind open jumpers, rather than
+leaving footprints. So the §"Deliberately not yet" block at the bottom is
+**no longer deliberate-not-yet** — those parts move into the Phase 0 order,
+at **4 × photoMOS and 3 × 2-pin header**, both decided 2026-10-12 and costed
+in §7.
 
 ---
 
@@ -364,17 +362,25 @@ rather than leaving footprints — so they belong in the Phase 0 order. See
 (AQY212 / TLP222A), RC parts for the one-shot, and jumpers or DIP switches
 for the hardware disables.
 
-**Two quantities are UNRESOLVED and both must be settled before ordering:**
+**Both quantities were settled 2026-10-12:**
 
-- **photoMOS: 2 or 4.** One per driven line, or two in series per line as a
-  redundancy chain. Four is more robust but contradicts the "Phase 1 costs two
-  jumpers, not a soldering iron" rationale that chose this build — fitting two
-  now bakes in exactly the retrofit the decision existed to avoid. The plan's
-  failure analysis also grades the chain weaker than it first looks (two
-  *partial* failures suffice, and the parts share a common cause).
-- **jumpers: 2 or 4.** This list said "a jumper", singular. The design wants
-  one in **each drive leg** (2) plus one in the **LED supply** — and the LED
-  one may be a single shared jumper or one per line.
+- **4 × photoMOS** (AQY212 / TLP222A) — **two in series per driven line**, not
+  one. A single device failing short reprograms the stored timer within 2 s
+  and nothing can stop it, so the pair is worth two extra parts. See the
+  failure analysis in `docs/phase-0-plan.md`, which also records what the pair
+  does *not* fix.
+- **3 × 2-pin header, no shunts fitted** — two in the drive legs (one per
+  line, on the pos-1 side of the pair) and one shared in the LED supply. Two
+  electrical domains, so one contaminated pad cannot close both. **Headers,
+  not DIP switches**: bare pins are the most visible open state, and the
+  invariant's virtue is being checkable by eye. Buy no spare shunts, or keep
+  them out of the box.
+
+**One thing this does NOT yet cost.** The pair hides its own first failure, so
+it needs a per-device test — which means each photoMOS needs its **own** drive
+path, not a shared one. That is a one-shot-channel and GPIO-budget question
+Phase 1 has not answered. It does not change what to buy today; it may add a
+second '221.
 
 These are the parts that let the firmware *trigger* the machine while being
 physically incapable of *holding* the line — which matters because holding

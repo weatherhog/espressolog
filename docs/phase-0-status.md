@@ -559,7 +559,8 @@ same circuit anyway:
 **The GPIO pin map is NOT one of them — it was closed on 2026-10-08 and
 re-confirmed 2026-10-12.** CLAUDE.md carried "they have not been checked
 against the clone DevKitC-1's silkscreen; do that before the perfboard is
-drilled" for four days, 200 lines from the bench table that closed it. The
+drilled" for four days, 200 lines from the bench table that closed it.
+
 The functional evidence and the visual check **combine** — neither closes it
 alone. Functional: all four switches logged their own names, the bus decoded
 frames (a swapped pair gives `frames=0`), GPIO6 counted 736. Each wire was
@@ -582,9 +583,9 @@ the far end of the signal header, two directly opposite it. The signal header
 is therefore 3V3 at one end, GND at the other, all seven taps between them,
 and no ground return crosses the board. **The census is a visual scan, not an
 exhaustive pass over all 44 positions**, and it is the premise of that last
-clause — worth re-checking before the layout is committed. Note also that
-**nothing on this board draws from 3V3**: every divider is fed from a machine
-signal and returns to GND.
+clause — worth re-checking before the layout is committed. Note also that no
+*tap* draws from 3V3: every divider is fed from a machine signal and returns
+to GND. The rail is still needed for the '221 and the photoMOS LEDs.
 
 **Pitch is 2.54 mm, settled 2026-10-12 — by the breadboard, not by calipers.**
 A 1.9 mm caliper reading was briefly treated as possibly the pitch; it is the
@@ -595,9 +596,10 @@ knowing: calipers laid between two pins read the gap, and on 0.1 in hardware
 that gap is a plausible-looking 1.9 mm.
 
 **One mechanical fact IS outstanding: the ROW-TO-ROW header spacing**, in
-0.1 in holes — the gap *between* the two headers, which decides whether the
-DevKitC-1 straddles the perfboard. The breadboard argument fixes the pitch
-*along* each header and says nothing about the gap between them.
+0.1 in holes — the gap *between* the two headers. The breadboard argument
+constrains it to an **integer number of holes** (both rows seat on the grid),
+so what is open is only which integer. `docs/shopping-list.md` narrows it
+further: a DevKitC-1 straddles a standard board leaving no rows beside it.
 
 **It was recorded as open on 2026-10-12, deleted the same day by a paragraph
 rewrite, and then covered over by a claim that "nothing mechanical is now

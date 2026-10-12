@@ -359,8 +359,12 @@ rather than leaving footprints — so they belong in the Phase 0 order. See
 `docs/phase-0-plan.md` and hard invariant 1 as amended.
 
 **74HC221** (dual, non-retriggerable monostable), **photoMOS relays**
-(AQY212 / TLP222A), RC parts for the one-shot, and jumpers or DIP switches
-for the hardware disables.
+(AQY212 / TLP222A), RC parts for the one-shot, and **2-pin headers** for the
+hardware disables — not DIP switches.
+
+**`docs/phase-0-plan.md` is normative on the counts and placement.** At the
+2026-10-12 decision that is 4 photoMOS and 3 headers; this list carries the
+numbers so you can order, but if the two disagree, the plan wins.
 
 **Both quantities were settled 2026-10-12:**
 
@@ -395,8 +399,9 @@ holds the output high) and needs an RC+diode differentiator. The '221 needs
 neither.
 
 A **photoMOS** rather than a bipolar optocoupler: it is a true contact
-replacement, bidirectional, a few ohms against R45's 100 Ω, with no
-saturation offset. (CLAUDE.md's "not an optocoupler" warning is about
+replacement, bidirectional, with no saturation offset, and its on-resistance
+is irrelevant against a press loop of ≥5 kΩ (not against R45's 100 Ω, as this
+and the plan both said until 2026-10-12). (CLAUDE.md's "not an optocoupler" warning is about
 *sensing*, where milliamps would break the board's own threshold. It does
 not apply to the drive path.)
 
@@ -405,13 +410,14 @@ only — the board latches, so one pulse starts and a second stops. Steam and
 Hot Water double the parts and the failure surface for nothing.
 
 **The design is in `docs/phase-0-plan.md`**, including the harness change:
-J2 position 1 (+5 V common) must reach the board, which it deliberately does
-not today.
+J2 position 1 (+5 V common) now rides in the loom, which it deliberately did
+not before 2026-10-12.
 
-Don't order them yet. 0f is measured (σ = 0.21 g/s, 12.2 %) and overshoot
-says stop-at-weight is viable, but the trigger path still depends on 0c
-being built and trusted first. Parts sitting in a drawer argue with the
-data.
+**ORDER THESE WITH THE PERFBOARD.** This block said "don't order them yet,
+the trigger path still depends on 0c being built and trusted first" — 0c was
+built and proven on 2026-10-08, and the 2026-10-12 build decision fits these
+parts in Phase 0 behind open jumpers. The reason not to order expired twice
+over.
 
 ---
 
@@ -421,11 +427,14 @@ Connectors are **bought** — the mixed balance-lead pack was €6.99 and
 should cover J5, J2 and J4, pending the seat check in section 1.
 
 Still outstanding: adhesive-lined heat-shrink, PTFE sleeving, perfboard,
-project box and cable gland — **~€30**.
+project box and cable gland — ~€30 — **plus the §7 actuation parts, ~€10**,
+which the 2026-10-12 build decision moved into this order. **~€40 total.**
 
 **Every resistor this project needs is now in hand (2026-10-08).** 8.2 K,
 15 K, 100 K, 150 K, 220 K and 1 K are all in stock; the E12 kit is Qty 0 and
-not needed. No milestone is gated on a part.
+not needed. **The perfboard build IS now gated on parts**, which it was not
+before 2026-10-12: it needs a 74HC221, 4 photoMOS and 3 headers, none of them
+bought.
 
 **Note what changed:** 0d was specified as 120 K, which this list claimed was
 in stock on 2026-10-07. It was not — the bag held 100 K and 150 K. 0d now
@@ -433,7 +442,8 @@ uses **100 K**, which is better here (see CLAUDE.md), and **150 K must not be
 substituted at J4** — it fails at −45 mV.
 
 What is left to buy is for the **perfboard stage, not the bench**: perfboard,
-project box, cable gland, adhesive-lined heat-shrink and PTFE sleeving, ~€30.
+project box, cable gland, adhesive-lined heat-shrink and PTFE sleeving (~€30)
+and the §7 actuation parts (~€10). **~€40.**
 The whole breadboard bench sequence can be done without any of it.
 
 **0d is no longer gated on firmware.** It was, for about an hour: the

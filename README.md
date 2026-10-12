@@ -14,9 +14,11 @@ sense tap is high-impedance and read-only. That is a hard invariant, not a
 stage we are waiting to leave.
 
 From the perfboard onward the board also *carries* the Phase 1 actuation
-parts, behind two open jumpers that leave them unable to conduct. The
-invariant is about what the hardware can do, not about what is soldered to
-it; `CLAUDE.md` states it in full.
+parts, behind open jumpers that leave them unable to conduct. The invariant
+is about what the hardware can do, not about what is soldered to it.
+**`CLAUDE.md` hard invariant 1 is the normative text and this paragraph
+deliberately does not paraphrase it** — earlier paraphrases here went stale
+twice.
 
 A visual tour is in [docs/overview.md](docs/overview.md).
 

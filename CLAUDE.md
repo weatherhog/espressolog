@@ -10,71 +10,71 @@ Currently **Phase 0: logging only.**
 Violating any of these is a bug, not a design choice.
 
 1. **Phase 0 never actuates anything.** No machine signal is driven, and
-   nothing on our board adds a current path between two machine signals.
+   nothing we add joins two machine signals through a path the machine did
+   not already have — **except a sense tap that is high-impedance or
+   passive**, which is the threshold this rule has always carried and which
+   applies to the "driven" clause as much as to the "joins" one. A pin that
+   briefly sinks microamps through 150 K is passive in the sense meant
+   here; a photoMOS closing a 5 V common onto a direction line is not.
 
-   **Sense taps are exempt, and the exemption carries the threshold**: a
-   tap may run from a machine signal to our ground provided it is
-   **high-impedance or passive**. Every divider here is — microamps
-   against the machine's own milliamps.
+   **How high-impedance, honestly:** J4 disturbs its node by **2.9 %**, J2
+   by ~1 mV, but **J5 pulls its line from 5.0 V to 4.16 V — a 17 %
+   disturbance at 179 µA**, measured. An earlier draft of this clause said
+   "microamps against the machine's own milliamps", which is false for J5.
+   The threshold is *does the machine still read what it would have read*,
+   not an absolute current.
 
-   *That sentence was briefly written as an absolute on 2026-10-12 — "no
-   current path … to our board's supplies" — which forbade **every tap
-   already fitted**, the J4 100 K + 220 K included, and also broke the
-   standing defence of the filter capacitors ("the cap blocks DC") and of
-   the GPIO15–18 power-up pulse. The threshold has to stay attached to the
-   rule, not sit in a sentence after it.*
+   **This rule is about our board. The harness is NOT covered and is now
+   the larger risk** — see `docs/phase-0-plan.md`. From Phase 1 provisioning
+   onward J2 position 1 (+5 V common) rides in the loom; a bridge from it to
+   a direction line actuates the machine and no jumper on the board is in
+   that path. Plumbing is likewise outside this invariant, for the same
+   reason and recorded separately.
 
    **Drive hardware may be PRESENT on the board**, and from the perfboard
-   onward it is — see `docs/phase-0-plan.md`. It is permitted only while an
-   **open jumper in series with its OUTPUT** leaves it unable to conduct:
-   not merely unpowered, not merely un-commanded. **A disable that only
-   cuts a control input does not satisfy this**, because it does not
-   survive the controlled part failing short, which is the characteristic
-   MOSFET failure mode.
-
-   **THREE jumpers, in two electrical domains — decided 2026-10-12.** Two
-   in the drive legs, one per driven line, on the **pos-1 side** of that
-   line's photoMOS pair; and one **shared in the photoMOS LED supply**. The
-   drive-leg jumpers are what make the claim true. The LED jumper is what
-   makes "firmware has demonstrably never commanded a fire" true *before*
-   a drive-leg jumper is ever fitted — otherwise a latent firmware fault
-   stays invisible for all of Phase 0 and surfaces the instant Phase 1
-   begins. Machine 5 V against our 3.3 V logic, so one contaminated pad
-   cannot close both. **Remove the LED one last.** Use 2-pin headers with
-   no shunt, not DIP switches: bare pins are the most visible open state.
+   onward it is. It is permitted only while an **open jumper in series with
+   its OUTPUT** leaves it unable to conduct: not merely unpowered, not
+   merely un-commanded. **A disable that only cuts a control input does not
+   satisfy this**, because it does not survive the controlled part failing
+   short, which is the characteristic MOSFET failure mode.
 
    **"Open jumper" is not "physically impossible", and an earlier draft of
    this clause said it was.** It makes conduction require a deliberate,
    visible mechanical act. A shunt fitted in error, a solder splash, swarf
-   or a dropped washer closes it. That is far stronger than firmware intent
-   and weaker than an absent component — and **checking it means opening
-   the box**, which the finished build is glanded and cable-tied shut.
+   or a dropped washer closes it. Far stronger than firmware intent, weaker
+   than an absent component — and **checking it means opening the box**,
+   which the finished build is glanded and cable-tied shut.
 
-   **GPIO8, the one pin this firmware drives, satisfies this by
-   construction on the perfboard**: it lands on a header with no trace to
-   anything. A path to the machine exists only while the operator has
-   deliberately fitted the selftest jumper to GPIO6, which is why "unplug
-   J4 first" is an **operational** rule rather than a structural one. It is
-   the weaker kind of guarantee, and it is bounded to a test nobody runs by
-   accident. On the breadboard, where that jumper was semi-permanent, it
-   was weaker still.
+   **How many jumpers, where, and in what order they are fitted is a build
+   decision and lives in `docs/phase-0-plan.md`** — do not restate it here.
+   This rule says only that at least one open jumper must sit in series with
+   every drive output.
 
-   *Amended 2026-10-12, re-drafted the same day after review.* The original
-   read "No writes to any machine signal. Every tap is high-impedance or
-   passive. Read-only." That sentence did two jobs: **"never actuates" is
-   the goal, "high-impedance or passive" is one implementation of it**, and
-   the perfboard forces them apart because a board can carry drive hardware
-   and still be unable to drive.
+   **One pin is bounded operationally, not structurally, and the invariant
+   should say so rather than imply otherwise.** `selftest` makes **GPIO8**
+   an output. (It is not the only output in the firmware — `updateLed()`
+   drives the onboard RGB LED — but it is the only one that can ever reach a
+   machine-facing net, which is the claim that matters.) On the perfboard it
+   lands on a header with no trace, so a path to the machine exists only
+   while the operator has deliberately fitted the selftest jumper to GPIO6 —
+   which is why "unplug J4 first" is an **operational** rule. That is the
+   weaker kind of guarantee and it is the one clause here not checkable by
+   looking at the board.
 
-   **The net is not simply "stricter", and the first draft claimed it was.**
-   On the drive path it is stricter: it names the one placement of the
-   disable that survives a component failure, which nothing previously did.
-   But it also **licenses a build that `docs/phase-0-plan.md` itself grades
-   as the higher-residual-risk of the two options considered** — parts
-   fitted behind jumpers, rather than footprints with nothing in them. The
-   trade is more residual risk for a verified layout, taken because
-   unverified things being wrong is where this project's defects have
-   actually come from. State it that way, not as a free improvement.
+   *Amended 2026-10-12, re-drafted the same day after two review rounds.*
+   The original read "No writes to any machine signal. Every tap is
+   high-impedance or passive. Read-only." That sentence did two jobs —
+   **"never actuates" is the goal, "high-impedance or passive" is one
+   implementation of it** — and the perfboard forces them apart, because a
+   board can carry drive hardware and still be unable to drive.
+
+   **The net is not simply "stricter", and a draft claimed it was.** On the
+   drive path it is stricter: it names the one placement of the disable that
+   survives a component failure. But it also **licenses the
+   higher-residual-risk of the two builds considered** — parts fitted behind
+   jumpers rather than footprints with nothing in them — trading residual
+   risk for a verified layout, because unverified things being wrong is
+   where this project's defects have actually come from.
 
 2. **Never write flash during a shot.** An ESP32 flash write blocks for
    tens of ms, which stalls the BLE stack and puts gaps in the curve.
@@ -249,7 +249,10 @@ against the operator's account.
 
 Nothing about the conclusion changes either way: **nobody has pressed
 deliberately shorter**, so the shortest press this board latches is still
-unestablished. A one-shot that is too short produces a drive path that
+unestablished. Note the grade precisely — what was recorded is **press
+durations observed at the tap**, not presses observed to *latch*. Nothing
+says the machine responded to a 345 ms press, so the figure does not even
+bound the threshold from above yet. One sentence next bench session. A one-shot that is too short produces a drive path that
 silently does nothing — and the sense tap would still show the pulse, so it
 would look like it worked. **Measure the minimum before choosing the RC**:
 press-and-release progressively shorter on the levers, with the tap watching,
@@ -964,8 +967,9 @@ position 1 at the board as the switching source — a photoMOS closes it to a
 direction line, which is what the lever does. That is a drive path, not a
 tap. It is **bounded** at ≤50 mA by the machine's own R45 — but that bound is
 not the operating point: a press pulls the line high through the board's
-pull-down (**not determined, ≥~50 kΩ**), so the real figure is ~100 µA, the
-same order as the sense dividers. Note this is **not
+pull-down, which is **not determined** (~0.1-1 mA depending on which meter
+resolution the 2026-10-04 reading is credited with; `docs/phase-0-plan.md` is
+normative on this figure). Note this is **not
 the J4 `+` net**, which the standalone read-only rule names and which remains
 untouchable; they are different conductors on different connectors that
 happen to share the IRM-03-5 rail.
@@ -1065,8 +1069,13 @@ presses on the machine.** The procedure records what was planned; the levers
 are what happened. Restored, and the divergence is now recorded in the
 pulse-width section above so the procedure is not cited this way again.
 
-So GPIO7/15 carry the **same full chain as 16/17** — J2 conductor, divider,
-header pin, die, firmware name — and all four switches sit at one grade.
+So GPIO7/15 were exercised the same way as 16/17. **But the record is one
+link short of saying so**, and this file spends a paragraph above insisting on
+exactly that distinction: lever B has its own row quoting what was logged
+(`B up logged water, B down logged steam`), while lever A's evidence is the
+summary row "All four switches | correct GPIO mapping" — a conclusion, not an
+observation. Nothing anywhere quotes "lever A up logged `1cup`". **One
+sentence at the next bench session closes it.**
 
 **The visual check's job**: the functional chain alone cannot distinguish
 wiring by *label* from wiring by *position*. The operator confirmed the
@@ -1096,7 +1105,11 @@ exploit.** Confirmed on the board in hand, 2026-10-12:
 overturns the published layout.** Espressif's pinout put GND on the opposite
 header only, which this file recorded as the layout's one awkward fact. The
 board in hand carries **three** GND pins: **one at the far end of the signal
-header**, and **two directly opposite it** on the other header.
+header**, and **two on the other header, opposite that end**. *(On a 2 × 22
+grid only one position is strictly opposite any other, so "two directly
+opposite" cannot be literal — read it as the facing end. The census is a
+visual scan and is the premise of the no-crossing claim below; re-check it
+over all 44 positions before the layout is committed.)*
 
 So the signal header is **3V3 at one end, GND at the other, all seven taps in
 between** — no ground return has to cross the board. A board reading beating a
@@ -1109,21 +1122,28 @@ than defended.)*
 the premise of "no ground return crosses the board". Worth a second pass over
 all 44 positions before the layout is committed.
 
-**NOTHING ON THIS BOARD DRAWS FROM 3V3.** The position table calls positions
-1-2 "the divider supply" and that is simply wrong — every divider here is fed
-from a **machine** signal and returns to GND (J2: 150 K from the direction
-line; J4: 100 K from `#`; J5: 8.2 K at the T-piece). 3V3 carries zero tap
-current. Its only Phase-0 use is as a **stimulus** in the bench jumper test.
-Anyone laying out from that row would route a rail nothing connects to.
+**NO TAP DRAWS FROM 3V3.** The position table calls positions 1-2 "the
+divider supply" and that is wrong — every divider here is fed from a
+**machine** signal and returns to GND (J2: 150 K from the direction line;
+J4: 100 K from `#`; J5: 8.2 K at the T-piece). 3V3 carries zero *tap* current.
 
-**STILL OPEN, and it was briefly lost: the ROW-TO-ROW header spacing**, in
-0.1 in holes. It was recorded as outstanding on 2026-10-12, deleted by a
-paragraph rewrite the same day, and then covered over by a claim that nothing
-mechanical remained — net information loss by rewrite, which is the defect
-this file names elsewhere. The breadboard argument fixes the **pitch along**
-each header at 2.54 mm; it says nothing about the gap **between** the two
-headers, which is the dimension that decides whether the DevKitC-1 straddles
-the perfboard. Count the holes.
+**The rail is still needed, and a draft of this paragraph said it was not.**
+The perfboard carries a populated 74HC221, which needs VCC and GND, and the
+photoMOS LED supply runs from our 3.3 V logic. "A rail nothing connects to"
+was true of the taps and false of the board.
+
+**PARTLY OPEN, and it was briefly lost entirely: the ROW-TO-ROW header
+spacing.** Recorded as outstanding on 2026-10-12, deleted by a paragraph
+rewrite the same day, then covered over by a claim that nothing mechanical
+remained — net information loss by rewrite, the defect this file names
+elsewhere.
+
+**The breadboard constrains it more than a draft of this paragraph allowed.**
+If the devkit seats in a 2.54 mm breadboard then *both* rows land on the
+0.1 in grid, so the gap is necessarily **an integer number of holes**. What is
+open is only *which* integer — and `docs/shopping-list.md` narrows it further,
+recording that a DevKitC-1 straddles a standard board leaving no rows beside
+it. **Count the holes**; it is one number, not an open question of kind.
 
 **Pitch is 2.54 mm (0.1 in) — and the proof is that the board has been in a
 BREADBOARD since 0a.** A caliper reading of **1.9 mm** was taken 2026-10-12
@@ -1154,7 +1174,9 @@ instruction reproduces the very jaw-placement ambiguity being warned about.
 *(10 × pitch + one 0.635 mm post. An earlier draft deleted the outer-edge row,
 leaving only the instruction that calipers cannot execute.)*
 
-**GPIO8 is reserved and is the one pin this firmware ever drives.** The
+**GPIO8 is reserved and is the only pin this firmware ever drives ON A
+MACHINE-FACING NET** — `updateLed()` drives the onboard RGB LED on GPIO48, so
+"the only output" is false and `main.cpp` already says so. The
 `selftest` command makes it an output to feed a known pulse train into
 GPIO6, proving the ISR/ring/loop path counts exactly, which no real shot can
 prove (there is nothing to check the count against). It returns to INPUT the

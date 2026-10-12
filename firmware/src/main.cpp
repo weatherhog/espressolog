@@ -191,9 +191,11 @@ static void printDisplay(Stream& out) {
 // Pin choices come from CLAUDE.md's GPIO budget. They avoid 0/3/45/46
 // (strapping), 19/20 (native USB), 26-32 (flash) and 33-37 (octal PSRAM on
 // this N16R8 module — configuring one of those typically crashes the
-// firmware). CONFIRM AGAINST THE SILKSCREEN before the perfboard is drilled:
-// this is a clone DevKitC-1 and these came from the constraint list rather
-// than a pin-by-pin check of the board in hand.
+// firmware). The silkscreen check is DONE (2026-10-12) and the pin map is
+// confirmed label-to-die for all eight pins -- see CLAUDE.md's GPIO budget,
+// which is normative. This comment told the reader to confirm it for four
+// days after it was closed; do not re-add an imperative here, point at
+// CLAUDE.md instead.
 //
 // NEVER enable an internal pull-up or pull-down on any of these. The taps are
 // resistor dividers in the hundreds of kilohms, and the ESP32's internal

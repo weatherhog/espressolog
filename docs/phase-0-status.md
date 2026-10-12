@@ -547,6 +547,27 @@ same circuit anyway:
 - the **logic analyser on `#`**, which is the only thing that settles whether
   the measured K-factor counts water or ringing
 
+**The GPIO pin map is NOT one of them — it was closed on 2026-10-08 and
+re-confirmed 2026-10-12.** CLAUDE.md carried "they have not been checked
+against the clone DevKitC-1's silkscreen; do that before the perfboard is
+drilled" for four days, 200 lines from the bench table that closed it. The
+evidence is functional rather than visual: all four switches logged their own
+names, the bus decoded frames (a swapped pair gives `frames=0`), GPIO6
+counted 736, and `selftest` ran 500/500 through GPIO8. Each wire was landed
+on a pin the operator picked by reading its label, so the chain fixes
+label to die, not merely die to firmware. The operator confirmed the
+silkscreen order against Espressif's published layout on 2026-10-12, which
+rules out the one alternative the functional chain cannot exclude - wiring by
+position rather than by label. See CLAUDE.md's GPIO budget table.
+
+**Two physical facts the perfboard layout still needs, and neither is
+electrical:** the row-to-row header spacing in 0.1 in holes, and which header
+carries GND. Espressif's layout puts it on the **opposite** header from all
+seven signal pins, which would be the layout's one awkward fact — but the
+2026-10-12 check covered the signal header only, so that is a datasheet
+reading, not a board reading. The seven being contiguous at positions 4-10
+is the layout's one piece of luck.
+
 ## The J5 tap went live 2026-10-07, and two things came out of it
 
 **A false `SETPOINT-TOUCHED`, and the cause is now MEASURED.** On first

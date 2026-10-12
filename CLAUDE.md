@@ -914,8 +914,51 @@ chain for the identification itself; see the lever table above.
 **All seven are now named in firmware 0.9.0, so none of them is a free
 choice any more** — this table used to mark five of them "proposed" and they
 were still unclaimed. Changing one now means changing `main.cpp`, not just
-this row. They have **not** been checked against the clone DevKitC-1's
-silkscreen; do that before the perfboard is drilled.
+this row.
+
+**The board check is DONE — 2026-10-12 — and it was already done on
+2026-10-08 without anyone noticing.** This paragraph carried "they have
+**not** been checked against the clone DevKitC-1's silkscreen; do that
+before the perfboard is drilled" for four days while the bench section 200
+lines away recorded the evidence that closed it. Same stale-line defect this
+file documents elsewhere.
+
+What closes it is **functional, not visual** — a higher grade than the
+silkscreen check that was asked for. The operator chose each header pin by
+reading its label, so if the pin marked `16` were not die GPIO16, the
+firmware (which names GPIO16 steam) would have been polling an unconnected
+pad and lever B down could not have logged `steam`. It logged.
+
+| GPIO | What confirmed it, 2026-10-08/09 |
+|---|---|
+| 4, 5 | the bus **decoded frames**. A swapped pair gives `frames=0` — this file's own documented signature — so this fixes *which is which*, not merely that both are right |
+| 6 | **736 counts** across shot 2, and `selftest` 500/500 at 100 Hz |
+| 7, 15 | lever A, logged as "correct GPIO mapping, taps of 345-480 ms" |
+| 16, 17 | lever B down logged `steam`, up logged `water` |
+| 8 | `selftest` drove it into GPIO6 and counted 500/500 |
+
+**The visual check still had one job, and it was done 2026-10-12**: the
+functional chain alone cannot distinguish wiring by *label* from wiring by
+*position*. The operator confirmed the silkscreen order against Espressif's
+published DevKitC-1 layout, and since each GPIO exists at exactly one header
+position, the two together identify every pin both ways round.
+
+**The seven are contiguous on one header, which the perfboard layout should
+exploit.** Confirmed on the board in hand, 2026-10-12:
+
+| Header position | Label |
+|---|---|
+| 1-2 | 3V3, 3V3 — the divider supply |
+| 3 | RST |
+| **4-10** | **GPIO4, 5, 6, 7, 15, 16, 17** — all seven, unbroken |
+| 11 | GPIO18 — gap |
+| **12** | **GPIO8** — selftest, header side only |
+
+**GND is believed to be on the opposite header — UNCONFIRMED.** That is
+Espressif's published layout, not something read off the board: the
+2026-10-12 confirmation covered the signal header only. It is the one
+awkward fact for the perfboard if true, so check it with the row-to-row
+spacing in 0.1 in holes, which is also unmeasured.
 
 **GPIO8 is reserved and is the one pin this firmware ever drives.** The
 `selftest` command makes it an output to feed a known pulse train into

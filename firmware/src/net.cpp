@@ -163,9 +163,20 @@ bool Net::tryUploadOldest() {
     Serial.printf("# net: uploaded %s (%s) -> %d, deleted\n", path.c_str(), record_id, code);
     return true;
   }
-  if (code >= 400 && code < 500) {
-    // The server understood us and said no — retrying forever won't help,
-    // but the record may still matter. Quarantine for a human.
+  // QUARANTINE ONLY ON A DELIBERATE REJECTION OF THIS RECORD'S CONTENT.
+  //
+  // This was `400 <= code < 500` until 2026-10-12, which is far too wide.
+  // 401 and 403 are an auth proxy, 404 is a wrong route after a redeploy,
+  // 408 is a timeout, 413 is a body limit and 429 is rate limiting — every
+  // one of them transient or a configuration slip, and every one of them
+  // moved a perfectly good record into /spool/bad, where NOTHING ever
+  // re-uploads it. One wrong endpoint could silently bin a whole backlog.
+  //
+  // The server returns 422 for a record it could not decode and 400 for a
+  // malformed request; those are about this record and retrying really is
+  // futile. Everything else 4xx is about the path, the proxy or the moment,
+  // so treat it like a 5xx and keep trying.
+  if (code == 400 || code == 422) {
     Serial.printf("# net: %s rejected with %d, quarantining\n", path.c_str(), code);
     LittleFS.mkdir("/spool/bad");
     LittleFS.rename(path, "/spool/bad/" + path.substring(path.lastIndexOf('/') + 1));

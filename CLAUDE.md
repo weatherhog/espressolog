@@ -488,10 +488,28 @@ blinks **`95`** while the boiler cools back down. Contrast the warm-up from
 cold, which shows the *actual* temperature climbing and does **not** blink
 at all. That asymmetry is unexplained.
 
-This is the one J5 line where a careless connection could actuate the
-machine, which hard invariant 1 forbids. The 8.2 K / 15 K divider is
-high-impedance and receive-only, so it is safe as specified — but do not
-replace it with anything that can source current.
+**`Disp-P4` IS THE LINE THAT MUST NOT BE LOADED, AND THIS PARAGRAPH USED TO
+SAY THE OPPOSITE.** Until 2026-10-12 it read: *"This is the one J5 line where
+a careless connection could actuate the machine… The 8.2 K / 15 K divider is
+high-impedance and receive-only, so it is safe as specified."* Two defects, and
+together they were the only thing in this file that could produce an
+invariant-1 violation:
+
+- **The antecedent was gone.** "This line" had drifted ~80 lines from the
+  `Disp-P4` discussion it referred to, landing after a passage about display
+  blinking. A reader met it with no referent and attached it to J5 generally.
+- **The conclusion is backwards for `Disp-P4` specifically.** It is
+  **bidirectional** and reaches the MCU through R32 = 100 K. `docs/phase-0-status.md`
+  is explicit: if that pull-up is weak, **a 23.2 K divider drags the line under
+  1 V and the MCU sees a button held down permanently** — not actuation, but a
+  false signal fed into the machine continuously, which invariant 1 still
+  forbids. `docs/shopping-list.md` specifies `Disp-P4` as branched through
+  8.2 K and **terminated at nothing**, and that is the built configuration.
+
+**So: the 8.2 K / 15 K divider is correct on `ESD1` and `ESD4`, and the 15 K
+shunt must NOT be fitted to `Disp-P4`.** Branch it through its 8.2 K for
+symmetry if you like, leave the far end open, and never hang anything on it
+that can source or sink current.
 
 Two traps, both of which cost time on 2026-09-28:
 - **Ground is pin 1, the spoked pad.** The square-pad-is-pin-1 convention

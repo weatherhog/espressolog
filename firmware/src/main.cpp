@@ -13,7 +13,7 @@
 #include "machine_io.h"
 #include <driver/gpio.h>
 
-const char* FIRMWARE_VERSION = "0.9.2";
+const char* FIRMWARE_VERSION = "0.9.3";
 const char* DETECTOR_VERSION = "0a.6";
 
 static ScaleManager scales;
@@ -350,6 +350,36 @@ static void reportSwitch(const SwitchBank::Event& e) {
   net.sendLive(frame);
 }
 
+// ------------------------------------------------------- is the pump running?
+// The detector cannot answer this. It is scale-driven, so it says IDLE from
+// pump-on until first drip plus POUR_HOLD_MS, which is exactly the window
+// invariant 2 cares about. The machine itself answers it two ways.
+//
+// PREFERRED: the display shows its brew timer. CLAUDE.md establishes that
+// Mode::TIMER IS the machine's own pump-on to pump-off measurement — it
+// starts when the pump starts and stops when it stops, including when a
+// cycle is cut short by hand. That is exactly the window we must not write
+// flash or block on HTTP in, with no guard time needed at either end.
+//
+// FALLBACK: a 1Cup/2Cup/Water press, for when the J5 tap is not fitted or
+// the bus has gone stale. Then a press is the only start-of-cycle signal
+// there is, and the stored duration is user-modifiable state we do not know
+// — 1Cup is ~10.5 s on this machine, 2Cup's value is UNKNOWN and the
+// default is 60 s. BREW_GUARD_MS covers the long case; it is deliberately
+// generous because the cost of being wrong is a stalled pour, while the
+// cost of being conservative is only that an upload waits a minute.
+static constexpr uint32_t BREW_GUARD_MS = 75000;
+static uint32_t last_brew_press_ms = 0;
+
+static bool machineBusy() {
+  // Trust the display only while it is actually being decoded. A stale bus
+  // would otherwise report whatever mode it last saw, forever.
+  if (display_on && !display_bus.stale(micros(), MachineContextTracker::BOILER_MAX_AGE_US))
+    return display_bus.reading().mode == DisplayBus::Mode::TIMER;
+  if (!last_brew_press_ms) return false;
+  return (millis() - last_brew_press_ms) < BREW_GUARD_MS;
+}
+
 static void pollSwitches() {
   if (!switches_on) return;
   uint32_t now = millis();
@@ -362,7 +392,12 @@ static void pollSwitches() {
   switches.feed(now, lv);
 
   SwitchBank::Event e;
-  while (switches.popEvent(e)) reportSwitch(e);
+  while (switches.popEvent(e)) {
+    // 1Cup, 2Cup and Water all run the pump. Remember when, because the
+    // detector will not know for several seconds — see machineBusy().
+    if (e.line == 0 || e.line == 1 || e.line == 3) last_brew_press_ms = now;
+    reportSwitch(e);
+  }
 }
 
 // ----------------------------------------------------------- bench self-test
@@ -623,7 +658,7 @@ static void handleCommand(String line, Stream& out) {
   String arg = sp < 0 ? "" : line.substring(sp + 1);
 
   if (cmd == "help" || cmd == "h") {
-    out.println("# status|s  tare|t  raw|r  verbose|v  display [on|off]  flow [on|off|filter <us>]  switches [on|off]  pins  selftest [n] [hz]  ls  dump <file>  rm <file>  fake  net  scales  assign <yield|dose> <mac|last>  set <ssid|pass|endpoint> <val>  reboot");
+    out.println("# status|s  tare|t  raw|r  verbose|v  display [on|off]  flow [on|off|filter <us>]  switches [on|off]  pins  selftest [n] [hz]  ls  dump <file>  rm <file>  format yes  fake  net  scales  assign <yield|dose> <mac|last>  set <ssid|pass|endpoint> <val>  reboot");
   } else if (cmd == "status" || cmd == "s") {
     out.printf("# yield: state=%d mac=%s | dose: state=%d mac=%s\n",
                (int)scales.slotState(ScaleRole::YIELD), scales.slotMac(ScaleRole::YIELD).c_str(),
@@ -768,6 +803,23 @@ static void handleCommand(String line, Stream& out) {
     spool.dump(arg, out);
   } else if (cmd == "rm") {
     out.printf("# rm %s: %s\n", arg.c_str(), spool.remove(arg) ? "ok" : "failed");
+  } else if (cmd == "format") {
+    // The deliberate act that LittleFS.begin() used to perform by itself on
+    // any mount failure, destroying every unsent shot. Needed once on a
+    // blank partition; never otherwise.
+    if (detector.state() != ShotState::IDLE) {
+      out.println("# format: REFUSED — a shot is in progress.");
+    } else if (arg != "yes") {
+      out.printf("# format: ERASES EVERYTHING on the spool, including %u pending"
+                 " record(s). There is no undo. Type 'format yes' to proceed.\n",
+                 (unsigned)(spool_ok ? spool.pendingCount() : 0));
+    } else {
+      out.println("# format: erasing…");
+      bool ok = LittleFS.format();
+      spool_ok = ok && LittleFS.begin(false, "/littlefs", 10, "littlefs") && spool.begin();
+      out.printf("# format: %s, spool %s\n", ok ? "done" : "FAILED",
+                 spool_ok ? "ready" : "UNAVAILABLE");
+    }
   } else if (cmd == "fake") {
     spoolFakeShot(out);
   } else if (cmd == "net") {
@@ -831,8 +883,23 @@ void setup() {
   Serial.printf("# espressolog %s (detector %s)\n", FIRMWARE_VERSION, DETECTOR_VERSION);
 
   // 4th arg: our partition is labeled "littlefs", not the wrapper's default "spiffs"
-  if (!LittleFS.begin(true /* format on first use */, "/littlefs", 10, "littlefs")) {
-    Serial.println("# LittleFS: MOUNT FAILED — shots will NOT be persisted");
+  //
+  // MOUNT WITHOUT FORMATTING FIRST. This passed format-on-fail = true until
+  // 2026-10-12, so any mount failure — corruption, a partition-table change,
+  // a half-written block after a brown-out — silently reformatted the
+  // partition and destroyed every unsent shot. That is invariant 6 being
+  // broken by the recovery path. A failed mount is now reported and left
+  // alone, so the flash can be dumped and the records recovered; formatting
+  // is a deliberate act, and `format` on the CLI is where it belongs.
+  //
+  // The cost is that a genuinely blank partition no longer self-formats on
+  // first boot. That happens once per board, is visible in this log line,
+  // and is worth paying to never auto-erase a backlog.
+  if (!LittleFS.begin(false, "/littlefs", 10, "littlefs")) {
+    Serial.println("# LittleFS: MOUNT FAILED — shots will NOT be persisted.");
+    Serial.println("# If this partition has never been used, run 'format' once."
+                   " If it HAS held shots, do NOT format: dump the flash first,"
+                   " because formatting destroys every record still waiting.");
   } else {
     spool_ok = spool.begin();
     Serial.printf("# LittleFS: %u/%u KB used, spool %s, %u pending\n",
@@ -963,7 +1030,26 @@ void loop() {
   }
 
   ShotState st = detector.state();
-  bool quiet = st == ShotState::IDLE || st == ShotState::ARMED;
+  // INVARIANT 2: never write flash or block on the network during a shot.
+  //
+  // This was `IDLE || ARMED` until 2026-10-12, and ARMED is not quiet. The
+  // detector only reaches POURING at first drip plus POUR_HOLD_MS, so ARMED
+  // spans pump-on, the whole of pre-infusion and the first drops — with the
+  // pump running, the flow ISR counting and the display bus decoding. In
+  // that window this loop was free to write a weighing to LittleFS and to
+  // call net.tick(), whose HTTP path is synchronous with a 3 s connect and
+  // 5 s response timeout. With the server unreachable and a record pending,
+  // loop() stalls seconds at a time; the 64-entry sample queue holds ~3-6 s,
+  // the 512-entry display ring ~50 ms, and a 345-480 ms switch press is
+  // missed outright. It is a candidate explanation for the one burst of
+  // ~6086 dropped display edges at pump start that docs/phase-0-status.md
+  // records as unexplained — not proof, but it predicts that signature.
+  //
+  // It is easy to hit: the yield scale's weighing episode ends when the
+  // first-drip creep exceeds RANGE_MG, which is usually BEFORE the shot
+  // detector confirms POURING, so the event is queued and flushed in the
+  // same loop iteration while the state is still ARMED.
+  bool quiet = (st == ShotState::IDLE || st == ShotState::ARMED) && !machineBusy();
 
   if (quiet && spool_ok) {
     while (pending_w_n > 0) {

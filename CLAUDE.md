@@ -1164,8 +1164,35 @@ exactly why that distinction was worth drawing, and the layout should be
 driven by the board in hand and nothing else.
 
 The signal column is still **3V3 at one end, GND at the other, all seven taps
-between** — row 42 and row 64 confirm it directly — so no ground return has to
+between** — row 42 and row 63 confirm it directly — so no ground return has to
 cross the board. That claim survives every revision above.
+
+**COUNTING TRAP: breadboard columns are not perfboard holes, and the
+difference is the channel.** A to I looks like 9 columns and *is* 9 columns —
+but it is **10 pitches**, because the single visual step from E to F is the
+0.3 in channel, worth **3 pitches of missing holes**, not one. Perfboard has
+no channel, so the same devkit lands on columns 0 and 10 there:
+
+| | columns you can see | pitches |
+|---|---|---|
+| breadboard, A to I | 9 | **10** |
+| perfboard, continuous | **11 inclusive** | **10** |
+
+Quote the **pitch count**, never the column count, when carrying a dimension
+from one board to the other.
+
+**FOOTPRINT ON PERFBOARD: 11 columns × 22 rows**, with 9 free columns running
+underneath the devkit between the two pin rows. That underneath space is real
+estate — the dividers can live there if the devkit is socketed high enough,
+which is the reason `docs/shopping-list.md` specifies **female** headers.
+
+**Size the board from the hole count, not the centimetre label.** 5 × 7 cm is
+~19 × 27 holes and the devkit alone eats **22 of the 27 rows**, leaving five
+for four J2 dividers, the J4 divider, two J5 resistors, a 74HC221 and four
+photoMOS. It does not fit. **7 × 9 cm** (~27 × 35) leaves 16 × 13 clear.
+**Count the holes on the board you actually receive** — some "5 × 7" boards
+are 18 × 24 — because a published figure has now been wrong about hardware in
+hand twice in one day.
 
 **Pitch is 2.54 mm (0.1 in) — and the proof is that the board has been in a
 BREADBOARD since 0a.** A caliper reading of **1.9 mm** was taken 2026-10-12

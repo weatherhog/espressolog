@@ -319,7 +319,7 @@ because the machine caught it:
 | Heat-shrink assortment, **adhesive-lined** | 6 | Strain relief at the T-piece branches, and over the stripped window. Adhesive-lined or nothing — plain heat-shrink is not insulation on its own. |
 | Breadboard, 830-point | 6 | For the **J5 bench test before the perfboard**. **Corrected 2026-10-12:** a DevKitC-1 straddles a standard board with its headers in columns **A and I** — 1.0 in row-to-row — so **one row (J) stays free**, not none as this line said. The advice is unchanged and was followed: put only the resistor junctions on the breadboard and jumper across to the devkit's headers. Note that is exactly why the ESP was NOT seated during the bench sessions, which a later commit wrongly cited as proof of the pin pitch. |
 | **Jumper wires, male-female AND male-male** | 6 | The easily-forgotten part. M-F reaches the devkit header pins from the breadboard. |
-| Perfboard + **FEMALE** pin headers | 6 | The dividers want to live on a board, not in mid-air. **Female** so the ESP32 sockets in and comes out — soldering the devkit down means it cannot be swapped or easily reflashed. |
+| Perfboard **7 × 9 cm** + **FEMALE** pin headers | 8 | The dividers want to live on a board, not in mid-air. **Female** so the ESP32 sockets in and comes out — soldering the devkit down means it cannot be swapped or easily reflashed. **Size settled 2026-10-12: 7 × 9, not 5 × 7.** The devkit's footprint is 11 columns × 22 rows (pin rows 10 pitches apart, 22 pins long) and a 5 × 7 board is only ~27 rows, so the devkit alone would take 22 of them. Count the holes on what arrives; centimetre labels vary. |
 | Second mixed balance-lead pack | 7 | **Insurance.** The 4S is the only lead that fits J2 and there is no spare if a strip-and-solder goes wrong. The T-pieces are the most laborious part of the build and the pack is seven euro. |
 | ABS project box, ~120 x 80 x 40 mm | 8 | ESP32 mounts **outside** the machine. Size it for **three** harnesses — 0c adds J2 (5 wires, **4** dividers — all four functions) and 0d adds J4, and they all land here. A box that fits only the display tap is a box bought twice. |
 | Cable gland or grommet | 3 | Where the harness leaves the case |
@@ -427,8 +427,9 @@ Connectors are **bought** — the mixed balance-lead pack was €6.99 and
 should cover J5, J2 and J4, pending the seat check in section 1.
 
 Still outstanding: adhesive-lined heat-shrink, PTFE sleeving, perfboard,
-project box and cable gland — ~€30 — **plus the §7 actuation parts, ~€10**,
-which the 2026-10-12 build decision moved into this order. **~€40 total.**
+project box and cable gland — ~€32, the perfboard having gone to 7 × 9 —
+**plus the §7 actuation parts, ~€10**, which the 2026-10-12 build decision
+moved into this order. **~€42 total.**
 
 **Every resistor this project needs is now in hand (2026-10-08).** 8.2 K,
 15 K, 100 K, 150 K, 220 K and 1 K are all in stock; the E12 kit is Qty 0 and
@@ -442,8 +443,8 @@ uses **100 K**, which is better here (see CLAUDE.md), and **150 K must not be
 substituted at J4** — it fails at −45 mV.
 
 What is left to buy is for the **perfboard stage, not the bench**: perfboard,
-project box, cable gland, adhesive-lined heat-shrink and PTFE sleeving (~€30)
-and the §7 actuation parts (~€10). **~€40.**
+project box, cable gland, adhesive-lined heat-shrink and PTFE sleeving (~€32)
+and the §7 actuation parts (~€10). **~€42.**
 The whole breadboard bench sequence can be done without any of it.
 
 **0d is no longer gated on firmware.** It was, for about an hour: the

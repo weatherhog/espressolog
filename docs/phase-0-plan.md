@@ -254,7 +254,7 @@ instead of soldering to the board.
 | ~~Resistor kit, E12 1/4 W~~ | **Not required** — see `shopping-list.md`: it covers no named value, and cheap kits are 5 % where every divider here wants 1 %. All of them are in stock. | — |
 | 30 AWG silicone hookup wire, 4 colours | flexible, survives vibration | 8 |
 | JST pigtails, assorted pitch | **after** identifying connectors | 8 |
-| Perfboard + pin headers | 2.54 mm, confirmed against the board | 6 |
+| Perfboard **7 × 9 cm** + **female** headers | 2.54 mm confirmed three ways; **7 × 9 not 5 × 7** — the devkit footprint is 11 × 22 holes and a 5 × 7 board has only ~27 rows. See `shopping-list.md` | 8 |
 | Heat-shrink assortment | | 5 |
 | Small ABS project box | mounts outside the machine | 6 |
 | 74HC221 (dual), **photoMOS ×4**, one-shot RC, **3 × 2-pin header** (no shunts) | **moved into this order 2026-10-12** — the build populates them behind open jumpers rather than leaving footprints. Counts decided; see `shopping-list.md` §7 | ~10 |

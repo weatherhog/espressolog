@@ -573,9 +573,10 @@ does not work:
     both together make a press. Three consequences, all real:
 
     - **The two LEDs in a pair cannot share one drive.** Each needs its own
-      path. Free digital GPIOs are not the constraint — 1, 2, 9, 10, 11-14,
-      18, 21, 38-42, 47, 48 are all unallocated — **the one-shot channels
-      are**: a dual '221 gives two, enough for one per *line*, not one per
+      path. Free digital GPIOs are not the constraint — against the full
+      board-read pinout in CLAUDE.md that is 1, 2, 9-14, 18, 21, 38-42 and 47
+      (48 is the onboard LED; 35-37 are PSRAM-internal; 0, 3, 19, 20, 45, 46
+      are strapping or native USB) — **the one-shot channels are**: a dual '221 gives two, enough for one per *line*, not one per
       device. A second '221, or a different gating scheme, is unpriced.
     - **Each test path must still be one-shot bounded.** If a per-device drive
       is a bare GPIO, the ~120 ms ceiling does not exist and a stuck test pin

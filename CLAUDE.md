@@ -1093,13 +1093,49 @@ missed the GND placement, so it carries that pass's limits.
 **The seven are contiguous on one header, which the perfboard layout should
 exploit.** Confirmed on the board in hand, 2026-10-12:
 
-| Header position | Label |
-|---|---|
-| 1-2 | 3V3, 3V3 — **not a divider supply**, see below |
-| 3 | RST |
-| **4-10** | **GPIO4, 5, 6, 7, 15, 16, 17** — all seven, unbroken |
-| 11 | GPIO18 — gap |
-| **12** | **GPIO8** — selftest, header side only |
+**FULL PINOUT, READ OFF THE BOARD 2026-10-12. This replaces Espressif's
+published layout as the reference for this clone — use nothing else.** Both
+columns enumerated end to end, 22 positions each, position 1 at the 3V3 end
+(breadboard row 42) and position 22 at the far end (row 63).
+
+| Pos | Signal column | | Opposite column |
+|---|---|---|---|
+| 1 | **3V3** | | **GND** |
+| 2 | 3V3 | | GPIO43 / TX |
+| 3 | RST | | GPIO44 / RX |
+| **4** | **GPIO4** — `ESD4` clock | | GPIO1 |
+| **5** | **GPIO5** — `ESD1` data | | GPIO2 |
+| **6** | **GPIO6** — flow `#` | | GPIO42 |
+| **7** | **GPIO7** — 1Cup | | GPIO41 |
+| **8** | **GPIO15** — 2Cup | | GPIO40 |
+| **9** | **GPIO16** — Steam | | GPIO39 |
+| **10** | **GPIO17** — Hot Water | | GPIO38 |
+| 11 | GPIO18 | | GPIO37 ‡ |
+| **12** | **GPIO8** — selftest | | GPIO36 ‡ |
+| 13 | GPIO3 † | | GPIO35 ‡ |
+| 14 | GPIO46 † | | GPIO0 † |
+| 15 | GPIO9 | | GPIO45 † |
+| 16 | GPIO10 | | GPIO48 — onboard RGB LED |
+| 17 | GPIO11 | | GPIO47 |
+| 18 | GPIO12 | | GPIO21 |
+| 19 | GPIO13 ◦ | | GPIO20 † |
+| 20 | GPIO14 | | GPIO19 † |
+| 21 | **5Vin** | | **GND** |
+| 22 | **GND** | | **GND** |
+
+† strapping or native-USB, avoid. ‡ **GPIO35-37 are octal-PSRAM internal on
+this N16R8 module** — physically present on the header and unusable; do not
+even probe them. ◦ the source read "12 12" at positions 18-19; 13 is inferred
+from the sequence and from GPIO13 having to be somewhere. **Confirm before
+anyone uses it.**
+
+**Two things this corrects about earlier working notes**, both from the
+published layout rather than the board: GPIO19 and GPIO20 are on the
+**opposite** column, not at signal-column positions 13-14 (which carry GPIO3
+and GPIO46), and the signal column ends **5Vin, GND** rather than running
+GPIO14 to the last position. The repo's own table only ever claimed positions
+1-12, which are correct — the error was in the fuller recollection used to
+reason about free pins.
 
 **GND IS ON THE SIGNAL COLUMN — read off the board 2026-10-12, and it
 overturns the published layout.** Espressif's pinout put GND on the opposite
@@ -1147,13 +1183,29 @@ have made the board depart from the published 2 × 22 layout. The operator
 corrected it to 63 within minutes. Recorded only because the 23-pin reading
 briefly reached a commit message.)*
 
-**There are FOUR GND pins, not three.** An earlier count said three; a fourth
-was noticed on 2026-10-12 when the board was seated and read properly. Three
-are located: **row 63 on the signal column** (far end from 3V3), and **rows 42
-and 63 on the opposite column**. The fourth is not. This is the third
-successive revision of the GND census, each from a closer look, so
-**enumerate all 44 positions once** before the layout is committed rather than
-counting by eye a fourth time.
+**FOUR GND pins, and the census is now CLOSED by full enumeration** rather
+than by a fourth count-by-eye. It had moved twice (three, then four) from
+successive closer looks, which is why a review flagged it as a visual scan
+standing as the premise of a layout claim. From the table above:
+
+| | Position | Neighbour |
+|---|---|---|
+| **signal column** | **22** | next to 5Vin at 21 |
+| opposite column | 1 | opposite 3V3 |
+| opposite column | 21 | next to GPIO19 at 20 |
+| opposite column | 22 | the far corner |
+
+**The load-bearing claim SURVIVES.** The signal column runs **3V3 at position
+1, GND at position 22, all seven taps between** — so no ground return has to
+cross the board. That was in four documents on the strength of a visual scan,
+and an intermediate description of the GNDs ("one opposite 3V3, two at the
+other end of that row") read as though all of them were on the *opposite*
+column, which would have refuted it. The enumeration settles it: there is a
+GND at the far end of the taps' own column.
+
+**5Vin is at signal-column position 21**, which was not previously recorded
+anywhere. It is adjacent to that GND, and it is *our* 5 V rail, not the
+machine's — do not confuse it with the J4 `+` net, which is read-only.
 
 **Stop citing Espressif's published pinout for this board.** It was used as
 the comparison for the silkscreen check and then contradicted the same day on

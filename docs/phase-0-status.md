@@ -596,11 +596,15 @@ had reached a commit message.)*
 
 **Two things the same seating did correct:**
 
-- **There are four GNDs, not three.** Third revision of that census, each
-  from a closer look, which is why a review had flagged it as a visual scan
-  standing as the premise of a layout claim. Three located: row 63 on the
-  signal column, rows 42 and 63 opposite. The fourth is not. **Enumerate all
-  44 positions once** rather than counting by eye again.
+- **Four GNDs, and the census is CLOSED** — both columns enumerated end to
+  end on 2026-10-12 rather than counted by eye a fourth time. One on the
+  signal column (position 22, next to 5Vin); three opposite (positions 1, 21,
+  22). The count had moved twice from successive closer looks, which is why a
+  review flagged it as a visual scan standing as the premise of a layout
+  claim. **The claim survives**: the signal column is 3V3 at position 1 and
+  GND at position 22, so no ground return crosses the board. CLAUDE.md now
+  carries the full board-read pinout for both columns, which replaces
+  Espressif's published layout as the reference for this clone.
 - **`docs/shopping-list.md`'s "leaves no rows beside it" is refuted** — J is
   free. That line was used twice to argue the spacing was already partly
   constrained.

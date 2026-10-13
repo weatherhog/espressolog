@@ -1,4 +1,5 @@
 #include "spool.h"
+#include "spool_pick.h"
 #include <LittleFS.h>
 #include <esp_random.h>
 #include <esp_rom_crc.h>
@@ -153,25 +154,18 @@ bool Spool::remove(const String& name) {
 }
 
 String Spool::oldest() {
-  // Lexicographic min works within a boot; across boots order is arbitrary
-  // but every file still gets its turn (stage 4 uploads until empty).
+  // The WALK lives here; the CHOICE lives in spool_pick.h, where it is tested
+  // over a stream of (name, is_dir) pairs. Until 2026-10-12 the choice was
+  // inline and considered directories — see spool_pick.h for what that cost.
   //
-  // SKIP DIRECTORIES. The quarantine path creates /spool/bad INSIDE /spool,
-  // and openNextFile() returns directories as well as files. "bad" sorts
-  // before both "s-" and "w-", so without this test the first quarantine
-  // wedges the queue permanently: oldest() returns /spool/bad forever,
-  // reading it yields 0 bytes, that re-triggers the quarantine branch, the
-  // rename fails, and the uploader backs off and repeats. Every later shot
-  // then sits on flash and never reaches the server — invariant 6, silently.
-  // Found by audit 2026-10-12; present since the quarantine path was added.
-  String best;
+  // Streaming, so there is no bound on how many entries a pass considers and
+  // the behaviour is identical to the loop it replaced.
+  OldestPicker pick;
   File d = LittleFS.open(DIR);
-  for (File f = d.openNextFile(); f; f = d.openNextFile()) {
-    if (f.isDirectory()) continue;
-    String n = String(f.name());
-    if (best.isEmpty() || n < best) best = n;
-  }
-  return best.isEmpty() ? best : String(DIR) + "/" + best;
+  for (File f = d.openNextFile(); f; f = d.openNextFile())
+    pick.consider(f.name(), f.isDirectory());   // name() is the basename here
+
+  return pick.have() ? String(DIR) + "/" + pick.best() : String();
 }
 
 void Spool::list(Stream& out) {

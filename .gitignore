@@ -38,3 +38,6 @@ analysis/espressolog.db-wal
 firmware/test/host/machine_context_test
 firmware/test/host/machine_io_test
 firmware/test/host/armed_test
+firmware/test/host/brew_guard_test
+firmware/test/host/upload_policy_test
+firmware/test/host/spool_pick_test

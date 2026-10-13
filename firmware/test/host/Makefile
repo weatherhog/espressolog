@@ -19,12 +19,15 @@ CXX ?= clang++
 # flag does not.
 CXXFLAGS = -std=c++17 -Wall -UNDEBUG
 
-test: detector_test display_test machine_context_test machine_io_test armed_test
+test: detector_test display_test machine_context_test machine_io_test armed_test brew_guard_test upload_policy_test spool_pick_test
 	./detector_test
 	./display_test
 	./machine_context_test
 	./machine_io_test
 	./armed_test
+	./brew_guard_test
+	./upload_policy_test
+	./spool_pick_test
 
 detector_test: detector_test.cpp ../../src/detector.cpp ../../src/detector.h
 	$(CXX) $(CXXFLAGS) -o $@ detector_test.cpp ../../src/detector.cpp
@@ -41,9 +44,19 @@ machine_io_test: machine_io_test.cpp ../../src/machine_io.cpp ../../src/machine_
 armed_test: armed_test.cpp ../../src/detector.cpp ../../src/detector.h
 	$(CXX) $(CXXFLAGS) -o $@ armed_test.cpp ../../src/detector.cpp
 
+brew_guard_test: brew_guard_test.cpp ../../src/brew_guard.cpp ../../src/brew_guard.h ../../src/machine_io.cpp
+	$(CXX) $(CXXFLAGS) -o $@ brew_guard_test.cpp ../../src/brew_guard.cpp ../../src/machine_io.cpp
+
+upload_policy_test: upload_policy_test.cpp ../../src/upload_policy.cpp ../../src/upload_policy.h
+	$(CXX) $(CXXFLAGS) -o $@ upload_policy_test.cpp ../../src/upload_policy.cpp
+
+spool_pick_test: spool_pick_test.cpp ../../src/spool_pick.cpp ../../src/spool_pick.h
+	$(CXX) $(CXXFLAGS) -o $@ spool_pick_test.cpp ../../src/spool_pick.cpp
+
 replay: replay.cpp ../../src/detector.cpp ../../src/detector.h
 	$(CXX) $(CXXFLAGS) -o $@ replay.cpp ../../src/detector.cpp
 
 clean:
-	rm -f detector_test display_test machine_context_test machine_io_test armed_test replay
+	rm -f detector_test display_test machine_context_test machine_io_test armed_test \
+	      brew_guard_test upload_policy_test spool_pick_test replay
 .PHONY: test clean

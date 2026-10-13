@@ -11,9 +11,10 @@
 #include "net.h"
 #include "display.h"
 #include "machine_io.h"
+#include "brew_guard.h"
 #include <driver/gpio.h>
 
-const char* FIRMWARE_VERSION = "0.9.3";
+const char* FIRMWARE_VERSION = "0.9.4";
 const char* DETECTOR_VERSION = "0a.6";
 
 static ScaleManager scales;
@@ -382,58 +383,27 @@ static void reportSwitch(const SwitchBank::Event& e) {
 // default is 60 s. BREW_GUARD_MS covers the long case; it is deliberately
 // generous because the cost of being wrong is a stalled pour, while the
 // cost of being conservative is only that an upload waits a minute.
-static constexpr uint32_t BREW_GUARD_MS = 75000;
+static BrewGuard brew_guard;
 
-static uint32_t last_press_ms[SwitchBank::N_LINES] = {0};
-
-static bool pressGuard(uint8_t line, uint32_t now) {
-  return last_press_ms[line] && (now - last_press_ms[line]) < BREW_GUARD_MS;
-}
-
-// Is the pump running? The detector cannot say — it is scale-driven and reads
-// IDLE/ARMED from pump-on until first drip plus POUR_HOLD_MS, which is exactly
-// the window invariant 2 cares about. The machine answers, per line.
+// Gather what the guard needs and ask it. main.cpp owns the pin reads, the
+// clock and the NVS tap flags; brew_guard.h owns the decision — see the header
+// for why that split exists and what it cost to learn.
 static bool machineBusy() {
+  BrewGuard::Inputs in;
+  in.switches_on = switches_on;
+  in.display_usable =
+      display_on && !display_bus.stale(micros(), DISPLAY_FRESH_US);
+  in.display_timer = display_bus.reading().mode == DisplayBus::Mode::TIMER;
+
   uint32_t now = millis();
-  bool display_fresh = display_on && !display_bus.stale(micros(), DISPLAY_FRESH_US);
-
-  // A lever held RIGHT NOW, whichever it is. SwitchBank emits an Event only on
-  // RELEASE, so for the 345-480 ms of the press the pump runs and the event
-  // path knows nothing. Two bounds: `stable` includes a level ADOPTED at the
-  // first poll and never witnessed going high (a floating unwired line, a
-  // reboot with a lever held), which a draft trusted unbounded and which
-  // latched `quiet` false forever; and heldMs caps it.
   if (switches_on) {
-    for (uint8_t i : {SwitchBank::ONE_CUP, SwitchBank::TWO_CUP, SwitchBank::HOT_WATER})
-      if (switches.pressed(i) && !switches.pressedSynthetic(i) &&
-          switches.heldMs(i, now) < BREW_GUARD_MS)
-        return true;
+    for (uint8_t i = 0; i < SwitchBank::N_LINES; i++) {
+      in.pressed[i]   = switches.pressed(i);
+      in.synthetic[i] = switches.pressedSynthetic(i);
+      in.held_ms[i]   = switches.heldMs(i, now);
+    }
   }
-
-  // BREW (1Cup/2Cup). When the display is fresh it is authoritative in BOTH
-  // directions: Mode::TIMER is the machine's own pump-on to pump-off window,
-  // and a fresh reading that is NOT TIMER means the pump has stopped. Only
-  // without a usable display does the timer-less press guard apply — a draft
-  // OR-ed it unconditionally and blocked uploads for the full 75 s after every
-  // 1Cup press, ~65 s of it needless.
-  if (display_fresh) {
-    if (display_bus.reading().mode == DisplayBus::Mode::TIMER) return true;
-  } else if (pressGuard(SwitchBank::ONE_CUP, now) || pressGuard(SwitchBank::TWO_CUP, now)) {
-    return true;
-  }
-
-  // HOT WATER. **The display can never help here**, fresh or not: CLAUDE.md
-  // records that the machine does NOT run its shot timer during a lever-B
-  // draw. So this guard applies unconditionally.
-  //
-  // A draft returned false early whenever the display was fresh, which reads
-  // as "the display has the answer" but actually means "the display is
-  // alive" — and during a hot-water draw it is very much alive, showing
-  // boiler temperature at 41 ms a frame. That made the Water fallback dead
-  // code in the deployed configuration, re-opening the exact hole the commit
-  // before it had fixed. Hot water runs the pump and pulses the suction-side
-  // flowmeter, so a stall here still overflows the 64-entry flow ring.
-  return pressGuard(SwitchBank::HOT_WATER, now);
+  return brew_guard.busy(now, in);
 }
 
 static void pollSwitches() {
@@ -457,8 +427,11 @@ static void pollSwitches() {
     // evidence everywhere else (it forces `reprogram` false and prints
     // `high?` rather than `PRESSED`). A floating line settling must not arm
     // a 75 s upload block.
+    // Backdate to the press, not the release: the pump started then. Skip
+    // synthetic events (a line already high at the first poll was never
+    // witnessed going high) and STEAM, which drives the heater not the pump.
     if (!e.synthetic && e.line < SwitchBank::N_LINES && e.line != SwitchBank::STEAM)
-      last_press_ms[e.line] = e.pressed_at_ms;
+      brew_guard.onRelease(e.line, e.pressed_at_ms);
     reportSwitch(e);
   }
 }

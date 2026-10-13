@@ -1,4 +1,5 @@
 #include "net.h"
+#include "upload_policy.h"
 #include "spool.h"
 #include <WiFi.h>
 #include <HTTPClient.h>
@@ -211,65 +212,41 @@ bool Net::tryUploadOldest() {
   http.end();
   f.close();
 
-  if (code >= 200 && code < 300 && !from_ingest) {
-    // Looks like success and is not. Keep the record and say so loudly —
-    // this is a configuration error, not a transient one, and retrying will
-    // not fix it, but deleting would be unrecoverable.
-    Serial.printf("# net: %s got %d from something that is NOT the ingest"
-                  " endpoint — check `endpoint`. Record KEPT.\n",
-                  path.c_str(), code);
-    last_failure_was_about_the_record = true;   // configuration, not weather
-    return false;
+  // ONE TABLE, TESTED AS A TABLE. The four branches that used to live here
+  // produced four findings across the 2026-10-12 reviews, three of which lost
+  // or nearly lost a shot — every one a claim about what a status code MEANS,
+  // made without reading what produces it. upload_policy.h holds the decision
+  // and upload_policy_test.cpp sweeps all 1000 (code, marker) cells.
+  UploadVerdict verdict = classifyResponse(code, from_ingest);
+  last_failure_was_about_the_record = verdictBlamesTheRecord(verdict);
+
+  switch (verdict) {
+    case UploadVerdict::Delete:
+      // Delete only now: a lost 200 means a retry, and the server dedupes on
+      // (device, boot_id, seq). Never the other way around.
+      LittleFS.remove(path);
+      Serial.printf("# net: uploaded %s (%s) -> %d, deleted\n",
+                    path.c_str(), record_id, code);
+      return true;
+
+    case UploadVerdict::KeepAndWarn:
+      Serial.printf("# net: %s got %d from something that is NOT the ingest"
+                    " endpoint — check `endpoint`. Record KEPT.\n",
+                    path.c_str(), code);
+      return false;
+
+    case UploadVerdict::Quarantine:
+      Serial.printf("# net: %s rejected with %d, quarantining\n",
+                    path.c_str(), code);
+      LittleFS.mkdir("/spool/bad");
+      LittleFS.rename(path, "/spool/bad/" +
+                            path.substring(path.lastIndexOf('/') + 1));
+      return false;
+
+    case UploadVerdict::Retry:
+      break;
   }
 
-  // CLASSIFY THE FAILURE BEFORE REPORTING IT. A draft set this on exactly one
-  // path (2xx-without-marker), so 400, 403, 413 and a bare 422 all reported
-  // "the server or the network is unreachable" — and net.h names 413
-  // specifically as the case that stalls the queue until the spool fills. The
-  // one failure the counter exists to surface was the one it blamed on the
-  // weather, telling the operator to wait out a condition that never clears.
-  //
-  // 408 and 429 are the genuinely transient 4xx; everything else at or above
-  // 400 is about this request or this record and will not fix itself.
-  if (code >= 400 && code != 408 && code != 429)
-    last_failure_was_about_the_record = true;
-
-  if (code >= 200 && code < 300) {
-    // Delete only now: a lost 200 means a retry, and the server dedupes on
-    // (device, boot_id, seq). Never the other way around.
-    LittleFS.remove(path);
-    Serial.printf("# net: uploaded %s (%s) -> %d, deleted\n", path.c_str(), record_id, code);
-    return true;
-  }
-  // QUARANTINE ONLY ON A DELIBERATE REJECTION OF THIS RECORD'S CONTENT.
-  //
-  // This was `400 <= code < 500` until 2026-10-12, which is far too wide.
-  // 401 and 403 are an auth proxy, 404 is a wrong route after a redeploy,
-  // 408 is a timeout, 413 is a body limit and 429 is rate limiting — every
-  // one of them transient or a configuration slip, and every one of them
-  // moved a perfectly good record into /spool/bad, where NOTHING ever
-  // re-uploads it. One wrong endpoint could silently bin a whole backlog.
-  //
-  // **422 ONLY.** That is the single status the ingest handler uses as a
-  // verdict on this record's content ("decode: …"). A draft of this also
-  // quarantined 400 on the stated grounds that it meant "malformed request";
-  // it does not — the server returned 400 when io.ReadAll failed, i.e. when
-  // the connection dropped mid-POST, which is a WiFi hiccup and succeeds on
-  // retry. Quarantining it binned a good shot on an ordinary glitch, which
-  // is the failure class this whole change exists to close. The server now
-  // answers 503 there, and this no longer trusts 400 either.
-  //
-  // Everything else 4xx is about the path, the proxy or the moment: retry.
-  // Require the marker here too. Quarantine is a one-way door — nothing
-  // re-uploads from /spool/bad and `format` destroys it — so it must be as
-  // well guarded as deletion is. A 422 from anything that is not this
-  // server's ingest handler is not a verdict on this record.
-  if (code == 422 && from_ingest) {
-    Serial.printf("# net: %s rejected with %d, quarantining\n", path.c_str(), code);
-    LittleFS.mkdir("/spool/bad");
-    LittleFS.rename(path, "/spool/bad/" + path.substring(path.lastIndexOf('/') + 1));
-    return false;
-  }
   Serial.printf("# net: upload %s failed (%d), will retry\n", path.c_str(), code);
   return false;
 }

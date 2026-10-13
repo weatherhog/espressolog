@@ -5,7 +5,7 @@ This file is the resume point: read it (and CLAUDE.md) before continuing.
 
 ## DEPLOY THE SERVER BEFORE FLASHING THE FIRMWARE — 2026-10-12
 
-0.9.3 requires an `X-Espressolog-Ingest` header before it will delete an
+0.9.4 requires an `X-Espressolog-Ingest` header before it will delete an
 uploaded record, and only a server built from this tree sets it. Flash first
 and every `201` arrives unmarked: the device keeps the record, logs *"NOT the
 ingest endpoint"*, and head-of-line blocks the whole queue. It is loud on
@@ -16,7 +16,7 @@ that loses shots.
 Order: `make deploy` (which runs migration 009), confirm `/healthz`, then
 `pio run -t upload`.
 
-**0.9.3's invariant-2 guard needs `switches on`, not just `display on`.**
+**0.9.4's invariant-2 guard needs `switches on`, not just `display on`.**
 `machineBusy()` asks the machine whether the pump is running, and it has two
 sources: the display's `Mode::TIMER` and the switch lines. Both are
 NVS-persisted booleans that default off. With only the display tap live, a
@@ -41,7 +41,7 @@ header carries two dry-run queries to run against a copy beforehand.
 
 | Piece | Where | State |
 |---|---|---|
-| **Firmware 0.9.0 is what is ON THE BOARD (flashed 2026-10-07). 0.9.1, 0.9.2 and 0.9.3 were built and never flashed**, detector 0a.6. **0.9.3 carries invariant fixes and SHOULD be flashed** — see the 2026-10-12 audit entries. **Caveat: three different binaries shipped as "0.9.0"** — the `flowSetEnabled` behaviour change landed before the bump, so `shot.firmware_version` cannot separate them. Shots 110–112 are all excluded anyway. | ESP32-S3 on a USB charger by the machine | both Bookoos bound: yield `aa:bb:cc:dd:ee:01`, dose `aa:bb:cc:dd:ee:02`. **All three taps were fitted and live on 2026-10-08** — J5, J2 and J4 — and the breadboard was then disassembled; see the bench section. The display bus **drops ~1 % of edges** during a flush, cause open (an earlier reading of `dropped=0` was taken before the other taps existed). 0.8.0's parser, written blind against the 0e captures, **was validated against a real brew**: mode flipped `temp` → `timer`, counted `042/080/112/143/174/206` in tenths, returned to `temp 95 C`. **0.8.1 and 0.8.2 both add `beginCapture()`** — 0.8.1 was flashed, then `display.cpp` changed again, so the board briefly ran a 0.8.1 that no longer existed in the repo; bumped to 0.8.2 and reflashed rather than leave that ambiguity. No shot record carries either version. See 0e. |
+| **Firmware 0.9.0 is what is ON THE BOARD (flashed 2026-10-07). 0.9.1 through 0.9.4 were built and never flashed**, detector 0a.6. **0.9.4 carries invariant fixes and SHOULD be flashed** — see the 2026-10-12 audit entries. **Caveat: three different binaries shipped as "0.9.0"** — the `flowSetEnabled` behaviour change landed before the bump, so `shot.firmware_version` cannot separate them. Shots 110–112 are all excluded anyway. | ESP32-S3 on a USB charger by the machine | both Bookoos bound: yield `aa:bb:cc:dd:ee:01`, dose `aa:bb:cc:dd:ee:02`. **All three taps were fitted and live on 2026-10-08** — J5, J2 and J4 — and the breadboard was then disassembled; see the bench section. The display bus **drops ~1 % of edges** during a flush, cause open (an earlier reading of `dropped=0` was taken before the other taps existed). 0.8.0's parser, written blind against the 0e captures, **was validated against a real brew**: mode flipped `temp` → `timer`, counted `042/080/112/143/174/206` in tenths, returned to `temp 95 C`. **0.8.1 and 0.8.2 both add `beginCapture()`** — 0.8.1 was flashed, then `display.cpp` changed again, so the board briefly ran a 0.8.1 that no longer existed in the repo; bumped to 0.8.2 and reflashed rather than leave that ambiguity. No shot record carries either version. See 0e. |
 | Go server + SQLite + PWA | Proxmox LXC `espressolog`, Debian 13, `espressolog.lan` (DHCP-reserved) | systemd `espressolog.service`, db at `/var/lib/espressolog/espressolog.db` |
 | HTTPS | Caddy on the same LXC, `https://espresso.example.com` | Let's Encrypt via Cloudflare DNS-01; CF token in `/etc/caddy/env` |
 | DNS | AdGuard Home rewrite `espresso.example.com → espressolog.lan` | resolution is LAN-only; no public A record (challenge TXT only) |

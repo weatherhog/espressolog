@@ -1,9 +1,13 @@
-# Phase 0 status — as of 2026-10-08
+# Phase 0 status — as of 2026-10-13
 
 Phase 0a (scale logging, stages 0–6) is **complete and in production**.
 This file is the resume point: read it (and CLAUDE.md) before continuing.
 
 ## DEPLOY THE SERVER BEFORE FLASHING THE FIRMWARE — 2026-10-12
+
+**DONE 2026-10-13, in this order, and the server was verified between the
+two steps** — see *The deploy and the flash* below. The rule stays here
+because it applies to every future round, not because anything is pending.
 
 0.9.4 requires an `X-Espressolog-Ingest` header before it will delete an
 uploaded record, and only a server built from this tree sets it. Flash first
@@ -37,11 +41,213 @@ the fix is a bench measurement: **does lever B latch, and how long is a
 typical draw?** Until then it is deliberately conservative. Back up the database first — 009 is irreversible and its
 header carries two dry-run queries to run against a copy beforehand.
 
+## The deploy and the flash — 2026-10-13
+
+Server first, verified, then the board. Both are done and both were checked
+after the fact rather than assumed.
+
+### Migration 009 on production, and why the dry run earned its place
+
+Production was at `user_version = 8` with **137 shots**. Backed up first to
+`/var/lib/espressolog/backup-pre009-20261013-104824.db` — `integrity_check
+ok`, 137 shots in the copy — because 009 is irreversible.
+
+**Name the two statements by PREDICATE, never by number.** 009 says so in as
+many words, because they were reordered and "statement 1" then meant
+different things in different drafts — and the file's own dry-run block
+labels them in the opposite order to the one they execute in. An earlier
+version of this section used numbers and got them crossed, attaching
+`18.109` to the literal-triple predicate. It belongs to the other one.
+
+| Predicate | What it matches | Dry run on production |
+|---|---|---|
+| **literal-triple** (runs first) | `grind_dial=2.4 AND brew_temp_c=93.0 AND preinfusion_s=0.0`, manual, no weighing — shot 3's fabricated recipe, dose `18.0` | **1 row — shot 3**, which is the pass condition 009 states |
+| **3-decimal** (runs second) | manual with a dose carrying 3 decimals, which the ≤2-decimal capture stepper cannot produce | **20 rows, not the 17** the working snapshot listed |
+
+**The dry run found three rows no snapshot had shown** — shots **87, 90 and
+105**, all at `17.911`. That matters because 009 warns a nulled dose is only
+recoverable if the same value survives elsewhere as a *measured* one, and
+post-snapshot rows were each seeded from a different preceding dose.
+**`17.911` is measured on shots 51 and 108**, so the three are recoverable on
+the same footing as the 17.
+
+**The 3-decimal statement does NOT test for a missing weighing row, and an
+earlier draft said it did.** It has no `NOT EXISTS (… weighing …)` clause at
+all; 009 is explicit that it matches on the rounding *rather than* on
+"manual with no weighing", because the latter would also catch a dose a human
+genuinely typed on an unweighed shot. That every matched row happens to lack
+a weighing is an observation about this database, not the predicate.
+
+**Measured on the backup, after the fact** (`sqlite3 -readonly` against
+`backup-pre009-…db`):
+
+| | |
+|---|---|
+| rows with `dose_source='manual'` | **21** |
+| of those, with a weighing row | **0** |
+| caught by literal-triple | 1 (shot 3) |
+| caught by 3-decimal | 20 |
+| **manual rows matched by neither** | **0** |
+
+Only three distinct manual doses ever existed: `17.911`, `18.109`, and shot
+3's literal `18.0`.
+
+**Do NOT write this up as "0 % false negatives".** An earlier draft did, and
+it is the wrong frame twice over. 009 predicts its own miss class — a
+fabricated dose seeded from a measured value with **≤2 decimals**, which is
+arithmetically indistinguishable from human input and which it expects to be
+*most* of the newer damage. That class is still large here: **38 of 81
+measured doses (47 %)** round to 2 places, against the 29/48 (60 %) 009
+measured on the older snapshot. Shot 3 is itself an instance of it — dose
+`18.0`, caught only because its recipe triple is unique.
+
+So the honest statement is narrower and stronger than a percentage: **no
+manual-attributed row survived either predicate**, and the three dose values
+that ever appeared were all accounted for. Whether a fabricated dose was ever
+written that looks exactly like human input is **not decidable from the
+data** — 009 says as much, and says cleaning it would need per-shot judgement
+rather than a predicate. What is closed is the source: `Capture.jsx` no
+longer PATCHes untouched fields, so the population cannot grow.
+
+The migration was then simulated on a copy before being run for real —
+**56 NULL / 81 measured / 137 shots**, shot 3's recipe cleared, the 0f pool
+intact. The live result **matched the simulation exactly**, which is the
+check that makes the simulation worth doing.
+
+After `make deploy`: service **active, `NRestarts=0`** (not crash-looping),
+`user_version = 9`.
+
+### What was verified on the live server
+
+| Check | Result |
+|---|---|
+| `/healthz` | 200 |
+| POST with a garbage body | **422 with `X-Espressolog-Ingest: 1`** |
+| typo'd path `/api/v1/ingestt` | **404** |
+
+The last one is the important one. Before the `/api/` guard, an unmatched
+path fell through to the SPA handler and returned **200 with an HTML body** —
+which the device read as a successful ingest and deleted the record on.
+
+**But the 404 closes only half of it, and saying "that failure is closed"
+overstates what was tested.** `api.go` is explicit: the guard covers
+`/api/<typo>` **only**. The example that originally found the hole — a POST
+to `/espressolog/api/v1/ingest` — does not begin with `/api/`, still reaches
+the SPA handler and still returns 200 with HTML. What covers *that* is the
+`X-Espressolog-Ingest` marker, i.e. row two of this table. **Two different
+holes, two different patches**; both were verified above, but they are not
+the same check.
+
+### The firmware
+
+`pio run -t upload`, 1192528 bytes, hash verified. Banner:
+
+```
+# espressolog 0.9.4 (detector 0a.6)
+# LittleFS: 16/1920 KB used, spool ready, 0 pending
+# display bus on (clk=GPIO4 data=GPIO5)
+# flow on (GPIO6) | switches on (1cup=GPIO7 2cup=GPIO15 steam=GPIO16 water=GPIO17)
+```
+
+**`switches on`** — the toggle 0.9.4's invariant-2 guard needs, which the
+section above warns is NVS-persisted and defaults off. All three taps are
+enabled.
+
+**`net status` confirms the endpoint is the same origin the ingest marker was
+verified on.** That was the one link in the marker contract not checkable
+from the server side: the device's endpoint lives in NVS, and a board pointed
+somewhere else would have met an unmarked 200 and kept every record.
+
+### Nothing is quarantined and the spool is empty
+
+`ls` returns `0 record(s), 0 bytes` with **no `QUARANTINED` line**, and
+`0 pending`. Nothing is stranded and the queue is not blocked.
+
+**How much that proves took two wrong answers to pin down, in opposite
+directions.** Both are kept, because each is a plausible misreading of the
+same code.
+
+- A first draft said it proves `/spool/bad` was never created. **Too strong
+  on its own**: `Spool::list` prints the QUARANTINED line under
+  `if (quarantined)` — a count of non-directory files *inside* the directory
+  — so an **empty** `/spool/bad` prints nothing and is invisible to every
+  command the firmware has.
+- The correction then said an empty `/spool/bad` is "exactly what the wedge
+  leaves behind". **That inverts the mechanism.** The wedge *begins* with a
+  successful quarantine: `net.cpp` does `mkdir` then `rename`, and that first
+  rename moves a real record in. A wedged board therefore has a **non-empty**
+  `/spool/bad`, and `ls` names it. The *"the rename fails"* line in
+  `Spool::oldest()`'s comment describes the **second** iteration — renaming
+  the directory into itself — and empties nothing.
+
+**So the clean `ls` does rule out an un-cleaned wedge**, which is the state
+that matters. What it cannot rule out is an empty `/spool/bad` left behind by
+a manual `rm bad/<name>`, a `format`, or a first rename that failed — none of
+which is recorded as having happened.
+
+**Name the right function.** The wedge was in **`Spool::oldest()`**: `"bad"`
+sorts before both `s-` and `w-`, so it won the pick forever. `pendingCount()`
+is only a diagnostic counter — every caller is a printf.
+
+**`pendingCount()` did NOT already filter directories, and a draft said it
+did.** The `isDirectory()` test landed in **713899f**, the same commit as the
+wedge fix; `713899f^` — the 0.9.0 that ran on the board until this flash —
+counts every entry. Consequence worth keeping: **any pre-2026-10-13 "N
+pending" reading is inflated by one whenever `/spool/bad` exists**, including
+the figure the `net: STUCK` message quotes. The draft got this by reading a
+*later* commit's source and calling it history, which is the third instance
+of that error in one sitting.
+
+**Either way it is now inert**: 0.9.4's picker skips directories.
+
+### What the flash did and did not settle about the display tap
+
+With the machine off, `status` reports `display=[] mode=none (STALE)`,
+`frames=0 dropped_edges=0`, all four switches `idle`, `flow last=NEVER`.
+
+**`frames=0` alone is ambiguous — but `pins` resolves it, and a draft of this
+section said nothing could.** The documented swapped-pair signature is
+`frames=0` **with both lines idling high** (CLAUDE.md, 2026-10-09), because
+J5's 4.7 K pull-ups sit on the *machine's* rail. `pins` reads:
+
+```
+# pins: flow/GPIO6=0 | 1cup/GPIO7=0 2cup/GPIO15=0 steam/GPIO16=0 water/GPIO17=0 | clk/GPIO4=0 data/GPIO5=0
+# expected at rest: flow=1 (idles high on the board pull-up), all four switches=0
+```
+
+Every machine-sourced pull-up is dead — including the flow line, which the
+firmware itself says should read **1**. That is an unpowered machine, and it
+is not the swap signature. `printPins()` cites CLAUDE.md for exactly this
+discrimination, so the claim that nothing distinguishes the two was wrong
+against a comment in the function being quoted.
+
+**It does not prove the taps work.** With the machine off a swapped pair
+reads 0/0 as well; what the reading does is remove any need for a wiring
+hypothesis to explain `frames=0`. **The first `status` with the machine ON is
+still what confirms the bus** — one line, no setup.
+
+### A deploy-host note
+
+`espressolog.lan` is the LXC's **DHCP-reserved hostname** — not the AdGuard
+rewrite, which is the separate `espresso.example.com → espressolog.lan` entry
+in the table above. Either way it does **not** resolve from the dev Mac, so `make deploy` needs the host passed
+explicitly:
+
+```
+make deploy HOST=root@<the LXC's address>
+```
+
+The address is deliberately not recorded in this repo — `README.md` states
+that every hostname, IP and MAC in the docs is a placeholder, and that rule
+covers this one. `server/Makefile` defaults to
+`root@espressolog.lan`, which works from anything using the LAN resolver and
+fails from anything that is not.
+
 ## What runs where
 
 | Piece | Where | State |
 |---|---|---|
-| **Firmware 0.9.0 is what is ON THE BOARD (flashed 2026-10-07). 0.9.1 through 0.9.4 were built and never flashed**, detector 0a.6. **0.9.4 carries invariant fixes and SHOULD be flashed** — see the 2026-10-12 audit entries. **Caveat: three different binaries shipped as "0.9.0"** — the `flowSetEnabled` behaviour change landed before the bump, so `shot.firmware_version` cannot separate them. Shots 110–112 are all excluded anyway. | ESP32-S3 on a USB charger by the machine | both Bookoos bound: yield `aa:bb:cc:dd:ee:01`, dose `aa:bb:cc:dd:ee:02`. **All three taps were fitted and live on 2026-10-08** — J5, J2 and J4 — and the breadboard was then disassembled; see the bench section. The display bus **drops ~1 % of edges** during a flush, cause open (an earlier reading of `dropped=0` was taken before the other taps existed). 0.8.0's parser, written blind against the 0e captures, **was validated against a real brew**: mode flipped `temp` → `timer`, counted `042/080/112/143/174/206` in tenths, returned to `temp 95 C`. **0.8.1 and 0.8.2 both add `beginCapture()`** — 0.8.1 was flashed, then `display.cpp` changed again, so the board briefly ran a 0.8.1 that no longer existed in the repo; bumped to 0.8.2 and reflashed rather than leave that ambiguity. No shot record carries either version. See 0e. |
+| **Firmware 0.9.4 is what is ON THE BOARD (flashed 2026-10-13)**, detector 0a.6. 0.9.1 through 0.9.3 were built and never flashed, so no shot record will ever carry them. **Caveat: three different binaries shipped as "0.9.0"** — the `flowSetEnabled` behaviour change landed before the bump, so `shot.firmware_version` cannot separate them. Shots 110–112 are all excluded anyway. | ESP32-S3 on a USB charger by the machine | both Bookoos bound: yield `aa:bb:cc:dd:ee:01`, dose `aa:bb:cc:dd:ee:02`. **All three taps were fitted and live on 2026-10-08** — J5, J2 and J4 — and the breadboard was then disassembled; see the bench section. The display bus **drops ~1 % of edges** during a flush, cause open (an earlier reading of `dropped=0` was taken before the other taps existed). 0.8.0's parser, written blind against the 0e captures, **was validated against a real brew**: mode flipped `temp` → `timer`, counted `042/080/112/143/174/206` in tenths, returned to `temp 95 C`. **0.8.1 and 0.8.2 both add `beginCapture()`** — 0.8.1 was flashed, then `display.cpp` changed again, so the board briefly ran a 0.8.1 that no longer existed in the repo; bumped to 0.8.2 and reflashed rather than leave that ambiguity. No shot record carries either version. See 0e. |
 | Go server + SQLite + PWA | Proxmox LXC `espressolog`, Debian 13, `espressolog.lan` (DHCP-reserved) | systemd `espressolog.service`, db at `/var/lib/espressolog/espressolog.db` |
 | HTTPS | Caddy on the same LXC, `https://espresso.example.com` | Let's Encrypt via Cloudflare DNS-01; CF token in `/etc/caddy/env` |
 | DNS | AdGuard Home rewrite `espresso.example.com → espressolog.lan` | resolution is LAN-only; no public A record (challenge TXT only) |
@@ -596,6 +802,20 @@ and the vibratory pump (on the suction side)". What remains open is only
 whether a lever-B draw routes through it. 0d scopes its counting to
 shot boundaries either way, so nothing depends on the answer — but it decides
 whether a tap draw shows up as inlet flow.
+
+**Two checks that need NO rig — one line each, next time the machine is on.**
+Both have been open for days only because nobody was standing at the machine:
+
+- **`status` with the machine powered.** After the 2026-10-13 flash the
+  display tap has not been seen carrying anything: `frames=0` with the
+  machine off is indistinguishable from the documented swapped-pair
+  signature. A non-zero `frames` closes it.
+- **Does the onboard RGB LED light?** It settles GPIO48 (v1.0) against
+  GPIO38 (v1.1). **`docs/phase-0-plan.md` is already correct** — it reads
+  "38 or 48 free depending on board revision" and retracts the draft that
+  listed 38 as free, so do not "fix" it. **CLAUDE.md is the file still
+  asserting 48 flatly**, in the pinout table and against `main.cpp:377`.
+  If the LED has always been dark it is GPIO38, and that is the edit.
 
 **Three measurements that now need the rig rebuilt.** The breadboard was
 disassembled on 2026-10-08 before these were taken, so they are no longer

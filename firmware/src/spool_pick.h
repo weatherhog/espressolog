@@ -19,10 +19,29 @@
 // INCREMENTAL ON PURPOSE. A first version of this took an array and a count,
 // which forced a cap on how many entries one pass could consider — and that
 // silently changed which file uploads next once the spool held more than the
-// cap. Streaming keeps the behaviour identical to the walk it replaced.
+// cap. Streaming keeps the walk unbounded, as it was.
+//
+// ONE DELIBERATE DIVERGENCE from the loop this replaced: a name of MAX_NAME
+// characters or more is skipped. The old loop considered any non-directory
+// entry, so a foreign file with a long name became `best`, failed the prelude
+// check in tryUploadOldest and was quarantined — i.e. it cleared itself. Now
+// it is simply never picked. No record this spool writes can reach that
+// length (see MAX_NAME), so no shot is affected — and since Spool::
+// pendingCount() now counts through this same object, the pick and the count
+// agree about it rather than disagreeing, which they briefly did.
 class OldestPicker {
 public:
-  // Spool names are "s-%08lx-%lu" / "w-%08lx-%lu" — at most 21 characters.
+  // MEASURED FROM THE FORMAT STRING THAT ACTUALLY WRITES THEM, which is
+  // spool.cpp's `"%s/%c-%08lx-%04lu.bin"`. The basename is therefore
+  // "s-feed0001-0001.bin" at 19 characters, and 25 at a full uint32_t seq
+  // ("s-feed0001-4294967295.bin"). 32 leaves room without being generous.
+  //
+  // A draft of this comment quoted "s-%08lx-%lu … at most 21 characters" —
+  // a format string that appears nowhere in the code, dropping both `.bin`
+  // and the %04 width. Harmless at 32, but tightening MAX_NAME to that
+  // remembered 21 would make every record with seq >= 1000000 invisible to
+  // oldest() and it would never upload. Silently. Test 7 pins the real
+  // lengths so that cannot happen.
   static constexpr size_t MAX_NAME = 32;
 
   // Offer one directory entry. Directories are skipped; that is the fix.

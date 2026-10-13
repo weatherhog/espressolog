@@ -427,9 +427,6 @@ static void pollSwitches() {
     // evidence everywhere else (it forces `reprogram` false and prints
     // `high?` rather than `PRESSED`). A floating line settling must not arm
     // a 75 s upload block.
-    // Backdate to the press, not the release: the pump started then. Skip
-    // synthetic events (a line already high at the first poll was never
-    // witnessed going high) and STEAM, which drives the heater not the pump.
     if (!e.synthetic && e.line < SwitchBank::N_LINES && e.line != SwitchBank::STEAM)
       brew_guard.onRelease(e.line, e.pressed_at_ms);
     reportSwitch(e);

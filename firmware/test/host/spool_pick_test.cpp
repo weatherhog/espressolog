@@ -17,22 +17,22 @@ int main() {
   //    before both "s-" and "w-", so without the is_dir skip the first
   //    quarantine stopped every upload for ever — silently.
   {
-    Entry e[] = {{"bad", true}, {"s-feed0001-0001", false}, {"w-feed0001-0002", false}};
+    Entry e[] = {{"bad", true}, {"s-feed0001-0001.bin", false}, {"w-feed0001-0002.bin", false}};
     auto p = walk(e, 3);
     assert(p.have());
-    assert(strcmp(p.best(), "s-feed0001-0001") == 0);
+    assert(strcmp(p.best(), "s-feed0001-0001.bin") == 0);
     printf("1. a quarantine directory never wins the pick OK\n");
   }
 
   // 2. Lexicographic order among real files is unchanged, whatever order the
   //    filesystem hands them over in.
   {
-    Entry e[] = {{"w-feed0001-0009", false}, {"s-feed0001-0003", false},
-                 {"s-feed0001-0001", false}};
-    assert(strcmp(walk(e, 3).best(), "s-feed0001-0001") == 0);
-    Entry r[] = {{"s-feed0001-0001", false}, {"s-feed0001-0003", false},
-                 {"w-feed0001-0009", false}};
-    assert(strcmp(walk(r, 3).best(), "s-feed0001-0001") == 0);
+    Entry e[] = {{"w-feed0001-0009.bin", false}, {"s-feed0001-0003.bin", false},
+                 {"s-feed0001-0001.bin", false}};
+    assert(strcmp(walk(e, 3).best(), "s-feed0001-0001.bin") == 0);
+    Entry r[] = {{"s-feed0001-0001.bin", false}, {"s-feed0001-0003.bin", false},
+                 {"w-feed0001-0009.bin", false}};
+    assert(strcmp(walk(r, 3).best(), "s-feed0001-0001.bin") == 0);
     printf("2. the lexicographic minimum wins regardless of walk order OK\n");
   }
 
@@ -59,8 +59,8 @@ int main() {
   //    `format`'s confirmation prompt is the only thing between the operator
   //    and an irreversible erase, so it must not undercount.
   {
-    Entry e[] = {{"bad", true}, {"s-feed0001-0001", false},
-                 {"w-feed0001-0002", false}, {"nested", true}};
+    Entry e[] = {{"bad", true}, {"s-feed0001-0001.bin", false},
+                 {"w-feed0001-0002.bin", false}, {"nested", true}};
     assert(walk(e, 4).records() == 2);
     printf("5. the record count and the pick agree on what a record is OK\n");
   }
@@ -73,21 +73,39 @@ int main() {
     OldestPicker p;
     char buf[OldestPicker::MAX_NAME];
     for (int i = 500; i >= 1; i--) {          // worst case: minimum arrives last
-      snprintf(buf, sizeof buf, "s-feed0001-%04d", i);
+      snprintf(buf, sizeof buf, "s-feed0001-%04d.bin", i);
       p.consider(buf, false);
     }
-    assert(strcmp(p.best(), "s-feed0001-0001") == 0);
+    assert(strcmp(p.best(), "s-feed0001-0001.bin") == 0);
     assert(p.records() == 500);
     printf("6. 500 entries, the true minimum still wins (no cap) OK\n");
   }
 
-  // 7. A name longer than the spool ever writes is ignored rather than
+  // 7. MAX_NAME MUST ACCOMMODATE THE LONGEST NAME THIS SPOOL ACTUALLY
+  //    WRITES. A review found every name in this corpus was 15 characters,
+  //    with no `.bin`, so shrinking MAX_NAME to 16 survived the whole suite —
+  //    and the header's comment quoted a format string that does not exist.
+  //    Pin both ends of the real range: 19 chars minimum, 25 at a full
+  //    uint32_t seq. If MAX_NAME were ever tightened to the remembered "21",
+  //    every record with seq >= 1000000 would silently stop uploading.
+  {
+    OldestPicker p;
+    p.consider("s-feed0001-4294967295.bin", false);   // 25 chars, the maximum
+    assert(p.have());
+    assert(p.records() == 1);
+    OldestPicker q;
+    q.consider("s-feed0001-0001.bin", false);         // 19 chars, the minimum
+    assert(q.have());
+    printf("7. the longest and shortest real spool names are both accepted OK\n");
+  }
+
+  // 8. A name longer than the spool ever writes is ignored rather than
   //    truncated into a wrong comparison.
   {
     Entry e[] = {{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", false},
-                 {"s-feed0001-0001", false}};
-    assert(strcmp(walk(e, 2).best(), "s-feed0001-0001") == 0);
-    printf("7. an over-long name is skipped, not truncated OK\n");
+                 {"s-feed0001-0001.bin", false}};
+    assert(strcmp(walk(e, 2).best(), "s-feed0001-0001.bin") == 0);
+    printf("8. an over-long name is skipped, not truncated OK\n");
   }
 
   printf("\nall spool pick tests passed\n");

@@ -44,8 +44,11 @@ machine_io_test: machine_io_test.cpp ../../src/machine_io.cpp ../../src/machine_
 armed_test: armed_test.cpp ../../src/detector.cpp ../../src/detector.h
 	$(CXX) $(CXXFLAGS) -o $@ armed_test.cpp ../../src/detector.cpp
 
-brew_guard_test: brew_guard_test.cpp ../../src/brew_guard.cpp ../../src/brew_guard.h ../../src/machine_io.cpp
-	$(CXX) $(CXXFLAGS) -o $@ brew_guard_test.cpp ../../src/brew_guard.cpp ../../src/machine_io.cpp
+# machine_io.h, not .cpp: BrewGuard uses only SwitchBank's enum constants, so
+# the suite links without the object — but renumbering the Line enum MUST
+# rebuild this, and only the header dependency makes that happen.
+brew_guard_test: brew_guard_test.cpp ../../src/brew_guard.cpp ../../src/brew_guard.h ../../src/machine_io.h
+	$(CXX) $(CXXFLAGS) -o $@ brew_guard_test.cpp ../../src/brew_guard.cpp
 
 upload_policy_test: upload_policy_test.cpp ../../src/upload_policy.cpp ../../src/upload_policy.h
 	$(CXX) $(CXXFLAGS) -o $@ upload_policy_test.cpp ../../src/upload_policy.cpp

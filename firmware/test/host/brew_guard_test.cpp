@@ -172,6 +172,81 @@ int main() {
     printf("13. a witnessed press outlives the tap being disabled OK\n");
   }
 
+  // 14. 2CUP IS A PUMP LINE TOO, held right now. A review found TWO_CUP
+  //     appeared ZERO times in this suite: dropping it from pump_lines[]
+  //     survived every one of the thirteen tests above. 2Cup is the shot
+  //     lever on lever A, so that gap was on the line this class most exists
+  //     for.
+  {
+    BrewGuard g;
+    auto in = bothTapsIdle();
+    in.pressed[L::TWO_CUP] = true;
+    in.held_ms[L::TWO_CUP] = 400;
+    assert(g.busy(2000, in));
+    printf("14. a 2Cup lever held right now is busy OK\n");
+  }
+
+  // 15. ...and its press guard applies when there is no usable display —
+  //     which is the DEPLOYED configuration, since display_on is NVS-
+  //     persisted and defaults off. Dropping this branch also survived.
+  {
+    BrewGuard g;
+    g.onRelease(L::TWO_CUP, 1000);
+    auto in = bothTapsIdle();
+    in.display_usable = false;
+    assert(g.busy(2000, in));
+    assert(!g.busy(1000 + BrewGuard::BREW_GUARD_MS + 1, in));
+    printf("15. the 2Cup press guard applies without a usable display OK\n");
+  }
+
+  // 16. Hot water held RIGHT NOW, via the live level rather than onRelease.
+  //     Every earlier water case went through onRelease, so dropping
+  //     HOT_WATER from pump_lines[] survived too.
+  {
+    BrewGuard g;
+    auto in = bothTapsIdle();
+    in.pressed[L::HOT_WATER] = true;
+    in.held_ms[L::HOT_WATER] = 400;
+    assert(g.busy(2000, in));
+    printf("16. a water lever held right now is busy OK\n");
+  }
+
+  // 17. THE TAP-ENABLE GATE on branch 1. Without it the guard would read
+  //     switch levels the firmware is not polling.
+  {
+    BrewGuard g;
+    auto in = bothTapsIdle();
+    in.switches_on = false;
+    in.pressed[L::ONE_CUP] = true;
+    in.held_ms[L::ONE_CUP] = 400;
+    assert(!g.busy(2000, in));
+    printf("17. a held level is ignored when the switch tap is off OK\n");
+  }
+
+  // 18. The held_ms cap is exclusive at the boundary, both sides of it.
+  {
+    BrewGuard g;
+    auto in = bothTapsIdle();
+    in.pressed[L::ONE_CUP] = true;
+    in.held_ms[L::ONE_CUP] = BrewGuard::BREW_GUARD_MS - 1;
+    assert(g.busy(2000, in));
+    in.held_ms[L::ONE_CUP] = BrewGuard::BREW_GUARD_MS;
+    assert(!g.busy(2000, in));
+    printf("18. the held_ms cap is exclusive, pinned either side OK\n");
+  }
+
+  // 19. onRelease ignores an out-of-range line rather than writing past the
+  //     array. STEAM is filtered by main.cpp, not here, so this bound is the
+  //     only thing standing between a future caller and memory corruption.
+  {
+    BrewGuard g;
+    g.onRelease(SwitchBank::N_LINES, 1000);       // out of range
+    g.onRelease(SwitchBank::N_LINES + 7, 1000);
+    BrewGuard::Inputs in;
+    assert(!g.busy(2000, in));
+    printf("19. onRelease ignores an out-of-range line OK\n");
+  }
+
   printf("\nall brew guard tests passed\n");
   return 0;
 }

@@ -33,11 +33,16 @@ size_t Spool::quarantinedCount() {
 }
 
 size_t Spool::pendingCount() {
-  size_t n = 0;
+  // Counted by the SAME object that picks, so the two cannot drift about what
+  // a record is. They were separate walks with separate filters until
+  // 2026-10-13, which also left OldestPicker::records() with no production
+  // caller at all — a tested function nothing used, which is worse than
+  // untested code because it reads as covered.
+  OldestPicker pick;
   File d = LittleFS.open(DIR);
   for (File f = d.openNextFile(); f; f = d.openNextFile())
-    if (!f.isDirectory()) n++;   // /spool/bad is a directory, not a record
-  return n;
+    pick.consider(f.name(), f.isDirectory());
+  return pick.records();
 }
 
 bool Spool::macToBytes(const String& mac, uint8_t out[6]) {

@@ -54,16 +54,54 @@ int main() {
     printf("5. negative HTTPClient codes retry OK\n");
   }
 
-  // 6. ONLY A VERDICT ABOUT THE RECORD BLAMES THE RECORD. A draft announced
+  // 6. THE FULL TABLE, every cell. Test 1 only asserts that exactly one cell
+  //    QUARANTINES, which leaves the other three verdicts unpinned — widening
+  //    the success window (code < 300 -> code <= 300) survived it. Assert the
+  //    whole mapping so no cell can drift.
+  {
+    for (int code = -20; code <= 599; code++)
+      for (int m = 0; m < 2; m++) {
+        UploadVerdict want;
+        if (code >= 200 && code < 300) want = m ? UploadVerdict::Delete
+                                                : UploadVerdict::KeepAndWarn;
+        else if (code == 422 && m)     want = UploadVerdict::Quarantine;
+        else                           want = UploadVerdict::Retry;
+        assert(classifyResponse(code, m) == want);
+      }
+    printf("6. every (code, marker) cell maps to the expected verdict OK\n");
+  }
+
+  // 7. 413 IS PERMANENT AND MUST SAY SO. net.h names it as the case the stuck
+  //    counter exists to surface — a record the server will never accept,
+  //    stalling everything behind it until the spool fills. A first version
+  //    classified blame from the verdict alone, so 413 (which retries) and
+  //    every other permanent 4xx reported "the server or network is
+  //    unreachable" and told the operator to wait out a condition that never
+  //    clears.
+  {
+    for (int code : {400, 401, 403, 404, 413, 422}) {
+      assert(classifyResponse(code, false) == UploadVerdict::Retry);
+      assert(failureIsPermanent(code, UploadVerdict::Retry));
+    }
+    printf("7. permanent 4xx retry but DO blame the record (413 included) OK\n");
+  }
+
+  // 8. ...and the genuinely transient ones must not blame.
+  {
+    for (int code : {408, 429, 500, 502, 503, -1, -11})
+      assert(!failureIsPermanent(code, UploadVerdict::Retry));
+    printf("8. 408/429/5xx/negative codes retry WITHOUT blaming the record OK\n");
+  }
+
+  // 9. ONLY A VERDICT ABOUT THE RECORD BLAMES THE RECORD. A draft announced
   //    every consecutive failure — including a server simply being down — as
   //    "this record is blocking every record behind it. Inspect it with dump",
   //    whose plausible next step is `rm`.
   {
-    assert(verdictBlamesTheRecord(UploadVerdict::Quarantine));
-    assert(verdictBlamesTheRecord(UploadVerdict::KeepAndWarn));
-    assert(!verdictBlamesTheRecord(UploadVerdict::Retry));
-    assert(!verdictBlamesTheRecord(UploadVerdict::Delete));
-    printf("6. only Quarantine and KeepAndWarn blame the record OK\n");
+    assert(failureIsPermanent(422, UploadVerdict::Quarantine));
+    assert(failureIsPermanent(200, UploadVerdict::KeepAndWarn));
+    assert(!failureIsPermanent(201, UploadVerdict::Delete));
+    printf("9. Quarantine and KeepAndWarn always blame; Delete never does OK\n");
   }
 
   printf("\nall upload policy tests passed\n");

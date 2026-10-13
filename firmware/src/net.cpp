@@ -218,7 +218,7 @@ bool Net::tryUploadOldest() {
   // made without reading what produces it. upload_policy.h holds the decision
   // and upload_policy_test.cpp sweeps all 1000 (code, marker) cells.
   UploadVerdict verdict = classifyResponse(code, from_ingest);
-  last_failure_was_about_the_record = verdictBlamesTheRecord(verdict);
+  last_failure_was_about_the_record = failureIsPermanent(code, verdict);
 
   switch (verdict) {
     case UploadVerdict::Delete:

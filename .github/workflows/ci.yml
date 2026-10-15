@@ -45,6 +45,42 @@ on:
     branches: [main]
   pull_request:
 
+# ACTION MAJORS ARE AT THE FIRST NODE-24 RELEASE OF EACH, not the newest tag
+# (2026-10-15). Every action here was emitting "targets Node.js 20 but is being
+# forced to run on Node.js 24"; these majors are the ones that fix it. Newer
+# majors exist -- checkout v6/v7, setup-node v6/v7, setup-go v7, setup-python
+# v7, cache v6 -- so this is TWO majors behind on checkout and setup-node, not
+# one. They are deliberately not taken: checkout v6 changed credential
+# persistence and v7 blocks fork-PR checkout under pull_request_target and
+# workflow_run, which is a security-shaped change that deserves its own look.
+# "Mostly dependency churn" is true of cache v6 and false of checkout.
+#
+# ALL FIVE need runner >= 2.327.1, not just cache -- the hosted runner reported
+# 2.337.0 on the last green run.
+#
+# THE ONE REAL BEHAVIOUR CHANGE, found by review after a draft of this comment
+# claimed the bumps were checked: setup-go@v6 calls setGoToolchain()
+# unconditionally and `core.exportVariable`s **GOTOOLCHAIN=local** into the
+# whole job env. server/go.mod says `go 1.27.0` with no `toolchain` directive,
+# so Go is pinned to exactly that: a dependency that declares a newer Go now
+# FAILS here, where v5 would silently download a toolchain and stay green.
+# That is the better behaviour for a repo that pins its BLE stack for the same
+# reason -- but if `go vet` ever reports "go.mod requires go >= 1.28", this is
+# why, and the fix is a `toolchain` line in go.mod, not a workflow edit.
+#
+# setup-node@v5's own breaking change does NOT reach us, and a draft gave the
+# wrong reason for that. It is not that web/package.json lacks a
+# `packageManager` field (it does lack one, but that is not the guard): main.ts
+# reads `if (cache && ...) {...} else if (resolvedPackageManager && ...)`, so an
+# explicit `cache:` ALWAYS wins and auto-detection can never override it. The
+# knob that would disable it is `package-manager-cache: false`.
+#
+# ALSO DUE: ubuntu-latest migrates to Ubuntu 26 from 2026-10-19. Nothing here
+# looks exposed, but the PlatformIO cache key below is `runner.os` ("Linux" on
+# both), so a toolchain cached on 24 will restore on 26. That is a pre-existing
+# property of the key, not something this change introduced. If `pio run`
+# starts failing oddly that week, bust it before looking anywhere else.
+
 # A newer push makes an in-flight run irrelevant; don't leave it running.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -61,14 +97,14 @@ jobs:
     name: server (go test)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           # Read the version from go.mod rather than pinning it here, so the
           # two can never disagree.
           go-version-file: server/go.mod
           cache-dependency-path: server/go.sum
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -89,7 +125,7 @@ jobs:
     name: firmware (host tests)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       # ShotDetector and DisplayBus are pure logic with no Arduino
       # dependencies, which is what makes them testable off-target at all.
       - run: make test
@@ -102,8 +138,8 @@ jobs:
     # sit on a runner for the default six hours.
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
           # No pip cache here on purpose: setup-python's pip caching hashes a
@@ -112,7 +148,7 @@ jobs:
           # cache below is the one that actually matters.
       # The espressif32 toolchain is ~1 GB; without this cache every run
       # re-downloads it. Cache storage is free for public repos.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: |
             ~/.platformio/.cache
@@ -131,8 +167,8 @@ jobs:
     name: web (lint + build)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm

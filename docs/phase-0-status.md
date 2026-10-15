@@ -803,19 +803,33 @@ whether a lever-B draw routes through it. 0d scopes its counting to
 shot boundaries either way, so nothing depends on the answer — but it decides
 whether a tap draw shows up as inlet flow.
 
-**Two checks that need NO rig — one line each, next time the machine is on.**
-Both have been open for days only because nobody was standing at the machine:
+**One check left that needs NO rig** — the other was done on 2026-10-15,
+see below:
 
 - **`status` with the machine powered.** After the 2026-10-13 flash the
   display tap has not been seen carrying anything: `frames=0` with the
   machine off is indistinguishable from the documented swapped-pair
   signature. A non-zero `frames` closes it.
-- **Does the onboard RGB LED light?** It settles GPIO48 (v1.0) against
-  GPIO38 (v1.1). **`docs/phase-0-plan.md` is already correct** — it reads
-  "38 or 48 free depending on board revision" and retracts the draft that
-  listed 38 as free, so do not "fix" it. **CLAUDE.md is the file still
-  asserting 48 flatly**, in the pinout table and against `main.cpp:377`.
-  If the LED has always been dark it is GPIO38, and that is the edit.
+- ~~**Does the onboard RGB LED light?**~~ **DONE 2026-10-15: it is GPIO48, so
+  GPIO38 is free.** Board on USB, no machine connections, **yield Bookoo
+  bound and awake** — that last clause is load-bearing and a draft omitted it,
+  which would have had anyone reproducing this see a dark LED in both rows.
+  Two points, each anchored to a `status` read at the same moment:
+  `yield: state=3` with `detector=ARMED` → **dim green**; the scale then
+  switched off, `yield: state=4` (LOST) → **off**. Those are precisely what
+  `updateLed()` writes for the two states.
+
+  **The first point alone was published as sufficient and was not.** A green
+  power indicator beside a dark RGB LED reproduces it exactly; only the dark
+  reading rules that out. Worth keeping, because the argument that it was
+  sufficient — "the *colour* is specific to ARMED, so it must be the
+  firmware" — is genuinely persuasive and still wrong.
+
+  **And the test as this repo had written it was confounded.** "If it has
+  always been dark, it is GPIO38" ignores that `updateLed()` writes `0,0,0`
+  whenever the **yield** scale is disconnected, so a bench board with no
+  scale awake is dark on either revision. A dark LED means nothing on its
+  own — it meant something here only because `status` was read beside it.
 
 **Three measurements that now need the rig rebuilt.** The breadboard was
 disassembled on 2026-10-08 before these were taken, so they are no longer

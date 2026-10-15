@@ -1142,7 +1142,7 @@ use nothing else"; see the retraction below.
 | 13 | GPIO3 † | | GPIO35 ‡ |
 | 14 | GPIO46 † | | GPIO0 † |
 | 15 | GPIO9 | | GPIO45 † |
-| 16 | GPIO10 | | GPIO48 ◆ |
+| 16 | GPIO10 | | **GPIO48 — onboard RGB LED** ◆ |
 | 17 | GPIO11 | | GPIO47 |
 | 18 | GPIO12 | | GPIO21 |
 | 19 | GPIO13 | | GPIO20 † |
@@ -1154,19 +1154,80 @@ use nothing else"; see the retraction below.
 this N16R8 module** — physically present on the header and unusable; do not
 even probe them.
 
-◆ **WHICH PIN DRIVES THE ONBOARD RGB LED IS UNRESOLVED AND IS A BOARD-REVISION
-QUESTION.** Espressif put it on **GPIO48 on v1.0 and GPIO38 on v1.1**, and both
-revisions are sold. A draft of this table annotated position 16 "GPIO48 —
-onboard RGB LED" **inside a table headed "read off the board"** — but an LED
-net is not silkscreened, so that is the one row that cannot have come from the
-board read. It was recollection of the v1.0 layout.
+◆ **THE ONBOARD RGB LED IS ON GPIO48 — SETTLED 2026-10-15 BY A TWO-POINT
+TEST. So GPIO38 is FREE.** Espressif put it on **GPIO48 on v1.0 and GPIO38 on
+v1.1** and both revisions are sold, so this had to be measured. Open since
+2026-10-12.
 
-**It is already being spent**: `docs/phase-0-plan.md`'s free-GPIO list offers
-38 and excludes 48. If this clone is v1.1-alike that is exactly inverted.
-**One-second test: if the onboard status LED lights on the current firmware,
-it is GPIO48; if it has always been dark, it is GPIO38.** `main.cpp` hedges
-correctly ("boards with the LED on a different pin simply stay dark"); this
-file and `main.cpp:377` both assert 48 flatly. Record which.
+**The two points, each anchored to a serial reading taken at the same
+moment.** Setup: board on USB, **no machine connections**, and — the part a
+draft of this paragraph left out — **the yield Bookoo bound and awake**. Row 1
+is impossible without it, so "nothing else connected" read literally
+reproduces a dark LED in both rows, which is the very trap this entry warns
+the old one-second test fell into. Row 2 is produced by switching that scale
+off:
+
+| `status` | LED | what `updateLed()` writes |
+|---|---|---|
+| `yield: state=3` (CONNECTED), `detector=ARMED` | **dim green** | `mode 2` → `neopixelWrite(…, 0, 14, 0)` |
+| `yield: state=4` (LOST) | **off** | `mode 0` → `neopixelWrite(…, 0, 0, 0)` |
+
+**ONE POINT WOULD NOT HAVE BEEN ENOUGH, and a draft of this entry published
+it as though it were.** That draft argued the *colour* proved the firmware
+was driving the LED, because green is specific to ARMED. It does not: a
+**green power indicator** beside a dark RGB LED produces the first row
+exactly, and `docs/phase-0-plan.md` was about to free GPIO38 on the strength
+of it. A power LED cannot produce the second row. Only the pair does.
+
+**How the pin resolves — and a draft got the mechanism wrong while reaching
+the right answer.** `RGB_BUILTIN` is **not** 48. The `esp32s3` variant (which
+`esp32-s3-devkitc-1.json` selects) defines it as
+`SOC_GPIO_PIN_COUNT + PIN_NEOPIXEL` = **49 + 48 = 97**, a sentinel;
+`esp32-hal-rgb-led.c:12` subtracts `SOC_GPIO_PIN_COUNT` back off to reach
+GPIO48.
+
+**A draft then drew a false consequence from those two true facts**, warning
+that *"`digitalWrite(RGB_BUILTIN, …)` addresses pin 97 silently and would not
+do what it looks like it does."* **It does what it looks like.**
+`cores/esp32/esp32-hal-gpio.c:138` special-cases `pin == RGB_BUILTIN` inside
+`__digitalWrite` and routes it to `neopixelWrite(RGB_BUILTIN, c, c, c)` with
+`c = RGB_BRIGHTNESS` for any non-zero value — so it lights the LED white.
+`__pinMode` carries the same special case at line 95. The sentinel is handled
+at every call site that matters. Mechanism right, consequence invented: the
+call site was never read, which is this file's most-logged error and was
+committed three times in one session.
+
+**This fixes the LED net only. It does NOT make the board "v1.0".** Every
+other position in the table above agrees with Espressif's published v1.1
+layout, and a clone can mix revisions. Claim the pin, not the revision —
+which is also why the table cell above carries ◆ rather than standing as part
+of the board read: **an LED net is not silkscreened and is not in the v1.1
+table either** (that document says 38), so that one cell comes from this
+measurement and from no other source in this file.
+
+**THE ONE-SECOND TEST THIS ENTRY USED TO GIVE WAS WRONG, and would have
+produced the opposite answer.** It read: *"if the onboard status LED lights on
+the current firmware, it is GPIO48; if it has always been dark, it is
+GPIO38."* The second half is false. `updateLed()` sets `mode = 0` whenever the
+**yield** scale is not connected, so a board sitting on a bench with no scale
+awake is dark on *either* revision. Run as written it concludes GPIO38 and
+sends someone to invert a free-GPIO list that was already right. **A dark LED
+is informative only alongside `status`** — which is exactly what made the
+second row above evidence rather than noise.
+
+**A RETRACTION OF A RETRACTION, recorded because the second error is the one
+this file keeps making.** A draft of this entry deleted the old sentence
+*"this file and `main.cpp:377` both assert 48 flatly"*, calling it "a line
+number cited without being read". **That accusation was false and the original
+was correct.** `git show bb3ed26:firmware/src/main.cpp | sed -n '377p'` — bb3ed26
+being the commit that wrote the citation — returns exactly
+`// output full stop — updateLed() drives the onboard RGB LED on GPIO48, which`.
+The line was read, was right, and has since drifted to **`main.cpp:445`**,
+where it still asserts GPIO48 today. The draft checked the *current* file
+instead of the file at the commit that made the claim — the same
+read-a-later-version-and-call-it-history error logged against `pendingCount()`
+earlier the same day. **Cite `main.cpp:445`, and when a line number here looks
+wrong, check it at the commit that wrote it before retracting anything.**
 
 *(Position 19 carried a "◦" flag until 2026-10-12: the operator's transcription
 read "12 12" at positions 18-19 and GPIO13 was inferred. **Espressif's table

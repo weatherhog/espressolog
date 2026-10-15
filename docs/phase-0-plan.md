@@ -590,14 +590,26 @@ does not work:
       leaves a worst-case part 0.2 V of overdrive from 3.3 V logic. 
 
       **Free GPIOs are not the constraint.** Against CLAUDE.md's pinout:
-      1, 2, 9-14, 18, 21, 39-42 and 47, with **38 or 48 free depending on
-      board revision** (35-37 are PSRAM-internal; 0, 3, 19, 20, 45, 46 are
-      strapping or native USB; 43/44 are the UART0 console, which
-      `platformio.ini` names as the fallback flashing port, so treat them as
-      spoken for). **A draft listed 38 as free and 48 as the onboard LED** —
-      that is the v1.0 assignment, and Espressif moved the RGB LED to
-      **GPIO38 on v1.1**, which inverts it. CLAUDE.md records the
-      one-second test.
+      1, 2, 9-14, 18, 21, **38**, 39-42 and 47 (35-37 are PSRAM-internal;
+      0, 3, 19, 20, 45, 46 are strapping or native USB; 43/44 are the UART0
+      console, which `platformio.ini` names as the fallback flashing port, so
+      treat them as spoken for).
+
+      **GPIO38 IS FREE AND GPIO48 IS SPENT — measured 2026-10-15**, closing
+      the "38 or 48 depending on board revision" hedge this list carried from
+      2026-10-12. The onboard RGB LED is on 48, by a **two-point** test with
+      the board on USB, no machine connections and **the yield Bookoo bound
+      and awake** (without it both rows are dark and the test says nothing):
+      `yield: state=3` with `detector=ARMED` gave dim green, and `state=4`
+      (LOST), the scale switched off, gave dark — the two things `updateLed()`
+      writes for those states.
+      **One point was not enough**: green alone is what a green power
+      indicator beside a dark RGB LED would also show, and a draft of this
+      line freed GPIO38 on exactly that. CLAUDE.md has the full grading.
+
+      So the draft that listed 38 as free was right by accident, and the
+      correction that hedged it was right to hedge. Neither was measurement;
+      this is.
 
       **The one-shot channels ARE the constraint**: a dual '221 gives two,
       enough for one per *line*, not one per device. A second '221 or a

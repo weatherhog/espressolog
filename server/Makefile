@@ -12,7 +12,15 @@
 HOST ?= root@espressolog.lan
 BIN  = espressolog-server
 
-test:
+# DEPENDS ON web ON PURPOSE. internal/web/dist is gitignored, so in a clean
+# checkout go:embed has no index.html and web.Handler() serves its own 404
+# instead of the SPA fallback -- which silently breaks
+# TestSiteRootAnswers200WithoutTheMarker, the test standing behind the
+# X-Espressolog-Ingest marker. Without this prerequisite `make test` passes
+# only on a machine that happens to have run `make web` before, which is
+# exactly how that test stayed green locally while red in CI. The Vite build
+# is ~0.5 s; the prerequisite is cheaper than the trap.
+test: web
 	go test ./...
 
 # Build the Vite app and embed it: dist lands in internal/web/dist, which

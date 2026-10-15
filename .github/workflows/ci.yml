@@ -4,7 +4,22 @@
 #
 # The point of each job:
 #   server         — the record/store tests pin the on-flash wire format
-#                    against real captured fixtures.
+#                    against real captured fixtures. It BUILDS THE PWA first,
+#                    and that is not incidental: internal/web/dist is
+#                    gitignored, so in a clean checkout go:embed has no
+#                    index.html and web.Handler() serves its own 404 instead
+#                    of the SPA fallback. TestSiteRootAnswers200WithoutTheMarker
+#                    asserts that a misconfigured non-/api/ POST answers 200
+#                    with HTML — the whole reason the X-Espressolog-Ingest
+#                    marker exists — and without the build that premise is
+#                    absent and the test fails. It passed on a developer
+#                    machine, where dist is left populated by `make web`, and
+#                    was broken for FOUR commits -- f26a2c8^..16f5b76, i.e.
+#                    f26a2c8 (which introduced the assertion), 5941a55,
+#                    389743c, 16f5b76. Only THREE runs failed: 5941a55 was
+#                    pushed together with 389743c, so only the tip got a run.
+#                    Quote the inclusive range; `f26a2c8..16f5b76` excludes the
+#                    commit that broke it and sends a bisect one commit late.
 #   firmware-logic — detector_test.cpp encodes every real-world shot loss as
 #                    a scenario. These are the tests that exist because a shot
 #                    was actually lost, and they are the reason not to lose it
@@ -35,6 +50,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# ONE pin, read by both jobs that need node. The `server` job embeds the
+# bundle and the `web` job validates it; pinned separately they could drift,
+# which is the same hazard go-version-file avoids for Go below.
+env:
+  NODE_VERSION: '22'
+
 jobs:
   server:
     name: server (go test)
@@ -47,6 +68,18 @@ jobs:
           # two can never disagree.
           go-version-file: server/go.mod
           cache-dependency-path: server/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      # `make web` runs the Vite build and copies it into internal/web/dist,
+      # which is what go:embed picks up. Use the Makefile target rather than
+      # repeating the copy here, so the two cannot drift.
+      - run: make web
+        working-directory: server
       - run: go vet ./...
         working-directory: server
       - run: go test ./...
@@ -101,7 +134,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci

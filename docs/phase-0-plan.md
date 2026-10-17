@@ -557,8 +557,43 @@ does not work:
     *half*-failures, not two full shorts — **and a single-FET short is a more
     probable event than a full device short, so the pair buys less than
     squaring a full-short probability.**
-    *(Inferred from the standard photoMOS output topology; not checked
-    against the AQY212 datasheet in hand.)*
+    **Checked against Panasonic's datasheet 2026-10-17 — topology
+    CONFIRMED, one refinement.** The internal schematic for the AQY21•EH
+    family (same drawing in both documents read — see `shopping-list.md` for
+    filenames, dates and hashes) shows **two N-channel MOSFETs, sources joined
+    to a common node, gates joined to one gate node, drains to pins 3 and 4**,
+    driven by one LED. So "two MOSFETs, sources common" is **datasheet grade**.
+    What the datasheet does **not** do is draw or specify the body diodes: the
+    symbol carries the usual source-to-body arrow, which *implies* each FET's
+    intrinsic diode (anode at source, cathode at drain, hence opposed), and
+    nothing in either document gives an off-state forward characteristic. So
+    **"body diodes opposed" is inferred from the MOSFET symbol, not read from
+    a table**, and the ~0.35-0.6 V figure above remains a silicon-diode
+    estimate, not a Panasonic number. (`TLP222A` was not checked; the sentence
+    above names it only by analogy.)
+
+    **The refinement, which the draft missed: the half-failure is
+    polarity-dependent.** Label the FET on the +5 V side of a device F_hi and
+    the other F_lo. If **F_hi** shorts, current runs pos 1 → F_hi (shorted) →
+    common node → F_lo's body diode (anode = node, cathode = F_lo's drain, so
+    forward) → line: the device conducts at one diode drop, as above. If
+    **F_lo** shorts instead, the +5 V side meets F_hi's *reverse*-biased body
+    diode and F_hi's channel is off: **the device still blocks.** So only one
+    of the two single-FET failure sites per device is dangerous, and the pair
+    needs **F_hi shorted in both devices**, not "any FET in each". That cuts
+    the "single-FET short is likelier than a full short" worry by up to half
+    — *if* the two FETs fail short equally often, which is an assumption, not
+    data. Orientation of a device in the chain cannot be used to avoid this:
+    swapping its pins only swaps which FET is F_hi. The ~4.2 V-at-the-line
+    arithmetic and the "common cause" and "hides its own first failure"
+    points below are unchanged.
+
+    **What the old text got wrong, and why it was believable:** it called the
+    failure "one shorted FET leaves *the other's* body diode forward-biased"
+    as though that held for either FET. It is the standard photoMOS picture
+    and the conclusion (two half-failures give ~1.2 V, far above VIH) holds
+    for the case it describes; it just omitted that the other case blocks.
+    **Redundancy is slightly *better* than the draft said, not worse.**
   - **Common cause.** Two identical parts from the same reel, in series, in
     the same thermal environment, seeing the same surge history on the same
     node. A surge on J2 — the plausible cause of an output short — presents

@@ -383,7 +383,7 @@ apart on the transistor, the drive-current claim and the box.
 
 | Part | Qty | Why this one |
 |---|---|---|
-| **AQY212EH, DIP-4** | **8** | 4 in service, 4 spare. **Distributor-listing grade, 2026-10-12** (Distrelec, Farnell, Conrad agree): DIP-4 through-hole, SPST-NO **AC/DC**, 60 V / 550 mA, 5000 Vrms, LED operate 3.0 mA max / 5–10 mA recommended. **That is vendor-listing grade, not datasheet-in-hand** — this repo has sellers printing "JST EH" for parts that are plainly XH, and its maxim is verify by mating. A draft used it to upgrade the plan's body-diode analysis to "rests on the right structure" while the plan still grades that *inferred*; **fetch Panasonic's datasheet** and settle it at the grade the plan asks for. Most listings are **SOP-4 surface-mount** — check the photo shows four long legs. |
+| **AQY212EH, DIP-4** | **8** | 4 in service, 4 spare. **DATASHEET GRADE since 2026-10-17** — see "Datasheet read" below for what was read and what it settles. DIP-4 through-hole, SPST-NO (1 Form A) **AC/DC**, 60 V peak AC/DC, 0.55 A continuous, 5,000 V AC I/O isolation, all confirmed against Panasonic's own tables. **Bare `AQY212EH` is the through-hole part; `…EHA` is the surface-mount terminal version, tube-packed, `…EHAX`/`…EHAZ` are the same SMD part on tape-and-reel (picked from the 1/2-pin or 3/4-pin side)** — so buy the bare suffix, and a listing that says `EHAX` is SMD whatever its photo shows. |
 | **`CD74HC221E`, PDIP-16** | 3 | **Verified 2026-10-12** against TI and Farnell: dual monostable, PDIP-16, 2–6 V, non-retriggerable ("once triggered, the outputs are independent of further trigger inputs"), active lifecycle, 5.2 mA output drive. `SN74HC221N` is scarce — TI is retiring PDIP. **A draft also listed `MC74HC221AN`, `TC74HC221AP` and `HD74HC221P` as equivalents; none could be verified**, and the nearest real hit, `MM74HC221AN`, is obsolete. Those were recollection. The `N`/`E`/`P` suffixes are through-hole; `D`/`PW`/`NS` are SMD. |
 | **BC547 or 2N3904, TO-92** | 10 | **LED drivers, one per photoMOS.** **NOT the 2N7000**, which a draft of this row specified: its V_GS(th) is 0.8–3.0 V, so a worst-case part driven from 3.3 V logic has **0.2 V of overdrive** and R_DS(on) is only characterised at V_GS = 4.5/10 V. That is the same works-on-the-bench-fails-in-service trap as the 1 kΩ below, in the part bought to avoid it. A bipolar has no threshold lottery — 0.7 V of V_BE, cleared with enormous margin. **Base resistor 8.2 kΩ and base-emitter 100 kΩ, both in stock.** |
 | **330 Ω or 390 Ω, 1 %** | 20 | **The one resistor value not in stock.** See the LED arithmetic below. |
@@ -399,7 +399,7 @@ apart on the transistor, the drive-current claim and the box.
 Two consequences:
 
 - **1 kΩ is in stock and is the wrong value.** From 3.3 V it gives
-  `(3.3 − 1.2 V_F − 0.1 V_ds) / 1 kΩ ≈ 2 mA` — **above typical, below
+  `(3.3 − 1.14 V_F − 0.1 V_ds) / 1 kΩ ≈ 2 mA` *(V_F 1.2 V until 2026-10-17; the datasheet says 1.14 V typ at 5 mA — conclusion unchanged)* — **above typical, below
   guaranteed**, the worst place to sit: it works on the bench and fails on
   some units. **330 Ω gives ~6 mA**; 680 Ω if you drive the LEDs from 5 V.
 - **The '221's supply decides its input threshold.** A 74**HC** input needs
@@ -422,6 +422,82 @@ Two consequences:
   LED's 330 Ω feed either, so nothing conducts. **The real case is one this
   build creates**: pulling the '221 from its socket, which this list makes a
   deliberate third disable, leaves four bases floating **with the rail up**.
+
+### Datasheet read — 2026-10-17
+
+**Documents read (both Panasonic's, neither a distributor's paraphrase):**
+
+| | Document | Date / revision | sha256 (first 16) |
+|---|---|---|---|
+| A | **Panasonic Relay Catalog Part 2: PhotoMOS & Solid State Relays**, `ca_semiconductor1154_en.pdf` from `mediap.industry.panasonic.eu`, 356 pp; AQY21•EH section is printed p.146-149, document id **`ds_x615_en_aqy21eh: 010611J`** | PDF created **2011-10-04** | `8459c7ae3ad528cb` |
+| B | **"GU-E PhotoMOS (AQY21•EH)"**, 4-page datasheet, `AQY212EH-Panasonic-datasheet-109895.pdf` from `datasheet.octopart.com` — a **third-party mirror** of a Panasonic datasheet bearing the "Matsushita Electric Works" copyright and a "TESTING" banner | PDF created **2005-03-07**, modified 2005-10-06 | `71c9b77a7bed8328` |
+
+**Neither is a current Panasonic datasheet.** A is Panasonic-hosted but a
+2011 catalogue; B is a 2005 mirror. `industrial.panasonic.com` refused
+the fetch from this machine, so the current per-part datasheet was **not**
+read. A and B **agree on every number compared** (ratings, electrical
+table, symbol), which is some comfort that nothing changed 2005→2011 — it
+says nothing about 2011→now. A search snippet (not the notice itself, unread) mentions a Panasonic dimensional-tolerance unification for DIP4 starting September 2025;
+**that touches package drawings, not electricals**, but it is a reason to
+re-fetch before the order if anything dimensional ever matters (the 0.3 in
+row spacing does).
+
+**Confirmed (datasheet grade):**
+
+| Claim | Datasheet |
+|---|---|
+| Package / type | DIP 4-pin, 1 Form A, **AC/DC dual use** (A: "AC/DC dual use", "Peak AC, DC"); 6.4 × 4.78 × 3.2 mm |
+| Load | **60 V peak AC/DC, 0.55 A continuous, 1.5 A peak (100 ms, DC)** |
+| Isolation | **5,000 V AC** I/O, reinforced; I/O resistance ≥ 1,000 MΩ at 500 V DC; C_iso 0.8 pF typ |
+| LED operate current | **1.2 mA typ, 3.0 mA max** at I_L = max, **25 °C** |
+| LED turn-off current | **0.4 mA min, 1.1 mA typ** — "guaranteed OFF below 0.4 mA" is right |
+| LED forward drop | **1.25 V typ, 1.5 V max at I_F = 50 mA; 1.14 V typ at 5 mA** |
+| Recommended I_F | **5-10 mA** |
+| On-resistance | **0.85 Ω typ, 2.5 Ω max**, at I_F = 5 mA **and I_L = max (550 mA)**, "within 1 s on time" |
+| Turn-on / turn-off | **1 ms typ / 4 ms max; 0.05 ms typ / 1.0 ms max** (I_F = 5 mA, I_L = max) |
+| Off-state leakage | **1 µA max** at I_F = 0, V_L = max |
+| Abs max LED | I_F 50 mA, V_R 5 V |
+| Operating temp | −40 to +85 °C |
+
+**Things the datasheet changes or adds:**
+
+- **LED V_F: the 1.2 V assumption is fine**, slightly pessimistic at 25 °C
+  (1.14 V). Typical-sample curve 7 puts V_F at 5 mA between about 1.02 V
+  (+85 °C) and 1.22 V (−40 °C). 330 Ω from 3.3 V through a BC547 (V_CE(sat)
+  ~0.1 V, an estimate) is **≈ 6.2 mA nominal**; with the rail 5 % low, V_F at
+  the 1.5 V (50 mA) ceiling and V_CE 0.2 V it is still **≈ 4.3 mA**. Above 3.0
+  mA either way.
+- **NEW — the 3.0 mA guarantee is a 25 °C figure.** The electrical table is
+  headed "Ambient temperature: 25 °C", and the operate-current-vs-temperature
+  plot (curve 5, a typical sample) rises from ~0.6 mA at −40 °C to **~3.1 mA
+  at +85 °C**. A box that sits near a boiler can run warm. The 4.3-6 mA design
+  still clears that curve, but **the datasheet bounds unit-to-unit spread only
+  at 25 °C**, so the margin at 85 °C is unquantified. This is the same
+  "works on the bench, fails in service" family as the 1 kΩ trap above, and it
+  is a further reason not to economise on the 330 Ω.
+- **On-resistance is NOT specified at this circuit's current.** 0.85/2.5 Ω is
+  at 550 mA. At ~0.1-1 mA the drop is ~1-2.5 mV *if* the channel stays ohmic,
+  which the output I-V plot (8-(2)) supports around the origin but does not
+  state as a spec. Immaterial to the 100 Ω R45 loop. *(Plot 8-(2) is labelled
+  "Current, mA" with an axis of ±1.5, but a 0.25 Ω part reaching 1.0 at 0.3 V
+  is 1.2 A, not mA — the label looks like a datasheet unit error; read it as
+  amps. My reading, not Panasonic's statement.)*
+- **Turn-on up to 4 ms** is far inside the ~120 ms one-shot pulse and a
+  non-issue.
+- **Body diodes: NOT specified.** The output schematic is two common-source
+  N-MOSFETs; neither document draws or characterises a body diode. See the
+  re-graded paragraph in `phase-0-plan.md` (series-redundancy), which this
+  read settles at "topology datasheet, body diode inferred" and refines.
+- **Not settled here:** TLP222A (the plan's alternate) was not read.
+
+**Correction of record:** this row used to say the figures were "Distributor-
+listing grade, 2026-10-12 (Distrelec, Farnell, Conrad agree)", and that a
+draft had "used it to upgrade the plan's body-diode analysis to 'rests on the
+right structure'". The listing figures were **all right**; what the listings
+could not supply was the output topology, and they were never going to. One
+listing-site oddity worth knowing: LCSC/JLCPCB print **850 mΩ** for R_DS(on)
+and Farnell/Future **2.5 Ω** — both are real, **typical vs maximum**, of the
+same 550 mA test.
 
 ### Still not costed
 

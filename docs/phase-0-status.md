@@ -631,8 +631,24 @@ by an observation made over the sampled window. CLAUDE.md is normative.)
 it: the rated range is where K is *specified*, not a hydraulic limit, and if
 the flow really is above that range then 2382 is not the applicable K, so
 dividing by 2382 to prove it is out of range proves nothing. Worse, the
-recirculation account *predicts* roughly that figure. So: one reading
-refuted, the other unresolved.
+recirculation account *predicts* roughly that figure.
+
+**NEW EVIDENCE 2026-10-17, AND IT SUPPORTS THE WATER READING RATHER THAN
+KILLING IT.** The operator watches the 0–16 bar gauge on every shot: normal
+pulls sit at ~9 bar, a coarse grind barely raises it, an ultra-fine grind goes
+*"higher than 9 bar, but not way higher"*.
+
+*(A draft read that as proof the OPV sits above 9 bar and therefore never
+opens on a normal shot — **withdrawn the same day**. It rested on "a relief
+valve cannot be exceeded at its own setpoint", which is false: spring valves
+exceed their cracking pressure under flow, by 10–25 % at full flow. Read
+against an OPV cracking at ~9 the same observation fits better, because a
+clamp explains both the repeatability and why an ultra-fine puck does not
+drive the gauge toward the pump's deadhead.)*
+
+So the position is unchanged: **one reading refuted, the other unresolved** —
+with the gauge now weak evidence for it. CLAUDE.md is normative and carries
+the volume accounting and the discriminating experiment.
 
 **A capacitor is a CANDIDATE, not a measured requirement.** Nothing has been
 fitted; what was measured is the symptom. J4's 10 nF (73.1 kΩ, 218 Hz) is
@@ -840,8 +856,18 @@ same circuit anyway:
   proved the firmware reads `1`, never wrote down the margin)
 - the **dropped-edge experiment** (above), which needs `display on` to zero
   the counters and one flush with the scale disconnected
-- the **logic analyser on `#`**, which is the only thing that settles whether
-  the measured K-factor counts water or ringing
+- the **logic analyser on `#`** — and **this entry is the wrong instrument,
+  which the same file says 400 lines above.** See *"Settling the K-factor
+  without the analyser"*: the analyser tap on `#` produced the `E01` fault on
+  2026-10-03, its corrected 8.2 K conditioning has never been re-tested, and
+  the ESP tap at 100 K + 220 K now has been. *(A draft dated 2026-10-17
+  promoted this to "the single most valuable measurement in the project" on
+  the strength of a deduction about the OPV that was withdrawn the same day.
+  Withdrawn with it. The cheapest discriminating test is a **deliberately
+  coarse shot with the counter running** — below the OPV's cracking pressure
+  the valve is shut whatever its setpoint, so counts-per-ml there separates
+  recirculation from over-counting using the proven tap and no new hardware.
+  CLAUDE.md is normative.)*
 
 **The GPIO pin map is NOT one of them — it was closed on 2026-10-08 and
 re-confirmed 2026-10-12.** CLAUDE.md carried "they have not been checked

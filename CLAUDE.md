@@ -1637,9 +1637,16 @@ three reasons this file supplies itself:
 - and the recirculation subsection below **predicts exactly that figure** —
   under it the meter sees throughput rather than delivered volume.
 
-So the position is **one reading refuted (pump noise), the other unresolved**,
-not "neither holds". Water-plus-recirculation is a self-consistent account
-that this document supplies and an earlier version declined to credit.
+**AS OF 2026-10-17 THE POSITION IS "NEITHER HOLDS" AFTER ALL — but not for
+the circular reason this subsection rejects.** The objection above really was
+circular and is still rejected on its own terms. What killed
+water-plus-recirculation is the gauge: the OPV sits above 9 bar and a normal
+shot runs below it, so there is no relief path to carry the extra volume. See
+the recirculation subsection.
+
+Kept in full because the reasoning is sound and the refutation came from
+somewhere else entirely — from a pressure reading, not from the flow
+arithmetic that this section spends its length on.
 
 **Note the 11 is a lower bound too.** Shot 2 got a gap correction (+25 counts
 in the unsampled windows at pump start and stop); the aborted run has the same
@@ -1658,25 +1665,94 @@ are **activity**-correlated. An earlier version asserted "it is the pump, not
 the heater, not the solenoid, not ambient" — that was a grade inflation which
 deleted this very caveat.
 
-#### Recirculation is back on the table FOR SHOTS
+#### Recirculation is STILL LIVE — and the gauge reading makes it MORE likely, not less
 
 It was killed on free-flush evidence — an OPV is closed below setpoint, and
 both calibration flushes were free flushes. That reasoning was then applied to
-shots, where the 5× evidence actually comes from.
+shots, where the 5× evidence actually comes from, and this section re-opened
+it on the grounds that *"nobody has read this machine's own 0–16 bar gauge
+(`I.4220`) during a pour, and the OPV's relief setpoint is unrecorded"*.
 
-**Whether a shot reaches the setpoint is UNKNOWN and must not be asserted.**
-An earlier version stated flatly that shots do. Nobody has read this machine's
-own 0–16 bar gauge (`I.4220`) during a pour, and the OPV's relief setpoint is
-unrecorded; a normal ~9 bar extraction need not reach a typical 12–15 bar
-relief. So recirculation is **re-opened, not reinstated** — and reading the
-gauge mid-shot belongs in the experiment list below, because it is the cheapest
-thing that would settle it.
-The meter is on the suction side (confirmed) and the relief leg returns to
-the tank-side T upstream of the meter branch, so on a shot the meter would
-see throughput rather than delivered volume. The ~9.3 ml/s figure is what
-makes this worth re-testing rather than assuming.
+**BOTH HALVES OF THAT WERE WRONG, AND THE OPERATOR HAD THE ANSWER THE WHOLE
+TIME.** Asked directly on 2026-10-17: *"Normally the pressure goes up to
+roughly 9 bars. I watch it every time I pull a shot."* And on varying the
+grind: *"If I pull a coarse shot the pressure will barely rise. If I pull an
+ultra fine shot the pressure will rise higher than 9 bar. But not way
+higher."*
+
+**Grade it precisely, because it is an unusual kind of evidence.** This is not
+one instrumented reading; it is routine observation across many shots. That
+makes **n large and the repeatability real**, which is the part that matters
+here — and it makes the *numbers* soft: no value was recorded at the time, and
+nothing was read simultaneously with the flow counter.
+
+**A FIRST DRAFT OF THIS ENTRY USED THAT OBSERVATION TO DECLARE RECIRCULATION
+DEAD, AND THE DEDUCTION WAS BACKWARDS.** It argued: *"an ultra-fine shot
+exceeds 9 bar, and a relief valve cannot be exceeded at its own setpoint,
+therefore the OPV is above 9 bar, therefore a normal shot runs with it
+closed."*
+
+**The premise is false.** A spring relief valve has a *cracking* pressure, and
+pressure rises **above** it as flow through the valve increases — accumulation
+or pressure override, commonly 10–25 % above cracking at full flow. Being
+exceeded under flow is what these valves *do*. The whole chain rested on that
+one sentence.
+
+**Read the same observation against an OPV cracking at ~9 bar and it fits
+better than pure puck-dependence:**
+
+| grind | observed | OPV cracking at ~9 | no OPV in play |
+|---|---|---|---|
+| coarse | "barely rises" | puck passes all flow, never reaches 9, valve shut ✓ | low pressure ✓ |
+| normal | **"~9 bar, every time"** | puck reaches cracking, valve opens and **clamps** ✓ | 9 bar by coincidence, shot after shot ✗ |
+| ultra-fine | "higher than 9, **not way higher**" | nearly all flow through the valve, override to ~10–11 ✓ | rises toward the pump's ~15 bar deadhead ✗ |
+
+**Two things pure puck-dependence cannot explain and a clamp can**: that it
+lands on the *same* number across varying grind, dose and tamp, and that an
+ultra-fine puck — which passes almost nothing — does **not** drive the gauge
+toward deadhead.
+
+So: **the OPV setpoint is still unbounded, recirculation is still live, and
+this reading is weak evidence FOR it.** An earlier version of this file
+already reasoned this way and a draft threw it away on the false premise
+above.
+
+**This is the repo's recurring defect in its purest form.** The file asked for
+an experiment ("the cheapest thing that would settle it") that the operator
+performs every single morning. Nobody asked. Before adding an experiment to
+the list below, check whether it is already being done and merely unrecorded —
+this is now the **third** instance, after the GPIO silkscreen check and the
+`02.4` power-on string.
 
 #### The experiment that separates them
+
+**0. ONE DELIBERATELY COARSE SHOT, WITH THE COUNTER RUNNING. Do this one
+first — it is the cheapest discriminating test this project has ever had.**
+
+The operator reports a coarse grind *"barely raises"* the pressure. **Below
+the OPV's cracking pressure the valve is unambiguously shut**, whatever its
+setpoint is — which removes the one unknown that makes the ~9 bar reading
+ambiguous. So count pulses against delivered volume on a coarse shot:
+
+- **counts/ml falls to something near the datasheet 2382 pulses/L** →
+  recirculation CONFIRMED. The excess at ~9 bar is relieved flow, and the
+  meter has been reading throughput exactly as the account predicts.
+- **counts/ml stays ~5× high** → recirculation is dead, and the meter is
+  over-counting by a mechanism nobody has identified.
+
+It needs no analyser, no rig change and no new parts: the **proven ESP tap at
+100 K + 220 K**, one coarse shot, one normal shot, counts and yields recorded.
+**It carries none of the invariant-1 hazard that the analyser tap does.**
+
+*(A draft of this section promoted the analyser on `#` to first instead. That
+was wrong twice over: it contradicted `docs/phase-0-status.md`, which calls
+the analyser* **the wrong instrument** *because it produced the `E01` fault on
+2026-10-03 and its corrected 8.2 K conditioning has never been re-tested —
+400 lines from where the promotion was written, in the same file. And it
+justified the series resistor as protecting the analyser, inverting the
+documented hazard, which is protecting the machine.)*
+
+The rest are still worth running and none of them decides this on its own:
 
 1. **One shot and one free flush with the serial console DETACHED**, counts
    read before and after, **durations recorded**. Detaching serial removes
@@ -1715,6 +1791,66 @@ That is net information loss, and the opposite of this file's convention.
 4. **The counts are pump noise** — see the refutation above. Dead at **34×**
    on consistent windows (370 predicted against 11 observed over the same
    16.7 s), with the glitch rate collapsing 25× alongside it.
+*(A draft added "water plus OPV recirculation" here as a fifth dead
+hypothesis on 2026-10-17, and it was **withdrawn the same day** — the
+deduction that killed it rested on "a relief valve cannot be exceeded at its
+own setpoint", which is false. See the recirculation subsection. It is live,
+and the gauge reading is weak evidence for it.)*
+
+#### The volume hole, which is the sharpest statement of the problem
+
+| | |
+|---|---|
+| shot 2, pulses over the pump window | **761** |
+| at the datasheet's 2382 pulses/L | **319 ml** |
+| yield to the cup | **37.9 g** |
+| inlet at this file's own 60 % assumption | **~63 ml** |
+| **unaccounted** | **~256 ml over 33 s** |
+
+*(A draft said 280 ml by subtracting only the 37.9 g cup yield while the table
+above already credits ~63 ml of inlet. 319 − 63 = **256**, which is also what
+this file's own 5.1× figure implies. Conclusion unaffected; the arithmetic was
+double-counting.)*
+
+**That is a mugful, and it is a clean dichotomy: either that water moved, or
+the meter is not counting volume.** It did not reach the cup.
+
+**Recirculation is the account that says it moved**, and as of 2026-10-17 it
+is live — see above. **If it is wrong, the meter is over-counting** and the
+mechanism is unidentified, because electrical coupling is dead (hypothesis 4).
+
+*(A draft asserted "nothing else on the traced circuit takes 256 ml". Only the
+**inlet** side is traced. This file's own hydraulics section opens by saying
+the connector census has no plumbing counterpart and that building one is a
+next-time-in-there job, covering the gauge branch only. Do not treat the
+circuit as surveyed.)*
+
+**ONE UNEXAMINED CANDIDATE if the meter is over-counting, and it is reasoning
+rather than measurement — nobody has looked at the waveform.** The meter is on
+the **suction** side of a vibratory pump firing at 50 Hz against ~9 bar. If
+that pulls the turbine into **flutter or cavitation** rather than smooth
+rotation, the extra edges are *real optical transitions*, not noise — which is
+why a filter aimed at electrical glitches would pass them.
+
+**Two objections, both raised the day it was written:**
+
+- **The dry run should have been its best case, and was its worst.** A pump
+  running with no water drawn is where cavitation is maximal, and it produced
+  **11 counts**. Unless "no water drawn" means nothing moved through the meter
+  at all — which the record does not settle — flutter predicts the opposite of
+  what was measured.
+- **"Counts scale with water" is not in the data.** Shot 1 gave **752 counts
+  at 36.5 g**, shot 2 **736 at 37.9 g** — more yield, fewer counts. What the
+  data supports is a **wet/dry binary**, nothing finer. A draft claimed scaling
+  and there are only two wet points, moving the wrong way.
+
+So it is a weak candidate, recorded so it is not re-derived as an obvious one.
+
+**The discriminator already exists in the experiment list: the analyser on
+`#`.** Digmesa specify a **square wave at ~50 % duty**. Flutter or cavitation
+shows as irregular widths and a duty cycle that is not 50 %. A clean square
+wave at 5× the expected rate means something else again, and would refute
+this too.
 
 #### The capacitor is a CANDIDATE, not a measured requirement
 

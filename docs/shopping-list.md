@@ -448,7 +448,7 @@ row spacing does).
 |---|---|
 | Package / type | DIP 4-pin, 1 Form A, **AC/DC dual use** (A: "AC/DC dual use", "Peak AC, DC"); 6.4 × 4.78 × 3.2 mm |
 | Load | **60 V peak AC/DC, 0.55 A continuous, 1.5 A peak (100 ms, DC)** |
-| Isolation | **5,000 V AC** I/O, reinforced; I/O resistance ≥ 1,000 MΩ at 500 V DC; C_iso 0.8 pF typ |
+| Isolation | **5,000 V AC** I/O; I/O resistance ≥ 1,000 MΩ at 500 V DC; C_iso 0.8 pF typ. *(A draft appended "reinforced" to the voltage. That is a **certification class** under IEC 60664 / 62368, not an isolation-voltage figure, and nothing read supports it — the documents quote a withstand voltage and nothing about creepage, clearance or class. Not load-bearing here: both sides of this barrier are SELV, so it is a 5 V-to-3.3 V separation and not a mains barrier.)* |
 | LED operate current | **1.2 mA typ, 3.0 mA max** at I_L = max, **25 °C** |
 | LED turn-off current | **0.4 mA min, 1.1 mA typ** — "guaranteed OFF below 0.4 mA" is right |
 | LED forward drop | **1.25 V typ, 1.5 V max at I_F = 50 mA; 1.14 V typ at 5 mA** |

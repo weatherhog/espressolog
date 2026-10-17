@@ -580,10 +580,16 @@ does not work:
     **F_lo** shorts instead, the +5 V side meets F_hi's *reverse*-biased body
     diode and F_hi's channel is off: **the device still blocks.** So only one
     of the two single-FET failure sites per device is dangerous, and the pair
-    needs **F_hi shorted in both devices**, not "any FET in each". That cuts
-    the "single-FET short is likelier than a full short" worry by up to half
-    — *if* the two FETs fail short equally often, which is an assumption, not
-    data. Orientation of a device in the chain cannot be used to avoid this:
+    needs **F_hi shorted in both devices**, not "any FET in each".
+
+    **That is a factor of FOUR on the pair, not two, and a draft said "up to
+    half".** Halving each device's *dangerous*-failure rate squares across two
+    devices in series: (F/2)² = F²/4. The "up to half" figure is right for a
+    single device and was carried to the pair unchanged — the same
+    per-device-to-pair slip the "squaring a full-short probability" sentence
+    above warns about. It holds only *if* the two FETs fail short equally
+    often, which is an assumption, not data, and the common-cause point below
+    bites regardless. Orientation of a device in the chain cannot be used to avoid this:
     swapping its pins only swaps which FET is F_hi. The ~4.2 V-at-the-line
     arithmetic and the "common cause" and "hides its own first failure"
     points below are unchanged.

@@ -753,6 +753,91 @@ flashing 0.9.0. An older binary decodes a 0.9.0 record perfectly well — magic,
 version, header_len and CRC are all unchanged — and then silently binds NULL
 for every pulse, with its own suite green.
 
+### THE BENCH RIG AS IT STANDS — 2026-10-18
+
+The 2026-10-08 breadboard was disassembled; this is the rebuild. **Record it
+because the rig is now semi-permanent**: the harnesses were insulated on
+2026-10-18 and terminate in Dupont females, so this is no longer loose wire
+that gets rebuilt from scratch each session.
+
+**The three T-pieces all exist and carry their series resistors.** Verified by
+meter on 2026-10-18, female-to-male-end on each branch, machine unplugged —
+not assumed from the build:
+
+| Tap | Series, **in the T-piece branch** | Shunt, on the breadboard |
+|---|---|---|
+| J2 ×4 (1Cup, 2Cup, Steam, Water) | **150 kΩ** | 220 kΩ |
+| J4 `#` | **100 kΩ** | 220 kΩ |
+| J5 `ESD4`, `ESD1` | **8.2 kΩ** | 15 kΩ |
+
+That placement is not tidiness. **GPIO15-18 emit a ~60 µs low pulse at
+power-up** and three switch pins are in that range; the series resistor at the
+machine end is what keeps the tap passive through it. The same sweep also
+re-derived which Dupont female is which conductor, so the labels come from a
+measurement rather than from memory — which is what went wrong on the
+2026-10-09 rebuild.
+
+**J4's series read 100 kΩ, not 150 kΩ.** Worth stating as a positive result:
+the bag holds both, they look identical, and 150 K / 220 K at J4 looks fine
+nominally at 2.71 V and fails on tolerance stacking at −45 mV. The spec moved
+from 120 K to 100 K on 2026-10-08, the same day the taps went live, so which
+value went in was genuinely open until it was metered.
+
+#### Breadboard, as laid out 2026-10-18
+
+Seven circuits. Each is **two columns** — a junction column and a ground
+column — with the shunt bridging them. The junction column carries the
+T-piece female *and* the GPIO wire; the ground column goes to the rail.
+
+| Shunt | Junction → GPIO | Fed from |
+|---|---|---|
+| 220 kΩ | **7** | J2 1Cup |
+| 220 kΩ | **15** | J2 2Cup |
+| 220 kΩ | **16** | J2 Steam |
+| 220 kΩ | **17** | J2 Water |
+| 220 kΩ | **6** | J4 `#` — **circuit present, T-piece NOT plugged in** |
+| 15 kΩ | **4** | J5 `ESD4` — **clock** |
+| 15 kΩ | **5** | J5 `ESD1` — **data** |
+
+**The column numbers are arbitrary and deliberately not recorded here.** What
+is load-bearing is the shunt *value* and the GPIO; a first draft of this
+section prescribed specific columns and it only caused confusion, because
+"row A" meant tap 1 in one person's notes and breadboard row A in the other's.
+If the two halves reuse column numbers, note that **"column 35" is ambiguous**
+and needs its half.
+
+**Ground rail carries**: every ground column, **J5 `VSS`**, ESP `GND`,
+analyser `GND`. J2 has **no ground pin** of its own — its five positions are
++5 V common and four direction lines — so `VSS` is what its shunts return to.
+Without J5 connected, the J2 dividers have no reference.
+
+**Deliberately unconnected:**
+
+- **J5 `Disp-P4`** — branched through its 8.2 kΩ, far end open. Never a shunt,
+  never anything that can source or sink.
+- **J2 position 1** (+5 V common) — sense-only in Phase 0. It rides in the
+  loom from Phase 1 provisioning onward and that *buys* a failure mode.
+- **J4's T-piece** — the breadboard circuit sits idle. With nothing on the
+  junction, GPIO6 is pulled low through 220 kΩ: a defined level, harmless.
+  **`+` must never be connected to anything**, which is why the whole T-piece
+  stays out rather than two of its three conductors.
+
+**Analyser: CH0 on the 1Cup JUNCTION, not the raw line.** The junction sits at
+5 × 220/370 = **2.97 V**, inside the analyser's 3.3 V world, so its input
+clamp never conducts. That is structurally different from the 2026-10-03 J4
+incident, where the leading hypothesis is ~12 mA through a clamp on a raw 5 V
+net. Ground to the same rail.
+
+**Why the analyser is there at all:** the last `status` reported **`worst poll
+gap = 113 ms`**. The firmware can say a press happened; it cannot time one to
+the resolution a latch-threshold hunt needs.
+
+**ESP power: USB from the laptop, as every prior measurement in this repo
+was taken.** The rule is "do not power the ESP32 from the machine"; a laptop
+is not that, and its brick is an isolated SMPS. **Do not change this** — the
+grounding was identical for the 345-480 ms presses, the 736 counts and shot
+109, and changing it now introduces a variable across the dataset.
+
 ### The bench sequence, in order
 
 Everything here runs on the breadboard with the machine closed.

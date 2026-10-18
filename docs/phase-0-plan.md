@@ -582,17 +582,31 @@ does not work:
     of the two single-FET failure sites per device is dangerous, and the pair
     needs **F_hi shorted in both devices**, not "any FET in each".
 
-    **That is a factor of FOUR on the pair, not two, and a draft said "up to
-    half".** Halving each device's *dangerous*-failure rate squares across two
-    devices in series: (F/2)² = F²/4. The "up to half" figure is right for a
+    **That is up to a factor of FOUR on the pair, not two, and a draft said
+    "up to half".** Halving each device's *dangerous*-failure rate squares
+    across two devices in series: (F/2)² = F²/4.
+
+    **"Up to" is doing real work and a draft stated the 4× flat.** It halves
+    only the *single-FET-short* population. A **full-device short** — both
+    FETs — conducts in either polarity and is not halved at all, so the
+    device's total dangerous rate is somewhere between F/2 and F depending on
+    the mix, which nobody has data on. 4× is the ceiling, not the result. The "up to half" figure is right for a
     single device and was carried to the pair unchanged — the same
     per-device-to-pair slip the "squaring a full-short probability" sentence
     above warns about. It holds only *if* the two FETs fail short equally
     often, which is an assumption, not data, and the common-cause point below
     bites regardless. Orientation of a device in the chain cannot be used to avoid this:
-    swapping its pins only swaps which FET is F_hi. The ~4.2 V-at-the-line
-    arithmetic and the "common cause" and "hides its own first failure"
-    points below are unchanged.
+    swapping its pins only swaps which FET is F_hi. The "common cause" and
+    "hides its own first failure" points below are unchanged.
+
+    **The voltage arithmetic above is HALF-CORRECTED, and a draft froze it by
+    calling it "unchanged".** The passage still reads "~0.6 V" and "~1.2 V of
+    drop" next to "~4.2 V at the direction line", and 5 − 1.2 = **3.8**, not
+    4.2. The 4.2 belongs to the *corrected* drop: the parenthetical that
+    follows says 0.6 V is a ~1 mA figure while this loop runs at ~0.1-1 mA,
+    where a silicon diode drops ~0.35-0.45 V — about **0.8 V for two**.
+    **So 4.2 V is right and the 0.6 / 1.2 figures beside it are superseded.**
+    Quote ~0.4 V per diode and ~0.8 V for the pair.
 
     **What the old text got wrong, and why it was believable:** it called the
     failure "one shorted FET leaves *the other's* body diode forward-biased"

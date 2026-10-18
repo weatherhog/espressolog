@@ -1719,6 +1719,19 @@ this reading is weak evidence FOR it.** An earlier version of this file
 already reasoned this way and a draft threw it away on the false premise
 above.
 
+**THE MECHANISM, restored — a draft deleted it while strengthening the
+conclusion that depends on it**, which also left the "the recirculation
+subsection below predicts exactly that figure" forward reference above
+pointing at nothing. The meter is on the suction side (confirmed by the
+Digmesa datasheet and by tracing) and the relief leg returns to the tank-side
+T **upstream of the meter branch**, so with the OPV open the meter sees
+throughput rather than delivered volume. That is what predicts the ~9.3 ml/s
+figure the subsection above quotes.
+
+**Grade the plumbing claim honestly**: the inlet side is traced, the rest of
+the circuit is not — this file's hydraulics section covers the gauge branch
+only and says building a plumbing census is a next-time-in-there job.
+
 **This is the repo's recurring defect in its purest form.** The file asked for
 an experiment ("the cheapest thing that would settle it") that the operator
 performs every single morning. Nobody asked. Before adding an experiment to
@@ -1736,15 +1749,24 @@ the OPV's cracking pressure the valve is unambiguously shut**, whatever its
 setpoint is — which removes the one unknown that makes the ~9 bar reading
 ambiguous. So count pulses against delivered volume on a coarse shot:
 
-- **counts/ml falls to something near the datasheet 2382 pulses/L** →
-  recirculation CONFIRMED. The excess at ~9 bar is relieved flow, and the
-  meter has been reading throughput exactly as the account predicts.
-- **counts/ml stays ~5× high** → recirculation is dead, and the meter is
-  over-counting by a mechanism nobody has identified.
+**STATE THE THRESHOLD AGAINST YIELD, NOT INLET — a draft of this section did
+not, and repeated the error this very entry corrects three paragraphs up.**
+Yield is **not** inlet: the water splits between cup, puck retention and the
+3-way dump, and this file's own working assumption is that the scale sees
+~60 %. So a meter reading *correctly* produces **2382 / 0.6 ≈ 3970 pulses per
+litre of YIELD**, not 2382. Compare against that, or the confirming result
+(~1.7× the datasheet) gets read as "nothing settled".
 
-It needs no analyser, no rig change and no new parts: the **proven ESP tap at
-100 K + 220 K**, one coarse shot, one normal shot, counts and yields recorded.
-**It carries none of the invariant-1 hazard that the analyser tap does.**
+- **counts per litre of yield lands near ~3970** → recirculation CONFIRMED.
+- **it stays near the ~5900–6500 the free flushes gave** → recirculation is
+  dead, and the meter over-counts by a mechanism nobody has identified.
+- **the 60 % is an assumption, not a measurement**, so treat the boundary as
+  soft and record counts, yield and duration rather than a verdict.
+
+It needs no analyser and no new parts — the **proven ESP tap at 100 K +
+220 K** — but it is **not "no rig change"**, and a draft claimed that. The J4
+T-piece is currently unplugged, so this means refitting the connector behind
+the 2026-10-03 `E01` incident. Watch for the fault on first contact.
 
 *(A draft of this section promoted the analyser on `#` to first instead. That
 was wrong twice over: it contradicted `docs/phase-0-status.md`, which calls

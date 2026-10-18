@@ -479,7 +479,7 @@ row spacing does).
   at 550 mA. At ~0.1-1 mA the drop is ~1-2.5 mV *if* the channel stays ohmic,
   which the output I-V plot (8-(2)) supports around the origin but does not
   state as a spec. Immaterial to the 100 Ω R45 loop. *(Plot 8-(2) is labelled
-  "Current, mA" with an axis of ±1.5, but a 0.25 Ω part reaching 1.0 at 0.3 V
+  "Current, mA" with an axis of ±1.5, but a sub-ohm part reaching 1.0 at 0.3 V *(A draft wrote "a 0.25 Ω part" here, contradicting the 0.85 Ω typ / 2.5 Ω max recorded in the table above. The unit argument does not need a specific R_on and should not invent one.)*
   is 1.2 A, not mA — the label looks like a datasheet unit error; read it as
   amps. My reading, not Panasonic's statement.)*
 - **Turn-on up to 4 ms** is far inside the ~120 ms one-shot pulse and a

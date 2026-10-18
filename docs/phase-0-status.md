@@ -815,8 +815,18 @@ Without J5 connected, the J2 dividers have no reference.
 
 - **J5 `Disp-P4`** — branched through its 8.2 kΩ, far end open. Never a shunt,
   never anything that can source or sink.
-- **J2 position 1** (+5 V common) — sense-only in Phase 0. It rides in the
-  loom from Phase 1 provisioning onward and that *buys* a failure mode.
+- **J2 position 1** (+5 V common) — **not connected on this rig.** That is
+  the only claim here that is an observation.
+
+  **CLAUDE.md contradicts itself about WHEN it enters the harness, and this
+  is safety-relevant, so it is flagged rather than quietly decided.**
+  Invariant 1 says *"from Phase 1 provisioning onward J2 position 1 rides in
+  the loom"*; the 0c section says *"Position 1 therefore rides in the
+  **Phase 0** harness"*. Both sit in the normative file and they are not the
+  same answer. A draft of this entry added a third statement and thereby
+  picked a side. **Do not resolve it from a bench-rig note** — that conductor
+  is where a bridge to a direction line starts a cycle and reprograms a
+  stored timer within 2 s, and no jumper on the board is in that path.
 - **J4's T-piece** — the breadboard circuit sits idle. With nothing on the
   junction, GPIO6 is pulled low through 220 kΩ: a defined level, harmless.
   **`+` must never be connected to anything**, which is why the whole T-piece
@@ -827,6 +837,33 @@ Without J5 connected, the J2 dividers have no reference.
 clamp never conducts. That is structurally different from the 2026-10-03 J4
 incident, where the leading hypothesis is ~12 mA through a clamp on a raw 5 V
 net. Ground to the same rail.
+
+**BUT THE LOADING IS UNRECORDED AND THE MARGIN IS THIN — check it, do not
+assume it.** A draft of this section argued only that the analyser's clamp is
+safe, which is about the *analyser*. The question it skipped is whether the
+**GPIO still reads a press** with the analyser attached:
+
+- It is **not** a 1 MΩ scope input. This repo records the instrument as a
+  **74HC245PW behind 100 Ω**, i.e. a CMOS input — DC load is leakage, not a
+  resistive divider, so the 244 mV drop a 1 MΩ assumption predicts does not
+  apply.
+- **It is still not nothing.** HC leakage runs to ~1 µA over temperature, and
+  the junction's source impedance is 150 K ∥ 220 K = **89 kΩ** → up to
+  **89 mV**. 0c's documented worst-case corner is **+203 mV**. So worst case
+  eats nearly half of it, and nothing here has been measured.
+
+**Settle it with the measurement already on the list.** The junction millivolt
+reading with a lever held is a prescribed step — **take it twice, with and
+without the analyser clipped on.** The difference is the loading, directly,
+and it costs one extra reading.
+
+**UNPLUG GPIO6 FROM THE IDLE J4 JUNCTION for this session.** A draft called it
+"a defined level, harmless". It is a **FALLING-edge interrupt** pin, and with
+the T-piece out its junction is a ~220 kΩ node with a wire on it and nothing
+driving it — an antenna into an edge-triggered counter. The "counter frozen
+during idle" evidence in the 0d tables was taken with the T-piece **connected**,
+i.e. with the sensor's ~9.4 kΩ source holding the node. It says nothing about
+an unterminated stub. Leave the resistor in place and pull the GPIO jumper.
 
 **Why the analyser is there at all:** the last `status` reported **`worst poll
 gap = 113 ms`**. The firmware can say a press happened; it cannot time one to

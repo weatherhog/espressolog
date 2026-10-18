@@ -1637,16 +1637,18 @@ three reasons this file supplies itself:
 - and the recirculation subsection below **predicts exactly that figure** —
   under it the meter sees throughput rather than delivered volume.
 
-**AS OF 2026-10-17 THE POSITION IS "NEITHER HOLDS" AFTER ALL — but not for
-the circular reason this subsection rejects.** The objection above really was
-circular and is still rejected on its own terms. What killed
-water-plus-recirculation is the gauge: the OPV sits above 9 bar and a normal
-shot runs below it, so there is no relief path to carry the extra volume. See
-the recirculation subsection.
+**THE POSITION IS UNCHANGED AS OF 2026-10-17: one reading refuted, the other
+unresolved — and the gauge now leans toward this one.** See the recirculation
+subsection: the operator's routine gauge reading is weak evidence *for*
+water-plus-recirculation, not against it.
 
-Kept in full because the reasoning is sound and the refutation came from
-somewhere else entirely — from a pressure reading, not from the flow
-arithmetic that this section spends its length on.
+*(A draft dated 2026-10-17 replaced this paragraph with "the position is
+NEITHER HOLDS after all", on the grounds that the OPV sits above 9 bar.
+**Withdrawn the same day** — that rested on "a relief valve cannot be exceeded
+at its own setpoint", which is false. The withdrawal reached the recirculation
+subsection and **not this one**, leaving the two contradicting each other
+~40 lines apart for one commit: a retraction applied in one place and missed
+in another is how every stale line in this file got here.)*
 
 **Note the 11 is a lower bound too.** Shot 2 got a gap correction (+25 counts
 in the unsampled windows at pump start and stop); the aborted run has the same

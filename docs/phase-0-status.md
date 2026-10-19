@@ -995,49 +995,68 @@ PP = push-pull, worst case for the pin: machine rail +5 %, shunt +1 %, series
 community-schematic value, never metered** — a draft quoted only the
 favourable one while calling it the pessimistic variant.)*
 
-**TWO CEILINGS APPEAR BECAUSE THIS REPO USES TWO, AND NOBODY HAD NOTICED.**
-The J5 text has always compared against a flat **3.600 V** (VDD + 0.3 at a
-nominal 3.3 V rail). **The J4 section uses the corner** — it explicitly works
-in "VDD + 0.3 V" with the ESP rail moved, which at −5 % is **3.435 V**. The
-two give opposite answers here, so the inconsistency is load-bearing rather
-than cosmetic.
+**THE CEILING IS A CURRENT LIMIT, NOT A VOLTAGE WALL — AND A DRAFT OF THIS
+SECTION BUILT ITS HEADLINE RESULT ON TREATING IT AS A WALL.** That draft
+noticed this repo uses two conventions (the J5 text compares against a flat
+**3.600 V**; the J4 section uses VDD + 0.3 with the ESP rail moved, **3.435 V**
+at −5 %), computed the feasible window under each, and published the result:
 
-| convention | feasible window, both constraints, pessimistic |
+| convention | window, treating the ceiling as a hard wall |
 |---|---|
-| flat 3.600 V (what J5 has always used) | **16.2 – 17.5 kΩ** |
-| 3.435 V (what J4 uses) | **EMPTY — no value works** |
+| flat 3.600 V | 16.2 – 17.5 kΩ |
+| 3.435 V | ~~EMPTY — no value works~~ |
 
-**THAT EMPTY CELL IS THE REAL RESULT OF THIS ANALYSIS.** Under this repo's own
-stricter convention there is **no shunt value** that both reads a reliable
-logic high through the pull-ups and stays under the absolute maximum if the
-line is driven push-pull. The design has been quietly relying on the looser
-ceiling since the tap was built.
+**THE EMPTY CELL IS AN ARTIFACT AND IS WITHDRAWN.** What damages a pin above
+VDD is **clamp-diode current**, and this tap has **8.2 kΩ in series with the
+clamp**. This same file already reasons exactly that way, 700 lines down:
+*"the same 8.2K also bounds clamp-diode current to ~0.5 mA if the ESP32 is
+unpowered while the machine is on"* — a far worse case than this one. The J4
+section does it too, accepting VDD + 174 mV as benign because *"a clamp diode
+does not conduct meaningfully below ~0.4 V"*.
 
-**SO THE ANSWER IS NOT A RESISTOR. IT IS ONE METER READING.** Everything above
-is uncertainty about **how the line is driven**, and that has never been
-tested — the tap was deliberately specified to survive either case, which was
-right when nothing else depended on it and is now the thing blocking the
-choice.
+| shunt | PP corner | over VDD | clamp current |
+|---|---|---|---|
+| **16.4 kΩ** | 3.523 V | +223 mV | **0 — below conduction** |
+| 17.4 kΩ | 3.591 V | +291 mV | **0 — below conduction** |
+| 18 kΩ | 3.629 V | +329 mV | ~0 |
+| 23.2 kΩ | 3.899 V | +599 mV | ~24 µA — **clamp conducting continuously** |
 
-**The reading that settles it is already identified elsewhere in this
-commit**, and it closes two open questions at once:
+**So the ceiling binds softly, and 16.4 kΩ clears it with room.** 23.2 kΩ is
+still wrong — not because it destroys anything, but because it puts the clamp
+into conduction on every high phase, which distorts the signal and is not
+something to design in deliberately.
 
-> **With the tap fitted, meter the J5 line itself.** If it sags to ~4.16 V,
-> the high comes through the 4.7 K pull-ups — **open-drain**, the 3.6 V
-> ceiling never applies, and 18–22 kΩ open up with triple the margin. If it
-> stays near 5.0 V, a low-impedance driver is holding it — **push-pull**, the
-> ceiling binds hard, and the shunt must come *down*, not up.
+**THE SOBER CONCLUSION, after this section reversed itself three times in one
+day:**
 
-That is the **same reading** that would retire the "4.16 V is calculated, not
-measured" correction made in invariant 1 this week. One probe on a node that
-is already broken out at the T-piece, and both close.
+- **The floor failure is real and is the solid finding.** As built, 15 kΩ sits
+  at **−70 to −87 mV** and must not go onto the perfboard.
+- **Fit 16.4 kΩ** — two 8.2 K in series, 25 in stock. **+18 mV** at the
+  pessimistic floor corner, clamp not conducting at the ceiling corner, node
+  disturbance **16.0 %** against the built 16.8 %, loading 171 µA against
+  179 µA. It is what this repo specified before any of this, with the
+  push-pull case worked out beside it at the time.
+- **+18 mV is thin and that is the honest number** — not the +43 mV a draft
+  reached by taking the unmetered 4.7 K's tolerance in its own favour.
 
-**Until it is taken: fit nothing new, and do not copy 15 kΩ onto the
-perfboard.** 16.4 kΩ remains the best-supported value — it is what this repo
-specified, with the push-pull case worked out beside it (*"3.33 V, still well
-under the 3.6 V absolute max"*) — but it is the right answer under the loose
-ceiling only, and the honest margin is **+18 mV**, not the +43 mV a draft
-quoted by taking the favourable pull-up tolerance.
+**THE DRIVE-TYPE MEASUREMENT IS STILL WORTH TAKING — IT IS JUST NOT
+BLOCKING**, as a draft claimed when it told the reader to fit nothing. If J5
+is confirmed open-drain the ceiling stops mattering altogether and 18–22 kΩ
+open up with triple the floor margin.
+
+**AND THE METHOD THAT DRAFT GAVE CANNOT WORK.** It said to *"meter the J5
+line: ~4.16 V means open-drain, ~5.0 V means push-pull."* **`ESD1`/`ESD4` are
+the clock and data — they switch continuously**, so a DC meter reads a
+duty-cycle mean rather than a level, and a push-pull line would read low and
+be called open-drain. It also cannot separate push-pull from a pull-up
+stronger than the schematic's 4.7 K.
+
+> **Use the method that solved J4: meter the resistance, unpowered.** Machine
+> off, J5 unplugged, read pin-to-5 V in Ω mode. An open-drain line shows the
+> pull-up (~4.7 K if the schematic is right); a push-pull output shows no such
+> path. That is how J4's 10.04 kΩ and 147.4 kΩ were established — and it
+> **also meters the 4.7 K itself**, which every number in the table above
+> scales with and which has never been measured.
 
 **WHY THE DRAFT REJECTED IT, AND WHY THAT ARGUMENT WAS WRONG.** It said 16.4 K
 buys "+18 mV, thinner than the **25 mV** that got 220 K / 220 K rejected at
@@ -1704,8 +1723,11 @@ the display is back in temperature mode, so edges lost there cost nothing.
    Two remedies if it happens, cheapest first. **Raise the shunt leg to
    16.4K (2 × 8.2K in series)**: the pin then sits at 2.80 V instead of
    2.69 V, so the margin goes 210 mV → 325 mV, loading is unchanged
-   (171 µA against 179 µA), and the push-pull worst case is 3.33 V, still
-   well under the 3.6 V absolute max. Only then reach for **~470 pF from
+   (171 µA against 179 µA), and the push-pull case is 3.33 V, well under the
+   3.6 V absolute max. **Those are NOMINAL figures** — the corner is
+   **+18 mV** and **3.52 V**, which is still the right answer but not by the
+   width this paragraph implies. **This is no longer contingent: 15K fails
+   its corner and 16.4K is the value to fit.** See the J5 corner section. Only then reach for **~470 pF from
    each GPIO to GND at the box**: 5.3 kΩ × 470 pF = 2.5 µs against a 36 µs
    clock high, so it settles in a fifth of the pulse and puts the corner at
    64 kHz, below triac spike content. Do not go much above 1 nF.

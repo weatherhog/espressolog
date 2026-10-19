@@ -49,7 +49,8 @@ static size_t pending_w_n = 0;
 //     J5 line --[ 8.2K ]--+-- GPIO
 //                         +--[ 15K ]-- GND
 //
-// Safe whichever way the line is driven: 3.23 V at the pin if push-pull,
+// Safe whichever way the line is driven AT NOMINAL -- the corner is a
+// separate question and 15K fails it, see below: 3.23 V at the pin if push-pull,
 // 2.69 V if open-drain through the board's 4.7K pull-ups (VIH is 2.48 V), and
 // the machine's own high never falls below 4.16 V against a display needing
 // 3.5 V. Do NOT enable an internal pull-down — 45K in parallel with the 15K
@@ -57,14 +58,16 @@ static size_t pending_w_n = 0;
 //
 // 2026-10-19: the 15K shunt FAILS its tolerance corner at -70 to -87 mV (the
 // spread is the unmetered 4.7K pull-up's tolerance; quote the pessimistic
-// figure). Do NOT fit a replacement yet -- the open-drain floor and the
-// push-pull absolute maximum pull opposite ways and no value satisfies both
-// under this repo's J4 ceiling convention. 16.4K is the value when one is
-// fitted, where the pull-down case is 2.41 V -- still under VIH, so the
-// warning above holds, but 2.33 V is 15K arithmetic and does not carry
-// across. The 4.16 V above is CALCULATED, never metered, and whether this
-// line is open-drain or push-pull has never been tested -- one meter reading
-// decides both. See docs/phase-0-status.md.
+// figure). FIT 16.4K -- two 8.2K in series, +18 mV, and the clamp is not
+// conducting at the push-pull corner. There, the internal-pull-down case is
+// 2.41 V rather than 2.33 V -- still under VIH, so the warning above holds,
+// but 2.33 V is 15K arithmetic and does not carry across.
+//
+// The 4.16 V above is CALCULATED, never metered, and whether this line is
+// open-drain or push-pull has never been tested. Worth settling (open-drain
+// would free 18-22K) but not blocking. Meter it UNPOWERED in ohms, the way
+// J4's node was solved -- a DC reading on a switching line gives a
+// duty-cycle mean, not a level. See docs/phase-0-status.md.
 static constexpr uint8_t DISPLAY_CLK_PIN  = 4;
 static constexpr uint8_t DISPLAY_DATA_PIN = 5;
 

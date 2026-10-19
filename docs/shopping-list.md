@@ -276,7 +276,7 @@ tighter than they need to be for the sake of a few euro.
 | Value | Qty | Where |
 |---|---|---|
 | 8.2 kΩ | 10 | 0e T-piece, series leg (**×3** — `ESD1`, `ESD4`, `Disp-P4`); 0b analyser tap (×3). **Bought: 25.** |
-| 15 kΩ | 10 | 0e divider, ground leg, at the box (**×2** — `Disp-P4` stays unterminated). **In stock.** |
+| 15 kΩ | 10 | **SUPERSEDED for 0e — do not fit.** Was the 0e divider ground leg; it fails its tolerance corner at −70 to −87 mV (2026-10-19). **Use 2 × 8.2 kΩ in series = 16.4 kΩ** per leg (**×2** — `Disp-P4` stays unterminated). Both in stock, no new parts. |
 | 150 kΩ | 10 | 0c switch divider, series leg (**×4** — all four J2 lines). **In stock 2026-10-07.** |
 | 220 kΩ | 10 | Ground leg: **×4 at J2** (1Cup, 2Cup, Steam, Water) **+ ×1 at J4** = **5**. **In stock.** |
 | 10 nF ceramic | — | **CANDIDATE, do not buy yet.** ×1 across the J4 220 K shunt, 218 Hz. Nothing has been fitted and there is no before/after; it may raise the glitch count by slowing the falling edge to ~1.1 ms through the noise band. Decide after the re-measurement in `phase-0-status.md`. |
@@ -314,15 +314,14 @@ because the machine caught it:
   out. The mechanism is **not** established; see the 0d entry before
   treating this as settled history.
 - **0e is 8.2 K / 15 K as built, and that FAILS its corner (−70 to −87 mV).
-  Buy nothing for it yet.** The shunt is squeezed from both sides: the
-  open-drain floor wants it big, the push-pull absolute maximum wants it
-  small, and **under this repo's J4 ceiling convention no value satisfies
-  both**. The drive type has never been tested, and one meter reading on the
-  J5 line settles it (sag to ~4.16 V = open-drain, ceiling gone, 18–22 K open
-  up). **When something is fitted it is 16.4 K** — two 8.2 K in series, 25 in
-  stock, no new parts, +18 mV. Drafts recommended 23.2 K (**3.90 V push-pull,
-  over the absolute maximum**) and 17.4 K (+9 mV ceiling headroom, marginal
-  the other way). See `docs/phase-0-status.md`.
+  Fit 8.2 K / 16.4 K** — two 8.2 K in series for the shunt, 25 in stock, no
+  new parts. **+18 mV** at the pessimistic floor corner, and the clamp is not
+  conducting at the ceiling corner. *(A draft said "buy nothing yet" on the
+  grounds that no value satisfied both ends; that rested on treating VDD + 0.3
+  as a hard wall, when the 8.2 K series bounds clamp current — which this repo
+  already argues elsewhere. Withdrawn.)* **Do not go to 23.2 K** — a draft
+  recommended it on floor margin alone and it puts the clamp into continuous
+  conduction. See `docs/phase-0-status.md`.
 - **Do not enable an internal pull-down on 0e.** The internal ~45 K across the
   shunt leg drops the open-drain case below VIH. *(The 2.33 V in
   `main.cpp` is **15 K arithmetic**; at 16.4 K it is 2.41 V — still under the

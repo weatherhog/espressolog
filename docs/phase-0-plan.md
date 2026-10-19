@@ -388,6 +388,7 @@ described in `docs/phase-0-status.md`.
   [220 K]
       |
      GND
+```
 
 **Read that carefully: the photoMOS goes between pos 1 and pos N, and
 NOTHING on the drive path touches ground.** An earlier box-drawing version of

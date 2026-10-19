@@ -135,7 +135,7 @@ Pin map, from the traced schematic:
 | Pump_Ctrl | PA15 | → FODM3053 → BTA204S triac (random-phase) |
 | Solenoid_CTRL | PB12 | |
 | HTR_CTRL | PB15 | |
-| display link | PB7/PB8 or PB8/PB9 | see below |
+| display link | PB7/PB8 or PB8/PB9 | **UNRESOLVED — and nothing below resolves it.** `PB7`/`PB8`/`PB9` appear nowhere else in this file; the J5 section decodes the bus without ever establishing which MCU pins it lands on. The cell said "see below" until 2026-10-19, pointing at nothing. |
 
 **Switch electrical — MEASURED 2026-10-04**, not taken from the schematic:
 +5 V → R45 (100 R) → switch common. The common (J2 conductor 1) reads
@@ -319,7 +319,10 @@ read off the tap, with no separate note that the machine responded to each.
 only. Treat 345–480 ms as *one session's* presses, not the machine's
 range.
 
-**FOUR places cite it, not the two a draft listed.** That draft named
+**AT LEAST SIX PLACES CITE IT.** *(This paragraph led with "FOUR" until
+2026-10-19 and corrected itself 23 lines later — so a reader skimming the bold
+text took away the superseded number. The live count leads now.)* Not the two
+a draft listed. That draft named
 `brew_guard.cpp:21` and `main.cpp:1109` and presented the list as complete; a
 review found `docs/phase-0-plan.md:683` — where it carries an **actuation
 safety argument** — and `firmware/test/host/brew_guard_test.cpp:72`.
@@ -363,8 +366,9 @@ and the line number drifted while it was being written.
 **THEN THE FIX DID IT AGAIN, IN THE CROSS-FILE ROWS.** The replacement table
 switched the same-file rows to section names and **left `plan.md:683` and
 `main.cpp:1109` as line numbers — both of which that same commit moved**, to
-685 and 1115 — and the `main.cpp` one has since moved to 1136, so even this
-note's "corrected" value went stale. So the lesson was learned in one
+685 and 1115 — and the `main.cpp` one has moved again since, twice, so both
+this note's "corrected" values went stale too. **It is the ring-headroom
+comment; grep it.** So the lesson was learned in one
 half of the table and not the other, in a commit whose subject was incomplete
 enumeration.
 
@@ -702,8 +706,12 @@ softly; 16.4 K clears it.
 
 **The drive type is still untested and still worth testing** — if J5 is
 open-drain the ceiling stops mattering and 18–22 K open up — but it does not
-block the build. **Meter it unpowered, in Ω mode**, the way J4's node was
-solved; a DC reading on a switching line gives a duty-cycle mean, not a
+block the build. **Meter it unpowered, in Ω mode — J5 pin 2 or 3 against
+J2 position 1**, machine off and both connectors unplugged. The reference
+matters: **J5 itself has no +5 V** (it is ground plus three signals), so
+"ohm against 5 V" without naming J2 pos 1 returns a false null that looks
+exactly like push-pull. A DC reading on the live line is no good either —
+`ESD1`/`ESD4` switch continuously, so a meter gives a duty-cycle mean, not a
 level. The built board decodes and is not an emergency; the perfboard should
 not copy it either way. **And the 15 K
 shunt must NOT be fitted to `Disp-P4`.** Branch it through its 8.2 K for
@@ -870,7 +878,7 @@ Three 7-segment digit fields, MSB = segment a, order abcdefg:
 | From rails up | What happens |
 |---|---|
 | 0 | all three lines leave 0 V; `ESD1`/`ESD4` settle in ~1 µs on their 4.7 K pull-ups |
-| +194 µs | `Disp-P4` starts settling, taking ~250 µs — see below |
+| +194 µs | `Disp-P4` starts settling, taking ~250 µs — see the `Disp-P4` section **above** (rail settling, R32 = 100 K against the 4.7 K pull-ups). *(This said "see below" and the explanation is ~325 lines above it.)* |
 | 0 to ~+1.1 s | **irregular bus activity, not frames**: 32–33 single-bit blips, a 48-bit frame, and one 564-bit burst. Plausibly display-controller init. Anything parsing frames here gets garbage. |
 | **~+1.1 s to +4.1 s** | **THE BUS IS SILENT — no frames at all for ~3 s.** Confirmed 2026-10-05: ~800 of the clock edges counted in this window are the 564-bit burst's own tail, and after it the line idles 98.8 % high. |
 | | **This is when the display shows `02.4`, the firmware version, with a decimal point** — and nothing on the bus carries it. See the decimal-point note above. |
@@ -1150,18 +1158,27 @@ firmware/          PlatformIO, Arduino framework
   partitions.csv
   src/
     main.cpp
-    scale.{h,cpp}      BLE clients, reconnect
-    detector.{h,cpp}   shot state machine
-    spool.{h,cpp}      LittleFS ring, upload+retry
-    net.{h,cpp}        WiFi, WebSocket, HTTP POST
+    scale.{h,cpp}           BLE clients, reconnect
+    detector.{h,cpp}        shot state machine
+    spool.{h,cpp}           LittleFS ring, upload+retry
+    spool_pick.{h,cpp}      which record uploads next
+    upload_policy.{h,cpp}   retry / quarantine / delete on each HTTP code
+    net.{h,cpp}             WiFi, WebSocket, HTTP POST
+    display.{h,cpp}         J5 bus decode, blink discrimination
+    machine_io.{h,cpp}      switch poller, debounce, event queue
+    machine_context.h       per-shot machine facts for the spool header
+    brew_guard.{h,cpp}      invariant 2 — is the pump running?
+  test/host/                host-compiled unit tests, no board needed
 server/            Go
   cmd/espressolog/
-  internal/{store,api,live,mqtt}/
+  internal/{api,live,record,store,web}/
+                   record = on-flash wire format (v1 + v2 decode)
+                   web    = embed.FS for the built PWA
   migrations/001_init.sql   ← from schema.sql
 web/               Vite + React PWA
-  (start from espresso-logger.jsx — chart, ghost trace, capture flow)
+  src/ · prototype/
 analysis/          Jupyter notebooks, reads the SQLite file
-docs/
+docs/              overview · phase-0-status · phase-0-plan · shopping-list
 ```
 
 ---
@@ -1421,8 +1438,9 @@ number cited without being read". **That accusation was false and the original
 was correct.** `git show bb3ed26:firmware/src/main.cpp | sed -n '377p'` — bb3ed26
 being the commit that wrote the citation — returns exactly
 `// output full stop — updateLed() drives the onboard RGB LED on GPIO48, which`.
-The line was read, was right, and has since drifted — to 445, and to **472**
-as of 2026-10-19 — where it still asserts GPIO48 today. The draft checked the *current* file
+The line was read, was right, and has since drifted repeatedly — 445, then
+472, and moving again within the same day's commits — while still asserting
+GPIO48. The draft checked the *current* file
 instead of the file at the commit that made the claim — the same
 read-a-later-version-and-call-it-history error logged against `pendingCount()`
 earlier the same day. **When a line number here looks wrong, check it at the

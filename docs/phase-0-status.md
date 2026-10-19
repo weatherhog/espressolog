@@ -1,4 +1,4 @@
-# Phase 0 status — as of 2026-10-13
+# Phase 0 status — as of 2026-10-19
 
 Phase 0a (scale logging, stages 0–6) is **complete and in production**.
 This file is the resume point: read it (and CLAUDE.md) before continuing.
@@ -58,7 +58,7 @@ the guard insufficient is the water draw, which has nothing to do with 2Cup.
 own** — a draft presented it as the fix. The second press is a real stop
 signal on a line already polled, but **the machine self-terminates without
 one**, and then `busy()` never clears: the latched-busy-forever failure
-`brew_guard.cpp:26-30` documents, which blocks flash writes indefinitely and
+the latched-busy-forever comment in `brew_guard.cpp` documents, which blocks flash writes indefinitely and
 is strictly worse than a guard that is sometimes short. **Any edge-driven
 design needs an upper bound too.** The cost meanwhile is bounded (`pending_w`
 holds 8 weighings before it drops them). CLAUDE.md carries the full entry. Back up the database first — 009 is irreversible and its
@@ -387,7 +387,7 @@ Everything on the breadboard, all three T-pieces in the machine, firmware
 | | |
 |---|---|
 | **`selftest`** | **500/500, 0 glitches, 0 ring drops** at 100 Hz — 6.3× the rate at the sensor's rated max flow (0.40 L/min × 2382 = 15.9 Hz). The one thing host tests cannot establish, because a real shot has no independent count to check against. |
-| **All four switches** | correct GPIO mapping, no false reprogram. *(The "taps of 345–480 ms" this row carried is **one session's** presses — 2026-10-19 logged 195-295 ms and 80-90 ms, all latching. See CLAUDE.md.)* |
+| **All four switches** | correct GPIO mapping, no false reprogram. *(The "taps of 345–480 ms" this row carried is **one session's** presses — 2026-10-19 logged 195-295 ms and 80-90 ms. **The pump was watched answering only the six fast ones**, so the latching evidence is those; the longer ten give width only. See CLAUDE.md.)* |
 | **Lever B** | **plug inspection → functional.** B up logged `water`, B down logged `steam` |
 | **J4 first contact** | **no `E01`.** The 100 K + 220 K is energised and the machine has not noticed — the tap that faulted it on 2026-10-03 |
 | **Worst poll gap** | **10 ms** on 2026-10-08 against that session's ~400 ms presses — **both halves of that ratio are superseded.** 2026-10-19 measured **42-57 ms** against **80-90 ms** presses, and missed two of six. The 40:1 headroom this row claimed is ~1.6:1. See the poll-gap reconciliation below; polling still stays, for reasons that are no longer this number |
@@ -1158,14 +1158,17 @@ mis-comparison is the entire reason the draft escalated past the ceiling.**
   Quote that figure, not +43: the difference is only which way the unmetered
   4.7 K is assumed to err, and assuming in your own favour is how the 23.2 K
   recommendation happened.
-- **17.4 kΩ is EXCLUDED, not merely marginal, and two drafts got this wrong
-  in sequence.** The first called 16.4 kΩ "the only value that clears both"
-  (an artifact of a five-row table); the second promoted 17.4 kΩ for its
-  +88 mV floor margin, which is the one-sided optimisation this section
-  exists to condemn. **Both are superseded by the corrected clamp corner**:
-  at 17.4 kΩ the pin sits **+456 mV over VDD**, past the ~0.4 V conduction
-  threshold, so it is outside the window rather than at its edge. The window
-  is **~16.2 – 16.6 kΩ**, and 16.4 kΩ is near its centre.
+- **17.4 kΩ is worse than 16.4 kΩ but not forbidden, and this section has
+  said both.** Three drafts in sequence: "16.4 is the only value that clears
+  both" (an artifact of a five-row table), then "17.4 buys five times the
+  margin" (one-sided, floor only), then "17.4 is EXCLUDED" (a hard 0.4 V wall,
+  in the same breath as calling 33-60 µA *"not destructive"* at 23.2 kΩ).
+  **The last of those is the one to drop**: you cannot treat the clamp as a
+  soft current limit where it rescues 16.4 kΩ and as a cliff where it
+  excludes 17.4 kΩ. Carried through consistently 17.4 kΩ draws **~10 µA** —
+  tolerable, worse than 16.4 kΩ, not forbidden. **16.4 kΩ is the choice
+  because it is the only value needing no appeal to how much clamp current is
+  acceptable.**
 
 **Why it decodes anyway at a negative corner**: a corner is not an operating
 point. The real rail is near 5.0 V, real 1 % parts are not all aligned, and
@@ -1216,8 +1219,15 @@ DRAFT SAID THE LATTER — WHICH IS ARITHMETICALLY IMPOSSIBLE HERE.** An 80 ms
 press cannot fit between two polls 42-57 ms apart; it is always seen by at
 least one. `SwitchBank` requires **two consecutive agreeing polls**
 `DEBOUNCE_MS` (20 ms) apart before it sets `stable`, so a press caught by only
-**one** poll is discarded. At ~1.6 intervals per press, roughly a third of
-presses get only one poll — which is the observed 2-in-6 directly.
+**one** poll is discarded.
+
+**DO NOT DERIVE A RATE FROM THIS THE WAY A DRAFT DID.** It said "at ~1.6
+intervals per press, roughly a third of presses get only one poll — which is
+the observed 2-in-6 directly". That treats `sw_max_gap`, a **running
+maximum**, as if it were the mean. The loop is nominally `delay(5)`, at which
+an 80 ms press spans ~16 polls and confirms easily. **The misses are
+excursions, not the steady state** — two presses happened to land in stalls.
+The agreement with 2-in-6 was numerology.
 
 **Two consequences the draft's version hid:**
 
@@ -1249,9 +1259,11 @@ roughly [−33, 193] ms and bound nothing.
 DRAFT OF THIS PARAGRAPH RETRACTED THE BOUND ON THE ASSUMPTION THAT IT DID.**
 `switchesSetEnabled()` in `main.cpp` zeroes `sw_max_gap` on every `switches
 on`, so the counter is per-arming, not per-session. *(A draft cited
-`main.cpp:321`, a comment line; a second draft "corrected" it to 328, also a
-comment line, **inside the same commit that added the cite-by-section rule**.
-It is at 336 as of this commit and will move again. Cite the function.)* The 113 ms belongs to whichever arming preceded
+`main.cpp:321`, a comment line. A second draft "corrected" it to 328 — also a
+comment line. A third said 336 — also a comment line. **Three attempts to
+cite one assignment by line, all three landing on comments, inside the commits
+that added the cite-by-section rule.** It is in `switchesSetEnabled()`; grep
+`sw_max_gap`.)* The 113 ms belongs to whichever arming preceded
 it; the press run was read at ~50 ms. **The bound survives.**
 
 **What does NOT survive is being able to show that from the record.** Nothing
@@ -1332,6 +1344,7 @@ rather than just the NVS boolean.
 |---|---|
 | Display tap after the 0.9.4 flash | `frames=177`, `mode=temp 95 C` |
 | Lever A's log line | ten quoted `# switch 1cup` events |
+| `BREW_GUARD_MS` | **probably too short for a lever-B draw** — the "couple of minutes" it rests on is operator recollection, not a measurement. And it can fail to ARM entirely; see CLAUDE.md |
 | Minimum latching press width | **below ~140 ms**, observed to latch — see the caveat below |
 | 2Cup stored duration | **45 s** (was UNKNOWN) |
 | Lever B latching | yes — and `BREW_GUARD_MS` is too short |
@@ -1757,12 +1770,14 @@ the display is back in temperature mode, so edges lost there cost nothing.
    | 1 | `VSS` | branch, no resistor | ground |
    | 2 | `ESD1` — **data** | 8.2K | ~~15K~~ **16.4K** shunt -> **GPIO5** |
    | 3 | `ESD4` — **clock** | 8.2K | ~~15K~~ **16.4K** shunt -> **GPIO4** |
+   | 4 | `Disp-P4` | 8.2K | **nothing — labelled test point** |
 
    **The 15K in the diagram above is what is FITTED; 16.4K (2 × 8.2K) is what
    to BUILD** — 15K fails its tolerance corner (2026-10-19). Marked inline
    because this table and that diagram are what the perfboard gets wired
-   from.
-   | 4 | `Disp-P4` | 8.2K | **nothing — labelled test point** |
+   from. *(A draft put this note between rows 3 and 4, which broke the table
+   and left the `Disp-P4` row rendering as literal text — the one row
+   carrying the fit-nothing rule.)*
 
    An earlier draft left `Disp-P4` untapped as the cautious choice. It is
    the opposite: this T-piece is on the critical path for the `Disp-P4`
@@ -2492,55 +2507,26 @@ the display is back in temperature mode, so edges lost there cost nothing.
      5 × 147.4/157.44 = **4.681 V** against **4.69 V measured**, so the
      model is right and the source impedance is R_pu ∥ R_pd = **9.4 kΩ**.
 
-     Because the source is 9.4 kΩ, the divider loads it and the unloaded
-     ratio is not the answer:
+     **The corner analysis for this divider lives in CLAUDE.md and is NOT
+     repeated here — it used to be, verbatim, and the two copies had already
+     drifted.** This file said the chosen divider disturbs the node by
+     *"126 mV (2.7 %)"*; CLAUDE.md says **134 mV (2.9 %)**, and invariant 1
+     quotes the 2.9 % as the J4 figure. **134 mV / 2.85 % is correct**
+     (unloaded 4.681 V against 4.548 V loaded). The 126 mV was wrong, in the
+     one number the project's top-line invariant cites.
 
-     | Divider | pin | nominal | worst case | over-rail |
-     |---|---|---|---|---|
-     | 8.2 K + 15 K | **2.15 V** | −321 mV | **FAILS** | — |
-     | 150 K + 220 K | 2.71 V | +239 mV | **−45 mV, FAILS** | — |
-     | 120 K + 220 K | 2.95 V | +472 mV | +177 mV | −13 mV |
-     | **100 K + 220 K** | **3.13 V** | **+651 mV** | **+348 mV** | **+174 mV** |
+     **The mechanism is worth more than the fix.** The duplicated block ended
+     with the sentence *"CLAUDE.md carries the corner table"* — it deferred to
+     CLAUDE.md **and kept its own copy anyway**. That is this repo's
+     signature defect, stated by the file, operating on the file. The copy is
+     deleted rather than corrected, because correcting both leaves two things
+     to keep in step.
 
-     **100 K is the fitted value as of 2026-10-08** — the 120 K this section
-     was written around was never in stock. It wins on margin and loses only
-     on the over-rail corner, which stays inside VDD + 0.3 V abs max.
-
-     Worst case is a full corner: the machine's 5 V sagging 5 %, the
-     ESP32's 3.3 V rail 5 % high (VIH 2.60 V), **1 % tolerance on the
-     divider pair, and ±1 % meter error on the measured 10.04 kΩ and
-     147.4 kΩ**. An earlier version of this table omitted the last two and
-     reported −20 mV and +201 mV — conclusions unchanged, margins
-     flattering.
-
-     **Two traps in that table.** The 8.2 K + 15 K an earlier draft
-     specified is 321 mV *under* VIH — it would have counted nothing,
-     forever, with nothing visibly broken. And **150 K / 220 K is in stock
-     and still wrong**: fine nominally, fails on tolerance stacking, which
-     is precisely why 220 K / 220 K was rejected for 0c. Do not substitute
-     it because it is in the drawer.
-
-     The chosen divider disturbs the node by **126 mV (2.7 %)**, leaving
-     the machine's own reading unambiguously high.
-
-     **Low side**, which the corner above does not cover: the pin sits at
-     **0.19 V** against an ESP32-S3 VIL of 0.25·VDD = **0.784 V** at a
-     5 %-low rail — **+590 mV**. Even at the datasheet's *maximum*
-     saturation of 0.7 V rather than the measured 0.3 V, the pin is
-     0.45 V, still **+331 mV** clear.
-
-     **Drift on the board's own resistors does not threaten it either.**
-     They were measured cold and unpowered and sit near a boiler, but they
-     move together in the ratio and 340 kΩ ≫ 10 kΩ, so the margin is
-     nearly flat: **+177 mV at ±1 %, +160 at ±5 %, +136 at ±10 %,
-     +111 mV at ±15 %.** A known gap, closed rather than flagged.
-
-     **The 4.681 V prediction matching 4.69 V to 0.2 % is luckier than the
-     instrument.** It confirms the *model*, not the precision of the two
-     resistances — which is why the corner still carries ±1 % meter error
-     on them. **The divider is 100 K + 220 K as of 2026-10-08** — the 120 K
-     this section was written around was never in stock, and 100 K has about
-     double the logic-high margin. CLAUDE.md carries the corner table.
+     **Normative home: CLAUDE.md, the 0d divider table.** What stays here is
+     the *measurement* above (10.04 kΩ, 147.4 kΩ, 4.69 V) — this file is the
+     bench record — and the fitted value: **100 K + 220 K since 2026-10-08**,
+     the 120 K it was designed around never having been in stock.
+     **Never 150 K**: in the drawer, fine nominally, fails at −45 mV.
 
      The earlier derivation here assumed a push-pull source and quoted
      5 × 15/23.2 = 3.23 V. That was the wrong model, and the right one was

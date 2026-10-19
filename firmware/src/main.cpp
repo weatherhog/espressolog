@@ -69,9 +69,11 @@ static size_t pending_w_n = 0;
 //
 // The 4.16 V above is CALCULATED, never metered, and whether this line is
 // open-drain or push-pull has never been tested. Worth settling (open-drain
-// would free 18-22K) but not blocking. Meter it UNPOWERED in ohms, the way
-// J4's node was solved -- a DC reading on a switching line gives a
-// duty-cycle mean, not a level. See docs/phase-0-status.md.
+// would free 18-22K) but not blocking. Meter it UNPOWERED in ohms: J5 pin 2
+// or 3 against J2 POSITION 1, which is where the +5 V is -- J5 itself has
+// none, and ohming against "5 V" without that reference returns a false null
+// that looks like push-pull. A DC reading on the live line is no good
+// either; it switches. See docs/phase-0-status.md.
 static constexpr uint8_t DISPLAY_CLK_PIN  = 4;
 static constexpr uint8_t DISPLAY_DATA_PIN = 5;
 

@@ -991,9 +991,14 @@ established**, so both columns bind:
 *(OD = open-drain through the board's 4.7 K pull-ups, worst case for reading
 HIGH: machine rail −5 %, VIH 2.60 V, shunt −1 %, series and pull-up +1 %.
 PP = push-pull, worst case for the pin: machine rail +5 %, shunt +1 %, series
-−1 %. **† The "vs 3.435 V" column is SUPERSEDED** — it treats VDD + 0.3 as a
-hard wall, which the clamp-current analysis below withdraws. Left visible
-because the figures were published; do not read the ✗/✓ marks in it. **Both pull-up columns are given because the 4.7 K is a
+−1 %. **† BOTH ceiling columns are SUPERSEDED, not just the strict one** —
+they treat VDD + 0.3 as a hard wall, which the clamp-current analysis below
+withdraws, and that applies to the flat 3.600 V column exactly as much as to
+the 3.435 V one. **Ignore every ✗ and ✓ in both.** *(A draft struck only the
+3.435 V column and left the flat one live — striking the pessimistic
+convention and keeping the favourable one, which is the inversion this
+section exists to condemn, and it left 15 kΩ apparently passing a ceiling
+test that no longer exists.)* **Both pull-up columns are given because the 4.7 K is a
 community-schematic value, never metered** — a draft quoted only the
 favourable one while calling it the pessimistic variant.)*
 
@@ -1005,7 +1010,7 @@ at −5 %), computed the feasible window under each, and published the result:
 
 | convention | window, treating the ceiling as a hard wall |
 |---|---|
-| flat 3.600 V | 16.2 – 17.5 kΩ |
+| flat 3.600 V | ~~16.2 – 17.5 kΩ~~ — also superseded; under the corrected clamp corner it is **~16.2 – 16.6 kΩ** |
 | 3.435 V | ~~EMPTY — no value works~~ |
 
 **THE EMPTY CELL IS AN ARTIFACT AND IS WITHDRAWN.** What damages a pin above
@@ -1024,12 +1029,14 @@ does not conduct meaningfully below ~0.4 V"*.
 | 18 kΩ | 3.629 V | +329 mV | +494 mV | **yes** |
 | 23.2 kΩ | 3.899 V ‡ | +599 mV | +764 mV | **yes, by far** |
 
-*(‡ 3.899 V is the **open-circuit** divider output. Once the clamp conducts
-the pin never actually reaches it — the clamp and the 8.2 K form a second
-divider and the pin sits lower, which is why the row is wrong to fit rather
-than dangerous. The ~24 µA quoted earlier used that open-circuit figure and
-so overstates the current; no better model has been worked out, and none is
-needed to reject the value.)*
+*(‡ 3.899 V is the **open-circuit** divider output; once the clamp conducts
+the pin sits lower. The ~24 µA a draft quoted for this came from
+(599 − 400) mV / 8.2 kΩ and the draft then called it an **overstatement**.
+It is an **understatement**, and in the direction that matters: the current
+flows through the Thévenin source 8.2 K ∥ 23.2 K = **6.03 kΩ**, giving
+**~33 µA at nominal VDD and ~60 µA at the −5 % corner** this section declares
+governing. Still not destructive — which is why 23.2 kΩ is rejected for
+putting the clamp into conduction at all, not for damage.)*
 
 *(A first version of this table subtracted a **nominal** 3.300 V from
 push-pull voltages computed at a machine rail of +5 % — mixing corners, which
@@ -1055,8 +1062,14 @@ day. Note how little of it is new:**
   specified before any of this analysis started**, which is the strongest
   thing that can be said for it: three rounds of argument ended where the
   original specification already was.
-- **Everything above 16.4 kΩ is ruled out** — by the clamp threshold at 17.4
-  and 18, and by continuous clamp conduction at 23.2.
+- **Everything above ~16.6 kΩ is ruled out IF the line is push-pull** — by
+  the clamp threshold at 17.4 and 18, and by outright conduction at 23.2.
+  **That qualifier is load-bearing and a draft dropped it.** The whole table
+  is a push-pull corner table; under open-drain the pin never exceeds 2.8 V
+  and none of it applies.
+- **So the feasible window is ~16.2 – 16.6 kΩ under push-pull**, and
+  16.2 kΩ upward under open-drain. **A draft left "16.2 – 17.5 kΩ" standing**
+  from before the clamp corner was redone; 17.4 and 17.5 are outside it.
 
 **THE DRIVE TYPE IS STILL UNTESTED, AND NOBODY HAS A WORKING PROCEDURE FOR
 IT. Two have been proposed in this file and both are wrong:**
@@ -1072,11 +1085,34 @@ cannot ohm against a 5 V pin that J5 does not have; and **it must not touch
 J4's `+`**, which is the one hard read-only rule in this project and which an
 ohmmeter would violate by sourcing current.
 
-**This is not blocking.** 16.4 kΩ is correct under either drive type. Settling
-it would only *unlock* larger shunts — and the table above now shows those are
-ruled out by the clamp threshold anyway, so the measurement has lost most of
-its value. **Record it as open and move on**; the schematic's 4.7 K is the
-working assumption and nothing currently depends on confirming it.
+**This is not blocking: 16.4 kΩ is correct under either drive type.** Fit it
+and build.
+
+**BUT THE MEASUREMENT HAS NOT LOST ITS VALUE, AND A DRAFT RETIRED IT WITH A
+CIRCULAR ARGUMENT.** That draft said larger shunts "are ruled out by the
+clamp threshold anyway, so the measurement has lost most of its value". **The
+clamp threshold only exists if the line is push-pull** — which is the very
+thing the measurement tests. Confirming open-drain voids the entire ceiling
+table and reopens 18–22 kΩ with triple the floor margin. Using a table to
+retire the experiment that would invalidate that table is the plainest
+circularity this file has logged. (`main.cpp` carries the correct version and
+was not changed to match the draft.)
+
+**And a valid procedure probably does exist — the rejection above is too
+strong on both halves:**
+
+- **The 5 V reference need not be on J5.** `J2 position 1 is +5 V` on the same
+  IRM-03-5 rail, and it is not the read-only conductor — this file's own
+  constraint names **J4's `+`** specifically, which presupposes J2 pos 1 is
+  fair game. Unpowered, machine off, both connectors unplugged: ohm J5 pin 2
+  or 3 against J2 position 1.
+- **The cited continuity failure was a different test.** It was J4's three
+  shrouded `B3B-XH-A` pins probed against the J5 pin-1 **pad**, and this file
+  records *"an occupied J5 pad"* as one hypothesis for it — which unplugging
+  J5 removes.
+
+So: **open, worth doing, and no longer believed impossible.** Not required
+before the perfboard.
 
 **WHY THE DRAFT REJECTED IT, AND WHY THAT ARGUMENT WAS WRONG.** It said 16.4 K
 buys "+18 mV, thinner than the **25 mV** that got 220 K / 220 K rejected at
@@ -1103,14 +1139,14 @@ mis-comparison is the entire reason the draft escalated past the ceiling.**
   Quote that figure, not +43: the difference is only which way the unmetered
   4.7 K is assumed to err, and assuming in your own favour is how the 23.2 K
   recommendation happened.
-- **A draft called 16.4 kΩ "the only value that clears both". It is not** —
-  that was an artifact of a five-row table; the window runs **16.2 – 17.5 kΩ**
-  under the flat ceiling. **But a second draft then promoted 17.4 kΩ on its
-  +88 mV floor margin alone, which is the same one-sided optimisation this
-  section exists to condemn.** 17.4 kΩ leaves **+9 mV** against the flat
-  ceiling where 16.4 leaves **+77 mV**: it trades a comfortable headroom for a
-  comfortable floor and ends up marginal at the other end. **16.4 kΩ is the
-  better-balanced value, not merely the one in stock.**
+- **17.4 kΩ is EXCLUDED, not merely marginal, and two drafts got this wrong
+  in sequence.** The first called 16.4 kΩ "the only value that clears both"
+  (an artifact of a five-row table); the second promoted 17.4 kΩ for its
+  +88 mV floor margin, which is the one-sided optimisation this section
+  exists to condemn. **Both are superseded by the corrected clamp corner**:
+  at 17.4 kΩ the pin sits **+456 mV over VDD**, past the ~0.4 V conduction
+  threshold, so it is outside the window rather than at its edge. The window
+  is **~16.2 – 16.6 kΩ**, and 16.4 kΩ is near its centre.
 
 **Why it decodes anyway at a negative corner**: a corner is not an operating
 point. The real rail is near 5.0 V, real 1 % parts are not all aligned, and
@@ -1663,9 +1699,9 @@ the display is back in temperature mode, so edges lost there cost nothing.
 
    ```
    J5 signal --[ 8.2K ]--+-- GPIO4  (clock)
-                         +--[ 15K ]-- GND
+                         +--[ 15K ]-- GND   <- SUPERSEDED: use 16.4K (2x8.2K)
    J5 signal --[ 8.2K ]--+-- GPIO5  (data)
-                         +--[ 15K ]-- GND
+                         +--[ 15K ]-- GND   <- SUPERSEDED: use 16.4K (2x8.2K)
    J5 ground ------------------- ESP32 GND
    ```
 
@@ -1682,8 +1718,13 @@ the display is back in temperature mode, so edges lost there cost nothing.
    | J5 pin | Net | At the T-piece | At the box |
    |---|---|---|---|
    | 1 | `VSS` | branch, no resistor | ground |
-   | 2 | `ESD1` — **data** | 8.2K | 15K shunt -> **GPIO5** |
-   | 3 | `ESD4` — **clock** | 8.2K | 15K shunt -> **GPIO4** |
+   | 2 | `ESD1` — **data** | 8.2K | ~~15K~~ **16.4K** shunt -> **GPIO5** |
+   | 3 | `ESD4` — **clock** | 8.2K | ~~15K~~ **16.4K** shunt -> **GPIO4** |
+
+   **The 15K in the diagram above is what is FITTED; 16.4K (2 × 8.2K) is what
+   to BUILD** — 15K fails its tolerance corner (2026-10-19). Marked inline
+   because this table and that diagram are what the perfboard gets wired
+   from.
    | 4 | `Disp-P4` | 8.2K | **nothing — labelled test point** |
 
    An earlier draft left `Disp-P4` untapped as the cautious choice. It is
@@ -1726,6 +1767,7 @@ the display is back in temperature mode, so edges lost there cost nothing.
    inside the machine          |  cable out       |  project box, outside
    ---------------------------------------------------------------------
    J5 -[T-piece]- 8.2K inline  |  3 x 26 AWG      |  2 x 15K to GND
+                                                     (BUILD: 16.4K)
         |                      |  silicone,       |  ESP32-S3 GPIO4/5/GND
         +- machine harness     |  twisted pairs   |  USB charger (isolated)
    ```

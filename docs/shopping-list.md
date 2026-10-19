@@ -326,8 +326,6 @@ because the machine caught it:
   shunt leg drops the open-drain case below VIH — **2.41 V at the specified
   16.4 K**, against a 2.475 V VIH. *(`main.cpp` quotes 2.33 V, which is 15 K
   arithmetic; the warning holds at either value and `main.cpp` is annotated.)*
-  The internal 45 K across the 15 K leg drops the open-drain case to
-  2.33 V and the pin stops reading high.
 
 ---
 

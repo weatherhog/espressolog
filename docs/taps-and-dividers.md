@@ -20,16 +20,19 @@
 
 ## The three fitted values, in one place
 
-| Tap | Series | Shunt | Lands at | Corner |
-|---|---|---|---|---|
-| **J2** — four direction lines | 150 K | 220 K | 2.89 V measured | **+203 mV** |
-| **J4** — flowmeter `#` | 100 K | 220 K | 3.13 V | **+348 mV** |
-| **J5** — `ESD1`, `ESD4` | 8.2 K | **16.4 K** | — | **+18 mV** |
-| **J5** — `Disp-P4` | 8.2 K | **none, ever** | — | n/a |
+| Tap | Divider (series, shunt) | Lands at | Corner |
+|---|---|---|---|
+| **J2** — four direction lines | **150 K / 220 K** | 2.89 V measured | **+203 mV** |
+| **J4** — flowmeter `#` | **100 K + 220 K** | 3.13 V | **+348 mV** |
+| **J5** — `ESD1`, `ESD4` | **8.2 K / 16.4 K** | — | **+18 mV** |
+| **J5** — `Disp-P4` | 8.2 K, **no shunt, ever** | — | n/a |
 
 <!-- fact:divider-j2 150 K / 220 K -->
 <!-- fact:divider-j4 100 K + 220 K -->
 <!-- fact:divider-j5-shunt 16.4 K -->
+
+*(J2's pair is written with a slash and J4's with a plus because that is how
+each is written everywhere else in this repo. They mean the same thing.)*
 
 **The J5 row is the one that is specified rather than built.** 8.2 K / 15 K is
 what is physically in the machine today and it fails its corner; see below.

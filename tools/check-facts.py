@@ -112,8 +112,15 @@ def normalise(text):
 
 
 def tracked_files():
+    # --others --exclude-standard includes files that are new and not yet
+    # `git add`ed. Without it a brand-new doc is invisible to this check
+    # until the commit that adds it -- which is precisely the commit where
+    # its markers are most likely to be wrong, and it cost a false pass.
     out = subprocess.run(
-        ["git", "ls-files", "-z"], capture_output=True, text=True, check=True
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout
     for path in out.split("\0"):
         if not path or path in SKIP_PATHS:

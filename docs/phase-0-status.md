@@ -906,7 +906,9 @@ is a max over the part's full temperature range and this is one line at one
 temperature on a bench. What it does establish is that **the analyser is fine
 to use on a J2 junction**, which is the only place it is ever used.
 
-**Settle it with the measurement already on the list.** The junction millivolt
+**DONE 2026-10-19 — see the measured result two paragraphs up.** This
+paragraph stood as an open action in the same commit that recorded its answer.
+The instruction it gave was: the junction millivolt
 reading with a lever held is a prescribed step — **take it twice, with and
 without the analyser clipped on.** The difference is the loading, directly,
 and it costs one extra reading.
@@ -970,32 +972,60 @@ Two successive drafts wrote *"nobody has run that corner for 8.2 K / 15 K"*.
 **It has now been run, and 8.2 K / 15 K does not pass it.** Same method as the
 0d table: machine rail −5 %, ESP rail +5 % (VIH **2.60 V**), 1 % on our pair.
 
-| shunt | nominal pin | nominal margin | **corner** | node | disturbance |
+**THIS DIVIDER HAS A CEILING AS WELL AS A FLOOR, AND A DRAFT OF THIS SECTION
+OPTIMISED ONLY THE FLOOR.** That draft recommended a **23.2 kΩ** shunt. It
+puts the pin at **3.89 V** in the push-pull corner — **290 mV over the
+ESP32-S3's 3.6 V absolute maximum** — and it reached a commit. The whole J5
+tap is specified to be safe *whichever way the line is driven* (`main.cpp:52`,
+and this file at the T-piece entry); **the drive type has never been
+established**, so both columns bind:
+
+| shunt | OD nominal | **OD corner** | PP nominal | **PP rail +5 %** | vs 3.6 V abs max |
 |---|---|---|---|---|---|
-| **15 kΩ — AS BUILT** | 2.688 V | +213 mV | **−70 mV ✗** | 4.16 V | 16.8 % |
-| 16.4 kΩ — the specified remedy | 2.799 V | +324 mV | **+35 mV** | 4.20 V | 16.0 % |
-| 22 kΩ | 3.152 V | +677 mV | **+372 mV** | 4.33 V | 13.5 % |
-| **23.2 kΩ (8.2 K + 15 K in series)** | **3.213 V** | **+738 mV** | **+431 mV ✓** | **4.35 V** | **13.0 %** |
+| **15 kΩ — AS BUILT** | 2.688 V | **−62 mV ✗** | 3.233 V | 3.406 V | ok |
+| **16.4 kΩ — the specified remedy** | **2.799 V** | **+43 mV ✓** | **3.333 V** | **3.512 V** | **ok ✓** |
+| 18 kΩ | 2.913 V | +151 mV | 3.435 V | 3.618 V | **OVER** |
+| 22 kΩ | 3.152 V | +379 mV | 3.642 V | 3.835 V | **OVER** |
+| ~~23.2 kΩ~~ — **the draft's recommendation** | 3.213 V | +438 mV | 3.694 V | **3.889 V** | **OVER ✗** |
 
-*(The machine's 4.7 K pull-up tolerance is unrecorded. At 5 % rather than 1 %
-the as-built corner is **−87 mV** and the 16.4 K remedy drops to **+18 mV**.)*
+*(OD = open-drain through the board's 4.7 K pull-ups; PP = push-pull, driver
+straight to the rail. OD corner is against VIH 2.60 V with the machine's
+pull-up at 5 %, the pessimistic variant. At 1 % the as-built is −62 mV and
+16.4 K is +43 mV.)*
 
-**Three things follow, and the first two are worse than the draft implied:**
+**The two constraints pull opposite ways**: open-drain wants a *big* shunt for
+logic-high margin, push-pull wants a *small* one to stay under the absolute
+maximum. **16.4 kΩ is the only value in the table that satisfies both** — and
+that is precisely why this file specified it, with the push-pull case worked
+out alongside it: *"the push-pull worst case is 3.33 V, still well under the
+3.6 V absolute max."* It was never the under-engineered compromise the draft
+took it for; it was the answer to a two-sided problem the draft only saw one
+side of.
 
-- **As built, J5 is a −70 mV corner — worse than the −45 mV that got
-  150 K / 220 K rejected outright at J4.** The rejection reason there was
-  "looks fine nominally, fails on tolerance stacking". That is this, exactly.
-- **The already-specified remedy is NOT sufficient either.** 16.4 K buys
-  +35 mV, or **+18 mV** if the machine's pull-up is a 5 % part — thinner than
-  the **25 mV** that got 220 K / 220 K rejected at 0c for being inside supply
-  tolerance. A draft of this paragraph offered 16.4 K as the answer. It is the
-  same class of mistake as the thing it was fixing.
-- **23.2 kΩ is the buy, and it needs no parts.** One 8.2 K in series with the
-  15 K already fitted — both in stock, 25 of the 8.2 K — gives **+431 mV**
-  (**+415 mV** if the machine's pull-up is a 5 % part), which is J2's margin.
-  It also **reduces the invariant-1 disturbance from 16.8 % to 13.0 %**, i.e.
-  the pin that invariant 1 singles out as this project's worst offender gets
-  *better*, not merely adequate.
+**WHY THE DRAFT REJECTED IT, AND WHY THAT ARGUMENT WAS WRONG.** It said 16.4 K
+buys "+18 mV, thinner than the **25 mV** that got 220 K / 220 K rejected at
+0c". **That compares a corner figure against a nominal one.** The 25 mV is
+220 K / 220 K's *nominal* margin, which CLAUDE.md rejects precisely because
+"supply tolerance alone consumes" it — at the same corner this table uses,
+220 K / 220 K sits near **−250 mV**. Like for like, 16.4 K's +43 mV corner is
+not in the same category at all. **Mismatched kinds of number, and the
+mis-comparison is the entire reason the draft escalated past the ceiling.**
+
+**So: as built is still wrong, and the fix is the one already on file.**
+
+- **As built, J5 is a −62 mV corner** — worse than the −45 mV that got
+  150 K / 220 K rejected outright at J4, and for the identical reason: fine
+  nominally, fails on tolerance stacking.
+- **Fit 16.4 kΩ — two 8.2 K in series, 25 in stock.** +43 mV at the OD corner
+  (+26 mV at a 5 % pull-up), 3.51 V at the PP corner, and loading essentially
+  unchanged at 171 µA against 179 µA.
+- **+43 mV is thin, and saying so is the honest version.** It is positive
+  where the built value is negative, and it is the most this divider can buy
+  while the drive type is unknown. **The measurement that unlocks the rest is
+  the drive type itself**: if J5 is confirmed open-drain the 3.6 V ceiling
+  does not apply, 18-22 kΩ open up, and the margin triples. The 4.7 K
+  pull-ups are evidence for open-drain but the design has deliberately never
+  relied on it.
 
 **Why it decodes anyway at −70 mV**: a corner is not an operating point. The
 real rail is near 5.0 V, real 1 % parts are not all aligned, and the bench is
@@ -1010,10 +1040,20 @@ entered at `7182c56` as *"4.7 K pull-ups, so a 23.2 K divider leaves them at
 the word "measured" has now been corrected. Checking 5 × 23.2/27.9 against
 5 × 23.2/27.9 confirms arithmetic, not hardware.
 
-**What DOES support the model is J4**, where the same resistive-divider
-treatment predicted 4.681 V and the meter read 4.69 V. That is a real
-validation of the method, on a different connector, and it is why the table
-above is worth acting on without re-metering J5 first.
+**AND EVERY NUMBER IN THE TABLE ABOVE SCALES WITH A RESISTOR NOBODY HAS
+METERED.** The 4.7 K pull-up is a **community-schematic value**. J2's and J4's
+dividers were sized against resistances measured on this machine (10.04 kΩ,
+147.4 kΩ, and J4's model then predicted 4.681 V against a metered 4.69 V);
+J5's was not. **A draft concluded from J4's success that the J5 table was
+"worth acting on without re-metering J5 first". That is the one claim this
+section does not earn** — J4 validates the *method*, not this particular
+input, and the method is only as good as the resistance fed into it.
+
+**It does not change what to fit.** 16.4 K is bracketed on both sides by
+constraints that do not depend on the pull-up at all: the push-pull ceiling
+has no pull-up in it, and the open-drain floor moves the *same direction* as
+any pull-up error for both candidate values. **Meter the 4.7 K next time J5
+is unplugged** — it is one reading and it would retire the hedge.
 
 **Why it presented as intermittent rather than dead**: at 1.94 V the pin sits
 just under threshold, so polled `pins` reads flickered between 0 and 1 and
@@ -1036,14 +1076,29 @@ number at three times, and the load-bearing bound depends on which:**
 
 | figure | when |
 |---|---|
+| **113 ms** | the bench-rig entry above — *"the last `status` reported worst poll gap = 113 ms"* |
 | **57 ms** | flow tap ON — the GPIO6 stub's 1.45 M glitches were burning interrupt time |
 | **42 ms** | after `flow off` |
-| **50 ms** | the press run itself, between the two |
+| **50 ms** | the press run itself |
 
-**Quote 42-57 ms as the session's range**, which is what CLAUDE.md's
-[23, 137] ms quantisation bound uses, and it is the conservative choice: the
-bound widens with the gap, so taking the larger figure cannot flatter the
-result. The 50 ms above is the press run specifically.
+**FOUR, NOT THREE — AND THE FOURTH BREAKS THE BOUND THAT DEPENDS ON THIS.** A
+draft listed only the lower three and called 57 ms the worst, which is what
+CLAUDE.md's **[23, 137] ms** press-width bound and the plan's **"below
+~140 ms"** are both computed from. **At 113 ms the band is roughly
+[−33, 193] ms, which bounds nothing** — not the 120 ms one-shot, not anything.
+
+**Which figure applied during the six presses is NOT RECORDED, and that is the
+actual defect.** `worst poll gap` is a running maximum printed by `status`; it
+was read at various moments, not latched per experiment. So the honest
+statement is: **the quantisation on those 80-90 ms readings is somewhere
+between ±42 and ±113 ms, and the project does not know which.**
+
+**This does not resurrect the presses as evidence — they still latched**, and
+that is an observation of the machine, not of the poller. What it kills is any
+attempt to turn the *numbers* into an RC. **The analyser redo is now the only
+route to a usable threshold**, which this file already said for a different
+reason. Reset `worst poll gap` immediately before the next press run so the
+figure belongs to that run.
 
 **And the 10 ms in the Settled table is a different session (2026-10-08), not
 a contradiction — but the 4-5× regression is unexplained.** The flow tap

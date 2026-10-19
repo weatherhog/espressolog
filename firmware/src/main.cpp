@@ -385,10 +385,15 @@ static void reportSwitch(const SwitchBank::Event& e) {
 //
 // NEITHER IS THE BINDING CASE. Lever B latches the same way and a hot-water
 // draw runs for "a couple of minutes" before the machine self-terminates, so
-// BREW_GUARD_MS (75 s) can expire with the pump still running. See
-// brew_guard.h. BREW_GUARD_MS covers the long case; it is deliberately
-// generous because the cost of being wrong is a stalled pour, while the
-// cost of being conservative is only that an upload waits a minute.
+// BREW_GUARD_MS (75 s) CAN EXPIRE WITH THE PUMP STILL RUNNING. See
+// brew_guard.h.
+//
+// So the guard is generous for 1Cup/2Cup (10.5 s and 45 s stored) and
+// INSUFFICIENT for a lever-B draw. It is still deliberately long: the cost of
+// expiring early is a flash write during a pour, the cost of being long is
+// only that an upload waits a minute. Fixing the lever-B case needs an
+// edge-driven guard WITH an upper bound -- see brew_guard.cpp:24-30 for why
+// the bound is not optional -- and the self-terminate period measured first.
 static BrewGuard brew_guard;
 
 // Gather what the guard needs and ask it. main.cpp owns the pin reads, the

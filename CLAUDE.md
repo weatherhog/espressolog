@@ -290,10 +290,10 @@ safety argument** — and `firmware/test/host/brew_guard_test.cpp:72`.
 
 | | |
 |---|---|
-| `docs/phase-0-plan.md:683` | **annotated 2026-10-19** |
-| `brew_guard_test.cpp:72` | **annotated 2026-10-19** |
-| `brew_guard.cpp:21` | still bare — revisit after the analyser redo |
-| `main.cpp:1109` | still bare — revisit after the analyser redo |
+| `docs/phase-0-plan.md`, the photoMOS-pair safety argument | **annotated 2026-10-19** |
+| `brew_guard_test.cpp`, the `press_long_enough` case | **annotated 2026-10-19** |
+| `brew_guard.cpp`, the pump-running-during-press comment | still bare — revisit after the analyser redo |
+| `main.cpp`, the ring-headroom comment | still bare — revisit after the analyser redo |
 
 `brew_guard.cpp:21` and `main.cpp:1109` are comments about *timing headroom*
 where the exact figure is not load-bearing, which is why they are left rather
@@ -307,6 +307,7 @@ a timing constant:
 |---|---|
 | this file, the **GPIO 7/15 confirmation row** | *"logged as 'correct GPIO mapping, taps of 345-480 ms'"* — **annotated 2026-10-19** |
 | `docs/phase-0-status.md`, the **Settled** table | *"taps of 345–480 ms"* — **annotated 2026-10-19** |
+| `docs/phase-0-status.md`, the ESP-power note | *"the grounding was identical for the 345-480 ms presses"* — uses it as a **dataset identifier**, which is legitimate: it names which session, and does not claim the range is the machine's |
 
 **So the enumeration offered as complete has now been wrong twice in two
 successive commits**, the second time in the very paragraph condemning the
@@ -314,16 +315,24 @@ first.
 
 **AND THE FIRST DRAFT OF THIS VERY TABLE CITED `CLAUDE.md:1157`, WHICH WAS
 ALREADY 1189 BY THE TIME THE COMMIT LANDED** — the paragraph above it grew,
-and the line number drifted while it was being written. Same-file line
-numbers are unstable *within a single edit session*, which is a sharper
-version of the `main.cpp:377` → `:445` drift this file already logs.
+and the line number drifted while it was being written.
 
-**Two rules follow, and they are the actual lesson:**
+**THEN THE FIX DID IT AGAIN, IN THE CROSS-FILE ROWS.** The replacement table
+switched the same-file rows to section names and **left `plan.md:683` and
+`main.cpp:1109` as line numbers — both of which that same commit moved**, to
+685 and 1115, by editing those very files. So the lesson was learned in one
+half of the table and not the other, in a commit whose subject was incomplete
+enumeration.
 
-- **Cite same-file locations by section or quoted content, never by line
-  number** — done above. Cross-file line numbers are safer but still drift.
-- **A prose list is the wrong instrument.** `grep -rn '345.480'` is the right
-  one; it cannot be stale. Run that, not this table.
+**One rule, and it is not "cite more carefully":**
+
+- **A prose list of citation sites is the wrong instrument.** It is stale the
+  moment anything above it moves, and it will be. `grep -rn '345.480'` cannot
+  be stale. **Run that, not this table** — the table is here as narrative, not
+  as an index.
+- Where a location must be named in prose, **name the section or quote the
+  line**, as the rows above now do. Line numbers are for a reader with the
+  file open *right now*, not for a document.
 
 **It was questioned for a good reason, and the reason is worth keeping.** The
 written bench sequence for that step (`docs/phase-0-status.md`) reads *"jumper
@@ -632,11 +641,17 @@ both hazards, but both are flagged as such.)
 against the 8.2 K / 8.2 K that was mistakenly fitted, which is the error this
 passage was written about. **It is NOT the right value for the perfboard:**
 2026-10-19 ran its tolerance corner for the first time and it comes out at
-**−70 mV**, worse than the −45 mV that got 150 K / 220 K rejected at J4.
-`docs/phase-0-status.md` has the table and the fix (**23.2 K shunt — one 8.2 K
-in series with the 15 K, both in stock, +431 mV, and it *lowers* the
-invariant-1 disturbance from 16.8 % to 13.0 %**). The built board decodes and
-is not an emergency; the perfboard should not copy it. **And the 15 K
+**−62 mV**, worse than the −45 mV that got 150 K / 220 K rejected at J4.
+**Fit 16.4 K** (two 8.2 K in series, 25 in stock) — the value this repo
+already specified. `docs/phase-0-status.md` has the table.
+
+**Do NOT go higher, and a draft of this line said to.** It recommended 23.2 K
+on logic-high margin alone; that puts the pin at **3.89 V push-pull, 290 mV
+over the 3.6 V absolute maximum**. This tap is sized to be safe whichever way
+the line is driven and **the drive type has never been established**, so the
+ceiling binds as hard as the floor. 16.4 K is the only value that clears both.
+The built board decodes and is not an emergency; the perfboard should not copy
+it either way. **And the 15 K
 shunt must NOT be fitted to `Disp-P4`.** Branch it through its 8.2 K for
 symmetry if you like, leave the far end open, and never hang anything on it
 that can source or sink current.
@@ -2330,11 +2345,13 @@ the database off the machine's own display. Conditioning: 8.2 K series at
 the T-piece, 15 K shunt at the board, `ESD4`→GPIO4, `ESD1`→GPIO5, `VSS`
 ground direct, `Disp-P4` unterminated.
 
-**THE 15 K SHUNT FAILS ITS TOLERANCE CORNER AT −70 mV — run 2026-10-19, for
+**THE 15 K SHUNT FAILS ITS TOLERANCE CORNER AT −62 mV — run 2026-10-19, for
 the first time.** That is the as-built value and it decodes, so this is the
-record of what is fitted; **the perfboard should use 23.2 K** (8.2 K + 15 K in
-series, both in stock). Table, corner method and the reason the previously
-specified 16.4 K remedy is also too thin: `docs/phase-0-status.md`.
+record of what is fitted; **the perfboard should use 16.4 K** (two 8.2 K in
+series), which is the remedy this repo had already specified. A draft
+recommended 23.2 K and that **exceeds the pin's 3.6 V absolute maximum in the
+push-pull case**, which the tap is required to survive. Table and both corners:
+`docs/phase-0-status.md`.
 
 **A capacitor here is NOT currently justified, and a 2026-10-09 edit said it
 was.** That edit attributed 6086 dropped display edges to pump coupling and

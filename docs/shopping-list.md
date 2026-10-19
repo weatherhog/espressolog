@@ -313,13 +313,19 @@ because the machine caught it:
   hypothesis for the `E01` would make dangerous, and it has not been ruled
   out. The mechanism is **not** established; see the 0d entry before
   treating this as settled history.
-- **0e is 8.2 K / 15 K as built — and the perfboard should be 8.2 K / 23.2 K.**
-  The corner was run 2026-10-19: 15 K gives **−70 mV**, the 16.4 K remedy this
-  file mentions elsewhere gives only +35 mV (+18 mV if the machine's pull-up is
-  a 5 % part), and **23.2 K — one 8.2 K in series with the 15 K, no new parts —
-  gives +431 mV** and cuts the invariant-1 disturbance from 16.8 % to 13.0 %.
-  See `docs/phase-0-status.md`.
-- **Do not enable an internal pull-down on 0e.**
+- **0e is 8.2 K / 15 K as built — the perfboard should be 8.2 K / 16.4 K.**
+  The corner was run 2026-10-19: 15 K gives **−62 mV** (fails), 16.4 K gives
+  **+43 mV** and stays at 3.51 V in the push-pull case, under the 3.6 V
+  absolute maximum. Two 8.2 K in series; 25 in stock, no new parts.
+  **Do not go higher** — a draft recommended 23.2 K on logic-high margin alone
+  and that hits **3.89 V push-pull, over the absolute maximum**. The tap must
+  be safe whichever way the line is driven and the drive type is unestablished,
+  so both ends bind. See `docs/phase-0-status.md`.
+- **Do not enable an internal pull-down on 0e.** The internal ~45 K across the
+  shunt leg drops the open-drain case below VIH. *(The 2.33 V quoted for this
+  elsewhere is **15 K arithmetic**; at the specified 16.4 K it is 2.41 V —
+  still under the 2.475 V VIH, so the warning holds, but do not carry the
+  2.33 V figure across to the new value.)*
   The internal 45 K across the 15 K leg drops the open-drain case to
   2.33 V and the pin stops reading high.
 

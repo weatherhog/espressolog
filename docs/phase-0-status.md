@@ -2273,6 +2273,14 @@ the display is back in temperature mode, so edges lost there cost nothing.
       > hang a pull-up on it.** It is the machine's own sensor rail off a
       > 3 W IRM-03-5.
 
+      **THIS IS THE DELIBERATE BACKUP COPY. Normative home: `CLAUDE.md`,
+      the standalone block directly under the six invariants.** Duplication
+      is this repo's signature defect and is collapsed everywhere else;
+      here it is kept on purpose, because the same rule has been lost from
+      CLAUDE.md three times (see the note further down this entry). If the
+      two ever disagree, CLAUDE.md wins — and the disagreement is itself
+      the bug. Changing either means changing both in the same commit.
+
       Two earlier drafts were wrong in opposite directions. "Must not be
       probed" is contradicted by the step above and discards the evidence
       that a high-impedance probe is safe. "Nothing with an input clamp"
@@ -2487,9 +2495,11 @@ the display is back in temperature mode, so edges lost there cost nothing.
 
    Related: the `+` safety rule has been lost from CLAUDE.md **three
    times**, each time because it lived as a row in the conditioning table
-   and the table was rewritten when the divider changed. It is now a
-   standalone block beneath that table. Rewrite the divider freely; leave
-   that block alone.
+   and the table was rewritten when the divider changed. **As of 2026-10-19
+   it is no longer beneath that table at all** — it is a standalone `##`
+   block directly under the six invariants at the top of CLAUDE.md, ~2300
+   lines away from the divider that kept eating it. Rewrite the divider
+   freely; the rule is not in that neighbourhood any more.
 
    **Carry into the retry:**
 

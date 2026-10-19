@@ -100,6 +100,29 @@ Violating any of these is a bug, not a design choice.
 
 ---
 
+## The J4 `+` rule — one hard safety rule, and it does not live in a table
+
+> **`+` is read-only, through a high-impedance meter, and nothing else.**
+> Nothing with an input clamp — no analyser, no GPIO, no divider — **and
+> nothing that sources or sinks current: never power the ESP32 from it,
+> never feed it from another supply, never hang a pull-up on it.** It is
+> the machine's own sensor rail off a 3 W IRM-03-5. A 20 MΩ DMM is fine,
+> and is how its 5.0 V was read on 2026-10-04.
+
+**Why it is HERE and not with the flowmeter, where it belongs topically.**
+This block was inside milestone 0d, ~2300 lines below the invariants, and
+`docs/phase-0-status.md` records that **the rule has been lost from
+CLAUDE.md three times** — each time because it lived as a row in the J4
+conditioning table, and the table was rewritten whenever the divider value
+changed. It is deliberately **outside** that table, and now outside that
+section. Rewrite the divider as often as you like; do not touch this.
+
+`docs/phase-0-status.md` carries a verbatim backup copy, marked as such.
+Duplication is wrong almost everywhere else in this repo; for a rule with
+this loss record it is the point.
+
+---
+
 ## Hardware facts (verified, do not re-derive)
 
 ### Machine: Ascaso Dream PID
@@ -2395,21 +2418,10 @@ instrument.** It confirms the *model* — a resistive divider off the 5 V
 rail — not the precision of the two resistances, which is why the corner
 above still carries ±1 % meter error on them.
 
----
-
-### J4 `+` — the one hard safety rule, and it does not live in a table
-
-> **`+` is read-only, through a high-impedance meter, and nothing else.**
-> Nothing with an input clamp — no analyser, no GPIO, no divider — **and
-> nothing that sources or sinks current: never power the ESP32 from it,
-> never feed it from another supply, never hang a pull-up on it.** It is
-> the machine's own sensor rail off a 3 W IRM-03-5. A 20 MΩ DMM is fine,
-> and is how its 5.0 V was read on 2026-10-04.
-
-This block is deliberately **outside** the conditioning table. The rule has
-now been lost three times, each time because it was a table row and the
-table got rewritten when the divider changed. Rewrite the divider as often
-as you like; do not touch this.
+**The `+` conductor's read-only rule is NOT here.** It lives with the
+invariants at the top of this file, deliberately, because it has been lost
+from this spot three times — each time because it sat in or beside the
+conditioning table and the table was rewritten when the divider changed.
 
 **Conditioning, for the other two conductors:**
 

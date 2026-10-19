@@ -373,7 +373,9 @@ described in `docs/phase-0-status.md`.
   [photoMOS]        DRIVE, device 1 of 2.
       |
   [photoMOS]        DRIVE, device 2 of 2 — in SERIES. Both must fail for the
-      |             line to be driven. Each LED needs its OWN path, for the
+      |             line to be driven (*but see the series-redundancy
+      |             section: "both" is not independent, and the
+      |             gate-to-drain mode is not body-diode-limited*). Each LED needs its OWN path, for the
       |             per-device test; they cannot share one drive.
       |             The LED supply carries jumper (b), shared across lines.
       |
@@ -534,7 +536,9 @@ does not work:
 - **two photoMOS in series per driven line — DECIDED 2026-10-12, four parts.**
   The pair genuinely requires **two** failures: for it to conduct, *each*
   device needs an internal short in the polarity-relevant FET, and one healthy
-  device blocks whatever the other does. Against a single-device failure whose
+  device blocks whatever the other does. **[Body-diode-only: a gate-to-drain
+  fault conducts by a different route, and the two failures are not
+  independent — see "Net" and the 2026-10-19 correction below.]** Against a single-device failure whose
   consequence is **unrecoverable** — the stored timer is reprogrammed within
   2 s and this file already records that opening the switch line cannot stop
   the machine — two more parts at ~€1.50 each is not a close call. Detection
@@ -681,7 +685,10 @@ does not work:
   - **Common cause.** Two identical parts from the same reel, in series, in
     the same thermal environment, seeing the same surge history on the same
     node. A surge on J2 — the plausible cause of an output short — presents
-    across the pair. "Standard safety-chain move" normally implies *diverse*
+    across the pair. **A positive-going surge loads F_hi of both devices;
+    a negative-going one loads F_lo of both, whose short fails safe — see the
+    2026-10-19 correction above, which makes this the same correlation, not a
+    separate caveat.** "Standard safety-chain move" normally implies *diverse*
     redundancy; this is its weakest form.
   - **THE PAIR HIDES ITS OWN FIRST FAILURE, and this is the part that
     constrains the layout.** One device shorts, the healthy one still blocks,
@@ -698,10 +705,12 @@ does not work:
       path — and since 2026-10-12 that is settled hardware, not just a
       constraint: each photoMOS gets a **BC547 or 2N3904** with an 8.2 kΩ
       base resistor and a 100 kΩ base-emitter resistor, fed through **330 Ω**
-      for ~6 mA. AQY212EH is guaranteed to operate only at **3.0 mA — at 25 °C**
+      for ~6 mA. AQY212EH is guaranteed to operate only at **3.0 mA at 25 °C**
       (typical 1.2 mA is not a design figure; `docs/shopping-list.md`, "85 °C
       note" under "Datasheet read", is normative on what the temperature
-      caveat does to these figures). **The transistor's reason is
+      caveat does to these figures).
+      <!-- fact:led-drive-resistor 330 Ω -->
+      <!-- fact:photomos-guarantee-25c 3.0 mA at 25 °C --> **The transistor's reason is
       this test, not the drive current** — a draft claimed "a 74HC221 at 3.3 V
       cannot source that reliably, so the transistor was needed regardless",
       which over-claims: `CD74HC221E` lists 5.2 mA drive, and at 3.3 V the

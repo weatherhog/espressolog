@@ -108,6 +108,15 @@ REQUIRED = {
     # it has been lost from CLAUDE.md three times. The duplication is the
     # point; the tag is what stops the two copies drifting apart.
     "j4-plus-readonly":    {"min_files": 2, "claude_md": True},
+    # The photoMOS LED-drive resistor. Tagged 2026-10-19 after two review
+    # rounds each found a surviving "330 or 390" / unqualified "guaranteed
+    # 3.0 mA" site in a file the correction had not reached. NOT claude_md:
+    # CLAUDE.md carries no drive figure, and putting one there to satisfy this
+    # rule would add a copy to keep in sync rather than remove one.
+    "led-drive-resistor":       {"min_files": 2, "claude_md": False},
+    # The 3.0 mA operate guarantee is a 25 C figure. The value pins both the
+    # number and its temperature, so a site that drops the qualifier fails.
+    "photomos-guarantee-25c":   {"min_files": 2, "claude_md": False},
 }
 
 SCAN_SUFFIXES = (".md", ".h", ".cpp", ".c", ".go", ".sql", ".py")
@@ -216,23 +225,27 @@ def collect():
             # mid-edit state, not a reason to traceback. Found by review.
             continue
         for i, line in enumerate(lines):
-            m = MARKER.search(line)
-            if not m:
-                continue
-            lo = max(0, i - CONTEXT_LINES)
-            hi = min(len(lines), i + CONTEXT_LINES + 1)
-            # The marker's own text is not evidence for itself.
-            context = "\n".join(
-                MARKER.sub("", lines[j]) if j == i else lines[j] for j in range(lo, hi)
-            )
-            sites[m.group(1)].append(
-                {
-                    "path": path,
-                    "line": i + 1,
-                    "value": m.group(2),
-                    "context": normalise(context),
-                }
-            )
+            # finditer, not search: a markdown table row cannot take a
+            # marker on its own line, so two facts tagged inline on one row
+            # are legitimate -- and `search` silently registered only the
+            # first, which let a site lose its tag without the build noticing.
+            # Found 2026-10-19 while tagging the photoMOS drive figures.
+            for m in MARKER.finditer(line):
+                lo = max(0, i - CONTEXT_LINES)
+                hi = min(len(lines), i + CONTEXT_LINES + 1)
+                # The marker's own text is not evidence for itself.
+                context = "\n".join(
+                    MARKER.sub("", lines[j]) if j == i else lines[j]
+                    for j in range(lo, hi)
+                )
+                sites[m.group(1)].append(
+                    {
+                        "path": path,
+                        "line": i + 1,
+                        "value": m.group(2),
+                        "context": normalise(context),
+                    }
+                )
     return sites
 
 

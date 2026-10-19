@@ -19,12 +19,33 @@ Violating any of these is a bug, not a design choice.
 
    <!-- fact:j4-node-disturbance 134 mV|2.9 % -->
    **How high-impedance, honestly:** J4 disturbs its node by **134 mV
-   (2.9 %)**, J2 by ~1 mV, but **J5 pulls its line from 5.0 V to 4.16 V —
-   a 17 % disturbance at 179 µA**. **That J5 figure is CALCULATED, not measured, and
-   this clause called it measured until 2026-10-19.** It entered at `7182c56`
-   as *"4.7 K pull-ups, so a 23.2 K divider leaves them at 4.16 V"* — the
-   "so" is a derivation — and no meter reading of that node exists. The
-   179 µA is the same arithmetic again (0.84 V / 4.7 K). J2's ~1 mV is
+   (2.9 %)**, J2 by ~1 mV, but **J5 pulls its line from 5.0 V to 4.20 V —
+   a 16.0 % disturbance at 171 µA**.
+
+   **That J5 figure is CALCULATED, not measured, and this clause called it
+   measured until 2026-10-19.** It entered at `7182c56` as *"4.7 K pull-ups,
+   so a 23.2 K divider leaves them at 4.16 V"* — the "so" is a derivation —
+   and no meter reading of that node exists. The current is the same
+   arithmetic again (0.80 V / 4.7 K).
+
+   **AND IT WAS PINNED TO A SHUNT THIS FILE TELLS YOU NOT TO FIT, until
+   2026-10-19.** 4.16 V / 17 % / 179 µA is the **as-built 15 K** (8.2 + 15
+   against the 4.7 K pull-up). Two other sections of this file supersede that
+   in favour of **16.4 K**, which fails no tolerance corner — so the
+   project's top-line invariant was quoting the value the build is meant to
+   move away from. Both, for the record:
+
+   | J5 shunt | line sits at | disturbance | current |
+   |---|---|---|---|
+   | 15 K — as built, superseded | 4.16 V | 16.8 % | 179 µA |
+   | **16.4 K — specified** | **4.20 V** | **16.0 %** | **171 µA** |
+
+   Nothing in the clause turns on which: J5 is the large disturbance either
+   way, and that is the whole reason it is named here. The headline figure is
+   the specified build because that is what a reader is about to solder.
+   *(17 % was the 15 K number rounded; 16.8 % is what it actually is.)*
+
+   J2's ~1 mV is
    likewise calculated; **J4's 2.9 % is the only one of the three backed by a
    meter**, and there the same model predicted 4.681 V against a measured
    4.69 V, which is the reason to trust the J5 number while still grading it
@@ -1767,7 +1788,8 @@ is that the analyser is fine to use on a J2 junction *on the bench*, which is
 all it is ever used for — not that the 89 mV bound is wrong.
 
 **Note it is specific to J2's high source impedance** — J5's junction is
-5.3 kΩ and could never have been affected.
+**5.47 kΩ** at the specified 16.4 K shunt (5.30 kΩ at the as-built 15 K) and
+could never have been affected at either value.
 
 **0d rejects 150 K / 220 K and 0c keeps it — that is not a contradiction.**
 0c's corner is **+203 mV** (rail −5 %, VIH +5 %, 1 % resistors) because the
@@ -2468,7 +2490,10 @@ was.** That edit attributed 6086 dropped display edges to pump coupling and
 specified 10 nF. Both parts were wrong:
 
 - **10 nF would have stopped the bus decoding.** Against a 6.9 kΩ source it
-  is a 69 µs time constant facing 36 µs clock highs — the clock never
+  is a 69 µs time constant facing 36 µs clock highs
+  *(6.9 kΩ is the as-built 15 K arithmetic; at the specified 16.4 K it is
+  7.2 kΩ and 72 µs. Worse, not better — the conclusion is unaffected, but
+  do not reuse 6.9 kΩ when sizing the 470 pF.)* — the clock never
   settles, and it would have presented as a wiring fault rather than a filter
   error. Corrected to 470 pF the same day.
 - **The drops are NOT coupling, and the actual cause is unidentified.** What

@@ -980,27 +980,64 @@ tap is specified to be safe *whichever way the line is driven* (`main.cpp:52`,
 and this file at the T-piece entry); **the drive type has never been
 established**, so both columns bind:
 
-| shunt | OD nominal | **OD corner** | PP nominal | **PP rail +5 %** | vs 3.6 V abs max |
-|---|---|---|---|---|---|
-| **15 kΩ — AS BUILT** | 2.688 V | **−62 mV ✗** | 3.233 V | 3.406 V | ok |
-| **16.4 kΩ — the specified remedy** | **2.799 V** | **+43 mV ✓** | **3.333 V** | **3.512 V** | **ok ✓** |
-| 18 kΩ | 2.913 V | +151 mV | 3.435 V | 3.618 V | **OVER** |
-| 22 kΩ | 3.152 V | +379 mV | 3.642 V | 3.835 V | **OVER** |
-| ~~23.2 kΩ~~ — **the draft's recommendation** | 3.213 V | +438 mV | 3.694 V | **3.889 V** | **OVER ✗** |
+| shunt | **OD corner** (pu 1 %) | **OD corner** (pu 5 %) | **PP worst** | vs flat 3.600 V | vs 3.435 V | disturbance |
+|---|---|---|---|---|---|---|
+| **15 kΩ — AS BUILT** | **−70 mV ✗** | **−87 mV ✗** | 3.418 V | +182 mV | **+17 mV** | 16.8 % |
+| 16.4 kΩ — the specified remedy | **+35 mV** | **+18 mV** | 3.523 V | +77 mV | **−88 mV** | 16.0 % |
+| 17.4 kΩ | +104 mV | +88 mV | 3.591 V | +9 mV | −156 mV | 15.6 % |
+| 18 kΩ | +144 mV | +127 mV | 3.629 V | **−29 mV** | −194 mV | 15.2 % |
+| ~~23.2 kΩ~~ — **a draft's recommendation** | +438 mV | +422 mV | **3.889 V** | **−289 mV ✗** | −454 mV | 13.0 % |
 
-*(OD = open-drain through the board's 4.7 K pull-ups; PP = push-pull, driver
-straight to the rail. OD corner is against VIH 2.60 V with the machine's
-pull-up at 5 %, the pessimistic variant. At 1 % the as-built is −62 mV and
-16.4 K is +43 mV.)*
+*(OD = open-drain through the board's 4.7 K pull-ups, worst case for reading
+HIGH: machine rail −5 %, VIH 2.60 V, shunt −1 %, series and pull-up +1 %.
+PP = push-pull, worst case for the pin: machine rail +5 %, shunt +1 %, series
+−1 %. **Both pull-up columns are given because the 4.7 K is a
+community-schematic value, never metered** — a draft quoted only the
+favourable one while calling it the pessimistic variant.)*
 
-**The two constraints pull opposite ways**: open-drain wants a *big* shunt for
-logic-high margin, push-pull wants a *small* one to stay under the absolute
-maximum. **16.4 kΩ is the only value in the table that satisfies both** — and
-that is precisely why this file specified it, with the push-pull case worked
-out alongside it: *"the push-pull worst case is 3.33 V, still well under the
-3.6 V absolute max."* It was never the under-engineered compromise the draft
-took it for; it was the answer to a two-sided problem the draft only saw one
-side of.
+**TWO CEILINGS APPEAR BECAUSE THIS REPO USES TWO, AND NOBODY HAD NOTICED.**
+The J5 text has always compared against a flat **3.600 V** (VDD + 0.3 at a
+nominal 3.3 V rail). **The J4 section uses the corner** — it explicitly works
+in "VDD + 0.3 V" with the ESP rail moved, which at −5 % is **3.435 V**. The
+two give opposite answers here, so the inconsistency is load-bearing rather
+than cosmetic.
+
+| convention | feasible window, both constraints, pessimistic |
+|---|---|
+| flat 3.600 V (what J5 has always used) | **16.2 – 17.5 kΩ** |
+| 3.435 V (what J4 uses) | **EMPTY — no value works** |
+
+**THAT EMPTY CELL IS THE REAL RESULT OF THIS ANALYSIS.** Under this repo's own
+stricter convention there is **no shunt value** that both reads a reliable
+logic high through the pull-ups and stays under the absolute maximum if the
+line is driven push-pull. The design has been quietly relying on the looser
+ceiling since the tap was built.
+
+**SO THE ANSWER IS NOT A RESISTOR. IT IS ONE METER READING.** Everything above
+is uncertainty about **how the line is driven**, and that has never been
+tested — the tap was deliberately specified to survive either case, which was
+right when nothing else depended on it and is now the thing blocking the
+choice.
+
+**The reading that settles it is already identified elsewhere in this
+commit**, and it closes two open questions at once:
+
+> **With the tap fitted, meter the J5 line itself.** If it sags to ~4.16 V,
+> the high comes through the 4.7 K pull-ups — **open-drain**, the 3.6 V
+> ceiling never applies, and 18–22 kΩ open up with triple the margin. If it
+> stays near 5.0 V, a low-impedance driver is holding it — **push-pull**, the
+> ceiling binds hard, and the shunt must come *down*, not up.
+
+That is the **same reading** that would retire the "4.16 V is calculated, not
+measured" correction made in invariant 1 this week. One probe on a node that
+is already broken out at the T-piece, and both close.
+
+**Until it is taken: fit nothing new, and do not copy 15 kΩ onto the
+perfboard.** 16.4 kΩ remains the best-supported value — it is what this repo
+specified, with the push-pull case worked out beside it (*"3.33 V, still well
+under the 3.6 V absolute max"*) — but it is the right answer under the loose
+ceiling only, and the honest margin is **+18 mV**, not the +43 mV a draft
+quoted by taking the favourable pull-up tolerance.
 
 **WHY THE DRAFT REJECTED IT, AND WHY THAT ARGUMENT WAS WRONG.** It said 16.4 K
 buys "+18 mV, thinner than the **25 mV** that got 220 K / 220 K rejected at
@@ -1011,26 +1048,32 @@ buys "+18 mV, thinner than the **25 mV** that got 220 K / 220 K rejected at
 not in the same category at all. **Mismatched kinds of number, and the
 mis-comparison is the entire reason the draft escalated past the ceiling.**
 
-**So: as built is still wrong, and the fix is the one already on file.**
+**So: as built is wrong either way, and that part is not in doubt.**
 
-- **As built, J5 is a −62 mV corner** — worse than the −45 mV that got
+- **As built, J5 is a −70 to −87 mV corner** — worse than the −45 mV that got
   150 K / 220 K rejected outright at J4, and for the identical reason: fine
-  nominally, fails on tolerance stacking.
-- **Fit 16.4 kΩ — two 8.2 K in series, 25 in stock.** +43 mV at the OD corner
-  (+26 mV at a 5 % pull-up), 3.51 V at the PP corner, and loading essentially
-  unchanged at 171 µA against 179 µA.
-- **+43 mV is thin, and saying so is the honest version.** It is positive
-  where the built value is negative, and it is the most this divider can buy
-  while the drive type is unknown. **The measurement that unlocks the rest is
-  the drive type itself**: if J5 is confirmed open-drain the 3.6 V ceiling
-  does not apply, 18-22 kΩ open up, and the margin triples. The 4.7 K
-  pull-ups are evidence for open-drain but the design has deliberately never
-  relied on it.
+  nominally, fails on tolerance stacking. It is the one value in the table
+  that clears the *strict* ceiling, which is the only thing to be said for it.
+- **16.4 kΩ is the value to fit when something is fitted** — two 8.2 K in
+  series, 25 in stock, loading essentially unchanged at 171 µA against 179 µA,
+  and **16.0 % node disturbance against the built 16.8 %**, so invariant 1
+  improves slightly rather than worsening.
+- **Its margin is +18 mV, and that is thin by this file's own standards.**
+  Quote that figure, not +43: the difference is only which way the unmetered
+  4.7 K is assumed to err, and assuming in your own favour is how the 23.2 K
+  recommendation happened.
+- **A draft called 16.4 kΩ "the only value that clears both". It is not** —
+  that was an artifact of a five-row table. Under the flat ceiling the window
+  runs **16.2 – 17.5 kΩ**, and **17.4 kΩ buys +88 mV**, nearly five times the
+  margin, while still clearing. It is not in stock as a single part, which is
+  the only reason 16.4 is preferred; say that rather than implying no
+  alternative exists.
 
-**Why it decodes anyway at −70 mV**: a corner is not an operating point. The
-real rail is near 5.0 V, real 1 % parts are not all aligned, and the bench is
-not a boiler housing. 363 clean frames say the nominal case works; they say
-nothing about the corner, which is the whole reason J4's table exists.
+**Why it decodes anyway at a negative corner**: a corner is not an operating
+point. The real rail is near 5.0 V, real 1 % parts are not all aligned, and
+the bench is not a boiler housing. 363 clean frames say the nominal case
+works; they say nothing about the corner, which is the whole reason J4's table
+exists.
 
 **THE 4.16 V IS NOT AN INDEPENDENT CHECK ON THIS, AND A DRAFT USED IT AS ONE.**
 It wrote that 4.16 V *"is the figure this repo already records as measured"*,
@@ -1081,24 +1124,36 @@ number at three times, and the load-bearing bound depends on which:**
 | **42 ms** | after `flow off` |
 | **50 ms** | the press run itself |
 
-**FOUR, NOT THREE — AND THE FOURTH BREAKS THE BOUND THAT DEPENDS ON THIS.** A
-draft listed only the lower three and called 57 ms the worst, which is what
+**FOUR, NOT THREE — and a draft listed only the lower three.** The 113 ms sits
+in the bench-rig entry above and was left out, which matters because
 CLAUDE.md's **[23, 137] ms** press-width bound and the plan's **"below
-~140 ms"** are both computed from. **At 113 ms the band is roughly
-[−33, 193] ms, which bounds nothing** — not the 120 ms one-shot, not anything.
+~140 ms"** are computed from 57 ms being the worst. At 113 the band would be
+roughly [−33, 193] ms and bound nothing.
 
-**Which figure applied during the six presses is NOT RECORDED, and that is the
-actual defect.** `worst poll gap` is a running maximum printed by `status`; it
-was read at various moments, not latched per experiment. So the honest
-statement is: **the quantisation on those 80-90 ms readings is somewhere
-between ±42 and ±113 ms, and the project does not know which.**
+**BUT THE 113 ms ALMOST CERTAINLY DOES NOT APPLY TO THE PRESS RUN, AND A FIRST
+DRAFT OF THIS PARAGRAPH RETRACTED THE BOUND ON THE ASSUMPTION THAT IT DID.**
+`main.cpp:321` zeroes `sw_max_gap` on every `switches on`, so the counter is
+per-arming, not per-session. The 113 ms belongs to whichever arming preceded
+it; the press run was read at ~50 ms. **The bound survives.**
 
-**This does not resurrect the presses as evidence — they still latched**, and
-that is an observation of the machine, not of the poller. What it kills is any
-attempt to turn the *numbers* into an RC. **The analyser redo is now the only
-route to a usable threshold**, which this file already said for a different
-reason. Reset `worst poll gap` immediately before the next press run so the
-figure belongs to that run.
+**What does NOT survive is being able to show that from the record.** Nothing
+ties the ~50 ms reading to those six presses except the order they appear in
+the notes — it is a running maximum read at some moment, not a figure latched
+around the experiment. So:
+
+- **[23, 137] ms stands**, and the files carrying it need no correction.
+- **It stands on an argument about firmware behaviour, not on a measurement
+  procedure**, which is weaker than it reads.
+- **Fix it procedurally, not textually:** issue `switches on` immediately
+  before the next press run and read `status` immediately after, so the gap
+  figure provably belongs to that run. That is one line in the bench sequence.
+
+*(Recorded in full because the first draft overcorrected — it widened the band
+to [−33, 193], declared the RC question dead on that basis, and did not check
+whether the counter resets. Reading `main.cpp:321` took one grep. This is the
+same read-the-call-site failure this repo logs more than any other, committed
+here in the direction of excessive caution rather than excessive confidence —
+which is still wrong, because it would have thrown away a real bound.)*
 
 **And the 10 ms in the Settled table is a different session (2026-10-08), not
 a contradiction — but the 4-5× regression is unexplained.** The flow tap

@@ -54,6 +54,13 @@ static size_t pending_w_n = 0;
 // the machine's own high never falls below 4.16 V against a display needing
 // 3.5 V. Do NOT enable an internal pull-down — 45K in parallel with the 15K
 // leg drops the open-drain case to 2.33 V and the pin stops reading high.
+//
+// 2026-10-19: the 15K shunt FAILS its tolerance corner (-70 mV); the
+// perfboard should use 16.4K, where the pull-down case is 2.41 V -- still
+// under VIH, so the warning holds, but 2.33 V is 15K arithmetic and does not
+// carry across. The 4.16 V above is CALCULATED, never metered, and whether
+// this line is open-drain or push-pull has never been tested -- which is what
+// decides the shunt. See docs/phase-0-status.md.
 static constexpr uint8_t DISPLAY_CLK_PIN  = 4;
 static constexpr uint8_t DISPLAY_DATA_PIN = 5;
 
@@ -392,8 +399,9 @@ static void reportSwitch(const SwitchBank::Event& e) {
 // INSUFFICIENT for a lever-B draw. It is still deliberately long: the cost of
 // expiring early is a flash write during a pour, the cost of being long is
 // only that an upload waits a minute. Fixing the lever-B case needs an
-// edge-driven guard WITH an upper bound -- see brew_guard.cpp:24-30 for why
-// the bound is not optional -- and the self-terminate period measured first.
+// edge-driven guard WITH an upper bound -- see the latched-busy-forever
+// comment in brew_guard.cpp for why the bound is not optional -- and the
+// self-terminate period measured first.
 static BrewGuard brew_guard;
 
 // Gather what the guard needs and ask it. main.cpp owns the pin reads, the

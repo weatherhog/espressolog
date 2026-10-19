@@ -322,10 +322,9 @@ because the machine caught it:
   be safe whichever way the line is driven and the drive type is unestablished,
   so both ends bind. See `docs/phase-0-status.md`.
 - **Do not enable an internal pull-down on 0e.** The internal ~45 K across the
-  shunt leg drops the open-drain case below VIH. *(The 2.33 V quoted for this
-  elsewhere is **15 K arithmetic**; at the specified 16.4 K it is 2.41 V —
-  still under the 2.475 V VIH, so the warning holds, but do not carry the
-  2.33 V figure across to the new value.)*
+  shunt leg drops the open-drain case below VIH. *(The 2.33 V in
+  `main.cpp` is **15 K arithmetic**; at 16.4 K it is 2.41 V — still under the
+  2.475 V VIH, so the warning holds at either value. `main.cpp` is annotated.)*
   The internal 45 K across the 15 K leg drops the open-drain case to
   2.33 V and the pin stops reading high.
 

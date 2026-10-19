@@ -295,6 +295,12 @@ safety argument** — and `firmware/test/host/brew_guard_test.cpp:72`.
 | `brew_guard.cpp`, the pump-running-during-press comment | still bare — revisit after the analyser redo |
 | `main.cpp`, the ring-headroom comment | still bare — revisit after the analyser redo |
 
+*(Both were `brew_guard.cpp:21` and `main.cpp:1109` until 2026-10-19. The
+second had already drifted to 1115, then 1120, then to 1120 when the commit that
+"fixed" the citation style edited `main.cpp` again. Two drifts in two
+commits on one citation is the argument for the rule, not an anecdote
+beside it.)*
+
 `brew_guard.cpp:21` and `main.cpp:1109` are comments about *timing headroom*
 where the exact figure is not load-bearing, which is why they are left rather
 than churned.

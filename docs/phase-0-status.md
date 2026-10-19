@@ -641,10 +641,13 @@ pulls sit at ~9 bar, a coarse grind barely raises it, an ultra-fine grind goes
 *(A draft read that as proof the OPV sits above 9 bar and therefore never
 opens on a normal shot — **withdrawn the same day**. It rested on "a relief
 valve cannot be exceeded at its own setpoint", which is false: spring valves
-exceed their cracking pressure under flow, by 10–25 % at full flow. Read
-against an OPV cracking at ~9 the same observation fits better, because a
-clamp explains both the repeatability and why an ultra-fine puck does not
-drive the gauge toward the pump's deadhead.)*
+exceed their cracking pressure under flow, by 10–25 % at full flow. A second
+draft then argued a clamp at ~9 explains the repeatability — **also
+withdrawn, 2026-10-19**: the operator dials the grind toward a target, so
+"~9 bar every time" needs no regulator. **The OPV was measured at 11 bar
+full-flow on 2026-10-19**, which puts cracking somewhere near 8–10 and leaves
+a normal shot inside that band — relief on a normal pull is neither
+established nor excluded. CLAUDE.md is normative.)*
 
 So the position is unchanged: **one reading refuted, the other unresolved** —
 with the gauge now weak evidence for it. CLAUDE.md is normative and carries
@@ -985,11 +988,12 @@ same circuit anyway:
   the ESP tap at 100 K + 220 K now has been. *(A draft dated 2026-10-17
   promoted this to "the single most valuable measurement in the project" on
   the strength of a deduction about the OPV that was withdrawn the same day.
-  Withdrawn with it. The cheapest discriminating test is a **deliberately
-  coarse shot with the counter running** — below the OPV's cracking pressure
-  the valve is shut whatever its setpoint, so counts-per-ml there separates
-  recirculation from over-counting using the proven tap and no new hardware.
-  CLAUDE.md is normative.)*
+  Withdrawn with it. **The coarse-shot test that replaced it is also
+  superseded** — 2026-10-19, once the OPV turned out to be adjustable and the
+  2.5×/5× gap turned out to depend on an unmeasured yield split. The current
+  first experiment is **weighing that split** (`inlet = yield + retention +
+  3-way dump`), because every "~5×" in these documents inherits it.
+  CLAUDE.md is normative and carries the arithmetic.)*
 
 **The GPIO pin map is NOT one of them — it was closed on 2026-10-08 and
 re-confirmed 2026-10-12.** CLAUDE.md carried "they have not been checked

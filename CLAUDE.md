@@ -1709,15 +1709,16 @@ better than pure puck-dependence:**
 | normal | **"~9 bar, every time"** | puck reaches cracking, valve opens and **clamps** ✓ | 9 bar by coincidence, shot after shot ✗ |
 | ultra-fine | "higher than 9, **not way higher**" | nearly all flow through the valve, override to ~10–11 ✓ | rises toward the pump's ~15 bar deadhead ✗ |
 
-**Two things pure puck-dependence cannot explain and a clamp can**: that it
-lands on the *same* number across varying grind, dose and tamp, and that an
-ultra-fine puck — which passes almost nothing — does **not** drive the gauge
-toward deadhead.
+**A draft then argued "two things pure puck-dependence cannot explain and a
+clamp can" — the same number across varying grind, and no run toward
+deadhead. The first half is retracted** (see the dial-in paragraph below: the
+operator tunes grind toward ~9 bar, so those variables are not random), and
+the ✗ marks in the table's last column overstate it. The second half still
+stands and is weak.
 
-So: **the OPV setpoint is still unbounded, recirculation is still live, and
-this reading is weak evidence FOR it.** An earlier version of this file
-already reasoned this way and a draft threw it away on the false premise
-above.
+So: **this reading is not evidence either way.** The OPV setpoint is bounded
+as of 2026-10-19 — see below — and whether a normal shot reaches cracking is
+open.
 
 **THE MECHANISM, restored — a draft deleted it while strengthening the
 conclusion that depends on it**, which also left the "the recirculation
@@ -1732,6 +1733,82 @@ figure the subsection above quotes.
 the circuit is not — this file's hydraulics section covers the gauge branch
 only and says building a plumbing census is a next-time-in-there job.
 
+#### THE OPV IS 11 BAR — MEASURED 2026-10-19, the first hard number on that valve
+
+Blind basket in the portafilter, pump on, read off the machine's own gauge;
+the operator moved the OPV screw to confirm it acts and returned it. **The
+method is right**: a blind basket passes no water, so 100 % of pump output
+goes through the valve and the gauge reads the valve rather than the puck.
+
+**IT IS THE FULL-FLOW PRESSURE, NOT THE CRACKING PRESSURE, and a draft read
+it as the latter.** Maximum flow through a spring valve means maximum
+accumulation, so **cracking sits BELOW 11** — spring valves typically show
+10–25 % override at full flow, which would put it near **9–10 bar**. That
+figure is general spring-valve behaviour, not a measurement of this valve.
+
+**So a ~9 bar shot is NOT cleanly below cracking.** A draft wrote "4 bar below
+cracking, OPV closed, recirculation dead for shots" — **withdrawn**. A normal
+pull may sit right at the knee. That is the second pressure number this entry
+has over-read: first the premise that a relief valve cannot be exceeded at its
+setpoint, then this.
+
+**AND IT WAS ALREADY 11 BAR WHEN THE 2026-10-09 SHOTS WERE MEASURED** —
+confirmed with the operator. The screw was turned only to verify it acts. So
+the flow data is comparable across it and no confound is introduced.
+
+**One gap in that, stated rather than smoothed over: the screw's return to 11
+was not re-verified against the gauge.** The reading that established 11 bar
+was taken before the adjustment, and "I put it back" is an action, not a
+measurement. Re-read it with the blind basket at the next opportunity —
+experiment 0b moves the screw twice more and the same applies there.
+
+**THE OPV SETTING IS ADJUSTABLE STATE, AND NOTHING RECORDS IT.** That puts it
+in the same class as `grind_epoch` (invariant 5): a number relative to a zero
+point that moves. Flow data taken either side of an adjustment is **not
+comparable**, and until 2026-10-19 nobody had established that this valve is
+adjustable in practice on this machine. If the schema ever grows a column for
+machine state, this belongs in it.
+
+**A DRAFT CLAIMED A TWO-COMPONENT ACCOUNT "NOW FITS WHERE NOTHING FITTED
+BEFORE" — baseline meter over-count plus relief on shots. WITHDRAWN: THE GAP
+IT EXPLAINS MAY NOT EXIST.**
+
+The 5× figure is not measured. It comes from dividing shot counts by an
+**assumed** inlet, using this file's own 60 % yield-to-inlet figure — which
+this same section already labels *"an assumption, not a measurement"*. Vary
+that one number and the gap closes:
+
+| flush over-count (OPV shut) | 5915 / 2382 = **2.483×** |
+|---|---|
+| apply that SAME factor to shot 2's 761 counts | 761 / 2.483 = **306 true pulses** |
+| at the datasheet 2382 pulses/L | **128.7 ml inlet** |
+| against a 37.9 g yield | **29.5 % reaches the cup** |
+
+**So a single constant over-count of 2.483×, with the OPV never opening,
+reproduces shot 2 exactly — provided ~30 % of inlet reaches the cup instead
+of 60 %.** One component, no relief, no gap.
+
+Two readings now fit the same data and **the only parameter separating them is
+one this file flags as unmeasured**. A draft took the softer number as firm
+because it supported the more interesting story.
+
+**WHICH MAKES THE SPLIT THE MEASUREMENT TO TAKE.** Every "~5×" in this
+document inherits that assumption. `inlet = yield + puck retention + 3-way
+dump`, and all three are weighable — see experiment 0a.
+
+**The free-flush half is untouched by any OPV question** — no basket, no
+pressure, nothing relieving, and the meter still read 5915–6508 pulses/L
+against a datasheet 2382. **The meter over-counts regardless**, and that has
+never depended on the valve.
+
+**AND THE "~9 BAR EVERY TIME" REPEATABILITY HAS A SIMPLER EXPLANATION THAN THE
+ONE THIS FILE REACHED FOR.** A draft argued pure puck-dependence "cannot
+explain landing on the same number across varying grind, dose and tamp", and
+inferred a regulator clamping at 9. **The operator dials the grind to pull a
+good shot, and ~9 bar is what that conventionally means.** Grind, dose and
+tamp do not vary randomly — they are tuned toward a target. The human is the
+feedback loop, and that was walked straight past.
+
 **This is the repo's recurring defect in its purest form.** The file asked for
 an experiment ("the cheapest thing that would settle it") that the operator
 performs every single morning. Nobody asked. Before adding an experiment to
@@ -1741,32 +1818,71 @@ this is now the **third** instance, after the GPIO silkscreen check and the
 
 #### The experiment that separates them
 
-**0. ONE DELIBERATELY COARSE SHOT, WITH THE COUNTER RUNNING. Do this one
-first — it is the cheapest discriminating test this project has ever had.**
+**0a. WEIGH THE SPLIT. Do this one first — it is cheaper than everything
+below and every "~5×" in this document depends on it.**
 
-The operator reports a coarse grind *"barely raises"* the pressure. **Below
-the OPV's cracking pressure the valve is unambiguously shut**, whatever its
-setpoint is — which removes the one unknown that makes the ~9 bar reading
-ambiguous. So count pulses against delivered volume on a coarse shot:
+`inlet = yield + puck retention + 3-way dump`. Weigh the loaded portafilter
+dry, pull a normal shot catching the cup on the Bookoo, weigh the portafilter
+again (wet puck − dry = retention), and catch the drip-tray dump. Three
+weighings and a subtraction.
 
-**STATE THE THRESHOLD AGAINST YIELD, NOT INLET — a draft of this section did
-not, and repeated the error this very entry corrects three paragraphs up.**
-Yield is **not** inlet: the water splits between cup, puck retention and the
-3-way dump, and this file's own working assumption is that the scale sees
-~60 %. So a meter reading *correctly* produces **2382 / 0.6 ≈ 3970 pulses per
-litre of YIELD**, not 2382. Compare against that, or the confirming result
-(~1.7× the datasheet) gets read as "nothing settled".
+**Until that number exists, the 5× is an assumption wearing a decimal point**,
+and a constant 2.483× over-count with a ~30 % split fits the same data with no
+relief at all.
 
-- **counts per litre of yield lands near ~3970** → recirculation CONFIRMED.
-- **it stays near the ~5900–6500 the free flushes gave** → recirculation is
-  dead, and the meter over-counts by a mechanism nobody has identified.
-- **the 60 % is an assumption, not a measurement**, so treat the boundary as
-  soft and record counts, yield and duration rather than a verdict.
+**0b. RAISE THE OPV AND PULL ONE NORMAL SHOT.** The operator owns the
+adjustment since 2026-10-19, so pressure can be moved without touching the
+grind.
 
-It needs no analyser and no new parts — the **proven ESP tap at 100 K +
-220 K** — but it is **not "no rig change"**, and a draft claimed that. The J4
-T-piece is currently unplugged, so this means refitting the connector behind
-the 2026-10-03 `E01` incident. Watch for the fault on first contact.
+It supersedes a coarse-shot version a draft put here, which moved pressure
+only through the puck and so changed grind, flow rate and contact time
+together. **This is NOT "one variable" either, and a draft said it was**:
+raising the OPV raises brew pressure, which moves flow rate and contact time
+with it. It changes *fewer* variables, and leaves the grind alone.
+
+Set the OPV to **~14 bar**, pull one otherwise-normal shot, set it back to 11.
+
+**READ THE GAUGE DURING THE SHOT. Without it the experiment can return a false
+null and you will not know.** A draft asserted "at 14 the valve is shut
+whatever its cracking pressure is" — that does not follow. By this section's
+own 10–25 % override, a 14 bar full-flow setting puts cracking at
+**11.2–12.7**, and removing a clamp at ~9 may let the puck drive the pull
+above that. The gauge is the only thing that tells you which happened:
+
+- **gauge stays well below ~11** → the valve was shut; the comparison is valid
+- **gauge pegs near 14** → it relieved anyway; the run is void, not a null
+
+**Then compare in CONSISTENT UNITS, which a draft did not.** The flushes'
+5915–6508 is per litre of *collected water*; a shot's counts per litre of
+*yield* is a different quantity, and shot 2 sits at 761 / 0.0379 L =
+**20 079 per litre of yield**. Comparing one to the other is meaningless. Do
+it in whichever of these the 0a weighing makes available:
+
+| if 0a has been done | compare **counts per litre of measured inlet** against the flushes' 5915–6508 |
+|---|---|
+| if it has not | compare this shot's counts/yield against a **normal-pressure shot's** counts/yield, same grind, same session — a ratio, not an absolute |
+
+Record counts, yield, duration **and the gauge reading**. Deliberate throwaway
+shot; at 14 bar it will not taste like anything.
+
+**And re-verify the OPV reading after setting it back**, with the blind basket
+— the 11 bar figure is only as good as the last time the gauge was read
+against it, and this procedure moves the screw twice.
+
+**BOTH 0a AND 0b NEED THE J4 TAP, WHICH MEANS REFITTING THE CONNECTOR BEHIND
+THE 2026-10-03 `E01` INCIDENT.** It is currently unplugged (see the bench-rig
+entry in `docs/phase-0-status.md`). **Watch for the fault on first contact**,
+and note that `+` connects to nothing, ever. This warning sat at the foot of a
+retired experiment and lost its antecedent in a restructure; it is the only
+safety-relevant line in this section and it covers everything in it.
+
+*(RETIRED THRESHOLDS, from the superseded coarse-shot version. Kept for the
+unit trap only, which is the part people get wrong: yield is not inlet, so a
+correctly-reading meter gives **2382 / 0.6 ≈ 3970 pulses per litre of
+YIELD**, not 2382 — and a confirming result would land at ~1.7× the datasheet
+and read as "nothing settled". **Do not use the 3970 as a live threshold**:
+the 60 % it rests on is exactly the number experiment 0a exists to replace,
+and the same arithmetic appears above with that caveat attached.)*
 
 *(A draft of this section promoted the analyser on `#` to first instead. That
 was wrong twice over: it contradicted `docs/phase-0-status.md`, which calls

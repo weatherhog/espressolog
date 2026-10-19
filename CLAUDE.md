@@ -224,6 +224,36 @@ lead routing. The conclusion is sound — a swap of 2/5 would have logged
   insufficient is the water draw running for minutes, which has nothing to do
   with 2Cup.** Two arguments were run together.
 
+  **AND THERE IS A WORSE FAILURE THAN A SHORT GUARD: THE GUARD CAN FAIL TO
+  ARM AT ALL. Found 2026-10-19 by review, unrecorded until then, and it is an
+  invariant-2 exposure rather than a sizing complaint.**
+
+  `SwitchBank` confirms a level only after **two consecutive polls agree**,
+  `DEBOUNCE_MS` apart (`machine_io.cpp`, the `cand`/`cand_since` path). A
+  press seen HIGH on **one** poll and LOW on the next never sets `stable` and
+  never emits an `Event`. Both of hot water's guard paths then miss it:
+
+  | path | why it misses |
+  |---|---|
+  | `busy()` branch 1 — a lever held right now | reads `in.pressed[]`, which is `stable`; never set |
+  | `busy()` branch 3 — `pressGuard(HOT_WATER)` | armed by `onRelease()`, called only from the `Event`; never emitted |
+
+  **So `busy()` returns false for the entire draw** — and lever B latches, so
+  that draw runs for minutes while flash writes proceed. **That is the
+  invariant-2 breach this class exists to prevent**, not a window that is
+  merely too short.
+
+  **It is specific to hot water.** 1Cup and 2Cup are covered by branch 2, the
+  display's own `Mode::TIMER`; `CLAUDE.md` records that the display does
+  **not** run its timer during a lever-B draw, which is exactly why branch 3
+  exists and exactly why nothing backs it up.
+
+  **How likely: this is the tail, not the typical case.** 2026-10-19 lost 2 of
+  6 deliberately-fast presses (80-90 ms). An ordinary lever-B press spans many
+  polls and confirms easily. But the exposure is real, silent, and currently
+  unguarded, and it is **made more likely by anything that stretches
+  `loop()`** — the same poll-gap excursions recorded in this session.
+
   **An edge-driven guard is the obvious fix and it is NOT sufficient on its
   own.** The second press is a real stop signal on a line already polled, so
   press N to press N+1 is the exact window — but **the machine self-terminates
@@ -279,8 +309,14 @@ this board actually latches.
 hand on the levers.
 
 **"Every press ever measured" is no longer true — superseded 2026-10-19**,
-which logged ten 1Cup presses at **195–295 ms** and four at **80–90 ms**, all
-latching. Treat 345–480 ms as *one session's* presses, not the machine's
+which logged ten 1Cup presses at **195–295 ms** and four at **80–90 ms**.
+
+**"All latching" is how a draft put it, and the record does not support that
+for all fourteen.** The operator watched the pump answer each of the **six
+fast presses** (four of which were logged); the ten longer ones are durations
+read off the tap, with no separate note that the machine responded to each.
+**The latching evidence is the fast six.** The ten establish the width range
+only. Treat 345–480 ms as *one session's* presses, not the machine's
 range.
 
 **FOUR places cite it, not the two a draft listed.** That draft named
@@ -327,7 +363,8 @@ and the line number drifted while it was being written.
 **THEN THE FIX DID IT AGAIN, IN THE CROSS-FILE ROWS.** The replacement table
 switched the same-file rows to section names and **left `plan.md:683` and
 `main.cpp:1109` as line numbers — both of which that same commit moved**, to
-685 and 1115, by editing those very files. So the lesson was learned in one
+685 and 1115 — and the `main.cpp` one has since moved to 1136, so even this
+note's "corrected" value went stale. So the lesson was learned in one
 half of the table and not the other, in a commit whose subject was incomplete
 enumeration.
 
@@ -1384,12 +1421,18 @@ number cited without being read". **That accusation was false and the original
 was correct.** `git show bb3ed26:firmware/src/main.cpp | sed -n '377p'` — bb3ed26
 being the commit that wrote the citation — returns exactly
 `// output full stop — updateLed() drives the onboard RGB LED on GPIO48, which`.
-The line was read, was right, and has since drifted to **`main.cpp:445`**,
-where it still asserts GPIO48 today. The draft checked the *current* file
+The line was read, was right, and has since drifted — to 445, and to **472**
+as of 2026-10-19 — where it still asserts GPIO48 today. The draft checked the *current* file
 instead of the file at the commit that made the claim — the same
 read-a-later-version-and-call-it-history error logged against `pendingCount()`
-earlier the same day. **Cite `main.cpp:445`, and when a line number here looks
-wrong, check it at the commit that wrote it before retracting anything.**
+earlier the same day. **When a line number here looks wrong, check it at the
+commit that wrote it before retracting anything.**
+
+**AND DO NOT RE-CITE IT BY LINE, WHICH A DRAFT DID — it said "Cite
+`main.cpp:445`" and that was stale within the week.** This paragraph has now
+carried three numbers for one comment (377, 445, 472), each correct when
+written. It is the `updateLed()` note in the GPIO8 block; `grep` finds it in
+one step and cannot go stale.
 
 *(Position 19 carried a "◦" flag until 2026-10-12: the operator's transcription
 read "12 12" at positions 18-19 and GPIO13 was inferred. **Espressif's table
@@ -1650,9 +1693,20 @@ closed the loop on a defect that was still open. A review found all three.
 Applying a correction in one file and announcing it as complete is strictly
 worse than not applying it, because it stops anyone looking.)*
 
-**The 80 mV below the predicted 2.97 V is not a defect**: it corresponds to
-the machine's rail sitting near 4.86 V rather than a round 5.0, or 1 %
-resistor tolerance, or both. Nothing to chase.
+**The 80 mV below the predicted 2.97 V is NOT fully accounted for, and this
+line used to say "nothing to chase".** The two causes it offered do not add
+up to 80 mV:
+
+- **a 4.86 V rail** would do it — but this file records that rail as
+  **measured at 5.0 V** (2026-10-04), so invoking 4.86 V contradicts its own
+  measurement;
+- **1 % resistor tolerance** moves the junction by at most **~24 mV**.
+
+Together they leave **~59 mV unexplained** unless the rail really is lower
+than recorded. **Still nothing to act on** — the margin is +415 mV and a
+60 mV discrepancy threatens nothing — but it is an open discrepancy between
+two of this file's own numbers, not a closed question. Re-read the rail at
+the junction next time J2 is live.
 
 **And a logic analyser on the junction costs nothing measurable at room
 temperature.** Same reading, 2.89 V, probe on and probe off — the difference
@@ -2057,7 +2111,7 @@ above that. The gauge is the only thing that tells you which happened:
 5915–6508 is per litre of *collected water*; a shot's counts per litre of
 *yield* is a different quantity, and shot 2 sits at 761 / 0.0379 L =
 **20 079 per litre of yield**. Comparing one to the other is meaningless. Do
-it in whichever of these the 0a weighing makes available:
+it in whichever of these the **0d-i** weighing makes available:
 
 | if 0d-i has been done | compare **counts per litre of measured inlet** against the flushes' 5915–6508 |
 |---|---|

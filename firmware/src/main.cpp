@@ -51,11 +51,14 @@ static size_t pending_w_n = 0;
 //                                               on the perfboard, see below
 //
 // Safe whichever way the line is driven AT NOMINAL -- the corner is a
-// separate question and 15K fails it, see below: 3.23 V at the pin if push-pull,
+// separate question and 15K fails it, see below. WITH 15K: 3.23 V at the pin if push-pull,
 // 2.69 V if open-drain through the board's 4.7K pull-ups (VIH is 2.48 V), and
 // the machine's own high never falls below 4.16 V against a display needing
-// 3.5 V. Do NOT enable an internal pull-down — 45K in parallel with the 15K
-// leg drops the open-drain case to 2.33 V and the pin stops reading high.
+// 3.5 V. WITH THE SPECIFIED 16.4K: 3.33 V push-pull (above VDD, but the
+// clamp is off -- see docs/phase-0-status.md) and 2.80 V open-drain.
+// Do NOT enable an internal pull-down — 45K in parallel with the 15K
+// leg drops the open-drain case to 2.33 V and the pin stops reading high
+// (2.41 V at 16.4K; the warning holds either way).
 //
 // 2026-10-19: the 15K shunt FAILS its tolerance corner at -70 to -87 mV (the
 // spread is the unmetered 4.7K pull-up's tolerance; quote the pessimistic

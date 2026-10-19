@@ -1044,10 +1044,29 @@ is the exact defect corrected in the 16.4 K remedy passage further down this
 file. Both columns are shown now. The −5 % column is the one that governs.)*
 
 **16.4 kΩ clears it by 12 mV, not by the 177 mV the first version implied.**
-That is thin, and it is a *soft* threshold — "~0.4 V" is where a silicon
-diode starts conducting meaningfully, not a cliff — so the conclusion holds
-while the comfort does not. **17.4 kΩ and 18 kΩ do NOT clear it**, which
-removes the "17.4 buys five times the margin" alternative a draft floated.
+
+**BUT "CLEARS IT" IS THE WRONG FRAME, AND A DRAFT USED THE CURRENT-LIMIT
+PRINCIPLE ONLY WHERE IT HELPED.** That draft withdrew the hard-wall ceiling —
+rightly — then turned round and declared 17.4 kΩ and 18 kΩ **EXCLUDED** by a
+hard 0.4 V wall. The principle does not get to be a soft current limit for
+16.4 kΩ and a cliff for 17.4 kΩ. Carried through consistently:
+
+| shunt | over VDD (−5 %) | clamp current | verdict |
+|---|---|---|---|
+| 16.4 kΩ | +388 mV | **~0** | clean |
+| 17.4 kΩ | +456 mV | **~10 µA** | *tolerable*, not excluded |
+| 18 kΩ | +494 mV | ~16 µA | tolerable |
+| 23.2 kΩ | +764 mV | **33–60 µA** | reject — continuous conduction |
+
+**So the honest ordering is a gradient, not a window.** 16.4 kΩ is the only
+value with the clamp genuinely off; 17.4–18 kΩ draw microamps the same
+section calls "not destructive" at 23.2 kΩ; 23.2 kΩ is rejected for degree,
+not kind.
+
+**16.4 kΩ remains the choice** — it is the one value needing no appeal to how
+much clamp current is acceptable, and it is what this repo already specified.
+**But "~16.2 – 16.6 kΩ" is a preference band, not a hard window**, and a
+draft stated it as though the arithmetic forced it.
 
 **THE SOBER CONCLUSION, after this section reversed itself three times in one
 day. Note how little of it is new:**
@@ -1190,8 +1209,25 @@ shunt 15 kΩ at the board — the two are not interchangeable.
 #### The switch poller has a resolution floor, and the counter that looks like it would warn you does not
 
 Six 1Cup presses at 80-90 ms: **four logged, two not.** `worst poll gap` was
-**~50 ms**, so a press is ~1.6 poll intervals and a third going missing is what
-polling at that rate does.
+**~50 ms**, so a press is ~1.6 poll intervals.
+
+**THE MECHANISM IS THE DEBOUNCE, NOT A PRESS FALLING BETWEEN POLLS, AND A
+DRAFT SAID THE LATTER — WHICH IS ARITHMETICALLY IMPOSSIBLE HERE.** An 80 ms
+press cannot fit between two polls 42-57 ms apart; it is always seen by at
+least one. `SwitchBank` requires **two consecutive agreeing polls**
+`DEBOUNCE_MS` (20 ms) apart before it sets `stable`, so a press caught by only
+**one** poll is discarded. At ~1.6 intervals per press, roughly a third of
+presses get only one poll — which is the observed 2-in-6 directly.
+
+**Two consequences the draft's version hid:**
+
+- **The logged durations are biased LONG.** A confirmed press needed two polls
+  HIGH, so its true width is at least one poll gap, and the short tail is
+  systematically missing. The **[23, 137] ms** band treats the quantisation as
+  symmetric; it is not.
+- **It is the same mechanism as the guard-fails-to-arm exposure** recorded in
+  CLAUDE.md under lever B — an unconfirmed press emits no `Event`, so nothing
+  downstream of `Event` ever runs.
 
 **THREE DIFFERENT POLL-GAP FIGURES APPEAR FOR THIS ONE SESSION. They are one
 number at three times, and the load-bearing bound depends on which:**
@@ -1213,8 +1249,9 @@ roughly [−33, 193] ms and bound nothing.
 DRAFT OF THIS PARAGRAPH RETRACTED THE BOUND ON THE ASSUMPTION THAT IT DID.**
 `switchesSetEnabled()` in `main.cpp` zeroes `sw_max_gap` on every `switches
 on`, so the counter is per-arming, not per-session. *(A draft cited
-`main.cpp:321`; that is a comment line, the assignment is at 328 — a wrong
-line number inside the commit that added the cite-by-section rule.)* The 113 ms belongs to whichever arming preceded
+`main.cpp:321`, a comment line; a second draft "corrected" it to 328, also a
+comment line, **inside the same commit that added the cite-by-section rule**.
+It is at 336 as of this commit and will move again. Cite the function.)* The 113 ms belongs to whichever arming preceded
 it; the press run was read at ~50 ms. **The bound survives.**
 
 **What does NOT survive is being able to show that from the record.** Nothing
@@ -1245,7 +1282,7 @@ next capture before trusting either number.**
 
 **`events dropped = 0` throughout.** `machine_io.cpp:43` increments `lost`
 only when the event **queue overflows** — events the poller *saw* but could
-not store. A press that falls entirely between two polls is never seen, so it
+not store. A press the debounce never confirms is never seen, so it
 cannot be counted. **Zero does not mean nothing was missed.**
 
 That is the same shape as `dropped_edges` on the display bus, which counts

@@ -373,9 +373,8 @@ described in `docs/phase-0-status.md`.
   [photoMOS]        DRIVE, device 1 of 2.
       |
   [photoMOS]        DRIVE, device 2 of 2 — in SERIES. Both must fail for the
-      |             line to be driven (*but see the series-redundancy
-      |             section: "both" is not independent, and the
-      |             gate-to-drain mode is not body-diode-limited*). Each LED needs its OWN path, for the
+      |             line to be driven (but see the note below the diagram).
+      |             Each LED needs its OWN path, for the
       |             per-device test; they cannot share one drive.
       |             The LED supply carries jumper (b), shared across lines.
       |
@@ -389,6 +388,11 @@ described in `docs/phase-0-status.md`.
       |
      GND
 ```
+
+**"Both must fail" is the body-diode picture only.** The two failures are not
+independent and a gate-to-drain fault is not diode-limited — see the
+**"two photoMOS in series per driven line"** bullet under **"The failure
+neither mechanism bounds"**, below, and its 2026-10-19 correction.
 
 **Read that carefully: the photoMOS goes between pos 1 and pos N, and
 NOTHING on the drive path touches ground.** An earlier box-drawing version of
@@ -705,12 +709,11 @@ does not work:
     - **The two LEDs in a pair cannot share one drive.** Each needs its own
       path — and since 2026-10-12 that is settled hardware, not just a
       constraint: each photoMOS gets a **BC547 or 2N3904** with an 8.2 kΩ
-      base resistor and a 100 kΩ base-emitter resistor, fed through **330 Ω**
+      base resistor and a 100 kΩ base-emitter resistor, fed through **330 Ω, 1 %**
       for ~6 mA. AQY212EH is guaranteed to operate only at **3.0 mA at 25 °C**
-      (typical 1.2 mA is not a design figure; `docs/shopping-list.md`, "85 °C
-      note" under "Datasheet read", is normative on what the temperature
+      (typical 1.2 mA is not a design figure; `docs/shopping-list.md`, the "85 °C note" under "Datasheet read", is normative on what the temperature
       caveat does to these figures).
-      <!-- fact:led-drive-resistor 330 Ω -->
+      <!-- fact:led-drive-resistor 330 Ω, 1 % -->
       <!-- fact:photomos-guarantee-25c 3.0 mA at 25 °C --> **The transistor's reason is
       this test, not the drive current** — a draft claimed "a 74HC221 at 3.3 V
       cannot source that reliably, so the transistor was needed regardless",

@@ -283,7 +283,7 @@ tighter than they need to be for the sake of a few euro.
 | 470 pF ceramic | — | **CANDIDATE, weaker case than J4's.** ×2 across the J5 shunts — **now 16.4 kΩ, not the 15 kΩ this row used to name**, so the sizing below needs redoing before it is bought. **Never 10 nF** (69 µs against 36 µs clock highs stops the bus decoding). But the J5 drops look like serial polling, not coupling. `phase-0-status.md` already carried this value as a contingent remedy after raising the shunt to 16.4 K — **that raise is no longer contingent; the capacitor still is.** |
 | 1 kΩ | 10 | 0d flowmeter, **at PA8/PA9 only** — the board side, after its own conditioning. **Never at J4.** **In stock.** |
 | 8.2 kΩ (J4) | — | **J4 ANALYSER tap only: 8.2 kΩ, one channel, `#` only, no shunt.** The ESP32 tap at J4 is **100 K + 220 K** — see the 0d entry in `docs/phase-0-status.md`. Covered by the 8.2 kΩ bag above. |
-| **330 Ω, 1 %** *(390 Ω only for a box that stays cool — see the 85 °C note under "Datasheet read")* | 20 | **PhotoMOS LED drive, ×4 — NOT IN STOCK, added 2026-10-12.** AQY212EH is guaranteed to operate at 3.0 mA **at 25 °C** (see the 85 °C note under "Datasheet read") and wants 5–10 mA; 330 Ω from 3.3 V gives ~6 mA. **Do not substitute the in-stock 1 kΩ** — it gives ~2 mA, above typical and below guaranteed, which is the one range that works on the bench and fails in service. 680 Ω if driving from 5 V instead. <!-- fact:led-drive-resistor 330 Ω --> <!-- fact:photomos-guarantee-25c 3.0 mA at 25 °C --> |
+| **330 Ω, 1 %** *(390 Ω only for a box that stays cool — see the 85 °C note under "Datasheet read")* | 20 | **PhotoMOS LED drive, ×4 — NOT IN STOCK, added 2026-10-12.** AQY212EH is guaranteed to operate at 3.0 mA **at 25 °C** (see the 85 °C note under "Datasheet read") and wants 5–10 mA; 330 Ω from 3.3 V gives ~6 mA. **Do not substitute the in-stock 1 kΩ** — it gives ~2 mA, above typical and below guaranteed, which is the one range that works on the bench and fails in service. 680 Ω if driving from 5 V instead. <!-- fact:led-drive-resistor 330 Ω, 1 % --> <!-- fact:photomos-guarantee-25c 3.0 mA at 25 °C --> |
 | **100 kΩ** | 10 | **0d J4 divider, series leg (×1)** — the chosen value since 2026-10-08. Also the **base-emitter resistors (×4)** for the LED drivers, added 2026-10-12: with the '221 pulled from its socket — a deliberate third disable — four bases would otherwise float with the rail up. **In stock.** |
 | 120 kΩ | 0 | **NOT in stock.** Recorded as in stock on 2026-10-07 from a verbal report; the bag held 100 K and 150 K. Superseded by 100 kΩ, which has ~double the margin — not needed. |
 | E12 assortment kit, 1/4 W | 0 | **Not required.** It covers no named requirement, and cheap kits are 5 % where the rows above are 1 %. Both dividers survive 5 % (J4 +271 mV, 0c +110 mV — the J4 figure was +96 mV while 120 K was specified), and 100 kΩ is already in stock. |
@@ -400,7 +400,7 @@ apart on the transistor, the drive-current claim and the box.
 | **AQY212EH, DIP-4** | **8** | 4 in service, 4 spare. **DATASHEET GRADE since 2026-10-17** — see "Datasheet read" below for what was read and what it settles. DIP-4 through-hole, SPST-NO (1 Form A) **AC/DC**, 60 V peak AC/DC, 0.55 A continuous, 5,000 V AC I/O isolation, all confirmed against Panasonic's own tables — **a 2011 catalogue and a 2005 mirror; the current per-part datasheet was NOT read** (see below). **Bare `AQY212EH` is the through-hole part; `…EHA` is the surface-mount terminal version, tube-packed, `…EHAX`/`…EHAZ` are the same SMD part on tape-and-reel (picked from the 1/2-pin or 3/4-pin side)** — so buy the bare suffix, and a listing that says `EHAX` is SMD whatever its photo shows. **Most listings are SOP-4 surface-mount, including other PhotoMOS families that carry no `EHA` suffix at all** — check the photo shows four long legs *and* that the printed part number is **exactly** `AQY212EH` with nothing after it (`AQY212EHA`, `EHAX` and `EHAZ` all *start* with `AQY212EH` and are all SMD). *(The "most listings are SOP-4" sentence is **listing grade** — an observation about sellers, not something either datasheet read supports — and sits in a datasheet-grade cell only because it is a purchasing warning.)* |
 | **`CD74HC221E`, PDIP-16** | 3 | **Verified 2026-10-12** against TI and Farnell: dual monostable, PDIP-16, 2–6 V, non-retriggerable ("once triggered, the outputs are independent of further trigger inputs"), active lifecycle, 5.2 mA output drive. `SN74HC221N` is scarce — TI is retiring PDIP. **A draft also listed `MC74HC221AN`, `TC74HC221AP` and `HD74HC221P` as equivalents; none could be verified**, and the nearest real hit, `MM74HC221AN`, is obsolete. Those were recollection. The `N`/`E`/`P` suffixes are through-hole; `D`/`PW`/`NS` are SMD. |
 | **BC547 or 2N3904, TO-92** | 10 | **LED drivers, one per photoMOS.** **NOT the 2N7000**, which a draft of this row specified: its V_GS(th) is 0.8–3.0 V, so a worst-case part driven from 3.3 V logic has **0.2 V of overdrive** and R_DS(on) is only characterised at V_GS = 4.5/10 V. That is the same works-on-the-bench-fails-in-service trap as the 1 kΩ below, in the part bought to avoid it. A bipolar has no threshold lottery — 0.7 V of V_BE, cleared with enormous margin. **Base resistor 8.2 kΩ and base-emitter 100 kΩ, both in stock.** |
-| **330 Ω, 1 %** *(390 Ω only for a box that stays cool)* | 20 | **The one resistor value not in stock.** See the LED arithmetic below **and the 85 °C note under "Datasheet read"** — the operate guarantee is 3.0 mA at 25 °C only, which is why 330 Ω and not 390 Ω. <!-- fact:led-drive-resistor 330 Ω --> <!-- fact:photomos-guarantee-25c 3.0 mA at 25 °C --> |
+| **330 Ω, 1 %** *(390 Ω only for a box that stays cool)* | 20 | **The one resistor value not in stock.** See the LED arithmetic below **and the 85 °C note under "Datasheet read"** — the operate guarantee is 3.0 mA at 25 °C only, which is why 330 Ω and not 390 Ω. <!-- fact:led-drive-resistor 330 Ω, 1 % --> <!-- fact:photomos-guarantee-25c 3.0 mA at 25 °C --> |
 | **2-pin male header** | 3 | the disables. **Buy no shunts** — open is the specified state and a loose shunt in the box is a hazard. Cut from a 1×40 male strip. |
 | DIP-16 socket | 3 | wire the socket, verify, *then* insert the '221 — 16 hand-wired joints with no heat near the part. Pulling the IC is also a third disable, stronger than an open jumper. |
 | Machined **round-pin** SIP socket strip 1×40 | 2 | **DIP-4 sockets are not a stocked item.** Cut 2-way pieces, two per photoMOS, 0.3 in apart. Soldering the photoMOS directly is acceptable if you cannot get these: a socket contact going intermittent fails **open**, which is the safe direction here. |
@@ -412,7 +412,6 @@ apart on the transistor, the drive-current claim and the box.
 3.0 mA at 25 °C** (typical 1.2 mA is not a design figure; guaranteed off
 below 0.4 mA; see the 85 °C note under "Datasheet read" for what the
 temperature caveat does to every figure in this section).
-<!-- fact:led-drive-resistor 330 Ω -->
 <!-- fact:photomos-guarantee-25c 3.0 mA at 25 °C -->
 Two consequences:
 
@@ -498,7 +497,7 @@ row spacing does).
   ~0.1 V, an estimate) is **≈ 6.2 mA nominal**; with the rail 5 % low, V_F at
   the 1.5 V (50 mA) ceiling and V_CE 0.2 V it is still **≈ 4.3 mA**. Above 3.0
   mA either way.
-- **85 °C NOTE — NEW: the 3.0 mA guarantee is a 25 °C figure, and what that means for the
+- **85 °C note: the 3.0 mA guarantee is a 25 °C figure, and what that means for the
   drive depends on WHICH criterion you hold it to — this paragraph has to say
   so, and a first version did not.** The electrical table is headed "Ambient
   temperature: 25 °C". The operate-current-vs-temperature plot (curve 5,
@@ -524,7 +523,7 @@ row spacing does).
   puts nominal drive at 6.2 mA inside that range; and the **3.0 mA operate
   spec is measured at I_L = max (550 mA)** whereas this circuit passes
   ~0.1-1 mA, a condition the datasheet gives no operate-current figure for.
-  Neither is a proof that B is wrong. **Decision: buy 330 Ω** *(against a guarantee of 3.0 mA at 25 °C only)* <!-- fact:led-drive-resistor 330 Ω --> <!-- fact:photomos-guarantee-25c 3.0 mA at 25 °C --> — it is the value
+  Neither is a proof that B is wrong. **Decision: buy 330 Ω, 1 %** *(against a guarantee of 3.0 mA at 25 °C only)* <!-- fact:led-drive-resistor 330 Ω, 1 % --> <!-- fact:photomos-guarantee-25c 3.0 mA at 25 °C --> — it is the value
   that satisfies A with margin and the datasheet's own recommendation, and it
   costs nothing over 390 Ω. **If B is ever adopted, neither value is enough**:
   270 Ω gives 7.0 mA at the 85 °C corner and 220 Ω 8.6 mA, both inside the

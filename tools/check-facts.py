@@ -49,6 +49,14 @@ Comparison is normalised, not literal: case, markdown emphasis, Ω vs K,
 string here. Two sites may render a number differently; they may not
 disagree about it.
 
+SEVERAL MARKERS ON ONE LINE are supported (a markdown table row cannot take a
+marker on its own line, so two facts tagged inline on one row are legitimate).
+Two cautions. An HTML marker ends at `-->`, so two of them coexist; a `//`,
+`--` or `#` marker has no terminator and its value runs to the END of the
+line, so a second marker after one of those is swallowed into its value.
+And a marker's own text is never evidence: every marker is stripped from the
+context window before needles are searched for.
+
 WHAT IT STILL DOES NOT CATCH, stated plainly so nobody trusts it further
 than it goes: an UNTAGGED site. If a seventh place states the K-factor and
 carries no marker, this script is blind to it. The registry below is the
@@ -78,6 +86,13 @@ CONTEXT_LINES = 10
 # The cost: deleting a SECOND marker inside an already-counted file no longer
 # fails here. Anchoring still covers the markers that remain, so the failure
 # mode is lost coverage rather than a wrong number going green.
+#
+# `min_sites` is OPTIONAL and counts markers, for the facts whose sites crowd
+# into the same files. `min_files` alone cannot see a marker deleted from
+# inside a file that still has another one -- which is exactly how a table
+# row's second inline marker was lost to the old `search`. Added 2026-10-19
+# for the two photoMOS drive facts; set it to the number tagged TODAY and
+# raise it when you tag more, never lower it to turn the build green.
 #
 # `claude_md` means at least one of those files must be CLAUDE.md -- these are the
 # facts whose live conclusion is supposed to stay in the auto-loaded file
@@ -113,10 +128,10 @@ REQUIRED = {
     # 3.0 mA" site in a file the correction had not reached. NOT claude_md:
     # CLAUDE.md carries no drive figure, and putting one there to satisfy this
     # rule would add a copy to keep in sync rather than remove one.
-    "led-drive-resistor":       {"min_files": 2, "claude_md": False},
+    "led-drive-resistor":       {"min_files": 2, "min_sites": 4, "claude_md": False},
     # The 3.0 mA operate guarantee is a 25 C figure. The value pins both the
     # number and its temperature, so a site that drops the qualifier fails.
-    "photomos-guarantee-25c":   {"min_files": 2, "claude_md": False},
+    "photomos-guarantee-25c":   {"min_files": 2, "min_sites": 5, "claude_md": False},
 }
 
 SCAN_SUFFIXES = (".md", ".h", ".cpp", ".c", ".go", ".sql", ".py")
@@ -233,10 +248,13 @@ def collect():
             for m in MARKER.finditer(line):
                 lo = max(0, i - CONTEXT_LINES)
                 hi = min(len(lines), i + CONTEXT_LINES + 1)
-                # The marker's own text is not evidence for itself.
+                # No marker's text is evidence for anything. Stripping only
+                # line i left an ADJACENT marker line's value in the window,
+                # so two facts with overlapping needles on neighbouring lines
+                # could anchor each other vacuously. Found by review of
+                # d5f36d8; no live fact was affected.
                 context = "\n".join(
-                    MARKER.sub("", lines[j]) if j == i else lines[j]
-                    for j in range(lo, hi)
+                    MARKER.sub("", lines[j]) for j in range(lo, hi)
                 )
                 sites[m.group(1)].append(
                     {
@@ -284,6 +302,12 @@ def main():
         # cross-FILE coverage; two markers in one file satisfied the old
         # count while proving nothing about any other file. Found by review.
         files = {e["path"] for e in entries}
+        if len(entries) < rule.get("min_sites", 0):
+            errors.append(
+                f"fact:{fact} has {len(entries)} tagged site(s), REQUIRED says at "
+                f"least {rule['min_sites']}. A marker was deleted from a file "
+                f"that still has another."
+            )
         if len(files) < rule["min_files"]:
             errors.append(
                 f"fact:{fact} is tagged in {len(files)} file(s) "

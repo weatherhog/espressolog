@@ -47,7 +47,8 @@ static size_t pending_w_n = 0;
 // Level conditioning — the bus is 5 V and these pins are NOT 5 V tolerant:
 //
 //     J5 line --[ 8.2K ]--+-- GPIO
-//                         +--[ 15K ]-- GND
+//                         +--[ 15K ]-- GND   <- AS BUILT; use 16.4K (2x8.2K)
+//                                               on the perfboard, see below
 //
 // Safe whichever way the line is driven AT NOMINAL -- the corner is a
 // separate question and 15K fails it, see below: 3.23 V at the pin if push-pull,

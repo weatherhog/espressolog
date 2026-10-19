@@ -275,12 +275,12 @@ tighter than they need to be for the sake of a few euro.
 
 | Value | Qty | Where |
 |---|---|---|
-| 8.2 kΩ | 10 | 0e T-piece, series leg (**×3** — `ESD1`, `ESD4`, `Disp-P4`); 0b analyser tap (×3). **Bought: 25.** |
+| 8.2 kΩ | 10 | 0e T-piece, series leg (**×3** — `ESD1`, `ESD4`, `Disp-P4`); **0e shunt legs, ×4 — two in series per leg to make 16.4 kΩ, on `ESD1` and `ESD4` only** (new 2026-10-19, replaces the 15 kΩ); 0b analyser tap (×3). **Bought: 25**, so the extra 4 are covered. |
 | 15 kΩ | 10 | **SUPERSEDED for 0e — do not fit.** Was the 0e divider ground leg; it fails its tolerance corner at −70 to −87 mV (2026-10-19). **Use 2 × 8.2 kΩ in series = 16.4 kΩ** per leg (**×2** — `Disp-P4` stays unterminated). Both in stock, no new parts. |
 | 150 kΩ | 10 | 0c switch divider, series leg (**×4** — all four J2 lines). **In stock 2026-10-07.** |
 | 220 kΩ | 10 | Ground leg: **×4 at J2** (1Cup, 2Cup, Steam, Water) **+ ×1 at J4** = **5**. **In stock.** |
 | 10 nF ceramic | — | **CANDIDATE, do not buy yet.** ×1 across the J4 220 K shunt, 218 Hz. Nothing has been fitted and there is no before/after; it may raise the glitch count by slowing the falling edge to ~1.1 ms through the noise band. Decide after the re-measurement in `phase-0-status.md`. |
-| 470 pF ceramic | — | **CANDIDATE, weaker case than J4's.** ×2 across the J5 15 K shunts, **never 10 nF** (69 µs against 36 µs clock highs stops the bus decoding). But the J5 drops look like serial polling, not coupling. `phase-0-status.md` already carried this value as a contingent remedy after raising the shunt to 16.4 K. |
+| 470 pF ceramic | — | **CANDIDATE, weaker case than J4's.** ×2 across the J5 shunts — **now 16.4 kΩ, not the 15 kΩ this row used to name**, so the sizing below needs redoing before it is bought. **Never 10 nF** (69 µs against 36 µs clock highs stops the bus decoding). But the J5 drops look like serial polling, not coupling. `phase-0-status.md` already carried this value as a contingent remedy after raising the shunt to 16.4 K — **that raise is no longer contingent; the capacitor still is.** |
 | 1 kΩ | 10 | 0d flowmeter, **at PA8/PA9 only** — the board side, after its own conditioning. **Never at J4.** **In stock.** |
 | 8.2 kΩ (J4) | — | **J4 ANALYSER tap only: 8.2 kΩ, one channel, `#` only, no shunt.** The ESP32 tap at J4 is **100 K + 220 K** — see the 0d entry in `docs/phase-0-status.md`. Covered by the 8.2 kΩ bag above. |
 | **330 Ω (or 390 Ω)** | 20 | **PhotoMOS LED drive, ×4 — NOT IN STOCK, added 2026-10-12.** AQY212EH is guaranteed to operate at 3.0 mA and wants 5–10 mA; 330 Ω from 3.3 V gives ~6 mA. **Do not substitute the in-stock 1 kΩ** — it gives ~2 mA, above typical and below guaranteed, which is the one range that works on the bench and fails in service. 680 Ω if driving from 5 V instead. |
@@ -323,9 +323,9 @@ because the machine caught it:
   recommended it on floor margin alone and it puts the clamp into continuous
   conduction. See `docs/phase-0-status.md`.
 - **Do not enable an internal pull-down on 0e.** The internal ~45 K across the
-  shunt leg drops the open-drain case below VIH. *(The 2.33 V in
-  `main.cpp` is **15 K arithmetic**; at 16.4 K it is 2.41 V — still under the
-  2.475 V VIH, so the warning holds at either value. `main.cpp` is annotated.)*
+  shunt leg drops the open-drain case below VIH — **2.41 V at the specified
+  16.4 K**, against a 2.475 V VIH. *(`main.cpp` quotes 2.33 V, which is 15 K
+  arithmetic; the warning holds at either value and `main.cpp` is annotated.)*
   The internal 45 K across the 15 K leg drops the open-drain case to
   2.33 V and the pin stops reading high.
 

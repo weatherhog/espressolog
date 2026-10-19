@@ -980,7 +980,7 @@ tap is specified to be safe *whichever way the line is driven* (`main.cpp:52`,
 and this file at the T-piece entry); **the drive type has never been
 established**, so both columns bind:
 
-| shunt | **OD corner** (pu 1 %) | **OD corner** (pu 5 %) | **PP worst** | vs flat 3.600 V | vs 3.435 V | disturbance |
+| shunt | **OD corner** (pu 1 %) | **OD corner** (pu 5 %) | **PP worst** | vs flat 3.600 V | ~~vs 3.435 V~~ † | disturbance |
 |---|---|---|---|---|---|---|
 | **15 kΩ — AS BUILT** | **−70 mV ✗** | **−87 mV ✗** | 3.418 V | +182 mV | **+17 mV** | 16.8 % |
 | 16.4 kΩ — the specified remedy | **+35 mV** | **+18 mV** | 3.523 V | +77 mV | **−88 mV** | 16.0 % |
@@ -991,7 +991,9 @@ established**, so both columns bind:
 *(OD = open-drain through the board's 4.7 K pull-ups, worst case for reading
 HIGH: machine rail −5 %, VIH 2.60 V, shunt −1 %, series and pull-up +1 %.
 PP = push-pull, worst case for the pin: machine rail +5 %, shunt +1 %, series
-−1 %. **Both pull-up columns are given because the 4.7 K is a
+−1 %. **† The "vs 3.435 V" column is SUPERSEDED** — it treats VDD + 0.3 as a
+hard wall, which the clamp-current analysis below withdraws. Left visible
+because the figures were published; do not read the ✗/✓ marks in it. **Both pull-up columns are given because the 4.7 K is a
 community-schematic value, never metered** — a draft quoted only the
 favourable one while calling it the pessimistic variant.)*
 
@@ -1014,49 +1016,67 @@ unpowered while the machine is on"* — a far worse case than this one. The J4
 section does it too, accepting VDD + 174 mV as benign because *"a clamp diode
 does not conduct meaningfully below ~0.4 V"*.
 
-| shunt | PP corner | over VDD | clamp current |
-|---|---|---|---|
-| **16.4 kΩ** | 3.523 V | +223 mV | **0 — below conduction** |
-| 17.4 kΩ | 3.591 V | +291 mV | **0 — below conduction** |
-| 18 kΩ | 3.629 V | +329 mV | ~0 |
-| 23.2 kΩ | 3.899 V | +599 mV | ~24 µA — **clamp conducting continuously** |
+| shunt | PP corner | over VDD nom | over VDD at −5 % | past ~0.4 V? |
+|---|---|---|---|---|
+| 15 kΩ (as built) | 3.418 V | +118 mV | +283 mV | no |
+| **16.4 kΩ** | 3.523 V | +223 mV | **+388 mV** | **no — by 12 mV** |
+| 17.4 kΩ | 3.591 V | +291 mV | +456 mV | **yes** |
+| 18 kΩ | 3.629 V | +329 mV | +494 mV | **yes** |
+| 23.2 kΩ | 3.899 V ‡ | +599 mV | +764 mV | **yes, by far** |
 
-**So the ceiling binds softly, and 16.4 kΩ clears it with room.** 23.2 kΩ is
-still wrong — not because it destroys anything, but because it puts the clamp
-into conduction on every high phase, which distorts the signal and is not
-something to design in deliberately.
+*(‡ 3.899 V is the **open-circuit** divider output. Once the clamp conducts
+the pin never actually reaches it — the clamp and the 8.2 K form a second
+divider and the pin sits lower, which is why the row is wrong to fit rather
+than dangerous. The ~24 µA quoted earlier used that open-circuit figure and
+so overstates the current; no better model has been worked out, and none is
+needed to reject the value.)*
+
+*(A first version of this table subtracted a **nominal** 3.300 V from
+push-pull voltages computed at a machine rail of +5 % — mixing corners, which
+is the exact defect corrected in the 16.4 K remedy passage further down this
+file. Both columns are shown now. The −5 % column is the one that governs.)*
+
+**16.4 kΩ clears it by 12 mV, not by the 177 mV the first version implied.**
+That is thin, and it is a *soft* threshold — "~0.4 V" is where a silicon
+diode starts conducting meaningfully, not a cliff — so the conclusion holds
+while the comfort does not. **17.4 kΩ and 18 kΩ do NOT clear it**, which
+removes the "17.4 buys five times the margin" alternative a draft floated.
 
 **THE SOBER CONCLUSION, after this section reversed itself three times in one
-day:**
+day. Note how little of it is new:**
 
-- **The floor failure is real and is the solid finding.** As built, 15 kΩ sits
-  at **−70 to −87 mV** and must not go onto the perfboard.
+- **The floor failure is the solid finding.** As built, 15 kΩ sits at
+  **−70 to −87 mV**. It must not go onto the perfboard. This has survived
+  every round.
 - **Fit 16.4 kΩ** — two 8.2 K in series, 25 in stock. **+18 mV** at the
-  pessimistic floor corner, clamp not conducting at the ceiling corner, node
-  disturbance **16.0 %** against the built 16.8 %, loading 171 µA against
-  179 µA. It is what this repo specified before any of this, with the
-  push-pull case worked out beside it at the time.
-- **+18 mV is thin and that is the honest number** — not the +43 mV a draft
-  reached by taking the unmetered 4.7 K's tolerance in its own favour.
+  pessimistic floor corner, node disturbance **16.0 %** against the built
+  16.8 %, loading 171 µA against 179 µA, and the clamp stays off at the
+  ceiling corner with little to spare. **This is the value this repo
+  specified before any of this analysis started**, which is the strongest
+  thing that can be said for it: three rounds of argument ended where the
+  original specification already was.
+- **Everything above 16.4 kΩ is ruled out** — by the clamp threshold at 17.4
+  and 18, and by continuous clamp conduction at 23.2.
 
-**THE DRIVE-TYPE MEASUREMENT IS STILL WORTH TAKING — IT IS JUST NOT
-BLOCKING**, as a draft claimed when it told the reader to fit nothing. If J5
-is confirmed open-drain the ceiling stops mattering altogether and 18–22 kΩ
-open up with triple the floor margin.
+**THE DRIVE TYPE IS STILL UNTESTED, AND NOBODY HAS A WORKING PROCEDURE FOR
+IT. Two have been proposed in this file and both are wrong:**
 
-**AND THE METHOD THAT DRAFT GAVE CANNOT WORK.** It said to *"meter the J5
-line: ~4.16 V means open-drain, ~5.0 V means push-pull."* **`ESD1`/`ESD4` are
-the clock and data — they switch continuously**, so a DC meter reads a
-duty-cycle mean rather than a level, and a push-pull line would read low and
-be called open-drain. It also cannot separate push-pull from a pull-up
-stronger than the schematic's 4.7 K.
+| attempt | why it fails |
+|---|---|
+| "meter the J5 line: ~4.16 V = open-drain, ~5.0 V = push-pull" | `ESD1`/`ESD4` switch continuously, so a DC meter reads a duty-cycle mean, not a level. A push-pull line reads low and is called open-drain. |
+| "J5 unplugged, read pin-to-5 V in Ω mode" | **there is no +5 V on J5** — it is ground plus three signals. And this file records that probing the J5 *board header* gave no continuity at all, which is why the T-piece window is the only place readings are obtainable. It returns a false null indistinguishable from push-pull. |
 
-> **Use the method that solved J4: meter the resistance, unpowered.** Machine
-> off, J5 unplugged, read pin-to-5 V in Ω mode. An open-drain line shows the
-> pull-up (~4.7 K if the schematic is right); a push-pull output shows no such
-> path. That is how J4's 10.04 kΩ and 147.4 kΩ were established — and it
-> **also meters the 4.7 K itself**, which every number in the table above
-> scales with and which has never been measured.
+**Constraints any valid procedure must satisfy**, recorded so the third
+attempt is not also wrong: it cannot be a DC voltage on a switching line; it
+cannot ohm against a 5 V pin that J5 does not have; and **it must not touch
+J4's `+`**, which is the one hard read-only rule in this project and which an
+ohmmeter would violate by sourcing current.
+
+**This is not blocking.** 16.4 kΩ is correct under either drive type. Settling
+it would only *unlock* larger shunts — and the table above now shows those are
+ruled out by the clamp threshold anyway, so the measurement has lost most of
+its value. **Record it as open and move on**; the schematic's 4.7 K is the
+working assumption and nothing currently depends on confirming it.
 
 **WHY THE DRAFT REJECTED IT, AND WHY THAT ARGUMENT WAS WRONG.** It said 16.4 K
 buys "+18 mV, thinner than the **25 mV** that got 220 K / 220 K rejected at
@@ -1720,6 +1740,12 @@ the display is back in temperature mode, so edges lost there cost nothing.
    commutation spike above 210 mV corrupts frames intermittently, which is
    the worst kind of fault to chase.
 
+   **The first of these is NO LONGER CONTINGENT — 15 K fails its corner and
+   16.4 K is now the specified value regardless of whether drops occur.** The
+   second remains contingent. Read what follows with that split in mind; its
+   sizing inputs (5.3 kΩ source, 210 mV margin) are **15 K figures** and would
+   need redoing at 16.4 K.
+
    Two remedies if it happens, cheapest first. **Raise the shunt leg to
    16.4K (2 × 8.2K in series)**: the pin then sits at 2.80 V instead of
    2.69 V, so the margin goes 210 mV → 325 mV, loading is unchanged
@@ -1822,6 +1848,10 @@ the display is back in temperature mode, so edges lost there cost nothing.
    back on J5's `VSS`. That makes this tap's ground conductor load-bearing
    for 0c as well as 0e, and it is why one box is the right shape rather
    than three.
+
+   **SHUNT VALUE SUPERSEDED 2026-10-19: use 16.4 K (2 × 8.2 K), not 15 K** —
+   the 15 K fails its tolerance corner. The diagram and table above record
+   what is currently fitted. See the J5 corner section.
 
    Safe either way the line is driven *at nominal*: 3.23 V at the pin if
    push-pull, 2.69 V if open-drain via the board's 4.7K pull-ups (VIH 2.48 V),

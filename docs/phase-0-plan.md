@@ -677,11 +677,20 @@ does not work:
       has measured.
     - **The test is not free when it finds something, and "the board latches"
       is not established.** If device 1 has already failed short, energising
-      device 2 alone *is* a press. Whether a ~120 ms press starts a cycle is
-      **unknown** — CLAUDE.md records that the shortest press this board
-      latches has never been measured, and every press ever recorded was
-      345-480 ms — **a figure superseded 2026-10-19**, which logged latching
-      presses at 195-295 ms and at a poller-measured 80-90 ms; see CLAUDE.md.
+      device 2 alone *is* a press.
+
+      **Whether a ~120 ms press starts a cycle is still unknown, but the
+      reason has changed and this passage stated the old one until
+      2026-10-19.** It read *"the shortest press this board latches has never
+      been measured, and every press ever recorded was 345-480 ms"*. Both
+      halves are now false: 2026-10-19 logged presses **observed to latch** at
+      a poller-measured 80-90 ms, so the threshold is **below ~140 ms** once
+      the poller's 42-57 ms quantisation is carried through.
+
+      **That does NOT clear ~120 ms.** The upper end of the quantised band is
+      137 ms, which is longer than 120, so the margin may be negative — see
+      CLAUDE.md. The question is open on a **tighter** bound than before, not
+      on no bound at all.
       So either it runs a cycle (the spurious cycle is the alarm,
       at the price of an unwanted flush) or it does not (and the detection
       story needs the sense line read directly instead). **Measure the minimum

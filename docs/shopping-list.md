@@ -313,7 +313,13 @@ because the machine caught it:
   hypothesis for the `E01` would make dangerous, and it has not been ruled
   out. The mechanism is **not** established; see the 0d entry before
   treating this as settled history.
-- **0e must be 8.2 K / 15 K, and do not enable an internal pull-down.**
+- **0e is 8.2 K / 15 K as built — and the perfboard should be 8.2 K / 23.2 K.**
+  The corner was run 2026-10-19: 15 K gives **−70 mV**, the 16.4 K remedy this
+  file mentions elsewhere gives only +35 mV (+18 mV if the machine's pull-up is
+  a 5 % part), and **23.2 K — one 8.2 K in series with the 15 K, no new parts —
+  gives +431 mV** and cuts the invariant-1 disturbance from 16.8 % to 13.0 %.
+  See `docs/phase-0-status.md`.
+- **Do not enable an internal pull-down on 0e.**
   The internal 45 K across the 15 K leg drops the open-drain case to
   2.33 V and the pin stops reading high.
 

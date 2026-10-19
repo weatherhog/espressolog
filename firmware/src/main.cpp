@@ -379,8 +379,14 @@ static void reportSwitch(const SwitchBank::Event& e) {
 // FALLBACK: a 1Cup/2Cup/Water press, for when the J5 tap is not fitted or
 // the bus has gone stale. Then a press is the only start-of-cycle signal
 // there is, and the stored duration is user-modifiable state we do not know
-// — 1Cup is ~10.5 s on this machine, 2Cup's value is UNKNOWN and the
-// default is 60 s. BREW_GUARD_MS covers the long case; it is deliberately
+// — 1Cup is ~10.5 s on this machine and 2Cup is 45 s (operator, set
+// deliberately, 2026-10-19; the factory default is 60 s). This comment said
+// 2Cup was UNKNOWN until then.
+//
+// NEITHER IS THE BINDING CASE. Lever B latches the same way and a hot-water
+// draw runs for "a couple of minutes" before the machine self-terminates, so
+// BREW_GUARD_MS (75 s) can expire with the pump still running. See
+// brew_guard.h. BREW_GUARD_MS covers the long case; it is deliberately
 // generous because the cost of being wrong is a stalled pour, while the
 // cost of being conservative is only that an upload waits a minute.
 static BrewGuard brew_guard;

@@ -19,7 +19,15 @@ Violating any of these is a bug, not a design choice.
 
    **How high-impedance, honestly:** J4 disturbs its node by **2.9 %**, J2
    by ~1 mV, but **J5 pulls its line from 5.0 V to 4.16 V — a 17 %
-   disturbance at 179 µA**, measured. An earlier draft of this clause said
+   disturbance at 179 µA**. **That J5 figure is CALCULATED, not measured, and
+   this clause called it measured until 2026-10-19.** It entered at `7182c56`
+   as *"4.7 K pull-ups, so a 23.2 K divider leaves them at 4.16 V"* — the
+   "so" is a derivation — and no meter reading of that node exists. The
+   179 µA is the same arithmetic again (0.84 V / 4.7 K). J2's ~1 mV is
+   likewise calculated; **J4's 2.9 % is the only one of the three backed by a
+   meter**, and there the same model predicted 4.681 V against a measured
+   4.69 V, which is the reason to trust the J5 number while still grading it
+   honestly. An earlier draft of this clause said
    "microamps against the machine's own milliamps", which is false for J5.
    The threshold is *does the machine still read what it would have read*,
    not an absolute current.
@@ -220,7 +228,9 @@ lead routing. The conclusion is sound — a swap of 2/5 would have logged
   own.** The second press is a real stop signal on a line already polled, so
   press N to press N+1 is the exact window — but **the machine self-terminates
   without any second press**, and then `busy()` never clears. That is the
-  latched-busy-forever failure `brew_guard.h` already warns about, and it
+  latched-busy-forever failure `brew_guard.cpp:24-30` already warns about
+  (**not `brew_guard.h`** — a draft cited the header; the warning, and the
+  account of the draft that latched busy forever, are in the .cpp), and it
   would block flash writes indefinitely: strictly worse than a guard that is
   sometimes short. **Any edge-driven design needs an upper bound as well**,
   and that bound needs the self-terminate period measured — "a couple of
@@ -285,10 +295,35 @@ safety argument** — and `firmware/test/host/brew_guard_test.cpp:72`.
 | `brew_guard.cpp:21` | still bare — revisit after the analyser redo |
 | `main.cpp:1109` | still bare — revisit after the analyser redo |
 
-The last two are comments about *timing headroom* where the exact figure is
-not load-bearing, which is why they are left rather than churned. **An
-enumeration offered as complete and not checked is worse than no
-enumeration**, because it stops the next reader grepping.
+`brew_guard.cpp:21` and `main.cpp:1109` are comments about *timing headroom*
+where the exact figure is not load-bearing, which is why they are left rather
+than churned.
+
+**AND THAT TABLE WAS WRONG TOO — IT SAID "FOUR" AND THERE ARE AT LEAST SIX.**
+Two more cite 345-480 as **live evidence**, which is worse than citing it as
+a timing constant:
+
+| | |
+|---|---|
+| this file, the **GPIO 7/15 confirmation row** | *"logged as 'correct GPIO mapping, taps of 345-480 ms'"* — **annotated 2026-10-19** |
+| `docs/phase-0-status.md`, the **Settled** table | *"taps of 345–480 ms"* — **annotated 2026-10-19** |
+
+**So the enumeration offered as complete has now been wrong twice in two
+successive commits**, the second time in the very paragraph condemning the
+first.
+
+**AND THE FIRST DRAFT OF THIS VERY TABLE CITED `CLAUDE.md:1157`, WHICH WAS
+ALREADY 1189 BY THE TIME THE COMMIT LANDED** — the paragraph above it grew,
+and the line number drifted while it was being written. Same-file line
+numbers are unstable *within a single edit session*, which is a sharper
+version of the `main.cpp:377` → `:445` drift this file already logs.
+
+**Two rules follow, and they are the actual lesson:**
+
+- **Cite same-file locations by section or quoted content, never by line
+  number** — done above. Cross-file line numbers are safer but still drift.
+- **A prose list is the wrong instrument.** `grep -rn '345.480'` is the right
+  one; it cannot be stale. Run that, not this table.
 
 **It was questioned for a good reason, and the reason is worth keeping.** The
 written bench sequence for that step (`docs/phase-0-status.md`) reads *"jumper
@@ -593,7 +628,15 @@ both hazards, but both are flagged as such.)
   loading it is unknown.** That is reason enough to fit nothing. `docs/shopping-list.md` specifies `Disp-P4` as branched through
   8.2 K and **terminated at nothing**, and that is the built configuration.
 
-**So: the 8.2 K / 15 K divider is correct on `ESD1` and `ESD4`, and the 15 K
+**So: the 8.2 K / 15 K divider is correct on `ESD1` and `ESD4`** — correct as
+against the 8.2 K / 8.2 K that was mistakenly fitted, which is the error this
+passage was written about. **It is NOT the right value for the perfboard:**
+2026-10-19 ran its tolerance corner for the first time and it comes out at
+**−70 mV**, worse than the −45 mV that got 150 K / 220 K rejected at J4.
+`docs/phase-0-status.md` has the table and the fix (**23.2 K shunt — one 8.2 K
+in series with the 15 K, both in stock, +431 mV, and it *lowers* the
+invariant-1 disturbance from 16.8 % to 13.0 %**). The built board decodes and
+is not an emergency; the perfboard should not copy it. **And the 15 K
 shunt must NOT be fitted to `Disp-P4`.** Branch it through its 8.2 K for
 symmetry if you like, leave the far end open, and never hang anything on it
 that can source or sink current.
@@ -1154,7 +1197,7 @@ inflated.
 |---|---|
 | 4, 5 | the bus **decoded frames**. A swapped pair gives `frames=0` — this file's own documented signature — so this fixes *which is which*, not merely that both are right |
 | 6 | **736 counts** across shot 2, and `selftest` 500/500 at 100 Hz |
-| 7, 15 | **lever A**, logged as "correct GPIO mapping, taps of 345-480 ms" — same full chain as 16/17 |
+| 7, 15 | **lever A**, logged as "correct GPIO mapping" — same full chain as 16/17. *(This row quoted "taps of 345-480 ms" as evidence until 2026-10-19; that is one session's presses, superseded above. The GPIO conclusion is unaffected — it never depended on the width.)* |
 | 16, 17 | lever B down logged `steam`, up logged `water` |
 | 8 | `selftest` into GPIO6 — **not independent, see below** |
 
@@ -1882,7 +1925,7 @@ the flow data is comparable across it and no confound is introduced.
 was not re-verified against the gauge.** The reading that established 11 bar
 was taken before the adjustment, and "I put it back" is an action, not a
 measurement. Re-read it with the blind basket at the next opportunity —
-experiment 0b moves the screw twice more and the same applies there.
+experiment 0d-ii moves the screw twice more and the same applies there.
 
 **THE OPV SETTING IS ADJUSTABLE STATE, AND NOTHING RECORDS IT.** That puts it
 in the same class as `grind_epoch` (invariant 5): a number relative to a zero
@@ -1916,7 +1959,7 @@ because it supported the more interesting story.
 
 **WHICH MAKES THE SPLIT THE MEASUREMENT TO TAKE.** Every "~5×" in this
 document inherits that assumption. `inlet = yield + puck retention + 3-way
-dump`, and all three are weighable — see experiment 0a.
+dump`, and all three are weighable — see experiment 0d-i.
 
 **The free-flush half is untouched by any OPV question** — no basket, no
 pressure, nothing relieving, and the meter still read 5915–6508 pulses/L
@@ -1940,7 +1983,7 @@ this is now the **third** instance, after the GPIO silkscreen check and the
 
 #### The experiment that separates them
 
-**0a. WEIGH THE SPLIT. Do this one first — it is cheaper than everything
+**0d-i. WEIGH THE SPLIT. Do this one first — it is cheaper than everything
 below and every "~5×" in this document depends on it.**
 
 `inlet = yield + puck retention + 3-way dump`. Weigh the loaded portafilter
@@ -1952,7 +1995,7 @@ weighings and a subtraction.
 and a constant 2.483× over-count with a ~30 % split fits the same data with no
 relief at all.
 
-**0b. RAISE THE OPV AND PULL ONE NORMAL SHOT.** The operator owns the
+**0d-ii. RAISE THE OPV AND PULL ONE NORMAL SHOT.** The operator owns the
 adjustment since 2026-10-19, so pressure can be moved without touching the
 grind.
 
@@ -1984,7 +2027,7 @@ above that. The gauge is the only thing that tells you which happened:
 **20 079 per litre of yield**. Comparing one to the other is meaningless. Do
 it in whichever of these the 0a weighing makes available:
 
-| if 0a has been done | compare **counts per litre of measured inlet** against the flushes' 5915–6508 |
+| if 0d-i has been done | compare **counts per litre of measured inlet** against the flushes' 5915–6508 |
 |---|---|
 | if it has not | compare this shot's counts/yield against a **normal-pressure shot's** counts/yield, same grind, same session — a ratio, not an absolute |
 
@@ -1995,7 +2038,7 @@ shot; at 14 bar it will not taste like anything.
 — the 11 bar figure is only as good as the last time the gauge was read
 against it, and this procedure moves the screw twice.
 
-**BOTH 0a AND 0b NEED THE J4 TAP, WHICH MEANS REFITTING THE CONNECTOR BEHIND
+**BOTH 0d-i AND 0d-ii NEED THE J4 TAP, WHICH MEANS REFITTING THE CONNECTOR BEHIND
 THE 2026-10-03 `E01` INCIDENT.** It is currently unplugged (see the bench-rig
 entry in `docs/phase-0-status.md`). **Watch for the fault on first contact**,
 and note that `+` connects to nothing, ever. This warning sat at the foot of a
@@ -2007,7 +2050,7 @@ unit trap only, which is the part people get wrong: yield is not inlet, so a
 correctly-reading meter gives **2382 / 0.6 ≈ 3970 pulses per litre of
 YIELD**, not 2382 — and a confirming result would land at ~1.7× the datasheet
 and read as "nothing settled". **Do not use the 3970 as a live threshold**:
-the 60 % it rests on is exactly the number experiment 0a exists to replace,
+the 60 % it rests on is exactly the number experiment 0d-i exists to replace,
 and the same arithmetic appears above with that caveat attached.)*
 
 *(A draft of this section promoted the analyser on `#` to first instead. That
@@ -2286,6 +2329,12 @@ wired to the ESP32 and `boiler_temp_start_c` / `machine_timer_s` land in
 the database off the machine's own display. Conditioning: 8.2 K series at
 the T-piece, 15 K shunt at the board, `ESD4`→GPIO4, `ESD1`→GPIO5, `VSS`
 ground direct, `Disp-P4` unterminated.
+
+**THE 15 K SHUNT FAILS ITS TOLERANCE CORNER AT −70 mV — run 2026-10-19, for
+the first time.** That is the as-built value and it decodes, so this is the
+record of what is fitted; **the perfboard should use 23.2 K** (8.2 K + 15 K in
+series, both in stock). Table, corner method and the reason the previously
+specified 16.4 K remedy is also too thin: `docs/phase-0-status.md`.
 
 **A capacitor here is NOT currently justified, and a 2026-10-09 edit said it
 was.** That edit attributed 6086 dropped display edges to pump coupling and

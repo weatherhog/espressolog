@@ -387,10 +387,10 @@ Everything on the breadboard, all three T-pieces in the machine, firmware
 | | |
 |---|---|
 | **`selftest`** | **500/500, 0 glitches, 0 ring drops** at 100 Hz — 6.3× the rate at the sensor's rated max flow (0.40 L/min × 2382 = 15.9 Hz). The one thing host tests cannot establish, because a real shot has no independent count to check against. |
-| **All four switches** | correct GPIO mapping, taps of 345–480 ms, no false reprogram |
+| **All four switches** | correct GPIO mapping, no false reprogram. *(The "taps of 345–480 ms" this row carried is **one session's** presses — 2026-10-19 logged 195-295 ms and 80-90 ms, all latching. See CLAUDE.md.)* |
 | **Lever B** | **plug inspection → functional.** B up logged `water`, B down logged `steam` |
 | **J4 first contact** | **no `E01`.** The 100 K + 220 K is energised and the machine has not noticed — the tap that faulted it on 2026-10-03 |
-| **Worst poll gap** | **10 ms** against ~400 ms presses. Polling stays; it goes into the perfboard |
+| **Worst poll gap** | **10 ms** on 2026-10-08 against that session's ~400 ms presses — **both halves of that ratio are superseded.** 2026-10-19 measured **42-57 ms** against **80-90 ms** presses, and missed two of six. The 40:1 headroom this row claimed is ~1.6:1. See the poll-gap reconciliation below; polling still stays, for reasons that are no longer this number |
 | 0d end to end | the PATH works — `inlet_pulses` reaches `shot_sample`. **What the numbers mean is unresolved**; see CLAUDE.md 0d |
 | **K-factor** | datasheet **2382 pulses/L** for our exact part. In-circuit counts are ~5× that and **what they are is unresolved** — see CLAUDE.md 0d |
 
@@ -604,6 +604,26 @@ interrupts could. The risk it does carry is a press missed inside a long
 `loop()` stall — so the worst poll gap is **measured and printed in
 `status`** rather than assumed. If the bench shows gaps near a press length,
 this becomes interrupt-driven, and the measurement will be the reason.
+
+> **THAT TRIGGER FIRED ON 2026-10-19 AND THE FIRST WRITE-UP DID NOT SAY SO.**
+> The bench showed gaps of **42-57 ms** against presses of **80-90 ms** — not
+> merely "near a press length" but **~60 % of one** — and **two of six presses
+> went unlogged**. This was a pre-registered decision rule with its evidence
+> delivered, and the session recorded the gap, recorded the misses, and left
+> the rule unmentioned.
+>
+> **It does not fire on its own merits, though, and that is the one thing
+> saving it.** The rule was written for the *polling* design; the 2026-10-19
+> session also established that the switch log **is not an instrument below
+> ~100 ms**, so interrupt-driving it would sharpen a measurement this project
+> has no use for — presses are tens to hundreds of ms and the guard runs from
+> the press. **And the analyser redo supersedes both**: microsecond edges on a
+> J2 junction answer the pulse-width question that motivated the rule, without
+> four more edge interrupts on machine-facing lines.
+>
+> So: **the rule is retired, not satisfied** — and retiring it deliberately is
+> the point, because a pre-registered trigger that fires and is silently
+> dropped is worth less than no trigger at all.
 A missed press is also not silent: the display bus runs the machine's own
 shot timer, so a brew with no switch event still leaves a trace.
 
@@ -876,7 +896,15 @@ safe, which is about the *analyser*. The question it skipped is whether the
 - **It is still not nothing.** HC leakage runs to ~1 µA over temperature, and
   the junction's source impedance is 150 K ∥ 220 K = **89 kΩ** → up to
   **89 mV**. 0c's documented worst-case corner is **+203 mV**. So worst case
-  eats nearly half of it, and nothing here has been measured.
+  eats nearly half of it.
+
+**MEASURED 2026-10-19, and this paragraph said "nothing here has been
+measured" after the reading was taken.** Probe on and probe off both read
+**2.89 V** at the J2 junction — a difference below meter resolution, so under
+~10 mV against the 89 mV worst case. **The worst case is not retired**: 1 µA
+is a max over the part's full temperature range and this is one line at one
+temperature on a bench. What it does establish is that **the analyser is fine
+to use on a J2 junction**, which is the only place it is ever used.
 
 **Settle it with the measurement already on the list.** The junction millivolt
 reading with a lever held is a prescribed step — **take it twice, with and
@@ -936,23 +964,56 @@ figure, not the ESP32-S3's** — this repo uses **2.475 V** nominal and
 220 K / 220 K at 0c. Corrected above; the diagnosis is unaffected, the
 *margins* were flattered by 165 mV.
 
-**AND J5's REMAINING MARGIN DESERVES THE TREATMENT J4's DIVIDERS GOT.**
-+215 mV nominal shrinks further at the corner the 0d table uses — rail low,
-VIH high, resistor tolerance — and **−45 mV at corner is exactly the figure
-that got 150 K / 220 K rejected at J4**. Nobody has run that corner for
-8.2 K / 15 K. It is the built configuration and it decodes, so this is not an
-emergency; it is an unexamined assumption that should not reach the perfboard
-unexamined.
+#### THE CORRECT J5 DIVIDER FAILS THE SAME CORNER THAT REJECTED 150 K AT J4
 
-**And a remedy is already specified in this file** — *"raising the shunt to
-16.4 K"*, with ~470 pF as a contingent second step. A draft of this paragraph
-wrote "nobody has run that corner" without mentioning it, which reads as
-though no one had thought about J5's margin at all. The corner analysis is
-missing; the remedy is not.
+Two successive drafts wrote *"nobody has run that corner for 8.2 K / 15 K"*.
+**It has now been run, and 8.2 K / 15 K does not pass it.** Same method as the
+0d table: machine rail −5 %, ESP rail +5 % (VIH **2.60 V**), 1 % on our pair.
 
-The 4.16 V in the top row is the figure this repo already records as measured
-(*"J5 pulls its line from 5.0 V to 4.16 V, a 17 % disturbance at 179 µA"*),
-which is a decent check that the model is right.
+| shunt | nominal pin | nominal margin | **corner** | node | disturbance |
+|---|---|---|---|---|---|
+| **15 kΩ — AS BUILT** | 2.688 V | +213 mV | **−70 mV ✗** | 4.16 V | 16.8 % |
+| 16.4 kΩ — the specified remedy | 2.799 V | +324 mV | **+35 mV** | 4.20 V | 16.0 % |
+| 22 kΩ | 3.152 V | +677 mV | **+372 mV** | 4.33 V | 13.5 % |
+| **23.2 kΩ (8.2 K + 15 K in series)** | **3.213 V** | **+738 mV** | **+431 mV ✓** | **4.35 V** | **13.0 %** |
+
+*(The machine's 4.7 K pull-up tolerance is unrecorded. At 5 % rather than 1 %
+the as-built corner is **−87 mV** and the 16.4 K remedy drops to **+18 mV**.)*
+
+**Three things follow, and the first two are worse than the draft implied:**
+
+- **As built, J5 is a −70 mV corner — worse than the −45 mV that got
+  150 K / 220 K rejected outright at J4.** The rejection reason there was
+  "looks fine nominally, fails on tolerance stacking". That is this, exactly.
+- **The already-specified remedy is NOT sufficient either.** 16.4 K buys
+  +35 mV, or **+18 mV** if the machine's pull-up is a 5 % part — thinner than
+  the **25 mV** that got 220 K / 220 K rejected at 0c for being inside supply
+  tolerance. A draft of this paragraph offered 16.4 K as the answer. It is the
+  same class of mistake as the thing it was fixing.
+- **23.2 kΩ is the buy, and it needs no parts.** One 8.2 K in series with the
+  15 K already fitted — both in stock, 25 of the 8.2 K — gives **+431 mV**
+  (**+415 mV** if the machine's pull-up is a 5 % part), which is J2's margin.
+  It also **reduces the invariant-1 disturbance from 16.8 % to 13.0 %**, i.e.
+  the pin that invariant 1 singles out as this project's worst offender gets
+  *better*, not merely adequate.
+
+**Why it decodes anyway at −70 mV**: a corner is not an operating point. The
+real rail is near 5.0 V, real 1 % parts are not all aligned, and the bench is
+not a boiler housing. 363 clean frames say the nominal case works; they say
+nothing about the corner, which is the whole reason J4's table exists.
+
+**THE 4.16 V IS NOT AN INDEPENDENT CHECK ON THIS, AND A DRAFT USED IT AS ONE.**
+It wrote that 4.16 V *"is the figure this repo already records as measured"*,
+so the model agreed with a measurement. **It is the same calculation.** It
+entered at `7182c56` as *"4.7 K pull-ups, so a 23.2 K divider leaves them at
+4.16 V"*, and no meter reading of that node exists — see invariant 1, where
+the word "measured" has now been corrected. Checking 5 × 23.2/27.9 against
+5 × 23.2/27.9 confirms arithmetic, not hardware.
+
+**What DOES support the model is J4**, where the same resistive-divider
+treatment predicted 4.681 V and the meter read 4.69 V. That is a real
+validation of the method, on a different connector, and it is why the table
+above is worth acting on without re-metering J5 first.
 
 **Why it presented as intermittent rather than dead**: at 1.94 V the pin sits
 just under threshold, so polled `pins` reads flickered between 0 and 1 and
@@ -967,8 +1028,29 @@ shunt 15 kΩ at the board — the two are not interchangeable.
 #### The switch poller has a resolution floor, and the counter that looks like it would warn you does not
 
 Six 1Cup presses at 80-90 ms: **four logged, two not.** `worst poll gap` was
-**50 ms**, so a press is ~1.6 poll intervals and a third going missing is what
+**~50 ms**, so a press is ~1.6 poll intervals and a third going missing is what
 polling at that rate does.
+
+**THREE DIFFERENT POLL-GAP FIGURES APPEAR FOR THIS ONE SESSION. They are one
+number at three times, and the load-bearing bound depends on which:**
+
+| figure | when |
+|---|---|
+| **57 ms** | flow tap ON — the GPIO6 stub's 1.45 M glitches were burning interrupt time |
+| **42 ms** | after `flow off` |
+| **50 ms** | the press run itself, between the two |
+
+**Quote 42-57 ms as the session's range**, which is what CLAUDE.md's
+[23, 137] ms quantisation bound uses, and it is the conservative choice: the
+bound widens with the gap, so taking the larger figure cannot flatter the
+result. The 50 ms above is the press run specifically.
+
+**And the 10 ms in the Settled table is a different session (2026-10-08), not
+a contradiction — but the 4-5× regression is unexplained.** The flow tap
+accounts for 57 → 42; nothing accounts for 42 → 10. Candidates are the J5 tap
+being live (0.8.0 was display-off) and the BLE/spool work at pour start that
+already has an unexplained 6086-edge burst against it. **Print it again on the
+next capture before trusting either number.**
 
 **`events dropped = 0` throughout.** `machine_io.cpp:43` increments `lost`
 only when the event **queue overflows** — events the poller *saw* but could

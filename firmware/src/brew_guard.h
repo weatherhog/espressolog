@@ -25,8 +25,10 @@ public:
   // How long a press keeps the guard up once the lever has sprung back.
   //
   // GRADE THIS HONESTLY: it is sized from 2Cup's factory-default 60 s plus
-  // margin, and CLAUDE.md records this machine's stored 2Cup duration as
-  // UNKNOWN (user-modifiable; 1Cup was reprogrammed to ~10.5 s). It is a
+  // margin. CLAUDE.md recorded this machine's stored 2Cup duration as UNKNOWN
+  // until 2026-10-19, when the operator reported it set to 45 s (1Cup is
+  // ~10.5 s; both are user-modifiable). Note 45 < 75, so 2Cup is NOT what
+  // makes this constant doubtful -- a hot-water draw is, see CLAUDE.md. It is a
   // conservative guess, not a measurement, and it is the dominant cost of the
   // hot-water path — see busy(). Measuring a real draw would let it shrink.
   static constexpr uint32_t BREW_GUARD_MS = 75000;

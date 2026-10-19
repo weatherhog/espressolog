@@ -31,14 +31,37 @@ which its own comment calls 1.88 s of bus. That is ~120 ms of margin on a
 number measured once. **Enable both taps, or accept that the guard is
 best-effort.**
 
-**And know what the hot-water guard costs.** A lever-B draw blocks flash
-writes, uploads and SNTP for a flat `BREW_GUARD_MS` (75 s) after the lever is
-released, because the display never shows a timer for one so there is nothing
-to tell the firmware the pump stopped. 75 s is sized from 2Cup's *unknown*
-stored brew duration — borrowed reasoning, not a measurement of a water draw.
-The cost is bounded (`pending_w` holds 8 weighings before it drops them) and
-the fix is a bench measurement: **does lever B latch, and how long is a
-typical draw?** Until then it is deliberately conservative. Back up the database first — 009 is irreversible and its
+**And know what the hot-water guard costs — IT LOOKS TOO SHORT, 2026-10-19.**
+A lever-B draw blocks flash writes, uploads and SNTP for a flat
+`BREW_GUARD_MS` (75 s). The bench question this paragraph used to ask —
+*"does lever B latch, and how long is a typical draw?"* — is half answered:
+**it latches** (observed), a second press stops it (observed), and left alone
+it runs for *"a couple of minutes"* before self-terminating.
+
+**Grade that last clause: it is the operator's recollection, not a
+measurement.** A draft headed this paragraph "IT IS TOO SHORT, **measured**"
+— the latching is measured, the duration is not, and the whole
+too-short conclusion rests on the duration.
+
+**If the recollection holds, the guard expires while the pump is running.**
+Note the mechanism: `brew_guard.cpp:5` backdates to the **press**, so the
+75 s runs from the press, not the release — a draft said "released, ~250 ms
+after the press", which is wrong and makes the guard marginally shorter.
+
+**And 75 s does NOT come from 2Cup.** `brew_guard.h:27-28` sizes it from
+2Cup's **factory-default 60 s plus margin**. A draft wrote that the 75 s came
+from 2Cup's then-unknown stored duration and that the guess "was low" now
+that 2Cup is known to be 45 s — incoherent, since 45 < 75. What would make
+the guard insufficient is the water draw, which has nothing to do with 2Cup.
+
+**Edge-driving the guard is the obvious direction and is NOT sufficient on its
+own** — a draft presented it as the fix. The second press is a real stop
+signal on a line already polled, but **the machine self-terminates without
+one**, and then `busy()` never clears: the latched-busy-forever failure
+`brew_guard.cpp:26-30` documents, which blocks flash writes indefinitely and
+is strictly worse than a guard that is sometimes short. **Any edge-driven
+design needs an upper bound too.** The cost meanwhile is bounded (`pending_w`
+holds 8 weighings before it drops them). CLAUDE.md carries the full entry. Back up the database first — 009 is irreversible and its
 header carries two dry-run queries to run against a copy beforehand.
 
 ## The deploy and the flash — 2026-10-13
@@ -878,6 +901,145 @@ is not that, and its brick is an isolated SMPS. **Do not change this** — the
 grounding was identical for the 345-480 ms presses, the 736 counts and shot
 109, and changing it now introduces a variable across the dataset.
 
+### THE 2026-10-19 BENCH SESSION — J2 and J5 live, six findings
+
+J5 and J2 taps fitted, J4 deliberately left out. Everything below was
+measured with the rig described above, ESP on laptop USB as always.
+
+#### J5 had TWO faults, and the first one hid the second
+
+**Symptom: `frames=0` for over an hour**, with the machine's display plainly
+lit and showing 95 °C.
+
+| Fault | Effect |
+|---|---|
+| **Shunts were 8.2 kΩ, not 15 kΩ** | junction at **1.94 V** against VIH 2.475 V — **535 mV short** |
+| **`ESD4`/`ESD1` swapped** across GPIO4/GPIO5 | the documented swapped-pair signature |
+
+**The order mattered, and getting it wrong cost most of the session.** While
+the shunts were wrong, **neither orientation could work**, so swapping the
+pair changed nothing — and that null result was read as *"the swap is
+excluded"*. It was not excluded; it was **untestable**. Only after the levels
+were fixed did the swap test mean anything, and then it resolved immediately:
+`frames=177` in 8 s, `mode=temp 95 C`.
+
+**The arithmetic, because it is the diagnosis:**
+
+| Shunt | machine's line | junction | vs VIH |
+|---|---|---|---|
+| **15 kΩ** (correct) | 5 × 23.2/27.9 = **4.16 V** | **2.69 V** | **+215 mV** |
+| 8.2 kΩ (fitted) | 5 × 16.4/21.1 = **3.89 V** | **1.94 V** | **−535 mV** ✗ |
+
+**A draft of this table used VIH = 2.31 V (0.7 × VDD). That is the 74HC
+figure, not the ESP32-S3's** — this repo uses **2.475 V** nominal and
+**2.60 V** at a 5 %-high rail everywhere else, and quotes it when rejecting
+220 K / 220 K at 0c. Corrected above; the diagnosis is unaffected, the
+*margins* were flattered by 165 mV.
+
+**AND J5's REMAINING MARGIN DESERVES THE TREATMENT J4's DIVIDERS GOT.**
++215 mV nominal shrinks further at the corner the 0d table uses — rail low,
+VIH high, resistor tolerance — and **−45 mV at corner is exactly the figure
+that got 150 K / 220 K rejected at J4**. Nobody has run that corner for
+8.2 K / 15 K. It is the built configuration and it decodes, so this is not an
+emergency; it is an unexamined assumption that should not reach the perfboard
+unexamined.
+
+**And a remedy is already specified in this file** — *"raising the shunt to
+16.4 K"*, with ~470 pF as a contingent second step. A draft of this paragraph
+wrote "nobody has run that corner" without mentioning it, which reads as
+though no one had thought about J5's margin at all. The corner analysis is
+missing; the remedy is not.
+
+The 4.16 V in the top row is the figure this repo already records as measured
+(*"J5 pulls its line from 5.0 V to 4.16 V, a 17 % disturbance at 179 µA"*),
+which is a decent check that the model is right.
+
+**Why it presented as intermittent rather than dead**: at 1.94 V the pin sits
+just under threshold, so polled `pins` reads flickered between 0 and 1 and
+looked alive, while the ISR — which needs a real edge — never fired once.
+**A polled read cannot distinguish a signal from a pin loitering near VIH.**
+
+**The 8.2 kΩ is the J5 SERIES value**, fitted in the T-piece branch, and there
+are 25 of them in stock. Putting one in the shunt position is an easy
+substitution and it fails exactly this way. Series 8.2 kΩ at the T-piece,
+shunt 15 kΩ at the board — the two are not interchangeable.
+
+#### The switch poller has a resolution floor, and the counter that looks like it would warn you does not
+
+Six 1Cup presses at 80-90 ms: **four logged, two not.** `worst poll gap` was
+**50 ms**, so a press is ~1.6 poll intervals and a third going missing is what
+polling at that rate does.
+
+**`events dropped = 0` throughout.** `machine_io.cpp:43` increments `lost`
+only when the event **queue overflows** — events the poller *saw* but could
+not store. A press that falls entirely between two polls is never seen, so it
+cannot be counted. **Zero does not mean nothing was missed.**
+
+That is the same shape as `dropped_edges` on the display bus, which counts
+ring-buffer overflow rather than ISR firings, and which was misread the same
+day. **When a counter's value is load-bearing, read the line that increments
+it.**
+
+Consequence: **the firmware's switch log is not an instrument below ~100 ms.**
+It is sound above that — the 42-50 ms gap is well clear of the 195-295 ms
+presses in the same session.
+
+#### GPIO6 on an unterminated stub is an antenna — confirmed, with numbers
+
+J4's T-piece was out but its breadboard circuit and GPIO6 jumper were left in.
+With nothing driving that junction:
+
+    flow: pulses=78488 glitches=1450274 dropped=834 last=8 ms ago
+
+**1.45 million rejected edges and 78 thousand accepted ones, counting nothing
+at all.** A code review predicted exactly this four days earlier, against a
+draft that had called the floating junction *"a defined level, harmless"*. The
+frozen-counter evidence in the 0d tables does not apply, because it was taken
+with the T-piece **connected** and the sensor's 9.4 kΩ source holding the node.
+
+`flow off` stops it. **Pull the GPIO6 jumper or disable the tap whenever J4 is
+unplugged** — it also burns interrupt time, and `worst poll gap` improved from
+57 ms to 42 ms once it was off.
+
+**AND IT IS A DATA-INTEGRITY HAZARD, not just noise.** A shot pulled with
+`flow on` while J4 is unplugged spools those antenna counts with
+**`SPOOL_FLAG_FLOW_TAP` set**, because the flag records *"the tap was
+enabled"*, not *"the tap was connected"*. The server then ingests pure noise
+as a measurement — and this repo's own rule is that a stored value must be
+distinguishable from "nothing was counting", which is exactly what the flag
+exists to guarantee and exactly what it fails to do here.
+
+Nothing in the format carries a quality field, so **the only mitigation today
+is procedural**: `flow off` whenever J4 is out. That is the weak kind of
+guarantee this file flags elsewhere — it depends on the operator remembering.
+Worth a firmware fix: the tap could be treated as absent when the counter
+runs with no J4-shaped signal, or the flag could require a plausibility check
+rather than just the NVS boolean.
+
+#### What this session closed
+
+| | |
+|---|---|
+| Display tap after the 0.9.4 flash | `frames=177`, `mode=temp 95 C` |
+| Lever A's log line | ten quoted `# switch 1cup` events |
+| Minimum latching press width | **below ~140 ms**, observed to latch — see the caveat below |
+| 2Cup stored duration | **45 s** (was UNKNOWN) |
+| Lever B latching | yes — and `BREW_GUARD_MS` is too short |
+| J2 divider margin | **2.89 V held, +415 mV over VIH 2.475 V** |
+| Analyser loading on a J2 junction | **unmeasurable**, under ~10 mV |
+
+**The press-width measurement is the one that unblocks work**: the one-shot RC
+could not be chosen until it existed. **It still cannot be chosen**, and a
+draft of this very entry said otherwise.
+
+**The 80 ms is a POLLER reading, not a width.** `machine_io.cpp:102` takes
+`cand_since - prev_since`, the difference of two poll timestamps, and the gap
+was 42-57 ms — so the true width is anywhere in **[23, 137] ms**. A draft
+claimed "a ~120 ms pulse has 1.5× margin over a demonstrated-latching 80 ms";
+**137 ms exceeds 120 ms, so the margin may be negative**, and this same file
+says a page earlier that the switch log *"is not an instrument below
+~100 ms"*. **Redo it with the analyser.** CLAUDE.md is normative.
+
 ### The bench sequence, in order
 
 Everything here runs on the breadboard with the machine closed.
@@ -944,13 +1106,13 @@ whether a lever-B draw routes through it. 0d scopes its counting to
 shot boundaries either way, so nothing depends on the answer — but it decides
 whether a tap draw shows up as inlet flow.
 
-**One check left that needs NO rig** — the other was done on 2026-10-15,
-see below:
+**Both of these are now done** — the LED on 2026-10-15, the display tap on
+2026-10-19:
 
-- **`status` with the machine powered.** After the 2026-10-13 flash the
-  display tap has not been seen carrying anything: `frames=0` with the
-  machine off is indistinguishable from the documented swapped-pair
-  signature. A non-zero `frames` closes it.
+- ~~**`status` with the machine powered.**~~ **DONE 2026-10-19:
+  `frames=177`, `mode=temp 95 C`.** It took two faults to get there — the J5
+  shunts were 8.2 kΩ instead of 15 kΩ, *and* `ESD4`/`ESD1` were swapped, with
+  the first masking the second. See the 2026-10-19 session entry above.
 - ~~**Does the onboard RGB LED light?**~~ **DONE 2026-10-15: it is GPIO48, so
   GPIO38 is free.** Board on USB, no machine connections, **yield Bookoo
   bound and awake** — that last clause is load-bearing and a draft omitted it,
@@ -977,8 +1139,13 @@ disassembled on 2026-10-08 before these were taken, so they are no longer
 two-minute jobs — fold them into **perfboard bring-up**, which re-creates the
 same circuit anyway:
 
-- the **actual millivolts** at each divider junction with a lever held (we
-  proved the firmware reads `1`, never wrote down the margin)
+- ~~the **actual millivolts** at each divider junction with a lever held~~
+  **DONE 2026-10-19 on 1Cup: 2.89 V held, 0 V at rest, +415 mV over the
+  2.475 V VIH this repo uses.**
+  Also closed the analyser-loading question — identical reading with the
+  probe on and off, so under ~10 mV, against a review estimate of up to
+  89 mV. The other three lines are still unmeasured, but they are the same
+  divider off the same rail, so the remaining value is low.
 - the **dropped-edge experiment** (above), which needs `display on` to zero
   the counters and one flush with the scale disconnected
 - the **logic analyser on `#`** — and **this entry is the wrong instrument,

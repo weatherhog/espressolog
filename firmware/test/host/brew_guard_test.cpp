@@ -69,7 +69,11 @@ int main() {
   }
 
   // 5. A genuine held lever IS busy — the event path knows nothing until
-  //    release, and a press runs 345-480 ms by hand on this machine.
+  //    release, and a press ran 345-480 ms by hand in the 2026-10-08 session.
+  //    SUPERSEDED 2026-10-19: latching presses were logged at 195-295 ms and
+  //    at a poller-measured 80-90 ms. The scenario below is unaffected -- it
+  //    only needs a press long enough to be seen -- but do not cite 345-480
+  //    as this machine's range.
   {
     BrewGuard g;
     auto in = bothTapsIdle();

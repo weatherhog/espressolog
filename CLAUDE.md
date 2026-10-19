@@ -118,7 +118,7 @@ Pin map, from the traced schematic:
 | Net | Pin | Notes |
 |---|---|---|
 | 1Cup | PB5 | up direction of the switch. 15 s is the *default*; **this machine is set to ~10.5 s** — the operator reprogrammed it (2026-10-04). See below: these durations are user-modifiable state, not constants. |
-| 2Cup | PB6 | down direction. 60 s is the *default*; **this machine's stored value is UNKNOWN** — the 2026-10-03 capture was stopped by hand at 21.0 s, so it says nothing about the stored duration. User-modifiable, like 1Cup. |
+| 2Cup | PB6 | down direction. 60 s is the *default*; **this machine is set to 45 s** — operator, 2026-10-19, set deliberately. Recorded as UNKNOWN from 2026-10-03 until then, because that capture was stopped by hand at 21.0 s and says nothing about the stored duration. User-modifiable, like 1Cup. |
 | Water | PB4 | **WIRED**, and the conductor mapping is **FUNCTIONAL since 2026-10-08**: with the 0c tap live, lever B **up** drove the line on J2 position 5 high and the firmware logged `water`. Lever B up also runs the pump — observed. Whether that water passes the flowmeter is still **unverified** — see 0d. |
 | Steam | PA10 | **WIRED**, and the conductor mapping is **FUNCTIONAL since 2026-10-08**: lever B **down** drove J2 position 2 high and the firmware logged `steam`. Lever B down also drives the heater to 165 °C — observed. |
 | DIP1–4 | PB0–PB3 | four config DIP switches (SW1), purpose unknown |
@@ -196,6 +196,36 @@ lead routing. The conclusion is sound — a swap of 2/5 would have logged
   still fine — the operator asked for all four functions — but it is not
   required for `boiler_temp_start_dc` integrity, and this entry should not
   claim it is.
+- **LEVER B LATCHES — observed 2026-10-19, and it changes the brew guard.**
+  A momentary press up starts the pump; it **keeps running after release**,
+  and a **second press stops it** — the same latching behaviour as lever A.
+  Left alone it runs for *"a couple of minutes"* (operator, approximate) and
+  then returns to brewing mode on its own. Steam behaves the same way.
+
+  **So `BREW_GUARD_MS = 75 s` can expire while the pump is still running** —
+  a draw of "a couple of minutes" outlasts it. Note the mechanism precisely:
+  `onRelease()` stores a **backdated** `pressed_at_ms`, so the guard runs from
+  the **press**, not the release. A draft said "from release, about 250 ms
+  after the press"; that is wrong and it makes the guard marginally shorter,
+  not longer.
+
+  **A draft also wrote that 75 s "was sized from 2Cup's unknown stored
+  duration, and that guess was low (2Cup is in fact 45 s)". That is
+  incoherent** — 45 < 75, so if 2Cup were the basis the guess was *generous*.
+  `brew_guard.h` cites 60 s default plus margin. **What makes the guard
+  insufficient is the water draw running for minutes, which has nothing to do
+  with 2Cup.** Two arguments were run together.
+
+  **An edge-driven guard is the obvious fix and it is NOT sufficient on its
+  own.** The second press is a real stop signal on a line already polled, so
+  press N to press N+1 is the exact window — but **the machine self-terminates
+  without any second press**, and then `busy()` never clears. That is the
+  latched-busy-forever failure `brew_guard.h` already warns about, and it
+  would block flash writes indefinitely: strictly worse than a guard that is
+  sometimes short. **Any edge-driven design needs an upper bound as well**,
+  and that bound needs the self-terminate period measured — "a couple of
+  minutes" is recollection.
+
 - **Hot Water runs the pump**, which **probably** pulses the flowmeter
   outside any shot — a prediction, not an observation. What was seen is
   the pump running and water leaving the steam valve; **whether that path
@@ -235,8 +265,30 @@ no RC tolerance gets near it. But nothing has established the shortest press
 this board actually latches.
 
 **The 345–480 ms figure IS machine presses — confirmed by the operator
-2026-10-12, after a review questioned it.** Every press ever measured on this
-machine was **345–480 ms** (2026-10-08), by hand on the levers.
+2026-10-12, after a review questioned it.** It was recorded on 2026-10-08, by
+hand on the levers.
+
+**"Every press ever measured" is no longer true — superseded 2026-10-19**,
+which logged ten 1Cup presses at **195–295 ms** and four at **80–90 ms**, all
+latching. Treat 345–480 ms as *one session's* presses, not the machine's
+range.
+
+**FOUR places cite it, not the two a draft listed.** That draft named
+`brew_guard.cpp:21` and `main.cpp:1109` and presented the list as complete; a
+review found `docs/phase-0-plan.md:683` — where it carries an **actuation
+safety argument** — and `firmware/test/host/brew_guard_test.cpp:72`.
+
+| | |
+|---|---|
+| `docs/phase-0-plan.md:683` | **annotated 2026-10-19** |
+| `brew_guard_test.cpp:72` | **annotated 2026-10-19** |
+| `brew_guard.cpp:21` | still bare — revisit after the analyser redo |
+| `main.cpp:1109` | still bare — revisit after the analyser redo |
+
+The last two are comments about *timing headroom* where the exact figure is
+not load-bearing, which is why they are left rather than churned. **An
+enumeration offered as complete and not checked is worse than no
+enumeration**, because it stops the next reader grepping.
 
 **It was questioned for a good reason, and the reason is worth keeping.** The
 written bench sequence for that step (`docs/phase-0-status.md`) reads *"jumper
@@ -247,16 +299,43 @@ the procedure as evidence of what happened will reach the wrong conclusion, as
 a 2026-10-12 review did. Fix the procedure or annotate it; do not cite it
 against the operator's account.
 
-Nothing about the conclusion changes either way: **nobody has pressed
-deliberately shorter**, so the shortest press this board latches is still
-unestablished. Note the grade precisely — what was recorded is **press
-durations observed at the tap**, not presses observed to *latch*. Nothing
-says the machine responded to a 345 ms press, so the figure does not even
-bound the threshold from above yet. One sentence next bench session. A one-shot that is too short produces a drive path that
-silently does nothing — and the sense tap would still show the pulse, so it
-would look like it worked. **Measure the minimum before choosing the RC**:
-press-and-release progressively shorter on the levers, with the tap watching,
-and find where the machine stops responding.
+**MEASURED 2026-10-19: AT LEAST FOUR PRESSES IN THE 80-90 ms BAND LATCHED.**
+Six deliberate 1Cup presses, as fast as the operator could make them; **the
+pump started or stopped on every one**. The firmware logged four of the six,
+at **90, 80, 85 and 80 ms**.
+
+**This is the grade the paragraph above was asking for.** What was on record
+before was *press durations observed at the tap* — nothing said the machine
+had responded. These are presses **observed to latch**, because the operator
+watched the pump answer each one. It is the first latching evidence in the
+project, and it is **four times shorter** than the 345-480 ms band.
+
+**THE 80 ms FIGURE IS QUANTISED BY THE POLLER AND A DRAFT USED IT AS IF IT
+WERE NOT.** `machine_io.cpp:102` computes `duration_ms = cand_since -
+prev_since` — the difference of **two poll timestamps**. Both edges are
+rounded up to the next poll, and `worst poll gap` was **42-57 ms** in this
+session. So a reported 80 ms means a true width anywhere in roughly
+**[23, 137] ms**.
+
+**That draft then claimed "a ~120 ms pulse has 1.5× margin over a
+demonstrated-latching 80 ms". It does not follow, and the margin may be
+NEGATIVE** — 137 ms is longer than 120 ms. The same commit states, a page
+away, that the switch log *"is not an instrument below ~100 ms"*, and then
+used an 80 ms reading from it to size a drive path. That is the file's
+most-logged error committed against its own warning.
+
+**WHAT THE MEASUREMENT ACTUALLY ESTABLISHES:** presses the poller measured at
+80-90 ms latched, so the true threshold is **below ~140 ms** — which is still
+a large improvement on 345-480 ms, and still the first latching evidence this
+project has. It is **not** enough to choose the RC.
+
+**THE RC REMAINS UNCHOSEN, and the warning that motivated it still stands**:
+*a one-shot that is too short produces a drive path that silently does
+nothing, and the sense tap would still show the pulse, so it would look like
+it worked.* **Redo the measurement with the logic analyser on a J2 junction**
+— microsecond edges instead of 50 ms quantisation. That is precisely why the
+analyser is in the bench plan, and it was connected on 2026-10-19 and not
+used for this.
 
 **Use the 74HC221, NOT the 74HC123 this file used to name.** The '123 is
 **retriggerable**: a new trigger edge restarts the pulse, so a GPIO
@@ -1100,8 +1179,16 @@ link short of saying so**, and this file spends a paragraph above insisting on
 exactly that distinction: lever B has its own row quoting what was logged
 (`B up logged water, B down logged steam`), while lever A's evidence is the
 summary row "All four switches | correct GPIO mapping" — a conclusion, not an
-observation. Nothing anywhere quotes "lever A up logged `1cup`". **One
-sentence at the next bench session closes it.**
+observation. **CLOSED 2026-10-19 — ten of them, verbatim from the live tap:**
+
+    # switch 1cup 220 ms    # switch 1cup 245 ms
+    # switch 1cup 220 ms    # switch 1cup 285 ms
+    # switch 1cup 295 ms    # switch 1cup 230 ms
+    # switch 1cup 235 ms    # switch 1cup 275 ms
+    # switch 1cup 240 ms    # switch 1cup 195 ms
+
+Lever A up, logged as `1cup`, on GPIO7. Row 7/15's evidence is now the same
+kind as lever B's — a quoted log line rather than a summary conclusion.
 
 **The visual check's job**: the functional chain alone cannot distinguish
 wiring by *label* from wiring by *position*. The operator confirmed the
@@ -1472,6 +1559,41 @@ about a millivolt and the unloaded arithmetic is valid here.
 **150 K / 220 K** divider on PB5 and PB6 into GPIO
 (5 V → 2.97 V, ~0.5 V over VIH; 13.5 µA load, dropping **1.35 mV** across
 R45).
+
+**MEASURED AT THE JUNCTION 2026-10-19: 2.89 V with a lever held, 0 V at
+rest.** Against an ESP32-S3 VIH of **2.475 V** that is **+415 mV of margin**.
+This closes an item the bench list carried as open — *"we proved the firmware
+reads `1`, never wrote down the margin"*.
+
+*(A draft wrote "+580 mV against a VIH of 2.31 V". **2.31 V is 0.7 × VDD, the
+74HC figure** — this file uses **2.475 V** nominal and **2.60 V** at a
+5 %-high rail, and quotes 2.475 V twelve lines below when rejecting
+220 K / 220 K. **A first version of this parenthetical then claimed the error "was caught and
+fixed in `docs/phase-0-status.md` in the commit that introduced it". It was
+not** — that file carried it in three further places, and saying otherwise
+closed the loop on a defect that was still open. A review found all three.
+Applying a correction in one file and announcing it as complete is strictly
+worse than not applying it, because it stops anyone looking.)*
+
+**The 80 mV below the predicted 2.97 V is not a defect**: it corresponds to
+the machine's rail sitting near 4.86 V rather than a round 5.0, or 1 %
+resistor tolerance, or both. Nothing to chase.
+
+**And a logic analyser on the junction costs nothing measurable at room
+temperature.** Same reading, 2.89 V, probe on and probe off — the difference
+is below meter resolution, so under ~10 mV. A review had flagged this as
+worth up to **89 mV**, from a worst-case HC input leakage of 1 µA into the
+junction's 89 kΩ source impedance.
+
+**Grade the closure honestly: ONE reading on ONE line at ONE temperature does
+not retire a datasheet worst case.** The 1 µA figure is a max over the
+part's full temperature range; typical at 25 °C is an order lower, which is
+what was measured. The bench is not a boiler housing. What this establishes
+is that the analyser is fine to use on a J2 junction *on the bench*, which is
+all it is ever used for — not that the 89 mV bound is wrong.
+
+**Note it is specific to J2's high source impedance** — J5's junction is
+5.3 kΩ and could never have been affected.
 
 **0d rejects 150 K / 220 K and 0c keeps it — that is not a contradiction.**
 0c's corner is **+203 mV** (rail −5 %, VIH +5 %, 1 % resistors) because the
@@ -1851,6 +1973,10 @@ above that. The gauge is the only thing that tells you which happened:
 
 - **gauge stays well below ~11** → the valve was shut; the comparison is valid
 - **gauge pegs near 14** → it relieved anyway; the run is void, not a null
+- **gauge sits between ~11 and ~14** → **also void, and a draft left this band
+  uncovered** — it is exactly where this section's own cracking estimate
+  (11.2-12.7) lies, so the valve may be partly relieving and the run cannot be
+  read either way. Lower the OPV or coarsen the grind and repeat.
 
 **Then compare in CONSISTENT UNITS, which a draft did not.** The flushes'
 5915–6508 is per litre of *collected water*; a shot's counts per litre of

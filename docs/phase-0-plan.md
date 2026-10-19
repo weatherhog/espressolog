@@ -680,7 +680,9 @@ does not work:
       device 2 alone *is* a press. Whether a ~120 ms press starts a cycle is
       **unknown** — CLAUDE.md records that the shortest press this board
       latches has never been measured, and every press ever recorded was
-      345-480 ms. So either it runs a cycle (the spurious cycle is the alarm,
+      345-480 ms — **a figure superseded 2026-10-19**, which logged latching
+      presses at 195-295 ms and at a poller-measured 80-90 ms; see CLAUDE.md.
+      So either it runs a cycle (the spurious cycle is the alarm,
       at the price of an unwanted flush) or it does not (and the detection
       story needs the sense line read directly instead). **Measure the minimum
       latching width before relying on either reading.**

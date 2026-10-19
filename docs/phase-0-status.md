@@ -385,16 +385,17 @@ Everything on the breadboard, all three T-pieces in the machine, firmware
 
 ### Settled
 
+<!-- fact:divider-j4 100 K + 220 K -->
+<!-- fact:digmesa-k-factor 2382 pulses/L -->
+
 | | |
 |---|---|
 | **`selftest`** | **500/500, 0 glitches, 0 ring drops** at 100 Hz — 6.3× the rate at the sensor's rated max flow (0.40 L/min × 2382 = 15.9 Hz). The one thing host tests cannot establish, because a real shot has no independent count to check against. |
 | **All four switches** | correct GPIO mapping, no false reprogram. *(The "taps of 345–480 ms" this row carried is **one session's** presses — 2026-10-19 logged 195-295 ms and 80-90 ms. **The pump was watched answering only the six fast ones**, so the latching evidence is those; the longer ten give width only. See CLAUDE.md.)* |
 | **Lever B** | **plug inspection → functional.** B up logged `water`, B down logged `steam` |
-<!-- fact:divider-j4 100 K + 220 K -->
 | **J4 first contact** | **no `E01`.** The 100 K + 220 K is energised and the machine has not noticed — the tap that faulted it on 2026-10-03 |
 | **Worst poll gap** | **10 ms** on 2026-10-08 against that session's ~400 ms presses — **both halves of that ratio are superseded.** 2026-10-19 measured **42-57 ms** against **80-90 ms** presses, and missed two of six. The 40:1 headroom this row claimed is ~1.6:1. See the poll-gap reconciliation below; polling still stays, for reasons that are no longer this number |
 | 0d end to end | the PATH works — `inlet_pulses` reaches `shot_sample`. **What the numbers mean is unresolved**; see `docs/flowmeter-j4.md` |
-<!-- fact:digmesa-k-factor 2382 pulses/L -->
 | **K-factor** | datasheet **2382 pulses/L** for our exact part. In-circuit counts are ~5× that and **what they are is unresolved** — see `docs/flowmeter-j4.md` |
 
 **The 0d chain is proven by the data, not by inspection.** Shot 109 (fw

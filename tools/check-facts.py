@@ -25,7 +25,12 @@ Needles are separated by `|`. When a needle must itself contain a `|` --
 which it must to assert a markdown table ROW rather than three words that
 happen to be somewhere nearby -- separate them with `;;` instead:
 
-    <!-- fact:j4-conductor-map ground | yellow;;black | 0.3 V parked -->
+    <!-- fact:example-table-row ground | yellow;;black | 0.3 V parked -->
+
+Note the id in that example is deliberately fake. An earlier draft used the
+live `j4-conductor-map` id with a cut-down value, which only avoided failing
+CI because SKIP_PATHS excludes this file by its hardcoded path -- a booby
+trap for whoever moves or copies the script.
 
 Using `;;` anywhere in the value switches the whole value to `;;`.
 
@@ -61,41 +66,48 @@ from collections import defaultdict
 # Lines either side of a marker that count as "its prose".
 CONTEXT_LINES = 10
 
-# Facts that must stay tagged, and the minimum number of sites each. A fact
-# below its minimum fails the build: it means a site was deleted or lost its
-# marker, which is exactly the state this check exists to prevent. Raise a
-# number when you add a site; never lower one to make the build pass without
-# saying why in the commit message.
+# Facts that must stay tagged, and the minimum number of distinct FILES each
+# must appear in. A fact below its minimum fails the build: it means a site
+# was deleted or lost its marker, which is exactly the state this check
+# exists to prevent. Raise a number when you tag a new file; never lower one
+# to make the build pass without saying why in the commit message.
 #
-# `claude_md` means at least one site must be in CLAUDE.md -- these are the
+# IT COUNTS FILES, NOT MARKERS, and that is a deliberate trade with a cost.
+# The point of a minimum is cross-FILE coverage -- two markers in one file
+# satisfied the old marker count while proving nothing about any other file.
+# The cost: deleting a SECOND marker inside an already-counted file no longer
+# fails here. Anchoring still covers the markers that remain, so the failure
+# mode is lost coverage rather than a wrong number going green.
+#
+# `claude_md` means at least one of those files must be CLAUDE.md -- these are the
 # facts whose live conclusion is supposed to stay in the auto-loaded file
 # even though the arithmetic that justifies it has moved to docs/.
 REQUIRED = {
     # Invariant 1 cites this as the only metered disturbance figure of the
     # three it names. It is the number that was wrong in status.md.
-    "j4-node-disturbance": {"min_sites": 3, "claude_md": True},
+    "j4-node-disturbance": {"min_files": 3, "claude_md": True},
     # The three fitted dividers. Values, not arithmetic -- the corner tables
     # live in docs/taps-and-dividers.md.
-    "divider-j2":          {"min_sites": 3, "claude_md": True},
-    "divider-j4":          {"min_sites": 3, "claude_md": True},
+    "divider-j2":          {"min_files": 3, "claude_md": True},
+    "divider-j4":          {"min_files": 3, "claude_md": True},
     # J5's shunt is the highest-risk number in the repo: it was stated in
     # full on five surfaces, and 15 K (as built) is superseded by 16.4 K
     # (specified). A stale 15 K reads as a live instruction.
-    "divider-j5-shunt":    {"min_sites": 4, "claude_md": True},
+    "divider-j5-shunt":    {"min_files": 4, "claude_md": True},
     # Datasheet constant. Invariant 3 forbids baking it into stored data,
     # which makes the documented value the only copy there is.
-    "digmesa-k-factor":    {"min_sites": 4, "claude_md": True},
+    "digmesa-k-factor":    {"min_files": 4, "claude_md": True},
     # Firmware constant with a known-insufficient value and four prose
     # sites discussing it. The header is the source of truth.
-    "brew-guard-ms":       {"min_sites": 4, "claude_md": True},
+    "brew-guard-ms":       {"min_files": 4, "claude_md": True},
     # Which colour is which conductor on the J4 lead. The one divergence in
     # this repo that could put a probe on the wrong wire -- and `+` is the
     # conductor with the read-only rule.
-    "j4-conductor-map":    {"min_sites": 2, "claude_md": True},
+    "j4-conductor-map":    {"min_files": 2, "claude_md": True},
     # The one rule in this repo that is DELIBERATELY stated twice, because
     # it has been lost from CLAUDE.md three times. The duplication is the
     # point; the tag is what stops the two copies drifting apart.
-    "j4-plus-readonly":    {"min_sites": 2, "claude_md": True},
+    "j4-plus-readonly":    {"min_files": 2, "claude_md": True},
 }
 
 SCAN_SUFFIXES = (".md", ".h", ".cpp", ".c", ".go", ".sql", ".py")
@@ -106,7 +118,7 @@ SKIP_PATHS = {"tools/check-facts.py"}
 # `<!--` for markdown/HTML, `//` for C/C++/Go, `--` for SQL, `#` for python
 # and shell. SCAN_SUFFIXES covers .sql and .py, and an earlier version of this
 # regex accepted neither of their comment leaders -- so a tag written there
-# was silently ignored, and min_sites could not notice a site that never
+# was silently ignored, and the registry could not notice a site that never
 # registered in the first place. Found by review, 2026-10-19.
 MARKER = re.compile(
     r"(?:<!--|//|--|#)\s*fact:([a-z0-9][a-z0-9-]*)\s+(.+?)\s*(?:-->|$)"
@@ -259,11 +271,11 @@ def main():
         # cross-FILE coverage; two markers in one file satisfied the old
         # count while proving nothing about any other file. Found by review.
         files = {e["path"] for e in entries}
-        if len(files) < rule["min_sites"]:
+        if len(files) < rule["min_files"]:
             errors.append(
                 f"fact:{fact} is tagged in {len(files)} file(s) "
                 f"({', '.join(sorted(files)) or 'none'}), REQUIRED says at least "
-                f"{rule['min_sites']}. A site was deleted or lost its marker."
+                f"{rule['min_files']}. A file was deleted or lost its marker."
             )
         if rule.get("claude_md") and not any(
             e["path"] == "CLAUDE.md" for e in entries

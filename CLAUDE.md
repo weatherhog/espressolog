@@ -17,6 +17,14 @@ two copies disagree.
 **Keyed by what you are about to do, not by filename** — the filenames are
 the thing you do not know yet.
 
+<!-- The index below restates numbers that are normative elsewhere, so it is
+     tagged like any other site. Markers sit ABOVE the table: a marker between
+     two GFM rows breaks the table, which is how this one was first written. -->
+<!-- fact:divider-j2 150 K / 220 K -->
+<!-- fact:divider-j4 100 K + 220 K -->
+<!-- fact:divider-j5-shunt 16.4 K -->
+<!-- fact:brew-guard-ms 75 s -->
+
 | If you are about to… | read | live conclusion, in one line |
 |---|---|---|
 | **touch any machine signal at all** | the invariants, immediately below — nothing else first | Phase 0 never actuates; drive hardware may exist only behind an **open jumper in series with its OUTPUT** |
@@ -648,6 +656,10 @@ web/               Vite + React PWA
   src/ · prototype/
 analysis/          Jupyter notebooks, reads the SQLite file
 docs/              overview · phase-0-status · phase-0-plan · shopping-list
+                   machine-display-bus · machine-switches-j2 · flowmeter-j4
+                   taps-and-dividers · board-and-perfboard · hydraulics
+                   (the last six are the 2026-10-19 split out of CLAUDE.md;
+                    the Reference section at the foot says what each is for)
 ```
 
 ---
@@ -994,11 +1006,13 @@ it fails its corner at −45 mV.
 <!-- fact:j4-node-disturbance 134 mV|2.9 % -->
 The chosen divider disturbs the node by **134 mV (2.9 %)**, which leaves the
 machine's own reading unambiguously high — and which is the figure hard
-invariant 1 cites as the only one of its three backed by a meter. *(134 mV
-is the exact figure, 4.681 V unloaded against 4.548 V loaded; the ratio is
-**2.85 %**, which this repo rounds to 2.9 % everywhere. Quote the mV when
-precision matters — the percentage is a rounding and reads as a
-disagreement when it is not.)*
+invariant 1 cites as the only one of its three backed by a meter. *(The exact
+figures are **133.4 mV** and **2.851 %** — 4.681 V unloaded against
+**4.5476 V** loaded, the divider's 320 K sitting across the node's 147.4 K
+pull-down. This repo renders them **134 mV** and **2.9 %** everywhere, and
+those are the tagged values. A draft of this parenthetical wrote "134 mV is
+the exact figure, 4.681 against 4.548" — which subtracts to 133, in the one
+sentence telling readers to quote the mV when precision matters.)*
 
 **`docs/taps-and-dividers.md` is normative on the arithmetic** — the four-way
 divider comparison, the full tolerance corner, the low side, the over-rail
@@ -1041,11 +1055,20 @@ specified value is above, in the display-bus entry — stated once, not twice.
 The corner tables are in `docs/taps-and-dividers.md` and
 `docs/phase-0-status.md`.
 
-**The J5 tap's capacitor and the GPIO4/5 swap signature are covered above**
-in the display-bus entry, and the 470 pF candidate's arithmetic is in
-`docs/taps-and-dividers.md`. **What `boiler_temp_start_c` means is also
-above**, and it is the open half of this milestone: the path works, the
-number's meaning does not follow from it.
+**NEVER 10 nF ON `ESD1`/`ESD4`.** It is a 69 µs time constant against 36 µs
+clock highs — the clock never settles and **the bus stops decoding**, which
+presents as a wiring fault rather than a filter error. A 2026-10-09 edit
+specified it and was corrected to **~470 pF** the same day. The 470 pF is
+still only a **candidate**: the drops it was meant to fix are **not** pump
+coupling, their cause is unidentified, and `worst poll gap` is the
+discriminator — record it on the next capture before fitting anything.
+*(And the 470 pF has not been re-sized since the shunt went to 16.4 K: the
+source moves 6.9 kΩ → 7.2 kΩ.)* **`docs/taps-and-dividers.md` is normative
+on that arithmetic.**
+
+**The GPIO4/5 swap signature and what `boiler_temp_start_c` means are both
+in the display-bus entry above.** The latter is the open half of this
+milestone: the path works, the number's meaning does not follow from it.
 
 
 ### 0f — sit still

@@ -141,6 +141,7 @@ specified 10 nF. Both parts were wrong:
 this**, as a *contingent second remedy* after raising the shunt to 16.4 K.
 Prefer that passage. Re-measure with the serial console detached before
 fitting anything here.
+
 ---
 
 ## J2 — the switch tap

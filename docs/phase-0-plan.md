@@ -574,8 +574,12 @@ does not work:
     estimate, not a Panasonic number. (`TLP222A` was not checked; the sentence
     above names it only by analogy.)
 
-    **The refinement, which the draft missed: the half-failure is
-    polarity-dependent.** Label the FET on the +5 V side of a device F_hi and
+    **The refinement: the half-failure is polarity-dependent.** *(A first
+    version said the draft "missed" this. The section's own lead bullet — "each
+    device needs an internal short in the polarity-relevant FET" — already
+    carried the idea, so the section was internally inconsistent, not silent;
+    what it lacked was the F_hi / F_lo spelling-out and the consequence for
+    the off-state stress below.)* Label the FET on the +5 V side of a device F_hi and
     the other F_lo. If **F_hi** shorts, current runs pos 1 → F_hi (shorted) →
     common node → F_lo's body diode (anode = node, cathode = F_lo's drain, so
     forward) → line: the device conducts at one diode drop, as above. If
@@ -613,9 +617,35 @@ does not work:
     **What the old text got wrong, and why it was believable:** it called the
     failure "one shorted FET leaves *the other's* body diode forward-biased"
     as though that held for either FET. It is the standard photoMOS picture
-    and the conclusion (two half-failures give ~1.2 V, far above VIH) holds
+    and the conclusion (two half-failures give ~0.8 V, far above VIH) holds
     for the case it describes; it just omitted that the other case blocks.
-    **Redundancy is slightly *better* than the draft said, not worse.**
+
+    **"Redundancy is slightly *better* than the draft said" WAS TOO STRONG,
+    AND A 2026-10-19 REVIEW SHOWED WHY. It holds only under equal, independent
+    failure rates, and both assumptions lean the wrong way:**
+
+    - **F_hi is the stressed FET.** With 5 V on the F_hi side and the line at
+      0 V, F_hi's channel is off and its body diode reverse-biased, so F_hi
+      carries essentially the whole off-state voltage; F_lo's diode is forward
+      and F_lo carries about a diode drop at most. The failure that matters
+      is a short in the FET under stress, so its rate is plausibly *higher*
+      than F_lo's, not equal.
+    - **A surge stresses F_hi in both devices at once.** The common-cause
+      point below is not a separate caveat: it is the same two FETs, which
+      makes the required double failure positively correlated and erodes the
+      squaring the factor-of-four argument relies on.
+    - **A drain-source short is not the only way to conduct.** The two gates
+      are joined. A gate-to-drain failure of F_hi pulls the shared gate to
+      about the +5 V side and turns on **both** channels — one failure site
+      per device, no body-diode logic involved, and the polarity refinement
+      does nothing for it. Nobody has data on its rate against a D-S short;
+      it is **not** excluded by anything read.
+
+    **Net: the polarity refinement is real and removes one failure
+    population, but the honest statement is "somewhere between a little
+    better and no better", not "better". The datasheet read neither raises
+    nor lowers the case for four parts** — what the pair does not give is
+    unchanged.
   - **Common cause.** Two identical parts from the same reel, in series, in
     the same thermal environment, seeing the same surge history on the same
     node. A surge on J2 — the plausible cause of an output short — presents

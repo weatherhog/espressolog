@@ -518,7 +518,7 @@ same 550 mA test.
 The per-device test needs each photoMOS on its **own** one-shot-bounded drive.
 A dual '221 gives two channels — enough for one per *line*, not one per
 *device*. A second '221 or a different gating scheme is unpriced; the GPIO
-budget is not the constraint (see CLAUDE.md's board-read pinout). Buying three
+budget is not the constraint (see `docs/board-and-perfboard.md`). Buying three
 '221s covers it either way.
 
 These are the parts that let the firmware *trigger* the machine while being

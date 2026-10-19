@@ -1,4 +1,4 @@
-# Four jobs, all on standard GitHub-hosted runners so a public repo pays
+# Five jobs, all on standard GitHub-hosted runners so a public repo pays
 # nothing. Do NOT switch any of these to a larger runner: those are billed
 # even on public repositories.
 #

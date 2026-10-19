@@ -19,11 +19,11 @@ the thing you do not know yet.
 
 | If you are about to… | read | live conclusion, in one line |
 |---|---|---|
-| **touch any machine signal at all** | the invariants above — nothing else first | Phase 0 never actuates; drive hardware may exist only behind an **open jumper in series with its OUTPUT** |
-| **put anything on the J4 `+` conductor** | the `##` block under the invariants | **read-only, high-impedance meter, nothing else.** This rule has been lost three times |
+| **touch any machine signal at all** | the invariants, immediately below — nothing else first | Phase 0 never actuates; drive hardware may exist only behind an **open jumper in series with its OUTPUT** |
+| **put anything on the J4 `+` conductor** | the `##` block directly under the invariants | **read-only, high-impedance meter, nothing else.** This rule has been lost three times |
 | **choose or substitute a divider resistor** | `docs/taps-and-dividers.md` | J2 **150 K / 220 K**, J4 **100 K + 220 K**, J5 **8.2 K / 16.4 K**, `Disp-P4` **no shunt ever** |
 | **write actuation or one-shot code** | `docs/machine-switches-j2.md` | a hold **> ~2 s REPROGRAMS** the stored duration; use a **74HC221**, never a '123; the RC is unchosen and failing short is **silent** |
-| **trust `BREW_GUARD_MS`** | `firmware/src/brew_guard.h`, then 0c here | it is 75 s, it is too short for a lever-B draw, **and it can fail to ARM entirely** — an unguarded invariant-2 exposure |
+| **trust `BREW_GUARD_MS`** | `firmware/src/brew_guard.h`, then the **LEVER B LATCHES** bullet in *Machine: Ascaso Dream PID* | it is 75 s, it is too short for a lever-B draw, **and it can fail to ARM entirely** — an unguarded invariant-2 exposure |
 | **parse or re-capture the display bus** | `docs/machine-display-bus.md` | 67/66 pair, **not** 133-bit frames; GPIO4 clock, GPIO5 data, and a swap is **silent** (`frames=0`, levels perfect) |
 | **read `boiler_temp_start_c`** | `docs/machine-display-bus.md` | at ` 95` it is indistinguishable from the **setpoint**, and that is the only range it is ever sampled in |
 | **believe a flowmeter pulse count** | `docs/flowmeter-j4.md` | counts are **~5× the datasheet and UNRESOLVED** — and the 5× itself divides by an **assumed** inlet |
@@ -162,6 +162,7 @@ Violating any of these is a bug, not a design choice.
 
 ## The J4 `+` rule — one hard safety rule, and it does not live in a table
 
+<!-- fact:j4-plus-readonly read-only, through a high-impedance meter, and nothing else|nothing that sources or sinks current|never power the ESP32 from it|3 W IRM-03-5 -->
 > **`+` is read-only, through a high-impedance meter, and nothing else.**
 > Nothing with an input clamp — no analyser, no GPIO, no divider — **and
 > nothing that sources or sinks current: never power the ESP32 from it,
@@ -177,9 +178,19 @@ conditioning table, and the table was rewritten whenever the divider value
 changed. It is deliberately **outside** that table, and now outside that
 section. Rewrite the divider as often as you like; do not touch this.
 
-`docs/phase-0-status.md` carries a verbatim backup copy, marked as such.
-Duplication is wrong almost everywhere else in this repo; for a rule with
-this loss record it is the point.
+`docs/phase-0-status.md` carries a **second statement of the same rule**,
+marked as such. Duplication is wrong almost everywhere else in this repo;
+for a rule with this loss record it is the point.
+
+**It is not byte-identical and should not be described as verbatim** — a
+draft of this paragraph did, and a review caught it. status.md's copy omits
+the closing *"A 20 MΩ DMM is fine, and is how its 5.0 V was read on
+2026-10-04"* because the sentence immediately above it there already says
+exactly that. What has to match is the **rule**, and the four clauses that
+carry it are fact-tagged on both sides: read-only through a high-impedance
+meter and nothing else, nothing that sources or sinks current, never power
+the ESP32 from it, and that it is the machine's own 3 W IRM-03-5 sensor
+rail. CI fails if either side loses one.
 
 ---
 
@@ -473,9 +484,9 @@ when it matters.
   (RIGHT, increases) of the 67-bit frame — free, same two wires
 - **`PrG` means the brew temperature is being changed**, which silently
   invalidates an 0f noise-floor run
-- **a steam cycle**, which blinks `165` then `95`. **So the J2 Steam tap is
-  redundant for detecting steam** — fit it because the operator asked for all
-  four functions, not because `boiler_temp_start_dc` needs it.
+- **a steam cycle**, which blinks `165` then `95` — which is what makes the
+  J2 Steam tap redundant for detecting steam, stated with the lever-B
+  consequences above rather than repeated here.
 
 **THE DISPLAY BLINKS FOR TWO DIFFERENT REASONS AND THE PERIOD IS
 LOAD-BEARING.** A setpoint edit blinks at **~410 ms**; steam and the cooldown
@@ -938,7 +949,7 @@ being done and merely unrecorded.
 **J4 pinout — roles MEASURED 2026-10-04**, with a DC pen meter, at the
 window in the 2S T-piece lead, nothing attached:
 
-<!-- fact:j4-conductor-map yellow|green|black|continuity beep to J5 pin 1|5.0 V, steady through a flush|0.3 V parked -->
+<!-- fact:j4-conductor-map ground | yellow;;green | 5.0 V, steady through a flush;;black | 0.3 V parked;;continuity beep to J5 pin 1 -->
 
 | Marking | Role | Lead | What was actually read |
 |---|---|---|---|
@@ -983,7 +994,11 @@ it fails its corner at −45 mV.
 <!-- fact:j4-node-disturbance 134 mV|2.9 % -->
 The chosen divider disturbs the node by **134 mV (2.9 %)**, which leaves the
 machine's own reading unambiguously high — and which is the figure hard
-invariant 1 cites as the only one of its three backed by a meter.
+invariant 1 cites as the only one of its three backed by a meter. *(134 mV
+is the exact figure, 4.681 V unloaded against 4.548 V loaded; the ratio is
+**2.85 %**, which this repo rounds to 2.9 % everywhere. Quote the mV when
+precision matters — the percentage is a rounding and reads as a
+disagreement when it is not.)*
 
 **`docs/taps-and-dividers.md` is normative on the arithmetic** — the four-way
 divider comparison, the full tolerance corner, the low side, the over-rail
@@ -1195,17 +1210,17 @@ NVS, not the filesystem.
 
 ## Reference
 
-**Every document in this repo, and what each one is for.** This section
-cited `docs/phase-0-status.md` twelve times inline and introduced it zero
-times, and `README.md` and `docs/overview.md` appeared nowhere in 2635
-lines.
+**Every document in this repo, and what each one is for.** Before
+2026-10-19 this section was three bullets: `docs/phase-0-status.md` was
+cited inline a dozen times across the file and introduced nowhere, and
+`README.md` and `docs/overview.md` appeared nowhere in 2653 lines.
 
 | File | What it is | When to open it |
 |---|---|---|
 | **this file** | live conclusions, invariants, architecture | every session, automatically |
 | `README.md` | the public front page | writing about the project |
 | `docs/overview.md` | a visual tour of the PWA | explaining what it looks like |
-| `docs/phase-0-status.md` | **the bench record and the resume point** | before continuing any hardware work. The twelve inline citations above all point here |
+| `docs/phase-0-status.md` | **the bench record and the resume point** | before continuing any hardware work. Every bare "see `docs/phase-0-status.md`" above points here |
 | `docs/phase-0-plan.md` | the build plan, stage by stage | planning the next stage |
 | `docs/shopping-list.md` | what to buy; **supersedes** the plan's parts tables | before ordering anything |
 | `docs/machine-display-bus.md` | the J5 decode in full | opening a capture, or changing `display.cpp` |

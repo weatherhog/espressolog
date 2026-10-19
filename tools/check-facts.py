@@ -18,7 +18,16 @@ HOW A TAG WORKS. Put a marker beside each site that states the fact:
     the node is disturbed by **134 mV (2.9 %)**
     <!-- fact:j4-node-disturbance 134 mV|2.9 % -->
 
-In C/C++/Go, `// fact:<id> <value>` instead of the HTML comment.
+In C/C++/Go, `// fact:<id> <value>` instead of the HTML comment; `--` and
+`#` leaders work too, for SQL and python.
+
+Needles are separated by `|`. When a needle must itself contain a `|` --
+which it must to assert a markdown table ROW rather than three words that
+happen to be somewhere nearby -- separate them with `;;` instead:
+
+    <!-- fact:j4-conductor-map ground | yellow;;black | 0.3 V parked -->
+
+Using `;;` anywhere in the value switches the whole value to `;;`.
 
 Two things are then checked, and the second is the one that earns its keep:
 
@@ -43,6 +52,7 @@ a tagged site fails rather than silently shrinking coverage -- but adding
 an untagged one still passes. Tag new sites as you write them.
 """
 
+import os
 import re
 import subprocess
 import sys
@@ -82,6 +92,10 @@ REQUIRED = {
     # this repo that could put a probe on the wrong wire -- and `+` is the
     # conductor with the read-only rule.
     "j4-conductor-map":    {"min_sites": 2, "claude_md": True},
+    # The one rule in this repo that is DELIBERATELY stated twice, because
+    # it has been lost from CLAUDE.md three times. The duplication is the
+    # point; the tag is what stops the two copies drifting apart.
+    "j4-plus-readonly":    {"min_sites": 2, "claude_md": True},
 }
 
 SCAN_SUFFIXES = (".md", ".h", ".cpp", ".c", ".go", ".sql", ".py")
@@ -89,7 +103,27 @@ SCAN_SUFFIXES = (".md", ".h", ".cpp", ".c", ".go", ".sql", ".py")
 # This file is full of example markers; scanning it would invent facts.
 SKIP_PATHS = {"tools/check-facts.py"}
 
-MARKER = re.compile(r"(?:<!--|//)\s*fact:([a-z0-9][a-z0-9-]*)\s+(.+?)\s*(?:-->|$)")
+# `<!--` for markdown/HTML, `//` for C/C++/Go, `--` for SQL, `#` for python
+# and shell. SCAN_SUFFIXES covers .sql and .py, and an earlier version of this
+# regex accepted neither of their comment leaders -- so a tag written there
+# was silently ignored, and min_sites could not notice a site that never
+# registered in the first place. Found by review, 2026-10-19.
+MARKER = re.compile(
+    r"(?:<!--|//|--|#)\s*fact:([a-z0-9][a-z0-9-]*)\s+(.+?)\s*(?:-->|$)"
+)
+
+
+def split_needles(value):
+    """`;;` wins when present, so a needle can contain a literal `|`.
+
+    Without this, a tag on a markdown table could only assert that a set of
+    words appears nearby -- which does not pin a MAPPING. Reproduced by
+    review on 2026-10-19: swapping the `yellow` and `green` cells between
+    the `T` and `+` rows of the J4 conductor table still passed, on the one
+    connector where a swapped colour puts a probe on the read-only wire.
+    """
+    sep = ";;" if ";;" in value else "|"
+    return [n for n in value.split(sep) if n.strip()]
 
 
 def normalise(text):
@@ -102,6 +136,12 @@ def normalise(text):
     for ch in (" ", " ", " "):
         t = t.replace(ch, " ")
     t = re.sub(r"[*`~]", "", t)
+    # Blockquote markers are layout, not content. Without this, a rule
+    # wrapped as "> ... and nothing\n> else." cannot be matched by any
+    # needle that spans the line break -- and the J4 `+` rule, the one
+    # clause in this repo that is deliberately stated twice, is a
+    # blockquote in both copies with DIFFERENT wrap points.
+    t = re.sub(r"(?m)^[ \t]*>+[ \t]?", "", t)
     for ch in ("−", "–", "—"):
         t = t.replace(ch, "-")
     t = t.replace("kω", "k").replace("ω", "ohm")
@@ -115,6 +155,22 @@ def normalise(text):
     return t.strip()
 
 
+def repo_root():
+    """Everything below is relative to the repo root.
+
+    SKIP_PATHS and the `claude_md` registry rule are root-relative paths, so
+    running this from tools/ used to produce a page of false errors AND scan
+    this file's own docstring, inventing facts from its examples. Found by
+    review, 2026-10-19.
+    """
+    return subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+
+
 def tracked_files():
     # --others --exclude-standard includes files that are new and not yet
     # `git add`ed. Without it a brand-new doc is invisible to this check
@@ -125,6 +181,7 @@ def tracked_files():
         capture_output=True,
         text=True,
         check=True,
+        cwd=repo_root(),
     ).stdout
     for path in out.split("\0"):
         if not path or path in SKIP_PATHS:
@@ -134,11 +191,17 @@ def tracked_files():
 
 
 def collect():
+    root = repo_root()
     sites = defaultdict(list)
     for path in tracked_files():
         try:
-            lines = open(path, encoding="utf-8").read().splitlines()
+            lines = open(os.path.join(root, path), encoding="utf-8").read().splitlines()
         except UnicodeDecodeError:
+            continue
+        except (FileNotFoundError, IsADirectoryError):
+            # `git ls-files --cached` lists a file that has been deleted or
+            # moved in the worktree but not yet staged. That is an ordinary
+            # mid-edit state, not a reason to traceback. Found by review.
             continue
         for i, line in enumerate(lines):
             m = MARKER.search(line)
@@ -179,7 +242,7 @@ def main():
 
         # 2. anchoring
         for e in entries:
-            for needle in e["value"].split("|"):
+            for needle in split_needles(e["value"]):
                 n = normalise(needle)
                 if n and n not in e["context"]:
                     errors.append(
@@ -192,9 +255,14 @@ def main():
     # 3. registry
     for fact, rule in sorted(REQUIRED.items()):
         entries = sites.get(fact, [])
-        if len(entries) < rule["min_sites"]:
+        # Count distinct FILES, not markers. The point of a minimum is
+        # cross-FILE coverage; two markers in one file satisfied the old
+        # count while proving nothing about any other file. Found by review.
+        files = {e["path"] for e in entries}
+        if len(files) < rule["min_sites"]:
             errors.append(
-                f"fact:{fact} has {len(entries)} site(s), REQUIRED says at least "
+                f"fact:{fact} is tagged in {len(files)} file(s) "
+                f"({', '.join(sorted(files)) or 'none'}), REQUIRED says at least "
                 f"{rule['min_sites']}. A site was deleted or lost its marker."
             )
         if rule.get("claude_md") and not any(
@@ -214,6 +282,9 @@ def main():
 
     total = sum(len(v) for v in sites.values())
     print(f"fact check OK: {len(sites)} facts, {total} sites agree and are anchored.")
+    for fact, rule in sorted(REQUIRED.items()):
+        files = sorted({e["path"] for e in sites.get(fact, [])})
+        print(f"  {fact:22s} {len(files)} files: {', '.join(files)}")
     return 0
 
 

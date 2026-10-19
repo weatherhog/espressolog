@@ -255,7 +255,7 @@ instead of soldering to the board.
 | ~~Resistor kit, E12 1/4 W~~ | **Not required** — see `shopping-list.md`: it covers no named value, and cheap kits are 5 % where every divider here wants 1 %. All of them are in stock. | — |
 | 30 AWG silicone hookup wire, 4 colours | flexible, survives vibration | 8 |
 | JST pigtails, assorted pitch | **after** identifying connectors | 8 |
-| Perfboard **7 × 9 cm ×2** + **female** headers ×5 + sockets | 2.54 mm confirmed by mating; **7 × 9 for soldering room, not because 5 × 7 "does not fit"** — see CLAUDE.md, where that arithmetic is corrected. `shopping-list.md` is normative on parts and prices | 15 |
+| Perfboard **7 × 9 cm ×2** + **female** headers ×5 + sockets | 2.54 mm confirmed by mating; **7 × 9 for soldering room, not because 5 × 7 "does not fit"** — see `docs/board-and-perfboard.md`, where that arithmetic is corrected. `shopping-list.md` is normative on parts and prices | 15 |
 | Heat-shrink assortment | | 5 |
 | ~~Small ABS project box~~ **PRINTED** | the 120 × 80 size was chosen for a 5 × 7 board and **would not have fitted** the 70 × 90 one. See `shopping-list.md` | 0 |
 | **`CD74HC221E`** ×3, **AQY212EH DIP-4 ×8**, **BC547/2N3904 ×10**, **330 Ω**, one-shot caps, **3 × 2-pin header** (no shunts), DIP sockets | **moved into this order 2026-10-12** — the build populates them behind open jumpers rather than leaving footprints. `shopping-list.md` is normative on part numbers and prices; **this file is normative on counts and placement** | ~25 |
@@ -336,7 +336,8 @@ and the display bus dropped 6086 edges at pump start. Across 13 idle samples
 either side, both taps were perfectly silent.
 
 **Do not read "hash" into those counts.** What they measure is unresolved —
-CLAUDE.md 0d carries the live account; a published reading that they were
+`docs/flowmeter-j4.md` carries the live account (CLAUDE.md 0d has the
+conclusion); a published reading that they were
 pump noise has been withdrawn.
 
 | tap | source Z | signal | fit | cutoff |
@@ -645,7 +646,8 @@ does not work:
       5–10 mA recommendation wants. **And not a 2N7000** — V_GS(th) 0.8–3.0 V
       leaves a worst-case part 0.2 V of overdrive from 3.3 V logic. 
 
-      **Free GPIOs are not the constraint.** Against CLAUDE.md's pinout:
+      **Free GPIOs are not the constraint.** Against the pinout in
+      `docs/board-and-perfboard.md`:
       1, 2, 9-14, 18, 21, **38**, 39-42 and 47 (35-37 are PSRAM-internal;
       0, 3, 19, 20, 45, 46 are strapping or native USB; 43/44 are the UART0
       console, which `platformio.ini` names as the fallback flashing port, so
@@ -661,7 +663,8 @@ does not work:
       writes for those states.
       **One point was not enough**: green alone is what a green power
       indicator beside a dark RGB LED would also show, and a draft of this
-      line freed GPIO38 on exactly that. CLAUDE.md has the full grading.
+      line freed GPIO38 on exactly that. `docs/board-and-perfboard.md`
+      has the full grading.
 
       So the draft that listed 38 as free was right by accident, and the
       correction that hedged it was right to hedge. Neither was measurement;

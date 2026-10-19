@@ -393,8 +393,9 @@ Everything on the breadboard, all three T-pieces in the machine, firmware
 <!-- fact:divider-j4 100 K + 220 K -->
 | **J4 first contact** | **no `E01`.** The 100 K + 220 K is energised and the machine has not noticed — the tap that faulted it on 2026-10-03 |
 | **Worst poll gap** | **10 ms** on 2026-10-08 against that session's ~400 ms presses — **both halves of that ratio are superseded.** 2026-10-19 measured **42-57 ms** against **80-90 ms** presses, and missed two of six. The 40:1 headroom this row claimed is ~1.6:1. See the poll-gap reconciliation below; polling still stays, for reasons that are no longer this number |
-| 0d end to end | the PATH works — `inlet_pulses` reaches `shot_sample`. **What the numbers mean is unresolved**; see CLAUDE.md 0d |
-| **K-factor** | datasheet **2382 pulses/L** for our exact part. In-circuit counts are ~5× that and **what they are is unresolved** — see CLAUDE.md 0d |
+| 0d end to end | the PATH works — `inlet_pulses` reaches `shot_sample`. **What the numbers mean is unresolved**; see `docs/flowmeter-j4.md` |
+<!-- fact:digmesa-k-factor 2382 pulses/L -->
+| **K-factor** | datasheet **2382 pulses/L** for our exact part. In-circuit counts are ~5× that and **what they are is unresolved** — see `docs/flowmeter-j4.md` |
 
 **The 0d chain is proven by the data, not by inspection.** Shot 109 (fw
 0.8.2, no tap) stores `inlet_pulses` NULL; shots 110–112 (fw 0.9.0, tap live)
@@ -489,7 +490,7 @@ so the scale sees maybe 60 % of it. Per-second needs no volume at all.
 
 **THIS TEST HAS BEEN RUN — 2026-10-09 — and the table below is kept only as
 the prediction it made.** Two shots measured **~22 Hz**, which is none of the
-three columns. The 50 Hz column is **dead** (see CLAUDE.md 0d), the 5915
+three columns. The 50 Hz column is **dead** (see `docs/flowmeter-j4.md`), the 5915
 column rests on a figure now withdrawn, and what the counts measure is
 unresolved. Do not re-run this expecting it to decide anything.
 
@@ -1534,9 +1535,12 @@ had reached a commit message.)*
   22). The count had moved twice from successive closer looks, which is why a
   review flagged it as a visual scan standing as the premise of a layout
   claim. **The claim survives**: the signal column is 3V3 at position 1 and
-  GND at position 22, so no ground return crosses the board. CLAUDE.md now
-  carries the full board-read pinout for both columns, which replaces
-  Espressif's published layout as the reference for this clone.
+  GND at position 22, so no ground return crosses the board.
+  **`docs/board-and-perfboard.md` carries the full board-read pinout** for
+  both columns (it was in CLAUDE.md until 2026-10-19). It **corroborates**
+  Espressif's published layout for this clone rather than replacing it —
+  the two agree at all 44 positions, and the "replaces it" wording was
+  retracted in that file.
 - **`docs/shopping-list.md`'s "leaves no rows beside it" is refuted** — J is
   free. That line was used twice to argue the spacing was already partly
   constrained.
@@ -1693,8 +1697,10 @@ the display is back in temperature mode, so edges lost there cost nothing.
    the pool at all. `shot.excluded` exists for exactly this.
 
 2. **0b — display bus — DONE 2026-09-28.** The bus is decoded and the
-   display is readable from the wire. Protocol, probe point and bit
-   offsets are in CLAUDE.md; the decoder is `tools/decode-display-bus.py`
+   display is readable from the wire. Protocol and probe point are in
+   CLAUDE.md; **the bit offsets and the full decode are in
+   `docs/machine-display-bus.md`** (they were in CLAUDE.md until
+   2026-10-19); the decoder is `tools/decode-display-bus.py`
    and the raw captures are in `analysis/captures/`. Validation: the
    decoded shot timer ran `001`→`169` over 16.892 s of capture time.
    That is 168 displayed steps, i.e. **16.8 s against 16.892 s — +92 ms**.
@@ -2226,7 +2232,7 @@ the display is back in temperature mode, so edges lost there cost nothing.
    symbol-reading below is now a record of how it was guessed, not of what
    is known:
 
-   <!-- fact:j4-conductor-map yellow|green|black|continuity beep to J5 pin 1|5.0 V, steady through a flush|0.3 V parked -->
+   <!-- fact:j4-conductor-map ground | yellow;;green | 5.0 V, steady through a flush;;black | 0.3 V parked;;continuity beep to J5 pin 1 -->
 
    | Marking | Role | On the 2S T-piece lead | Measured |
    |---|---|---|---|
@@ -2287,13 +2293,26 @@ the display is back in temperature mode, so edges lost there cost nothing.
       > hang a pull-up on it.** It is the machine's own sensor rail off a
       > 3 W IRM-03-5.
 
-      **THIS IS THE DELIBERATE BACKUP COPY. Normative home: `CLAUDE.md`,
-      the standalone block directly under the six invariants.** Duplication
-      is this repo's signature defect and is collapsed everywhere else;
-      here it is kept on purpose, because the same rule has been lost from
-      CLAUDE.md three times (see the note further down this entry). If the
-      two ever disagree, CLAUDE.md wins — and the disagreement is itself
-      the bug. Changing either means changing both in the same commit.
+      <!-- fact:j4-plus-readonly read-only, through a high-impedance meter, and nothing else|nothing that sources or sinks current|never power the ESP32 from it|3 W IRM-03-5 -->
+
+      **THIS IS THE DELIBERATE SECOND STATEMENT OF THE RULE. Normative
+      home: `CLAUDE.md`, the standalone block directly under the six
+      invariants.** Duplication is this repo's signature defect and is
+      collapsed everywhere else; here it is kept on purpose, because the
+      same rule has been lost from CLAUDE.md three times (see the note
+      further down this entry). If the two ever disagree, CLAUDE.md wins —
+      and the disagreement is itself the bug. Changing either means
+      changing both in the same commit.
+
+      **It is deliberately NOT byte-identical, and a draft of CLAUDE.md's
+      pointer called it "verbatim".** This copy omits the closing *"A 20 MΩ
+      DMM is fine, and is how its 5.0 V was read on 2026-10-04"*, because
+      the sentence introducing this blockquote already says exactly that.
+      The four clauses that carry the rule are fact-tagged on both sides —
+      read-only through a high-impedance meter and nothing else, nothing
+      that sources or sinks current, never power the ESP32 from it, and the
+      3 W IRM-03-5 rail — so CI fails if either side loses one. The
+      trailing sentence is provenance, not rule.
 
       Two earlier drafts were wrong in opposite directions. "Must not be
       probed" is contradicted by the step above and discards the evidence
@@ -2532,9 +2551,11 @@ the display is back in temperature mode, so edges lost there cost nothing.
      5 × 147.4/157.44 = **4.681 V** against **4.69 V measured**, so the
      model is right and the source impedance is R_pu ∥ R_pd = **9.4 kΩ**.
 
-     **The corner analysis for this divider lives in CLAUDE.md and is NOT
-     repeated here — it used to be, verbatim, and the two copies had already
-     drifted.** This file said the chosen divider disturbs the node by
+     **The corner analysis for this divider lives in
+     `docs/taps-and-dividers.md` and is NOT repeated here — it used to be,
+     verbatim, and the two copies had already drifted.** *(It was in
+     CLAUDE.md when this was written and moved out on 2026-10-19; CLAUDE.md
+     still carries the fitted value and the 134 mV.)* This file said the chosen divider disturbs the node by
      *"126 mV (2.7 %)"*; CLAUDE.md says **134 mV (2.9 %)**, and invariant 1
      quotes the 2.9 % as the J4 figure. **134 mV / 2.85 % is correct**
      (unloaded 4.681 V against 4.548 V loaded). The 126 mV was wrong, in the
@@ -2548,7 +2569,8 @@ the display is back in temperature mode, so edges lost there cost nothing.
      deleted rather than corrected, because correcting both leaves two things
      to keep in step.
 
-     **Normative home: CLAUDE.md, the 0d divider table.** What stays here is
+     **Normative home: `docs/taps-and-dividers.md` for the arithmetic,
+     CLAUDE.md for the fitted value and the 134 mV (2.9 %).** What stays here is
      the *measurement* above (10.04 kΩ, 147.4 kΩ, 4.69 V) — this file is the
      bench record — and the fitted value: **100 K + 220 K since 2026-10-08**,
      the 120 K it was designed around never having been in stock.

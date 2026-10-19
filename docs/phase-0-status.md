@@ -33,6 +33,7 @@ best-effort.**
 
 **And know what the hot-water guard costs — IT LOOKS TOO SHORT, 2026-10-19.**
 A lever-B draw blocks flash writes, uploads and SNTP for a flat
+<!-- fact:brew-guard-ms 75 s -->
 `BREW_GUARD_MS` (75 s). The bench question this paragraph used to ask —
 *"does lever B latch, and how long is a typical draw?"* — is half answered:
 **it latches** (observed), a second press stops it (observed), and left alone
@@ -384,6 +385,9 @@ Everything on the breadboard, all three T-pieces in the machine, firmware
 
 ### Settled
 
+<!-- fact:divider-j4 100 K + 220 K -->
+<!-- fact:digmesa-k-factor 2382 pulses/L -->
+
 | | |
 |---|---|
 | **`selftest`** | **500/500, 0 glitches, 0 ring drops** at 100 Hz — 6.3× the rate at the sensor's rated max flow (0.40 L/min × 2382 = 15.9 Hz). The one thing host tests cannot establish, because a real shot has no independent count to check against. |
@@ -391,8 +395,8 @@ Everything on the breadboard, all three T-pieces in the machine, firmware
 | **Lever B** | **plug inspection → functional.** B up logged `water`, B down logged `steam` |
 | **J4 first contact** | **no `E01`.** The 100 K + 220 K is energised and the machine has not noticed — the tap that faulted it on 2026-10-03 |
 | **Worst poll gap** | **10 ms** on 2026-10-08 against that session's ~400 ms presses — **both halves of that ratio are superseded.** 2026-10-19 measured **42-57 ms** against **80-90 ms** presses, and missed two of six. The 40:1 headroom this row claimed is ~1.6:1. See the poll-gap reconciliation below; polling still stays, for reasons that are no longer this number |
-| 0d end to end | the PATH works — `inlet_pulses` reaches `shot_sample`. **What the numbers mean is unresolved**; see CLAUDE.md 0d |
-| **K-factor** | datasheet **2382 pulses/L** for our exact part. In-circuit counts are ~5× that and **what they are is unresolved** — see CLAUDE.md 0d |
+| 0d end to end | the PATH works — `inlet_pulses` reaches `shot_sample`. **What the numbers mean is unresolved**; see `docs/flowmeter-j4.md` |
+| **K-factor** | datasheet **2382 pulses/L** for our exact part. In-circuit counts are ~5× that and **what they are is unresolved** — see `docs/flowmeter-j4.md` |
 
 **The 0d chain is proven by the data, not by inspection.** Shot 109 (fw
 0.8.2, no tap) stores `inlet_pulses` NULL; shots 110–112 (fw 0.9.0, tap live)
@@ -487,7 +491,7 @@ so the scale sees maybe 60 % of it. Per-second needs no volume at all.
 
 **THIS TEST HAS BEEN RUN — 2026-10-09 — and the table below is kept only as
 the prediction it made.** Two shots measured **~22 Hz**, which is none of the
-three columns. The 50 Hz column is **dead** (see CLAUDE.md 0d), the 5915
+three columns. The 50 Hz column is **dead** (see `docs/flowmeter-j4.md`), the 5915
 column rests on a figure now withdrawn, and what the counts measure is
 unresolved. Do not re-run this expecting it to decide anything.
 
@@ -1074,6 +1078,7 @@ day. Note how little of it is new:**
 - **The floor failure is the solid finding.** As built, 15 kΩ sits at
   **−70 to −87 mV**. It must not go onto the perfboard. This has survived
   every round.
+<!-- fact:divider-j5-shunt 16.4 K -->
 - **Fit 16.4 kΩ** — two 8.2 K in series, 25 in stock. **+18 mV** at the
   pessimistic floor corner, node disturbance **16.0 %** against the built
   16.8 %, loading 171 µA against 179 µA, and the clamp stays off at the
@@ -1531,9 +1536,12 @@ had reached a commit message.)*
   22). The count had moved twice from successive closer looks, which is why a
   review flagged it as a visual scan standing as the premise of a layout
   claim. **The claim survives**: the signal column is 3V3 at position 1 and
-  GND at position 22, so no ground return crosses the board. CLAUDE.md now
-  carries the full board-read pinout for both columns, which replaces
-  Espressif's published layout as the reference for this clone.
+  GND at position 22, so no ground return crosses the board.
+  **`docs/board-and-perfboard.md` carries the full board-read pinout** for
+  both columns (it was in CLAUDE.md until 2026-10-19). It **corroborates**
+  Espressif's published layout for this clone rather than replacing it —
+  the two agree at all 44 positions, and the "replaces it" wording was
+  retracted in that file.
 - **`docs/shopping-list.md`'s "leaves no rows beside it" is refuted** — J is
   free. That line was used twice to argue the spacing was already partly
   constrained.
@@ -1690,8 +1698,10 @@ the display is back in temperature mode, so edges lost there cost nothing.
    the pool at all. `shot.excluded` exists for exactly this.
 
 2. **0b — display bus — DONE 2026-09-28.** The bus is decoded and the
-   display is readable from the wire. Protocol, probe point and bit
-   offsets are in CLAUDE.md; the decoder is `tools/decode-display-bus.py`
+   display is readable from the wire. Protocol and probe point are in
+   CLAUDE.md; **the bit offsets and the full decode are in
+   `docs/machine-display-bus.md`** (they were in CLAUDE.md until
+   2026-10-19); the decoder is `tools/decode-display-bus.py`
    and the raw captures are in `analysis/captures/`. Validation: the
    decoded shot timer ran `001`→`169` over 16.892 s of capture time.
    That is 168 displayed steps, i.e. **16.8 s against 16.892 s — +92 ms**.
@@ -2088,6 +2098,7 @@ the display is back in temperature mode, so edges lost there cost nothing.
    in parallel with any of those shifts nothing), and it is recorded only
    so nobody later mistakes "drops to zero" for a measured pull-down.
 
+   <!-- fact:divider-j2 150 K / 220 K -->
    Divider **150 K / 220 K** into the GPIO (5 V → 2.97 V, 13.5 µA,
    dropping **1.35 mV** across R45). **The 5 V is measured, which is the
    step skipped at J4.**
@@ -2222,11 +2233,21 @@ the display is back in temperature mode, so edges lost there cost nothing.
    symbol-reading below is now a record of how it was guessed, not of what
    is known:
 
+   <!-- fact:j4-conductor-map ground | yellow;;green | 5.0 V, steady through a flush;;black | 0.3 V parked;;continuity beep to J5 pin 1 -->
+
    | Marking | Role | On the 2S T-piece lead | Measured |
    |---|---|---|---|
    | `T` (middle) | **ground** | yellow | continuity beep to J5 pin 1 `VSS`; **no resistance value recorded** |
    | `+` | **+5 V supply** | green | 5.0 V, steady through a flush |
    | `#` | **signal** | black | 0.3 V parked, **2.5 V averaged during flow** |
+
+   **Normative home for the conductor map is CLAUDE.md**, which carries the
+   same three rows beside the J4 conditioning. This copy is the **bench
+   record** and keeps what CLAUDE.md does not: that `T` is the middle
+   conductor, which symbols were guessed right, and the confidence-label
+   lesson below. The three roles and the three colours are tagged on both
+   sides, so `tools/check-facts.py` fails if they ever diverge — which is
+   the one divergence here that could put a probe on the wrong wire.
 
    The guesses that turned out right: `T` as the IEC earth symbol ⏚ (a
    stem on a bar), `#` as a square-wave symbol ⌍. Both were labelled
@@ -2273,6 +2294,27 @@ the display is back in temperature mode, so edges lost there cost nothing.
       > hang a pull-up on it.** It is the machine's own sensor rail off a
       > 3 W IRM-03-5.
 
+      <!-- fact:j4-plus-readonly read-only, through a high-impedance meter, and nothing else|nothing that sources or sinks current|never power the ESP32 from it|3 W IRM-03-5 -->
+
+      **THIS IS THE DELIBERATE SECOND STATEMENT OF THE RULE. Normative
+      home: `CLAUDE.md`, the standalone block directly under the six
+      invariants.** Duplication is this repo's signature defect and is
+      collapsed everywhere else; here it is kept on purpose, because the
+      same rule has been lost from CLAUDE.md three times (see the note
+      further down this entry). If the two ever disagree, CLAUDE.md wins —
+      and the disagreement is itself the bug. Changing either means
+      changing both in the same commit.
+
+      **It is deliberately NOT byte-identical, and a draft of CLAUDE.md's
+      pointer called it "verbatim".** This copy omits the closing *"A 20 MΩ
+      DMM is fine, and is how its 5.0 V was read on 2026-10-04"*, because
+      the sentence introducing this blockquote already says exactly that.
+      The four clauses that carry the rule are fact-tagged on both sides —
+      read-only through a high-impedance meter and nothing else, nothing
+      that sources or sinks current, never power the ESP32 from it, and the
+      3 W IRM-03-5 rail — so CI fails if either side loses one. The
+      trailing sentence is provenance, not rule.
+
       Two earlier drafts were wrong in opposite directions. "Must not be
       probed" is contradicted by the step above and discards the evidence
       that a high-impedance probe is safe. "Nothing with an input clamp"
@@ -2315,6 +2357,7 @@ the display is back in temperature mode, so edges lost there cost nothing.
    | Output | **NPN open collector**, 0 VDC active, saturation <0.7 V | Daitron + Digmesa product pages, corroborated |
    | Signal load | max 20 mA | as above |
    | Supply | **+3.8 to +20 VDC**, <8 mA | **the datasheet, retrieved 2026-10-09.** The "+2.8 V" that contradicted it was the 9NB nano brass — a different Digmesa product |
+   <!-- fact:digmesa-k-factor 2382 pulses/L -->
    | K-factor | **2382 pulses/L** for `#932-9525-B` Ø1.00 mm 0° | **the datasheet itself, retrieved 2026-10-09** |
    | Accuracy | ± 2.0 % | product pages |
 
@@ -2487,9 +2530,11 @@ the display is back in temperature mode, so edges lost there cost nothing.
 
    Related: the `+` safety rule has been lost from CLAUDE.md **three
    times**, each time because it lived as a row in the conditioning table
-   and the table was rewritten when the divider changed. It is now a
-   standalone block beneath that table. Rewrite the divider freely; leave
-   that block alone.
+   and the table was rewritten when the divider changed. **As of 2026-10-19
+   it is no longer beneath that table at all** — it is a standalone `##`
+   block directly under the six invariants at the top of CLAUDE.md, ~2300
+   lines away from the divider that kept eating it. Rewrite the divider
+   freely; the rule is not in that neighbourhood any more.
 
    **Carry into the retry:**
 
@@ -2507,13 +2552,16 @@ the display is back in temperature mode, so edges lost there cost nothing.
      5 × 147.4/157.44 = **4.681 V** against **4.69 V measured**, so the
      model is right and the source impedance is R_pu ∥ R_pd = **9.4 kΩ**.
 
-     **The corner analysis for this divider lives in CLAUDE.md and is NOT
-     repeated here — it used to be, verbatim, and the two copies had already
-     drifted.** This file said the chosen divider disturbs the node by
+     **The corner analysis for this divider lives in
+     `docs/taps-and-dividers.md` and is NOT repeated here — it used to be,
+     verbatim, and the two copies had already drifted.** *(It was in
+     CLAUDE.md when this was written and moved out on 2026-10-19; CLAUDE.md
+     still carries the fitted value and the 134 mV.)* This file said the chosen divider disturbs the node by
      *"126 mV (2.7 %)"*; CLAUDE.md says **134 mV (2.9 %)**, and invariant 1
      quotes the 2.9 % as the J4 figure. **134 mV / 2.85 % is correct**
      (unloaded 4.681 V against 4.548 V loaded). The 126 mV was wrong, in the
      one number the project's top-line invariant cites.
+     <!-- fact:j4-node-disturbance 134 mV|2.9 % -->
 
      **The mechanism is worth more than the fix.** The duplicated block ended
      with the sentence *"CLAUDE.md carries the corner table"* — it deferred to
@@ -2522,10 +2570,12 @@ the display is back in temperature mode, so edges lost there cost nothing.
      deleted rather than corrected, because correcting both leaves two things
      to keep in step.
 
-     **Normative home: CLAUDE.md, the 0d divider table.** What stays here is
+     **Normative home: `docs/taps-and-dividers.md` for the arithmetic,
+     CLAUDE.md for the fitted value and the 134 mV (2.9 %).** What stays here is
      the *measurement* above (10.04 kΩ, 147.4 kΩ, 4.69 V) — this file is the
      bench record — and the fitted value: **100 K + 220 K since 2026-10-08**,
      the 120 K it was designed around never having been in stock.
+     <!-- fact:divider-j4 100 K + 220 K -->
      **Never 150 K**: in the drawer, fine nominally, fails at −45 mV.
 
      The earlier derivation here assumed a push-pull source and quoted

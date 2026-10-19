@@ -1,4 +1,4 @@
-# Four jobs, all on standard GitHub-hosted runners so a public repo pays
+# Five jobs, all on standard GitHub-hosted runners so a public repo pays
 # nothing. Do NOT switch any of these to a larger runner: those are billed
 # even on public repositories.
 #
@@ -29,6 +29,20 @@
 #                    host tests build the pure-logic files with a host
 #                    compiler and never touch the Arduino toolchain, so
 #                    nothing else would catch a break there.
+#   facts          — THE NEWEST JOB, and the only one that guards prose.
+#                    This repo's most-logged defect is a number corrected in
+#                    one file while a stale copy survives in another; it has
+#                    happened at least three times in the week to 2026-10-19.
+#                    The one that mattered: docs/phase-0-status.md said the
+#                    J4 divider disturbs its node by "126 mV (2.7 %)" while
+#                    CLAUDE.md said "134 mV (2.9 %)" -- and CLAUDE.md's hard
+#                    invariant 1 cites that 2.9 % as the ONLY one of its
+#                    three disturbance figures backed by a meter. The wrong
+#                    copy sat under the project's top-line safety clause.
+#                    Pointers were tried twice and failed: status.md once
+#                    carried "CLAUDE.md carries the corner table" AND its
+#                    own drifted copy of that table, right beneath it. A
+#                    test had not been tried. tools/check-facts.py is it.
 #   web            — catches a PWA that no longer builds, which would
 #                    otherwise only surface at `make deploy`, and lints the
 #                    React. The lint is here because `vite build` is blind to
@@ -162,6 +176,16 @@ jobs:
       # it — and this job is what proves that stays true.
       - run: pio run
         working-directory: firmware
+
+  facts:
+    name: facts (cross-file agreement)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      # No setup-python step: the script is stdlib-only and the hosted
+      # runner's python3 is ample. Adding a toolchain here would make the
+      # cheapest job in the matrix the slowest one.
+      - run: python3 tools/check-facts.py
 
   web:
     name: web (lint + build)

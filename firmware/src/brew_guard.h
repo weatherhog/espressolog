@@ -31,6 +31,10 @@ public:
   // makes this constant doubtful -- a hot-water draw is, see CLAUDE.md. It is a
   // conservative guess, not a measurement, and it is the dominant cost of the
   // hot-water path — see busy(). Measuring a real draw would let it shrink.
+  //
+  // 75000 ms = 75 s. Every prose site that quotes this constant quotes the
+  // seconds; this header is the source of truth for both.
+  // fact:brew-guard-ms 75 s
   static constexpr uint32_t BREW_GUARD_MS = 75000;
 
   // Everything main.cpp knows, passed in. Nothing is read from a global.

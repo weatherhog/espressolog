@@ -5,6 +5,51 @@ Currently **Phase 0: logging only.**
 
 ---
 
+## Where things are — look here before grepping
+
+This file is auto-loaded into every session, so it carries **live
+conclusions** and nothing else. The measurements, corner tables and
+retraction histories that justify them moved out on 2026-10-19 to the files
+below. **A fact is never only in a moved file**: if a number matters to a
+decision, it is stated here too, and `tools/check-facts.py` fails CI when the
+two copies disagree.
+
+**Keyed by what you are about to do, not by filename** — the filenames are
+the thing you do not know yet.
+
+<!-- The index below restates numbers that are normative elsewhere, so it is
+     tagged like any other site. Markers sit ABOVE the table: a marker between
+     two GFM rows breaks the table, which is how this one was first written. -->
+<!-- fact:divider-j2 150 K / 220 K -->
+<!-- fact:divider-j4 100 K + 220 K -->
+<!-- fact:divider-j5-shunt 16.4 K -->
+<!-- fact:brew-guard-ms 75 s -->
+
+| If you are about to… | read | live conclusion, in one line |
+|---|---|---|
+| **touch any machine signal at all** | the invariants, immediately below — nothing else first | Phase 0 never actuates; drive hardware may exist only behind an **open jumper in series with its OUTPUT** |
+| **put anything on the J4 `+` conductor** | the `##` block directly under the invariants | **read-only, high-impedance meter, nothing else.** This rule has been lost three times |
+| **choose or substitute a divider resistor** | `docs/taps-and-dividers.md` | J2 **150 K / 220 K**, J4 **100 K + 220 K**, J5 **8.2 K / 16.4 K**, `Disp-P4` **no shunt ever** |
+| **write actuation or one-shot code** | `docs/machine-switches-j2.md` | a hold **> ~2 s REPROGRAMS** the stored duration; use a **74HC221**, never a '123; the RC is unchosen and failing short is **silent** |
+| **trust `BREW_GUARD_MS`** | `firmware/src/brew_guard.h`, then the **LEVER B LATCHES** bullet in *Machine: Ascaso Dream PID* | it is 75 s, it is too short for a lever-B draw, **and it can fail to ARM entirely** — an unguarded invariant-2 exposure |
+| **parse or re-capture the display bus** | `docs/machine-display-bus.md` | 67/66 pair, **not** 133-bit frames; GPIO4 clock, GPIO5 data, and a swap is **silent** (`frames=0`, levels perfect) |
+| **read `boiler_temp_start_c`** | `docs/machine-display-bus.md` | at ` 95` it is indistinguishable from the **setpoint**, and that is the only range it is ever sampled in |
+| **believe a flowmeter pulse count** | `docs/flowmeter-j4.md` | counts are **~5× the datasheet and UNRESOLVED** — and the 5× itself divides by an **assumed** inlet |
+| **plan a flowmeter experiment** | `docs/flowmeter-j4.md` | **0d-i first** (weigh the split). And check whether the operator already does it every morning — three for three so far |
+| **compare flow data across sessions** | `docs/flowmeter-j4.md` | the **OPV is adjustable state and nothing records it** — invariant-5 class |
+| **pick a free GPIO, or drill the perfboard** | `docs/board-and-perfboard.md` | **GPIO48 is the LED, so GPIO38 is free**; GPIO33–37 unusable; 5Vin at position 21 beside GND at 22 is a **solder hazard** |
+| **tee into the water circuit** | `docs/hydraulics.md` | everything is 1/8, the **gauge end cannot be teed**, there are **no spare ports**, and **whether invariant 1 covers plumbing is UNDECIDED** |
+| **work out what has actually been built and bench-tested** | `docs/phase-0-status.md` | the bench record and the resume point |
+| **buy a part** | `docs/shopping-list.md` | supersedes the parts tables in `docs/phase-0-plan.md` |
+
+**The rule for everything above: changing a number in one of those files
+means grepping this file for it in the same commit.** This repo's
+most-logged defect is a fact corrected in one place while a stale copy
+survives in another; it has happened at least three times in the week to
+2026-10-19, and `tools/check-facts.py` only covers the tagged facts.
+
+---
+
 ## Hard invariants
 
 Violating any of these is a bug, not a design choice.
@@ -17,13 +62,36 @@ Violating any of these is a bug, not a design choice.
    briefly sinks microamps through 150 K is passive in the sense meant
    here; a photoMOS closing a 5 V common onto a direction line is not.
 
-   **How high-impedance, honestly:** J4 disturbs its node by **2.9 %**, J2
-   by ~1 mV, but **J5 pulls its line from 5.0 V to 4.16 V — a 17 %
-   disturbance at 179 µA**. **That J5 figure is CALCULATED, not measured, and
-   this clause called it measured until 2026-10-19.** It entered at `7182c56`
-   as *"4.7 K pull-ups, so a 23.2 K divider leaves them at 4.16 V"* — the
-   "so" is a derivation — and no meter reading of that node exists. The
-   179 µA is the same arithmetic again (0.84 V / 4.7 K). J2's ~1 mV is
+   <!-- fact:j4-node-disturbance 134 mV|2.9 % -->
+   **How high-impedance, honestly:** J4 disturbs its node by **134 mV
+   (2.9 %)**, J2 by ~1 mV, but **J5 pulls its line from 5.0 V to 4.20 V —
+   a 16.0 % disturbance at 171 µA**.
+
+   **That J5 figure is CALCULATED, not measured, and this clause called it
+   measured until 2026-10-19.** It entered at `7182c56` as *"4.7 K pull-ups,
+   so a 23.2 K divider leaves them at 4.16 V"* — the "so" is a derivation —
+   and no meter reading of that node exists. The current is the same
+   arithmetic again (0.80 V / 4.7 K).
+
+   **AND IT WAS PINNED TO A SHUNT THIS FILE TELLS YOU NOT TO FIT, until
+   2026-10-19.** 4.16 V / 17 % / 179 µA is the **as-built 15 K** (8.2 + 15
+   against the 4.7 K pull-up). The display-bus entry below, together with
+   `docs/taps-and-dividers.md` and `docs/shopping-list.md`, supersedes that
+   in favour of **16.4 K**, which fails no tolerance corner — so the
+   project's top-line invariant was quoting the value the build is meant to
+   move away from. Both, for the record:
+
+   | J5 shunt | line sits at | disturbance | current |
+   |---|---|---|---|
+   | 15 K — as built, superseded | 4.16 V | 16.8 % | 179 µA |
+   | **16.4 K — specified** | **4.20 V** | **16.0 %** | **171 µA** |
+
+   Nothing in the clause turns on which: J5 is the large disturbance either
+   way, and that is the whole reason it is named here. The headline figure is
+   the specified build because that is what a reader is about to solder.
+   *(17 % was the 15 K number rounded; 16.8 % is what it actually is.)*
+
+   J2's ~1 mV is
    likewise calculated; **J4's 2.9 % is the only one of the three backed by a
    meter**, and there the same model predicted 4.681 V against a measured
    4.69 V, which is the reason to trust the J5 number while still grading it
@@ -100,19 +168,50 @@ Violating any of these is a bug, not a design choice.
 
 ---
 
+## The J4 `+` rule — one hard safety rule, and it does not live in a table
+
+<!-- fact:j4-plus-readonly read-only, through a high-impedance meter, and nothing else|nothing that sources or sinks current|never power the ESP32 from it|3 W IRM-03-5 -->
+> **`+` is read-only, through a high-impedance meter, and nothing else.**
+> Nothing with an input clamp — no analyser, no GPIO, no divider — **and
+> nothing that sources or sinks current: never power the ESP32 from it,
+> never feed it from another supply, never hang a pull-up on it.** It is
+> the machine's own sensor rail off a 3 W IRM-03-5. A 20 MΩ DMM is fine,
+> and is how its 5.0 V was read on 2026-10-04.
+
+**Why it is HERE and not with the flowmeter, where it belongs topically.**
+This block was inside milestone 0d, ~2300 lines below the invariants, and
+`docs/phase-0-status.md` records that **the rule has been lost from
+CLAUDE.md three times** — each time because it lived as a row in the J4
+conditioning table, and the table was rewritten whenever the divider value
+changed. It is deliberately **outside** that table, and now outside that
+section. Rewrite the divider as often as you like; do not touch this.
+
+`docs/phase-0-status.md` carries a **second statement of the same rule**,
+marked as such. Duplication is wrong almost everywhere else in this repo;
+for a rule with this loss record it is the point.
+
+**It is not byte-identical and should not be described as verbatim** — a
+draft of this paragraph did, and a review caught it. status.md's copy omits
+the closing *"A 20 MΩ DMM is fine, and is how its 5.0 V was read on
+2026-10-04"* because the sentence immediately above it there already says
+exactly that. What has to match is the **rule**, and the four clauses that
+carry it are fact-tagged on both sides: read-only through a high-impedance
+meter and nothing else, nothing that sources or sinks current, never power
+the ESP32 from it, and that it is the machine's own 3 W IRM-03-5 sensor
+rail. CI fails if either side loses one.
+
+---
+
 ## Hardware facts (verified, do not re-derive)
 
 ### Machine: Ascaso Dream PID
 
-**The display shows `02.4` for ~3 s at power-on** (read 2026-10-05). It is
-**probably a firmware version — that is an interpretation, not something
-observed**; all anyone has seen is the string. Which firmware, display
-controller or main MCU, is also unknown.
-
-Recorded anyway because every decode in this file came from **this machine
-in this state**: the glyph table, the bit offsets, the timer flag at 114,
-the 67/66 structure. If a future capture disagrees, check whether `02.4`
-still shows before assuming the protocol changed.
+**The display shows `02.4` for ~3 s at power-on** — probably a firmware
+version, but all anyone has seen is the string. It matters only as a
+provenance marker: **every decode in `docs/machine-display-bus.md` came from
+this machine in this state**, so if a future capture disagrees with the glyph
+table or the bit offsets, check whether `02.4` still shows before assuming
+the protocol changed.
 
 
 Control board MCU is an **STM32F030R8T6** (LQFP64, 64 KB flash). Read off
@@ -135,7 +234,7 @@ Pin map, from the traced schematic:
 | Pump_Ctrl | PA15 | → FODM3053 → BTA204S triac (random-phase) |
 | Solenoid_CTRL | PB12 | |
 | HTR_CTRL | PB15 | |
-| display link | PB7/PB8 or PB8/PB9 | **UNRESOLVED — and nothing below resolves it.** `PB7`/`PB8`/`PB9` appear nowhere else in this file; the J5 section decodes the bus without ever establishing which MCU pins it lands on. The cell said "see below" until 2026-10-19, pointing at nothing. |
+| display link | PB7/PB8 or PB8/PB9 | **UNRESOLVED, and nothing in this repo resolves it.** Checked 2026-10-19: `PB7`/`PB8`/`PB9` appear in exactly one other place, `docs/phase-0-plan.md`, which is where the ambiguity came from — *"either hardware I²C on PB8/PB9 or a bit-banged two-wire link on PB7/PB8"*. `docs/machine-display-bus.md` decodes the bus completely without ever establishing which MCU pins it lands on, and does not need to. The cell said "see below" until 2026-10-19, pointing at nothing. |
 
 **Switch electrical — MEASURED 2026-10-04**, not taken from the schematic:
 +5 V → R45 (100 R) → switch common. The common (J2 conductor 1) reads
@@ -172,19 +271,10 @@ likely unwired on a Dream"*. Both wrong:
 | B | Hot Water | Steam | **functional (3-link)** — the directions were already observed (Water runs the pump, Steam drives the boiler to 165 °C), and **2026-10-08 closed the conductor→function mapping** by watching each direction drive its own J2 line through the fitted tap. |
 
 All four are wired, and both levers share conductor 1 as their common.
-**All four conductor→function assignments are now functional.** 1Cup/2Cup
-came from lever-operated continuity on 2026-10-04; Steam/Water was plug
-inspection until **2026-10-08**, when the 0c tap went live and each lever
-direction was watched driving its own line into its own GPIO.
-
-**It is not quite the same grade as lever A's, and the difference is worth
-keeping.** Lever A's mapping is one link: a lever closes, a continuity pair
-closes. Lever B's is three — the tap test fixes conductor→GPIO→firmware
-name, and the conductor→*function* step still leans on the 2026-10-04
-behavioural observations (B up runs the pump, B down drives the boiler to
-165 °C), which were observed rather than instrumented, plus the breadboard
-lead routing. The conclusion is sound — a swap of 2/5 would have logged
-`steam` for B up — but it is a three-link claim, not a one-link one.
+**All four conductor→function assignments are functional** — but **lever A's
+is a one-link claim and lever B's is a three-link one**, and
+`docs/machine-switches-j2.md` keeps the difference. The conclusion is sound
+either way; the grades are not interchangeable.
 
 **Two consequences of lever B, found 2026-10-04 and not yet designed for:**
 
@@ -194,22 +284,18 @@ lead routing. The conclusion is sound — a swap of 2/5 would have logged
   that detects a *user* editing the setpoint, not the machine moving its
   own target.
 
-  **And the display DOES detect it — captured 2026-10-05.** Through a steam
-  cycle the display blinks **`165`** for 49 s, then after release blinks
-  **`95`** while cooling. Unmistakable on the bus, and a *better* signal
-  than a switch tap because it says how hot and when it came back, not
-  merely that a press happened.
-
-  **So the J2 Steam tap is redundant for detecting steam.** Fitting it is
-  still fine — the operator asked for all four functions — but it is not
-  required for `boiler_temp_start_dc` integrity, and this entry should not
-  claim it is.
+  **The display DOES detect it** — it blinks `165` through the cycle then
+  `95` while cooling, which is a better signal than a switch tap because it
+  says how hot and when it came back. **So the J2 Steam tap is redundant for
+  detecting steam.** Fit it because the operator asked for all four
+  functions, not because `boiler_temp_start_dc` needs it.
 - **LEVER B LATCHES — observed 2026-10-19, and it changes the brew guard.**
   A momentary press up starts the pump; it **keeps running after release**,
   and a **second press stops it** — the same latching behaviour as lever A.
   Left alone it runs for *"a couple of minutes"* (operator, approximate) and
   then returns to brewing mode on its own. Steam behaves the same way.
 
+  <!-- fact:brew-guard-ms 75 s -->
   **So `BREW_GUARD_MS = 75 s` can expire while the pump is still running** —
   a draw of "a couple of minutes" outlasts it. Note the mechanism precisely:
   `onRelease()` stores a **backdated** `pressed_at_ms`, so the guard runs from
@@ -296,788 +382,179 @@ and when.
 
 Consequences: there is no way to stop the machine by opening the switch
 line, so no fail-safe-open design is possible on that path. And any future
-actuator that can hold the line will silently reprogram the machine. Phase 1
-must use a hardware one-shot so firmware can *trigger* but never *hold*.
+actuator that can hold the line will silently reprogram the machine.
 
-**The pulse width's UPPER bound is sound and its LOWER bound is not
-established.** ~120 ms is comfortably under the ~2 s reprogram threshold, and
-no RC tolerance gets near it. But nothing has established the shortest press
-this board actually latches.
+**SO PHASE 1 MUST USE A HARDWARE ONE-SHOT, so firmware can *trigger* but
+never *hold*.** **Use the 74HC221, NOT the
+74HC123**: the '123 is **retriggerable**, so a GPIO oscillating faster than
+~8 Hz (a boot loop, a brown-out, a floating pin) holds its output high
+indefinitely, which is exactly the failure the one-shot exists to prevent.
+The NE555 has the mirror-image trap and needs an RC+diode differentiator
+before it is safe here; the '221 avoids the question.
 
-**The 345–480 ms figure IS machine presses — confirmed by the operator
-2026-10-12, after a review questioned it.** It was recorded on 2026-10-08, by
-hand on the levers.
+**THE RC IS NOT CHOSEN, and the reason it matters is that getting it wrong
+is SILENT**: a one-shot that is too short produces a drive path that does
+nothing, while the sense tap still shows the pulse — so it looks like it
+worked. ~120 ms is comfortably under the ~2 s reprogram threshold, which
+bounds it above. Below, all that is established is that **presses the poller
+measured at 80–90 ms latched, so the true threshold is under ~140 ms** — and
+that reading is quantised by a 42–57 ms poll gap, so 80 ms means a true width
+anywhere in roughly [23, 137] ms. **It is not enough to choose the RC.**
+Redo it with the logic analyser on a J2 junction.
 
-**"Every press ever measured" is no longer true — superseded 2026-10-19**,
-which logged ten 1Cup presses at **195–295 ms** and four at **80–90 ms**.
+**Do not quote 345–480 ms as "the machine's press range".** It is one
+session's presses (2026-10-08), it is superseded by 2026-10-19's 195–295 ms
+and 80–90 ms, and at least six places in this repo cite it. **`grep -rn
+'345.480'` finds them; a prose list of citation sites cannot, and this file
+has published a wrong one twice.**
 
-**"All latching" is how a draft put it, and the record does not support that
-for all fourteen.** The operator watched the pump answer each of the **six
-fast presses** (four of which were logged); the ten longer ones are durations
-read off the tap, with no separate note that the machine responded to each.
-**The latching evidence is the fast six.** The ten establish the width range
-only. Treat 345–480 ms as *one session's* presses, not the machine's
-range.
+**That whole one-shot argument predates the discovery of the second lever**
+and nobody has walked it through a two-lever, shared-common topology. The
+conclusions look unaffected; they were derived from a one-switch model.
 
-**AT LEAST SIX PLACES CITE IT.** *(This paragraph led with "FOUR" until
-2026-10-19 and corrected itself 23 lines later — so a reader skimming the bold
-text took away the superseded number. The live count leads now.)* Not the two
-a draft listed. That draft named
-`brew_guard.cpp:21` and `main.cpp:1109` and presented the list as complete; a
-review found `docs/phase-0-plan.md:683` — where it carries an **actuation
-safety argument** — and `firmware/test/host/brew_guard_test.cpp:72`.
+**`docs/machine-switches-j2.md` is normative on the rest** — the full
+pulse-width record and its grading, the latching evidence, the quantisation
+trap and the draft that sized a drive path with an 80 ms reading from an
+instrument the same commit called unusable below ~100 ms, and the
+citation-table saga that is this repo's best worked example of why a line
+number in a document is wrong by the time the document is saved.
 
-| | |
-|---|---|
-| `docs/phase-0-plan.md`, the photoMOS-pair safety argument | **annotated 2026-10-19** |
-| `brew_guard_test.cpp`, the `press_long_enough` case | **annotated 2026-10-19** |
-| `brew_guard.cpp`, the pump-running-during-press comment | still bare — revisit after the analyser redo |
-| `main.cpp`, the ring-headroom comment | still bare — revisit after the analyser redo |
+**Display bus — DECODED 2026-09-28 (0b done), and the decode is 500 lines
+of evidence that now lives in `docs/machine-display-bus.md`.** Captures and
+the decoder are in the repo: `analysis/captures/2026-09-28-display-bus-*.sr`,
+`tools/decode-display-bus.py`. Read the doc before touching this again.
 
-*(Both were cited by line until 2026-10-19. The `main.cpp` one then drifted on
-**four consecutive commits**, every time because the commit "fixing" the
-citation style edited `main.cpp` in the same breath — and each successive note
-recording the drift quoted a final value that was itself already stale, twice.
-**No line number appears in this table any more, deliberately.** A line number
-in a document is wrong by the time the document is saved; `grep` is not.)*
+**Where to tap:** **J5**, 4 pins, **JST XH** (`XHP-4` plug,
+`SXH-001T-P0.6` contacts, `B4B-XH-A` header). **Every connector on this board
+is XH**, including J2 and J4 — and sellers calling them "XH2.54" are selling
+the right part under a wrong name, while some print "JST EH" in spec tables
+for parts that are plainly XH. **Verify by mating, not by reading.** The one
+measurement that separates XH from EH is **depth** (plug 5.7 vs 3.8 mm).
 
-The `brew_guard.cpp` pump-running comment and the `main.cpp` ring-headroom
-comment are about *timing headroom* where the exact figure is not
-load-bearing, which is why they are left rather than churned.
-
-**AND THAT TABLE WAS WRONG TOO — IT SAID "FOUR" AND THERE ARE AT LEAST SIX.**
-Two more cite 345-480 as **live evidence**, which is worse than citing it as
-a timing constant:
-
-| | |
-|---|---|
-| this file, the **GPIO 7/15 confirmation row** | *"logged as 'correct GPIO mapping, taps of 345-480 ms'"* — **annotated 2026-10-19** |
-| `docs/phase-0-status.md`, the **Settled** table | *"taps of 345–480 ms"* — **annotated 2026-10-19** |
-| `docs/phase-0-status.md`, the ESP-power note | *"the grounding was identical for the 345-480 ms presses"* — uses it as a **dataset identifier**, which is legitimate: it names which session, and does not claim the range is the machine's |
-
-**So the enumeration offered as complete has now been wrong twice in two
-successive commits**, the second time in the very paragraph condemning the
-first.
-
-**AND THE FIRST DRAFT OF THIS VERY TABLE CITED `CLAUDE.md:1157`, WHICH WAS
-ALREADY 1189 BY THE TIME THE COMMIT LANDED** — the paragraph above it grew,
-and the line number drifted while it was being written.
-
-**THEN THE FIX DID IT AGAIN, IN THE CROSS-FILE ROWS.** The replacement table
-switched the same-file rows to section names and **left `plan.md:683` and
-`main.cpp:1109` as line numbers — both of which that same commit moved**, to
-685 and 1115 — and the `main.cpp` one has moved again since, twice, so both
-this note's "corrected" values went stale too. **It is the ring-headroom
-comment; grep it.** So the lesson was learned in one
-half of the table and not the other, in a commit whose subject was incomplete
-enumeration.
-
-**One rule, and it is not "cite more carefully":**
-
-- **A prose list of citation sites is the wrong instrument.** It is stale the
-  moment anything above it moves, and it will be. `grep -rn '345.480'` cannot
-  be stale. **Run that, not this table** — the table is here as narrative, not
-  as an index.
-- Where a location must be named in prose, **name the section or quote the
-  line**, as the rows above now do. Line numbers are for a reader with the
-  file open *right now*, not for a document.
-
-**It was questioned for a good reason, and the reason is worth keeping.** The
-written bench sequence for that step (`docs/phase-0-status.md`) reads *"jumper
-each of GPIO7/15/16/17 to 3V3 and back"* — header touches, which would say
-nothing about what this control board latches. **The session used the levers
-instead.** So the *procedure* and what was *done* diverge, and anyone reading
-the procedure as evidence of what happened will reach the wrong conclusion, as
-a 2026-10-12 review did. Fix the procedure or annotate it; do not cite it
-against the operator's account.
-
-**MEASURED 2026-10-19: AT LEAST FOUR PRESSES IN THE 80-90 ms BAND LATCHED.**
-Six deliberate 1Cup presses, as fast as the operator could make them; **the
-pump started or stopped on every one**. The firmware logged four of the six,
-at **90, 80, 85 and 80 ms**.
-
-**This is the grade the paragraph above was asking for.** What was on record
-before was *press durations observed at the tap* — nothing said the machine
-had responded. These are presses **observed to latch**, because the operator
-watched the pump answer each one. It is the first latching evidence in the
-project, and it is **four times shorter** than the 345-480 ms band.
-
-**THE 80 ms FIGURE IS QUANTISED BY THE POLLER AND A DRAFT USED IT AS IF IT
-WERE NOT.** `machine_io.cpp:102` computes `duration_ms = cand_since -
-prev_since` — the difference of **two poll timestamps**. Both edges are
-rounded up to the next poll, and `worst poll gap` was **42-57 ms** in this
-session. So a reported 80 ms means a true width anywhere in roughly
-**[23, 137] ms**.
-
-**That draft then claimed "a ~120 ms pulse has 1.5× margin over a
-demonstrated-latching 80 ms". It does not follow, and the margin may be
-NEGATIVE** — 137 ms is longer than 120 ms. The same commit states, a page
-away, that the switch log *"is not an instrument below ~100 ms"*, and then
-used an 80 ms reading from it to size a drive path. That is the file's
-most-logged error committed against its own warning.
-
-**WHAT THE MEASUREMENT ACTUALLY ESTABLISHES:** presses the poller measured at
-80-90 ms latched, so the true threshold is **below ~140 ms** — which is still
-a large improvement on 345-480 ms, and still the first latching evidence this
-project has. It is **not** enough to choose the RC.
-
-**THE RC REMAINS UNCHOSEN, and the warning that motivated it still stands**:
-*a one-shot that is too short produces a drive path that silently does
-nothing, and the sense tap would still show the pulse, so it would look like
-it worked.* **Redo the measurement with the logic analyser on a J2 junction**
-— microsecond edges instead of 50 ms quantisation. That is precisely why the
-analyser is in the bench plan, and it was connected on 2026-10-19 and not
-used for this.
-
-**Use the 74HC221, NOT the 74HC123 this file used to name.** The '123 is
-**retriggerable**: a new trigger edge restarts the pulse, so a GPIO
-oscillating faster than ~8 Hz — a boot loop, a brown-out, a floating pin —
-retriggers it continuously and holds the output high indefinitely. That is
-exactly the failure the one-shot exists to prevent, and the part originally
-specified does not prevent it. The '221 is non-retriggerable: the pulse
-width is set by its RC per trigger, whatever the input does afterwards.
-
-The NE555 has the mirror-image trap — in the standard monostable a trigger
-held **low** holds the output high for as long as it is held — so it needs an
-RC+diode differentiator on the trigger before it is safe here. The '221 avoids
-the question.
-
-**That reasoning predates the discovery of the second lever and should be
-re-checked against it** — the conclusions above are about one direction
-line at a time and look unaffected, but they were derived from a
-one-switch model and nobody has walked them through a two-lever, shared-
-common topology.
-
-**Display bus — DECODED 2026-09-28 (0b done).** Captures and the decoder
-are in the repo: `analysis/captures/2026-09-28-display-bus-*.sr`,
-`tools/decode-display-bus.py`. Read those before touching this again.
-
-Probe at **J5** on the main control board, 4 pins. **The connector is
-JST XH** — verified 2026-09-28 against the JST datasheet by measurement,
-not by eye:
-
-| Role | Part |
-|---|---|
-| Plug housing (on the machine harness) | `XHP-4` |
-| Crimp contact | `SXH-001T-P0.6` (AWG 28–22) |
-| Board header, top entry | `B4B-XH-A` |
-
-Measured 12.3 mm wide across the latches (spec 12.3; EHR-4 is 12.0),
-5.5 mm thick (spec 5.7; EH is 3.8 — the decisive one), pin span ~8 mm
-(spec 7.5). Friction latch with ribs, which EH does not have.
-
-**Sellers list these as "XH2.54". That is a misnomer — XH is 2.5 mm.**
-The listings are the right part; anything actually specified as Molex
-2.54 is not equivalent.
-
-Sellers also print **"JST EH"** in spec tables for parts that are plainly
-XH — seen 2026-09-30 on a LiPo balance extension whose own title said XH.
-What the part is *for* is better evidence than what the listing calls it:
-hobby LiPo balance ports are XH in all but a few outliers. **Confirmed
-2026-10-01 on the mixed balance-extension pack that arrived: XH, as the
-title said and the spec table denied.** Verify by mating, not by reading.
-
-**Every connector on this board is XH**, including J2 (`BOTONE`, 5 pins →
-`XHP-5` / `B5B-XH-A`) and J4 (flowmeter, 3 pins → `XHP-3` / `B3B-XH-A`).
-
-**The headers are moulded `H JST`, and that marking does NOT mean EH.**
-JST moulds it on XH headers too — it appears in the XH header drawing but
-not in any extractable text, so a text search of the datasheet will tell
-you the opposite. EH headers carry no such marking. The moulded number is
-the circuit count, so `3 H JST` is a `B3B-XH-A`.
-
-If a connector on this machine ever needs re-identifying, the one
-measurement that separates XH from EH — they share pitch, pin span and
-width to within 0.3 mm — is **depth**: plug 5.7 vs 3.8 mm, header shroud
-5.75 vs 3.8 mm. Nothing else discriminates, which is why identifying this
-from photographs failed repeatedly.
-
-Its pinout, from the traced schematic in
-`techdregs/Ascaso_Dream_PID_Electronics`:
-
-| J5 pin | Net | Notes |
+| J5 pin | Net | What it is |
 |---|---|---|
-| 1 | VSS | ground — the pad with thermal-relief spokes into the copper pour |
-| 2 | `ESD1` | signal, via U26. One of the two we decode. |
-| 3 | `ESD4` | signal, via U26 and R24. The other one. |
-| 4 | `Disp-P4` | third signal — **bidirectional**, see below. Idle high; moves only at power-on, see below. |
-
-**`ESD4` (pin 3) is the CLOCK. `ESD1` (pin 2) is the DATA.** Settled
-2026-10-03 off the T-piece, after being unrecorded since 0b. The
-discriminator is **the LOW period, not the high**: `ESD4`'s low took only
-**two** distinct values across 5 s (65 and 66 µs — 1 MHz quantisation of
-the documented 65.5 µs), against **31** for `ESD1`. Distinct *high* widths
-separate nothing, because inter-frame gaps give the clock about as many as
-the data line has (74 vs 92); an earlier draft of this paragraph offered
-that as the proof and it does not work.
-
-The conclusion stands on its own anyway: decoding with the pair the other
-way round yields **zero** frames of 120 bits or more — longest run 9 bits
-— against 363 clean 133-bit frames the right way round.
-
-Note `tools/decode-display-bus.py` reads **column 0 as the clock**, so a
-CSV captured as `D0=ESD1, D1=ESD4` must have its first two columns swapped
-before piping in. Capturing `ESD4` on the lower channel number avoids
-that.
-
-**There is no +5 V on J5** — it is ground plus three signals. A constant-high
-line on a logic analyser looks exactly like a supply rail, which is how it
-got mislabelled first time round.
-
-**`Disp-P4` is bidirectional — never drive it.** It reaches the MCU (net
-`P16`) through a two-transistor pair: `P16` → R30 (100 R) → Q11
-(PDTC143ET) → R31 (2.2 K) → Q10 → R32 (100 K) → the pin. One transistor
-lets the MCU pull the line low, the other lets it sense the line being
-pulled low from the display end. That topology only exists when both ends
-talk on one wire.
-
-**That hypothesis was WRONG — tested 2026-10-03 and disproven.** Across
-**344 s of live bus** — idle, every button press, the whole `SET UP` menu,
-both brew directions and a complete power cycle — `Disp-P4` produced
-transitions in exactly one place: **25 edges in the 204.5 ms after the
-supply rails come up**, starting 194 µs after `ESD1`/`ESD4` move. Nothing
-anywhere else. Per file: 8/30/40/60/60/60 s with no edges at all, and 86 s
-with those 25.
-
-The full interval list, in µs, because a truncated version of it was
-previously used to argue a conclusion it does not support:
-
-    1, 187, 1, 34, 1, 18, 1, 13, 2, 1, 9, 1, 23, 1, 32, 1, 94, 1,
-    2814, 1, 2, 2, 6, 201273
-
-Twenty-four edges inside the first 3.25 ms look like **rail settling**:
-irregular, converging, and `ESD1`/`ESD4` glitch at the same instant but
-settle within ~5 µs because they sit on 4.7 K pull-ups while `Disp-P4`
-reaches the MCU through **R32 = 100 K**, twenty times the impedance. A
-handshake would show a uniform bit period; this does not.
-
-**The late edge does not fit that story, and it reproduced on a second
-boot.** The quantity that reproduces is **its delay from the preceding
-edge**, not the rails-to-last-edge span:
-
-| Boot | delay from previous edge |
-|---|---|
-| `-cold-boot.sr` | **201.273 ms** |
-| `-boot-version.sr` (2026-10-05, hot) | **201.3 ms** |
-
-Agreement to ~30 µs on a 201 ms interval. **Quote that, not the 204 ms
-span**, because the span bundles in the settling burst, which does *not*
-reproduce: the cold boot had **24** intervals inside the first 3.2 ms, the
-2026-10-05 boot had **2**. The surrounding noise varied by an order of
-magnitude while the late edge landed within 30 µs — which is itself the
-argument that it is a real event rather than more settling.
-
-**n = 2.** Observed on both boots so far; that is not "every boot". Still
-no known cause, nothing has been seen to respond to it, and one edge is
-still not a protocol. Note also `-flush-timer.sr` carries 4 `Disp-P4` edges
-mid-flush, so it is not purely a boot phenomenon.
-
-Note also that `2026-09-28-display-bus-flush-timer.sr` carries **4**
-`Disp-P4` edges — two 1 µs glitches at 47.959 s and 48.235 s, mid-flush —
-so "silent whenever the machine is doing anything" is not quite true
-either.
-
-So: not the button line, not the display answering, and silent whenever the
-machine is actually doing anything. Branched to a test point, terminated at
-nothing.
-
-**The buttons are in the 67-bit frames instead** — the short frames this
-file previously wrote off as carrying nothing. Two bits, active low:
-
-| Bit | Button | Effect |
-|---|---|---|
-| 49 | LEFT | enters programming (`PrG`), then **decreases** |
-| 58 | RIGHT | **increases** |
-
-**Four** distinct 67-bit payloads exist: neither bit low, 49 low, 58 low,
-and **both low** — the last seen 2026-10-03 during the `SET UP` entry
-gesture, which is the only thing that presses both at once. Press and
-release timings matched the operator's account across three sessions, so
-the bit-to-button mapping is confirmed.
-
-Semantics are from the **Ascaso Dream PID user manual**, not inference —
-two earlier drafts of this paragraph guessed and one of them guessed wrong:
-
-- **bit 49 = the LEFT button** (manual's #22). Pressing it enters
-  temperature programming: the display renders **`PrG`**. Further presses
-  **decrease** the setpoint.
-- **bit 58 = the RIGHT button** (#23). **Increases** the setpoint.
-- **Three seconds of inactivity** returns the display to normal.
-- **23 held while 22 is pressed, ~3 s** opens the main `SET UP` menu — 22
-  scrolls parameters, 23 shows the options under each. **Confirmed
-  2026-10-03**, including the both-bits-low payload.
-
-This matches the captures: five short right-button presses alone did
-nothing, because programming mode had not been entered; five short left
-presses each rendered `PrG`; and in the first session, with the mode open,
-holding right ran 95 -> 120 in 41 ms steps and holding left brought it
-back.
-
-**`PrG` on the display means the brew temperature is being changed** —
-which is the event that silently invalidates an 0f noise-floor run, and
-the reason any of this is worth logging.
-
-**This costs nothing to log.** Same two wires, same two GPIOs, no divider
-on the bidirectional line, no extra pin — the short frames were already
-arriving and being discarded. `Disp-P4` can stay an unterminated test
-point.
-
-**THE DISPLAY BLINKS FOR TWO DIFFERENT REASONS, AT DIFFERENT RATES.** Only
-one of them is a setpoint edit, and the firmware distinguishes them by
-period alone — so the period is load-bearing:
-
-| State | blank-to-blank | `display.cpp` |
-|---|---|---|
-| **Setpoint being adjusted** | **~410 ms** (2.44 Hz, 0.204–0.210 s per half-cycle) | latches `setpoint_touched` ✓ |
-| **Steam, and cooling afterwards** | **1.021–1.101 s** (measured over 100 intervals) | does **not** latch ✓ |
-| `BLINK_WINDOW_US` | **600 ms**, sitting between them | |
-
-The guard band is **414 → 1020 ms**, and 600 ms sits inside it with
-**186 ms below and 420 ms above**. So steaming does not produce a false
-`setpoint_touched`, and a setpoint edit still latches. **The threshold was
-chosen before anyone knew the steam blink existed**; this is the
-measurement that justifies it rather than luck.
-`2026-10-05-display-bus-steam.sr`, 102 blank onsets.
-
-**Use the interval, never the blank duration.** Steam blanks average longer
-(0.550 s against a setpoint edit's 0.204 s), which looks like a cleaner
-discriminator — but steam's **shortest blank is 0.156 s, shorter than the
-setpoint blank**, so duration would misfire. The interval does not. This
-choice is deliberate.
-
-One interval of the 102 is **5.77 s** — the gap between the `165` and ` 95`
-blink regimes. Harmless (it is also > 600 ms) but it is why the quoted
-1.021–1.101 s range covers 99 intervals, not 100.
-
-While adjusting, the display blanks **entirely** (all three fields zero)
-and comes back. The steam blink does the same thing more slowly, which is
-why period is the only discriminator available.
-
-**What blinking means is "showing a target it has not reached":** during a
-steam cycle the display blinks **`165`**, and after steam is released it
-blinks **`95`** while the boiler cools back down. Contrast the warm-up from
-cold, which shows the *actual* temperature climbing and does **not** blink
-at all. That asymmetry is unexplained.
-
-**`Disp-P4` IS THE LINE THAT MUST NOT BE LOADED, AND THIS PARAGRAPH USED TO
-SAY THE OPPOSITE.** Until 2026-10-12 it read: *"This is the one J5 line where
-a careless connection could actuate the machine… The 8.2 K / 15 K divider is
-high-impedance and receive-only, so it is safe as specified."* Two defects, and together they made this the
-only paragraph in this file that **invited** an invariant-1 violation rather
-than warning against one. (It is not the only invariant-1 hazard documented
-here — `selftest` driving GPIO8 and the Phase-1 photoMOS on J2 position 1 are
-both hazards, but both are flagged as such.)
-
-- **The antecedent was gone.** "This line" had drifted ~80 lines from the
-  `Disp-P4` discussion it referred to, landing after a passage about display
-  blinking. A reader met it with no referent and attached it to J5 generally.
-- **The conclusion is backwards for `Disp-P4` specifically.** It is
-  **bidirectional** and reaches the MCU through R32 = 100 K. `docs/phase-0-status.md`
-  records that **a 23.2 K divider could drag it under 1 V if that pull-up is
-  weak**, feeding a false level into the machine continuously.
-
-  **Grade that mechanism honestly**: the "MCU sees a button held down" wording
-  it was first written with is wrong, because this same file establishes
-  (2026-10-03, 344 s of live bus) that `Disp-P4` is **not** the button line —
-  the buttons are bits 49/58 of the 67-bit frames, and `Disp-P4` moves only in
-  the ~204 ms after rails-up. What is actually true is narrower and still
-  sufficient: **its pull-up strength is unrecorded, so the consequence of
-  loading it is unknown.** That is reason enough to fit nothing. `docs/shopping-list.md` specifies `Disp-P4` as branched through
-  8.2 K and **terminated at nothing**, and that is the built configuration.
-
-**So: the 8.2 K / 15 K divider is correct on `ESD1` and `ESD4`** — correct as
-against the 8.2 K / 8.2 K that was mistakenly fitted, which is the error this
-passage was written about. **It is NOT the right value for the perfboard:**
-2026-10-19 ran its tolerance corner for the first time and the as-built 15 K
-comes out at **−70 to −87 mV** (the spread is the unmetered 4.7 K pull-up's
-tolerance), worse than the −45 mV that got 150 K / 220 K rejected at J4.
-
-**Fit 16.4 K** — two 8.2 K in series, 25 in stock, **+18 mV** at the
-pessimistic corner. That is the value this repo specified before any of this.
-
-**Two drafts of this line got it wrong in opposite directions**, both recorded
-in `docs/phase-0-status.md`. One ordered **23.2 K**, which puts the pin 600 mV
-over VDD and the clamp into continuous conduction. The other said to **fit
-nothing** until the drive type is metered, because no value cleared both the
-logic-high floor and the absolute-max ceiling — but that treated VDD + 0.3 as
-a hard wall, and the **8.2 K series bounds clamp current**, which this repo
-argues itself for J4 and for the ESP-unpowered case. The ceiling binds
-softly; 16.4 K clears it.
-
-**The drive type is still untested and still worth testing** — if J5 is
-open-drain the ceiling stops mattering and 18–22 K open up — but it does not
-block the build. **Meter it unpowered, in Ω mode — J5 pin 2 or 3 against
-J2 position 1**, machine off and both connectors unplugged. The reference
-matters: **J5 itself has no +5 V** (it is ground plus three signals), so
-"ohm against 5 V" without naming J2 pos 1 returns a false null that looks
-exactly like push-pull. A DC reading on the live line is no good either —
-`ESD1`/`ESD4` switch continuously, so a meter gives a duty-cycle mean, not a
-level. The built board decodes and is not an emergency; the perfboard should
-not copy it either way. **And the 15 K
-shunt must NOT be fitted to `Disp-P4`.** Branch it through its 8.2 K for
-symmetry if you like, leave the far end open, and never hang anything on it
-that can source or sink current.
-
-Two traps, both of which cost time on 2026-09-28:
-- **Ground is pin 1, the spoked pad.** The square-pad-is-pin-1 convention
-  does NOT hold on this board. **The square pad is pin 4** (`Disp-P4`) —
-  established 2026-10-03: spokes at one end of J5, square at the other,
-  two plain pads between. So either end identifies the connector, and the
-  square one marks the line that must never be driven.
-
-  Wire colours say nothing — the harness is red/black/red/black because it
-  was cut from two 2-wire reels, and ground lands on a red one. Its order,
-  from the spoked pad: **red (1, VSS), black (2, ESD1), red (3, ESD4),
-  black (4, Disp-P4)**. Useful for orienting the harness once unplugged,
-  but only in combination with the pads — two of the four are red.
-
-  **A replacement lead has its own colours and they will not match.**
-  Derive the mapping instead: hold the lead's male end in the orientation
-  it plugs in, see which housing end lands on the spoked pad (that is
-  position 1), then meter position-to-conductor. Pin 1 is also the only one
-  with continuity to the ground pour, which is an independent check that
-  needs no convention at all.
-
-  **The T-piece lead built 2026-10-03** (3S balance extension, three black
-  and one red) maps **red → pin 4, `Disp-P4`**. The three blacks follow by
-  position counting away from red: furthest from red is pin 1 `VSS`, then
-  pin 2 `ESD1`, then pin 3 `ESD4` adjacent to red. Convenient accident
-  worth keeping if this is ever rebuilt: **the one visually distinct
-  conductor is the one that must never be driven.**
-- Both decoded signals idle high on the 4.7 K pull-ups, as the schematic
-  predicted.
-
-It is **not I²C.** Plain synchronous serial: clock ~9.9 kHz (high 36 µs,
-low 65.5 µs), data sampled on the **rising** edge and stable across a whole
-clock period.
-
-**The bus sends two frames, 67 bits then 66 bits, about every 41 ms.** The
-67-bit frame carries the button state; the 66-bit frame carries the digits.
-
-**A "133-bit frame" is a merge artefact, not a frame.** The gap between the
-pair usually falls under the 1 ms idle threshold both the decoder and
-`display.cpp` use to split frames, so they arrive glued together — and 67 +
-66 = 133. Verified 2026-10-03: every 133-bit frame's **first 67 bits**
-match a standalone 67-bit payload, in all nine captures. The **last 66**
-match a standalone 66-bit payload 141/141 in `-95c-poweron.sr`; that half
-cannot be checked in `-buttons-separated.sr`, which contains no standalone
-66-bit frames at all, so an earlier "604/604" here was meaningless. When the gap happens to
-run long the pair splits properly, which is all the stray "66-bit frames"
-ever were, and **both decoders silently discard them, losing that digit
-reading**. Within the merged frame the digits sit at 106/115/124, which is
-39/48/57 of the 66-bit frame.
-
-**How often the pair splits tracks heater activity, not wiring.** Measured
-within a single capture (`2026-10-03-display-bus-flush-timer.sr`): 1.18 %
-idle before a flush, 3.62 % during it, 5.19 % settling, **6.56 % while the
-boiler recovers**, and 8.26 % in a separate capture of a machine heating
-from cold. Across files at comparable states the divider makes no
-difference — 1.10 % unshunted against 1.18 % shunted, both idle at
-temperature. An earlier note here credited the shunts; that was a confound
-between captures taken at different boiler states.
-
-So a parser that keys on 133 bits throws away up to ~8 % of digit readings
-exactly when the machine is working hardest. **Parse the 67/66 pair
-directly rather than relying on a gap threshold.**
-Beware: sigrok's `i2c` decoder happily "decodes" this as endless writes to
-address 0x00 — that output is the symptom of a wrong guess, not a result.
-
-**The display is not digits-only.** Observed vocabulary, all measured
-2026-10-03 (`analysis/captures/2026-10-03-display-bus-setup-menu.sr`):
-
-| Glyph | abcdefg | Seen in |
-|---|---|---|
-| `0`–`9` | — | temperature, shot timer |
-| `P` | 1100111 | `PrG`, `UP` |
-| `r` | 0000101 | `PrG`, `Pr`, `Cr` |
-| `G` | 1011110 | `PrG` |
-| `E` | 1001111 | `SET` |
-| `t` | 0001111 | `SET` |
-| `U` | 0111110 | `UP`, `Ud`, `U` |
-| `d` | 0111101 | `Ud` |
-| `C` | 1001110 | `Cr` |
-| `F` | 1000111 | `OFF` |
-| blank | 0000000 | leading field, blink |
-
-**Two letters are indistinguishable from digits. This is the display's
-limitation, not the decoder's:** `S` is the same seven segments as `5`, and
-`O` the same as `0`. So the `SET UP` banner arrives as `5Et`/`UP `, and the
-stand-by parameter as `0FF`. Only context can tell you which was meant.
-
-Still unobserved: **`n`**, needed for the `ON` value of the timer
-parameter. It appears only in a parameter *value*, which means pressing
-button 23 inside the menu and changing a setting.
-
-**Bit 114 is a TIMER-MODE FLAG, and it is the most useful thing in the
-frame after the digits.** Of the six bits around the digit fields,
-113/122/123/131/132 are always zero — but 114 is set in **exactly** the
-brew-timer frames and clear in **every** temperature frame:
-
-| Capture | bit 114 set | clear |
-|---|---|---|
-| `-flush-timer.sr` (2Cup) | 492, all `001`…`210` | 619, all ` 95` |
-| `-1cup-clean.sr` | 307, all `001`…`105` | 878, all ` 95` |
-| `-buttons.sr` | 0 | 363, incl. the ` 96`…`120` setpoint ramp |
-| `-setup-menu.sr` | 0 | 803, incl. `0FF`, `Ud`, `Pr` |
-| `-cold-boot.sr` | 0 | 1593 |
-
-So the machine tells you outright whether a three-digit reading is a timer
-in tenths or a temperature ≥ 100 °C. `display.cpp` **used** to guess, with
-a 1.5 s staleness heuristic; it now reads the bit (firmware 0.8.0). The
-test is a pair of real frames that both read `100` — one captured during a
-flush, one while the setpoint was ramped past 100 °C.
-
-This was recorded as "no decimal point observed" in an earlier draft —
-wrong, because the gap bits had only been checked in captures that contain
-no brew. **The decimal point is not in the frame format — 2026-10-05.** The strong
-evidence is a counted negative: across the three new captures, the gap bits
-**113 / 122 / 123 / 131 / 132 are set in ZERO of 2784 digit frames** (577
-boot + 2207 warm-up 133-bit frames; the steam capture agrees). A decimal
-point would almost certainly live in one of those, one bit past each
-seven-segment field. It never does.
-
-Separately, the display **can** render a point: at power-on it shows
-`02.4`. That appears during a window in which the bus sends nothing (see
-the power-on table), so the controller can clearly drive the display
-without being told frame-by-frame — **`02.4` is therefore most likely
-controller-generated and never visible to a frame parser.**
-
-Two honest limits on that. Nobody timed `02.4` against the capture, so
-"shown during the silent window" is inference from its ~3 s duration, not
-observation. And a search of the boot bitstream for the `0`/`2`/`4` segment
-patterns (both polarities, spacings to 20 bits) found nothing — but that is
-one strategy against an init burst nobody has decoded, and it would miss
-any other encoding.
-
-Consequence either way: the operator's `E.01` reading was punctuation,
-consistent with the manual printing `E01`.
-
-**One loose end, recorded rather than smoothed over:** bit 132 is set in
-the 564-bit init burst. It is zero in every 133-bit frame. This file says
-113/122/123/131/132 are always zero, which holds for digit frames; the init
-burst is not one.
-
-**The `SET UP` menu**, entered by holding 23 while pressing 22 for ~3 s,
-scrolls with 22 in this fixed order: `Ud` (units C/F), `Pr` (pre-infusion
-0–5 s), `Cr` (timer ON/OFF), `OFF` (stand-by OFF/0.5/1/2 h), `U` (offset
-between set and displayed temperature). Three seconds idle saves and exits.
-**Do not hold 23 alone for three seconds — that is `PrS`, an immediate
-factory reset.**
-
-Three 7-segment digit fields, MSB = segment a, order abcdefg:
-
-| Field | Bits in the 133-bit frame |
-|---|---|
-| hundreds / leading (blank when idle) | `[106:113]` |
-| tens | `[115:122]` |
-| units | `[124:131]` |
-
-**Power-on sequence**, measured from genuinely off in
-`analysis/captures/2026-10-03-display-bus-cold-boot.sr`:
-
-| From rails up | What happens |
-|---|---|
-| 0 | all three lines leave 0 V; `ESD1`/`ESD4` settle in ~1 µs on their 4.7 K pull-ups |
-| +194 µs | `Disp-P4` starts settling, taking ~250 µs — see the `Disp-P4` section **above** (rail settling, R32 = 100 K against the 4.7 K pull-ups). *(This said "see below" and the explanation is ~325 lines above it.)* |
-| 0 to ~+1.1 s | **irregular bus activity, not frames**: 32–33 single-bit blips, a 48-bit frame, and one 564-bit burst. Plausibly display-controller init. Anything parsing frames here gets garbage. |
-| **~+1.1 s to +4.1 s** | **THE BUS IS SILENT — no frames at all for ~3 s.** Confirmed 2026-10-05: ~800 of the clock edges counted in this window are the 564-bit burst's own tail, and after it the line idles 98.8 % high. |
-| | **This is when the display shows `02.4`, the firmware version, with a decimal point** — and nothing on the bus carries it. See the decimal-point note above. |
-| +4.1 s | normal 67/66 framing begins |
-| +4.12 s | blank |
-| +4.63 s | **`  0`** |
-| +4.69 s | the first real reading |
-
-**`  0` is a boot transient, not a boiler reading**, and it is present on
-both boots — cold (+4.1/+4.6/+4.7) and hot (+4.116/+4.627/+4.694,
-2026-10-05). An earlier draft of this table claimed the hot boot skipped it
-and told readers to drop the step; that was wrong, and wrong because
-`tools/decode-display-bus.py` discards 66-bit frames (`MIN_FRAME_BITS =
-120`) and both the blank and the `  0` arrive in 66-bit frames. **If you are
-checking boot behaviour, do not use that tool.**
-
-What boiler state *does* change is what comes next: a cold machine climbs
-from the forties, a hot one is already at its reading.
-
-**There is no lamp test and no ` 88` phase at boot** — that much is
-measured. `-95c-poweron.sr` was taken mid-warm-up, not at power-on, so
-whatever it shows is not a boot state.
-
-**The ` 88` is SOLVED — 2026-10-05**, by capturing a warm-up deliberately,
-which this file previously said was the only thing that would settle it.
-`analysis/captures/2026-10-05-display-bus-warmup.sr`:
-
-    0.040s [ 46]   ...one degree at a time...   52.489s [ 87]
-                                                54.631s [ 88]
-                                                57.165s [ 95]   <- jumps
-
-The boiler climbs **one degree at a time from 46 to 88, then jumps straight
-to 95 with no 89–94** — 48 change-events across 2270 digit frames.
-
-**The ±1 °C jitter elsewhere in the same ramp makes the skip more striking,
-not less**: the display demonstrably flickers between adjacent values at
-47/48 and 54/55, so 89–94 is not a display that cannot show those numbers. That is exactly the pattern in `-95c-poweron.sr`.
-
-So of the three stories told about it, the third — "the boiler genuinely
-passing 88 °C" — was right, and the objection that killed it was the error:
-"no 89–94 in between is not how a warming boiler reads" assumed a behaviour
-this machine does not have. **It really does skip 89–94.** Why is still
-unknown; the display may switch from reporting the boiler to reporting the
-setpoint once it decides it is ready.
-
-**The ` 95` at +4.7 s in `-cold-boot.sr` is explained the same way**: that
-machine was already hot. No boiler reaches 95 °C in 4.7 s, and that
-discrepancy sat unremarked in this file.
-
-**Idle: the display shows a temperature in °C — but WHICH temperature
-depends on the range, and the range that matters is the ambiguous one.**
-
-**Below ~88 °C it is demonstrably the actual boiler**: during a warm-up it
-climbs one degree at a time and **jitters ±1 °C** (` 47`→` 48`→` 47`→` 48`
-at 1.9–2.0 s; ` 54`→` 55`→` 54`→` 55` at 8.5 s), which is what a live
-readout looks like.
-
-**At ` 95` it is indistinguishable from the setpoint.** In the same capture
-it sits at ` 95` for **1134 consecutive frames — 57 s without a single
-change**. A PID-controlled boiler does not hold ±0 °C for a minute. And
-during the post-steam cooldown the display blinks ` 95` while the boiler is
-demonstrably hotter than that.
-
-**This matters for `boiler_temp_start_dc`** (spool v2, migration 008),
-which is sampled immediately before a shot — i.e. always in the ambiguous
-range. An earlier draft of this paragraph claimed the warm-up "confirmed"
-the column measures the real boiler and so rescued 008's rationale. **It
-does not**: it confirms the behaviour only in the range the column is never
-sampled in.
-
-What the column *does* reliably carry: a steady ` 95` means at setpoint; a
-blink or a different value means not. That is still worth storing. Settling
-whether it is ever a true boiler reading above 88 °C needs a capture with
-the boiler deliberately pulled off setpoint and allowed to recover. During a brew the
-machine takes the display over for a **shot timer in tenths of a second**
-(counts `001`→`169` across 16.8915 s — 168 steps, i.e. 16.8 s of
-displayed time; see the agreement table below, and do **not** restate it
-as "a 16.9 s pull", which compares against the final value instead of the
-interval), so temperature is *not* readable
-mid-shot. That timer is a gift, but a narrower one than first recorded. It IS the
-machine's own pump-on to pump-off measurement — stopping a cycle by hand
-stops the timer, so it tracks real pump time rather than counting out a
-stored duration (verified 2026-10-03: a 2Cup cycle cut short by hand
-stopped at `210`).
-
-**It does NOT tell you which switch direction ran.** 1Cup and 2Cup each
-produce exactly one 67-bit payload and it is byte-identical between them;
-nothing on J5 distinguishes a clean cycle from a shot. So the display
-replaces 0c for *timing* only. Deciding what kind of event it was still
-needs J2.
-
-Agreement with real time, from the first frame showing `001` to the first
-showing the final value. (**`000` IS displayed** — once per brew, always
-as a standalone 66-bit frame, which is why a decoder that only understood
-merged frames never saw it. Firmware 0.8.0 does.)
-
-| | displayed steps | measured | error |
-|---|---|---|---|
-| 2Cup `001`→`210` | 20.9 s | 21.0061 s | **+106 ms** |
-| 1Cup `001`→`105` | 10.4 s | 10.4303 s | **+30 ms** |
-
-Both are of the order of the display's own 100 ms tick plus the ~41 ms
-frame period, so there is nothing to explain — but **do not quote this as
-"within 100 ms"**, because 106 ms is not. Two earlier claims here were
-wrong: "6 ms" compared against the final displayed value instead of the
-interval, and "within the display's own 100 ms quantisation" was asserted
-without checking that 106 > 100.
+| 1 | `VSS` | ground — **the pad with thermal-relief spokes** |
+| 2 | `ESD1` | **DATA** → GPIO5 |
+| 3 | `ESD4` | **CLOCK** → GPIO4 |
+| 4 | `Disp-P4` | bidirectional. **Never drive it, never load it.** Unterminated. |
+
+**Ground is pin 1, the spoked pad — the square-pad-is-pin-1 convention does
+NOT hold here. The square pad is pin 4**, the line that must never be driven.
+Wire colours say nothing: the harness is red/black/red/black and ground lands
+on a red one.
+
+**`Disp-P4` MUST NOT BE LOADED — fit nothing on it, ever.** It is
+**bidirectional**, it reaches the MCU through R32 = 100 K, and **its pull-up
+strength is unrecorded**, so the consequence of loading it is unknown. That is
+reason enough. Branch it through its 8.2 K for symmetry if you like, leave the
+far end open, and never hang anything on it that can source or sink current —
+in particular **not the shunt**. `docs/shopping-list.md` specifies exactly
+that, and it is the built configuration.
+
+<!-- fact:divider-j5-shunt 16.4 K -->
+**`ESD1` and `ESD4` are 8.2 K series + 16.4 K shunt.** 16.4 K is two 8.2 K in
+series, 25 in stock. The **as-built 15 K is superseded** — it fails its
+tolerance corner at −70 to −87 mV, worse than the −45 mV that got 150 K / 220 K
+rejected at J4. 16.4 K comes out at **+18 mV**.
+
+**`docs/taps-and-dividers.md` is normative on the arithmetic** — the corner
+table, the 23.2 K and fit-nothing drafts that were both wrong in opposite
+directions, the untested drive-type question and how to meter it, and why
+this paragraph once said the opposite of what it says now. The two values
+above are the live conclusion; everything that justifies them is there.
+
+**GPIO4 is the CLOCK and GPIO5 is the DATA, and getting it backwards is
+silent** — both lines still idle high, `pins` looks perfect, and `frames=0`.
+Zero frames with correct levels is the swapped-pair signature. It happened on
+2026-10-09.
+
+**The bus is not I²C** — plain synchronous serial, clock ~9.9 kHz, data
+sampled on the **rising** edge. sigrok's `i2c` decoder will happily "decode"
+it as endless writes to address 0x00; that output is the symptom of a wrong
+guess, not a result.
+
+**It sends a 67-bit frame then a 66-bit frame, about every 41 ms.** The 67
+carries the button state, the 66 carries the digits. **A "133-bit frame" is a
+merge artefact, not a frame** — the two usually arrive glued together.
+**Parse the 67/66 pair directly rather than keying on 133 bits**, because the
+pair splits more often the harder the machine is working (1.2 % idle, 8.3 %
+heating from cold), so a 133-keyed parser throws away digit readings exactly
+when it matters.
+
+**What the bus gives you, and the firmware already reads all of it:**
+
+- **a shot timer in tenths**, which is the machine's own pump-on to pump-off
+  measurement — but it does **NOT** say which direction ran, so J2 is still
+  required to tell a shot from a clean cycle
+- **bit 114 is a TIMER-MODE FLAG**, set in exactly the brew-timer frames and
+  clear in every temperature frame, so `100` is never ambiguous
+- **the buttons**, as bits 49 (LEFT, enters `PrG` then decreases) and 58
+  (RIGHT, increases) of the 67-bit frame — free, same two wires
+- **`PrG` means the brew temperature is being changed**, which silently
+  invalidates an 0f noise-floor run
+- **a steam cycle**, which blinks `165` then `95` — which is what makes the
+  J2 Steam tap redundant for detecting steam, stated with the lever-B
+  consequences above rather than repeated here.
+
+**THE DISPLAY BLINKS FOR TWO DIFFERENT REASONS AND THE PERIOD IS
+LOAD-BEARING.** A setpoint edit blinks at **~410 ms**; steam and the cooldown
+after it blink at **1.021–1.101 s**. `BLINK_WINDOW_US` is **600 ms**, sitting
+in a 414→1020 ms guard band with 186 ms below and 420 ms above. **Use the
+interval, never the blank duration** — steam's shortest blank is 0.156 s,
+shorter than a setpoint blank, so duration would misfire. This is deliberate.
+
+**WHAT `boiler_temp_start_c` MEANS IS NARROWER THAN MIGRATION 008 CLAIMS.**
+Below ~88 °C the display tracks the real boiler and jitters ±1 °C. At ` 95` it
+is **indistinguishable from the setpoint** — it holds ±0 °C for 57 s, which no
+PID boiler does, and it blinks ` 95` post-steam while the boiler is
+demonstrably hotter. The column is sampled immediately before a pour, i.e.
+**always in the ambiguous range**, so today it means **"at setpoint"**, not a
+verified temperature. Settling that needs a capture with the boiler pulled off
+setpoint and allowed to recover.
+
+**The display does NOT run its shot timer during a hot-water draw**, so
+`machine_timer_dl` cannot pick up a tap draw and `machine_context.h` needs no
+special case. The flowmeter **does** pulse during one, which is why 0d scopes
+counting to shot boundaries.
+
+**`docs/machine-display-bus.md` is normative on everything else** — the JST
+identification by measurement, the `Disp-P4` bidirectional-handshake
+hypothesis and the 344 s of live bus that disproved it, the full glyph table,
+the exact bit offsets, the power-on sequence, the ` 88` that took three
+stories to solve, the 67/66-pair verification, and the timer-agreement
+arithmetic. Do not re-derive any of it from the captures; it is all there.
 
 ### Hydraulics — the pressure-gauge path
 
-**This is the first hydraulic entry in this file.** Everything above it is
-electrical: the connector census (J1–J5) has no plumbing counterpart, and
-building one is a next-time-in-there job. What follows covers the gauge
-branch only, because that is the only part anyone has looked at.
+**Moved to `docs/hydraulics.md` (2026-10-19), which is normative on it.**
+It is the only hydraulic material in this project and it is wanted by
+nobody who is not standing in front of an open machine.
 
-Note also that every tap described above is a resistor on a logic line.
-Plumbing is a different risk class, and **whether invariant 1 covers it is
-undecided** — the invariant was written about electrical taps, and a tee,
-a leak or added dead volume all change what the machine does. Do not read
-"every sense tap is high-impedance or passive" as settling anything about
-water. **The 2026-10-12 amendment does not change this** — it recast the
-invariant around current paths, which is still an electrical notion. Water
-remains outside it.
+The live conclusions, which are the ones that change what you do:
 
-Part numbers below are from **Ascaso's own Dream PID parts diagram**,
-which is document-grade and the best mechanical source this project has
-had:
-
-| Part | Spanish | What it is |
-|---|---|---|
-| `I.4220` | MANOMETRO DREAM/STEEL | the gauge, 0–16 bar |
-| `I.4238` | SOPORTE MANOMETRO DREAM PID | its bracket |
-| **`I.4234`** | **RACOR CONEXION INTER.-MAN. M6-1/8** | thermoblock → manometer fitting |
-| `I.3934` | RACOR T 1/8 H-H-M | a 1/8 tee, female-female-male |
-| `I...90` | RACOR CODO MACHO 1/8 LATON | brass 1/8 male elbow |
-| `I..259` / `I..706` | ELECTROV. 3 VIAS 1/8-1/8 0-15BAR | 3-way solenoid |
-| `I.2237` / `I.2238` | CJTO INTERCAMBIADOR INOX | the thermoblock |
-
-**The whole circuit is 1/8.** Even the solenoid is specced `1/8-1/8`.
-There are no odd threads in this machine.
-
-**`I.4234` is M6 at one end and G1/8 at the other, oriented thermoblock =
-M6, gauge = G1/8.** The three parts of that claim have different grades
-and the difference matters:
-
-- The **G1/8 end is MEASURED: 9.55 mm**, operator's calipers, 2026-10-05.
-  That sits inside G1/8's tolerance band (min ≈ 9.51 mm) and **below
-  M10×1's minimum** (≈ 9.79 mm), so the identification is quantitative
-  rather than a judgement call. The threads are visibly parallel, which
-  also rules out 1/8 NPT.
-- The **M6 end is NOT measured.** It is the catalogue designation plus
-  photo proportions. `M6×1.0` in particular is assumed, not established.
-- The **orientation** is the operator's account of the part in hand, not
-  an independent check.
-
-So the thermoblock presents an **M6 female gauge port**. M6 is also
-reported to be the E61 group-head pressure-port thread, which would make
-E61 gauge adapters the right category to shop in — but that is **vendor
-listing grade** (a sensor maker's compatibility page naming an M6 adapter
-for Lelit/Rocket/Profitec/ECM), not a spec, and **the pitch is not stated
-anywhere**. Do not buy an adapter on it without checking pitch and seat
-form, which is the same class of source that has twice misled this
-project.
-
-**An inference that was wrong, recorded so nobody re-derives it:** that
-the orientation must be the reverse (thermoblock 1/8, gauge M6), on the
-grounds that M6 is the natural size for a compression nut on 2 mm copper
-and 1/8 the natural size for a port in a block. The reasoning is plausible
-and the conclusion is false. The catalogue name lists the two threads in
-the same order as the two words before them, and reading it literally was
-right.
-
-**THE GAUGE END CANNOT BE TEED.** Observed 2026-10-05: the gauge's rear
-stem is a brass male thread with a **plain steel hex nut clamping it to
-the bracket**, and the copper capillary is **soldered at the base of that
-thread**. The thread holds the gauge up; pressure arrives through the
-capillary. A nutted-to-a-bracket thread is structural, not hydraulic.
-Anything that wants pressure has to go to `I.4234`.
-
-**The circuit is rigid stainless tube with compression fittings, not
-screwed pipe.** Every joint photographed is a compression nut swaging an
-olive onto rigid tube, threaded onto an elbow or tee body. Two
-consequences: opening a joint means a fresh olive and possibly a re-cut
-tube end, and **there are no spare ports** — every port in the areas
-photographed is occupied.
-
-The capillary is **~10 cm** (operator measurement) and ends in a
-compression nut with a **separate conical olive**, confirmed by Ascaso's
-own product photo of `I.4220`. So the joint is re-makeable and the gauge
-assembly comes off intact — keep it, with its olive and the M6 seal, and
-the machine goes back to stock.
-
-**Still unknown, all of it cheap to settle next time the machine is open:**
-whether the M6 is ×1.0; what seals the M6 at the block (there will be a
-washer — note what it is before it is lost, because an M6 *parallel*
-thread does not seal on its threads and PTFE tape is not a substitute);
-whether `I.4234`'s G1/8 male has a cone seat for the olive, which decides
-whether a plain G1/8 female can seal against it; where `I.3934` physically
-sits; and the bezel hole diameter.
+- **The whole circuit is 1/8**, including the solenoid. There are no odd
+  threads in this machine.
+- **The thermoblock presents an M6 female gauge port** via `I.4234`
+  (M6 at the block, G1/8 at the gauge). The G1/8 end is **measured**
+  (9.55 mm); the M6 end is catalogue-plus-photo and `M6×1.0` in particular
+  is **assumed, not established**.
+- **THE GAUGE END CANNOT BE TEED.** Its rear stem is structural — a hex
+  nut clamping it to the bracket — and pressure arrives through a soldered
+  capillary. Anything wanting pressure has to go to `I.4234`.
+- **The circuit is rigid tube with compression fittings**, so opening a
+  joint means a fresh olive, and **there are no spare ports** anywhere
+  photographed.
+- **WHETHER INVARIANT 1 COVERS PLUMBING IS UNDECIDED.** The invariant was
+  written about electrical taps and the 2026-10-12 amendment recast it
+  around current paths, which is still an electrical notion. A tee, a leak
+  or added dead volume all change what the machine does. Do not read
+  "every sense tap is high-impedance or passive" as settling anything
+  about water.
+- **There is no plumbing census.** The connector census (J1–J5) has no
+  hydraulic counterpart; `docs/hydraulics.md` covers the gauge branch
+  only, and building the rest is a next-time-in-there job. Several
+  arguments in the 0d flowmeter entry lean on this, so do not treat the
+  circuit as surveyed.
 
 ### Scales: 2 × Bookoo Themis (BLE)
 
@@ -1179,19 +656,29 @@ web/               Vite + React PWA
   src/ · prototype/
 analysis/          Jupyter notebooks, reads the SQLite file
 docs/              overview · phase-0-status · phase-0-plan · shopping-list
+                   machine-display-bus · machine-switches-j2 · flowmeter-j4
+                   taps-and-dividers · board-and-perfboard · hydraulics
+                   (the last six are the 2026-10-19 split out of CLAUDE.md;
+                    the Reference section at the foot says what each is for)
 ```
 
 ---
 
 ## Phase 0 milestones
 
-**0a — scale logging.** BLE, shot detection, spool, upload, UI. No machine
+### 0a — scale logging
+
+BLE, shot detection, spool, upload, UI. No machine
 contact. Most of the work, none of the risk. *This is where to start.*
 
-**0b — display bus.** Logic analyser on J5, offline reverse engineering.
+### 0b — display bus
+
+Logic analyser on J5, offline reverse engineering.
 Parallel track, no code yet.
 
-**0c — switch sensing. ALL FOUR direction lines are tapped** — the
+### 0c — switch sensing
+
+**ALL FOUR direction lines are tapped** — the
 operator asked for all functions (2026-10-04), which is sufficient reason
 on its own. Four dividers, four GPIOs; the common (position 1) is the supply and is
 never tapped **for sensing**.
@@ -1256,399 +743,52 @@ choice any more** — this table used to mark five of them "proposed" and they
 were still unclaimed. Changing one now means changing `main.cpp`, not just
 this row.
 
-**The board check is DONE — 2026-10-12 — and it was already done on
-2026-10-08 without anyone noticing.** This paragraph carried "they have
-**not** been checked against the clone DevKitC-1's silkscreen; do that
-before the perfboard is drilled" for four days while the bench section 200
-lines away recorded the evidence that closed it. Same stale-line defect this
-file documents elsewhere.
+**THE BOARD CHECK IS DONE — 2026-10-12.** All seven GPIOs are confirmed
+against the clone DevKitC-1 both ways round: **functionally** (the bus
+decoded on 4/5, `selftest` counted 500/500 on 6, each lever logged its own
+name on 7/15/16/17) **and visually** (the operator read the silkscreen
+order). Neither alone would do it — the functional chain cannot tell wiring
+by *label* from wiring by *position*, and the silkscreen read cannot tell
+you the firmware agrees.
 
-What closes it is **functional evidence combined with the visual check** —
-neither alone. The operator chose each header pin by reading its label, so if
-the pin marked `16` were not die GPIO16, the firmware (which names GPIO16
-steam) would have been polling an unconnected pad and lever B down could not
-have logged `steam`. It logged.
+**THE ONBOARD RGB LED IS ON GPIO48, SO GPIO38 IS FREE.** Espressif put it on
+48 on v1.0 and 38 on v1.1 and both revisions are sold, so this had to be
+measured; it was, 2026-10-15, by a two-point test against `status`. **This
+fixes the LED net only — it does not make the board "v1.0"**: every other
+position agrees with the published v1.1 layout.
 
-**Do NOT call the functional chain "a higher grade" than the silkscreen read,
-as a first draft of this paragraph did.** By this file's own standard — see
-the lever A/B discussion above — a silkscreen read is a **one-link**
-observation of exactly the claim being made (what is printed beside this
-pin). The functional chain is longer: operator picked by label (recalled, not
-recorded) → wire landed → firmware name → log line. It exercises more, and
-that makes it a *longer* evidential chain, not a better-graded one. The
-conclusion is sound because the two **combine**; the grade language was
-inflated.
+**ESPRESSIF'S PUBLISHED v1.1 PINOUT IS CORRECT FOR THIS CLONE.** The full
+44-position board read agrees with it at all 44 positions. A draft here once
+told readers to stop citing it; the unreliable source was a recollection of
+the document, not the document.
 
-| GPIO | What confirmed it, 2026-10-08/09 |
-|---|---|
-| 4, 5 | the bus **decoded frames**. A swapped pair gives `frames=0` — this file's own documented signature — so this fixes *which is which*, not merely that both are right |
-| 6 | **736 counts** across shot 2, and `selftest` 500/500 at 100 Hz |
-| 7, 15 | **lever A**, logged as "correct GPIO mapping" — same full chain as 16/17. *(This row quoted "taps of 345-480 ms" as evidence until 2026-10-19; that is one session's presses, superseded above. The GPIO conclusion is unaffected — it never depended on the width.)* |
-| 16, 17 | lever B down logged `steam`, up logged `water` |
-| 8 | `selftest` into GPIO6 — **not independent, see below** |
+**Layout facts the perfboard turns on:**
 
-**Two honest limits on that table.**
+- **The seven taps are contiguous at signal-column positions 4–10**, with
+  **3V3 at position 1 and a GND at position 22 of that same column**, so no
+  ground return has to cross the board. "Between" is not "adjacent" though —
+  each divider's ground leg runs 12–18 pitches.
+- **5Vin is at signal-column position 21, directly beside that GND at 22.**
+  That is a **solder hazard, not a convenience**: one bridge shorts the
+  devkit's USB 5 V to ground. Leave the gap or route the bus away.
+- **NO TAP DRAWS FROM 3V3.** Every divider is fed from a *machine* signal and
+  returns to GND. The rail is still needed — the 74HC221 and the photoMOS LED
+  supply run from it.
+- **Pitch is 2.54 mm and row-to-row is 10 pitches (25.4 mm)**, measured by
+  seating the devkit in a breadboard: one header in column A, the other in I.
+- **Perfboard footprint is 11 columns × 22 rows**, with 9 free columns
+  underneath the devkit if it is socketed high enough — which is why
+  `docs/shopping-list.md` specifies female headers. **Buy 7 × 9 cm** for
+  soldering room, and **count the holes on the board you actually receive**:
+  commodity "7 × 9" boards are often 24 × 34 rather than 27 × 35.
+- **GPIO33–37 are octal-PSRAM internal on this N16R8 module** — present on
+  the header, unusable, do not even probe them.
 
-**Row 8 is not independent evidence.** `selftest` drives one die pin into
-another through a physical jumper; if the pins labelled 6 and 8 were swapped,
-the jumper still joins die 6 to die 8 and 500/500 still passes. Row 8 is
-non-circular only given row 6. The rows are a mutually-supporting system, not
-six parallel confirmations.
-
-**Rows 7/15 were briefly "corrected" to jumper touches, and that was wrong.**
-A 2026-10-12 review read the written bench procedure — *"jumper each of
-GPIO7/15/16/17 to 3V3 and back"* — and inferred the taps were header touches.
-I applied that as a correction. **The operator confirms they were lever
-presses on the machine.** The procedure records what was planned; the levers
-are what happened. Restored, and the divergence is now recorded in the
-pulse-width section above so the procedure is not cited this way again.
-
-So GPIO7/15 were exercised the same way as 16/17. **But the record is one
-link short of saying so**, and this file spends a paragraph above insisting on
-exactly that distinction: lever B has its own row quoting what was logged
-(`B up logged water, B down logged steam`), while lever A's evidence is the
-summary row "All four switches | correct GPIO mapping" — a conclusion, not an
-observation. **CLOSED 2026-10-19 — ten of them, verbatim from the live tap:**
-
-    # switch 1cup 220 ms    # switch 1cup 245 ms
-    # switch 1cup 220 ms    # switch 1cup 285 ms
-    # switch 1cup 295 ms    # switch 1cup 230 ms
-    # switch 1cup 235 ms    # switch 1cup 275 ms
-    # switch 1cup 240 ms    # switch 1cup 195 ms
-
-Lever A up, logged as `1cup`, on GPIO7. Row 7/15's evidence is now the same
-kind as lever B's — a quoted log line rather than a summary conclusion.
-
-**The visual check's job**: the functional chain alone cannot distinguish
-wiring by *label* from wiring by *position*. The operator confirmed the
-silkscreen order on 2026-10-12, and since each GPIO exists at exactly one
-header position, the two together identify every pin both ways round.
-
-**The reference used for that check was Espressif's published layout, and it
-holds up.** A draft here said the layout had been "overturned the same day on
-GND placement" and graded it "a weak reference *for this clone*". Wrong on
-both counts — the full 44-position enumeration **agrees with the published
-table everywhere**, so the comparison is sound and this check is better
-supported than that draft claimed.
-
-**The seven are contiguous on one header, which the perfboard layout should
-exploit.** Confirmed on the board in hand, 2026-10-12:
-
-**FULL PINOUT — READ OFF THE BOARD 2026-10-12 AND CONFIRMED AGAINST
-ESPRESSIFS PUBLISHED v1.1 TABLE.** Both columns enumerated end to end, 22
-positions each, position 1 at the 3V3 end (breadboard row 42) and position 22
-at the far end (row 63). **The two agree at all 44 positions.** A draft of
-this heading said the board read "replaces Espressif's published layout —
-use nothing else"; see the retraction below.
-
-| Pos | Signal column | | Opposite column |
-|---|---|---|---|
-| 1 | **3V3** | | **GND** |
-| 2 | 3V3 | | GPIO43 / TX |
-| 3 | RST | | GPIO44 / RX |
-| **4** | **GPIO4** — `ESD4` clock | | GPIO1 |
-| **5** | **GPIO5** — `ESD1` data | | GPIO2 |
-| **6** | **GPIO6** — flow `#` | | GPIO42 |
-| **7** | **GPIO7** — 1Cup | | GPIO41 |
-| **8** | **GPIO15** — 2Cup | | GPIO40 |
-| **9** | **GPIO16** — Steam | | GPIO39 |
-| **10** | **GPIO17** — Hot Water | | GPIO38 |
-| 11 | GPIO18 | | GPIO37 ‡ |
-| **12** | **GPIO8** — selftest | | GPIO36 ‡ |
-| 13 | GPIO3 † | | GPIO35 ‡ |
-| 14 | GPIO46 † | | GPIO0 † |
-| 15 | GPIO9 | | GPIO45 † |
-| 16 | GPIO10 | | **GPIO48 — onboard RGB LED** ◆ |
-| 17 | GPIO11 | | GPIO47 |
-| 18 | GPIO12 | | GPIO21 |
-| 19 | GPIO13 | | GPIO20 † |
-| 20 | GPIO14 | | GPIO19 † |
-| 21 | **5Vin** | | **GND** |
-| 22 | **GND** | | **GND** |
-
-† strapping or native-USB, avoid. ‡ **GPIO35-37 are octal-PSRAM internal on
-this N16R8 module** — physically present on the header and unusable; do not
-even probe them.
-
-◆ **THE ONBOARD RGB LED IS ON GPIO48 — SETTLED 2026-10-15 BY A TWO-POINT
-TEST. So GPIO38 is FREE.** Espressif put it on **GPIO48 on v1.0 and GPIO38 on
-v1.1** and both revisions are sold, so this had to be measured. Open since
-2026-10-12.
-
-**The two points, each anchored to a serial reading taken at the same
-moment.** Setup: board on USB, **no machine connections**, and — the part a
-draft of this paragraph left out — **the yield Bookoo bound and awake**. Row 1
-is impossible without it, so "nothing else connected" read literally
-reproduces a dark LED in both rows, which is the very trap this entry warns
-the old one-second test fell into. Row 2 is produced by switching that scale
-off:
-
-| `status` | LED | what `updateLed()` writes |
-|---|---|---|
-| `yield: state=3` (CONNECTED), `detector=ARMED` | **dim green** | `mode 2` → `neopixelWrite(…, 0, 14, 0)` |
-| `yield: state=4` (LOST) | **off** | `mode 0` → `neopixelWrite(…, 0, 0, 0)` |
-
-**ONE POINT WOULD NOT HAVE BEEN ENOUGH, and a draft of this entry published
-it as though it were.** That draft argued the *colour* proved the firmware
-was driving the LED, because green is specific to ARMED. It does not: a
-**green power indicator** beside a dark RGB LED produces the first row
-exactly, and `docs/phase-0-plan.md` was about to free GPIO38 on the strength
-of it. A power LED cannot produce the second row. Only the pair does.
-
-**How the pin resolves — and a draft got the mechanism wrong while reaching
-the right answer.** `RGB_BUILTIN` is **not** 48. The `esp32s3` variant (which
-`esp32-s3-devkitc-1.json` selects) defines it as
-`SOC_GPIO_PIN_COUNT + PIN_NEOPIXEL` = **49 + 48 = 97**, a sentinel;
-`esp32-hal-rgb-led.c:12` subtracts `SOC_GPIO_PIN_COUNT` back off to reach
-GPIO48.
-
-**A draft then drew a false consequence from those two true facts**, warning
-that *"`digitalWrite(RGB_BUILTIN, …)` addresses pin 97 silently and would not
-do what it looks like it does."* **It does what it looks like.**
-`cores/esp32/esp32-hal-gpio.c:138` special-cases `pin == RGB_BUILTIN` inside
-`__digitalWrite` and routes it to `neopixelWrite(RGB_BUILTIN, c, c, c)` with
-`c = RGB_BRIGHTNESS` for any non-zero value — so it lights the LED white.
-`__pinMode` carries the same special case at line 95. The sentinel is handled
-at every call site that matters. Mechanism right, consequence invented: the
-call site was never read, which is this file's most-logged error and was
-committed three times in one session.
-
-**This fixes the LED net only. It does NOT make the board "v1.0".** Every
-other position in the table above agrees with Espressif's published v1.1
-layout, and a clone can mix revisions. Claim the pin, not the revision —
-which is also why the table cell above carries ◆ rather than standing as part
-of the board read: **an LED net is not silkscreened and is not in the v1.1
-table either** (that document says 38), so that one cell comes from this
-measurement and from no other source in this file.
-
-**THE ONE-SECOND TEST THIS ENTRY USED TO GIVE WAS WRONG, and would have
-produced the opposite answer.** It read: *"if the onboard status LED lights on
-the current firmware, it is GPIO48; if it has always been dark, it is
-GPIO38."* The second half is false. `updateLed()` sets `mode = 0` whenever the
-**yield** scale is not connected, so a board sitting on a bench with no scale
-awake is dark on *either* revision. Run as written it concludes GPIO38 and
-sends someone to invert a free-GPIO list that was already right. **A dark LED
-is informative only alongside `status`** — which is exactly what made the
-second row above evidence rather than noise.
-
-**A RETRACTION OF A RETRACTION, recorded because the second error is the one
-this file keeps making.** A draft of this entry deleted the old sentence
-*"this file and `main.cpp:377` both assert 48 flatly"*, calling it "a line
-number cited without being read". **That accusation was false and the original
-was correct.** `git show bb3ed26:firmware/src/main.cpp | sed -n '377p'` — bb3ed26
-being the commit that wrote the citation — returns exactly
-`// output full stop — updateLed() drives the onboard RGB LED on GPIO48, which`.
-The line was read, was right, and has since drifted repeatedly — 445, then
-472, and moving again within the same day's commits — while still asserting
-GPIO48. The draft checked the *current* file
-instead of the file at the commit that made the claim — the same
-read-a-later-version-and-call-it-history error logged against `pendingCount()`
-earlier the same day. **When a line number here looks wrong, check it at the
-commit that wrote it before retracting anything.**
-
-**AND DO NOT RE-CITE IT BY LINE, WHICH A DRAFT DID — it said "Cite
-`main.cpp:445`" and that was stale within the week.** This paragraph has now
-carried three numbers for one comment (377, 445, 472), each correct when
-written. It is the `updateLed()` note in the GPIO8 block; `grep` finds it in
-one step and cannot go stale.
-
-*(Position 19 carried a "◦" flag until 2026-10-12: the operator's transcription
-read "12 12" at positions 18-19 and GPIO13 was inferred. **Espressif's table
-gives position 19 = GPIO13**, so the inference is confirmed — by the very
-document a draft of this entry told the reader to stop consulting.)*
-
-**Two things this corrects about earlier working notes**, both from the
-published layout rather than the board: GPIO19 and GPIO20 are on the
-**opposite** column, not at signal-column positions 13-14 (which carry GPIO3
-and GPIO46), and the signal column ends **5Vin, GND** rather than running
-GPIO14 to the last position. The repo's own table only ever claimed positions
-1-12, which are correct — the error was in the fuller recollection used to
-reason about free pins.
-
-**GND is on the signal column — and the published layout said so all along.**
-A draft of this entry claimed the board read "overturns the published layout"
-and called it "a board reading beating a document-grade source". **It did not
-beat it; it reproduced it.** Espressif's own v1.1 user guide gives J1-22 = `G`.
-The enumeration above agrees with that document at all 44 positions.
-
-**NO TAP DRAWS FROM 3V3.** The position table calls positions 1-2 "the
-divider supply" and that is wrong — every divider here is fed from a
-**machine** signal and returns to GND (J2: 150 K from the direction line;
-J4: 100 K from `#`; J5: 8.2 K at the T-piece). 3V3 carries zero *tap* current.
-
-**The rail is still needed, and a draft of this paragraph said it was not.**
-The perfboard carries a populated 74HC221, which needs VCC and GND, and the
-photoMOS LED supply runs from our 3.3 V logic. "A rail nothing connects to"
-was true of the taps and false of the board.
-
-**ROW-TO-ROW SPACING: 10 pitches — 1.0 in, 25.4 mm. MEASURED 2026-10-12** by
-seating the devkit in an 830-point breadboard and reading the columns: one
-header in **A**, the other in **I**. A→E is 4 pitches, the 0.3 in channel is
-3, F→I is 3. **Column J stays free; nothing is free on the A side.**
-
-That closes the last mechanical unknown. It had been recorded as open on
-2026-10-12, deleted the same day by a paragraph rewrite, and covered over by a
-claim that nothing mechanical remained — net information loss by rewrite,
-restored, and now answered.
-
-**`docs/shopping-list.md` predicted "no rows beside it" and that is REFUTED** —
-one row (J) is free. The line is corrected there. It had been used twice to
-argue the spacing was already partly constrained.
-
-**The header is 22 pins, spanning breadboard rows 42 to 63** — one pin per
-row, 3V3 at row 42. **Call this a consistency check, not a third independent
-confirmation**, which a draft did: a header that is not 2.54 mm cannot seat in
-the breadboard at all, so the row count is undefined in the counterfactual.
-It is the *mating* argument restated from the same seating, on the same day.
-Worth having; not a separate observation.
-
-*(A first reading of this gave rows 42–64 and a 23-pin header, which would
-have made the board depart from the published 2 × 22 layout. The operator
-corrected it to 63 within minutes. Recorded only because the 23-pin reading
-briefly reached a commit message.)*
-
-**FOUR GND pins, and the census is now CLOSED by full enumeration** rather
-than by a fourth count-by-eye. It had moved twice (three, then four) from
-successive closer looks, which is why a review flagged it as a visual scan
-standing as the premise of a layout claim. From the table above:
-
-| | Position | Neighbour |
-|---|---|---|
-| **signal column** | **22** | next to 5Vin at 21 |
-| opposite column | 1 | opposite 3V3 |
-| opposite column | 21 | next to GPIO19 at 20 |
-| opposite column | 22 | the far corner |
-
-**The load-bearing claim SURVIVES.** The signal column runs **3V3 at position
-1, GND at position 22, all seven taps between** — so no ground return has to
-cross the board. That was in four documents on the strength of a visual scan,
-and an intermediate description of the GNDs ("one opposite 3V3, two at the
-other end of that row") read as though all of them were on the *opposite*
-column, which would have refuted it. The enumeration settles it: there is a
-GND at the far end of the taps' own column.
-
-**5Vin is at signal-column position 21.** It is *our* 5 V rail, not the
-machine's — do not confuse it with the J4 `+` net, which is read-only. (A
-draft called this "not previously recorded anywhere"; it is in Espressif's
-published table as J1-21.)
-
-**It sits directly beside the GND at 22, and that is a solder hazard, not a
-convenience.** On hand-wired perfboard with a ground bus down that column, one
-bridge between 21 and 22 shorts the devkit's USB 5 V to ground. Leave the gap
-or route the bus away.
-
-**THE PUBLISHED PINOUT IS CORROBORATED, NOT REPLACED — and a draft of this
-entry said the opposite.** It instructed the reader to *"stop citing
-Espressif's published pinout for this board… Neither direction is reliable
-here."* That rested on two supposed departures and **both were mine**:
-
-| Alleged departure | Actually |
-|---|---|
-| a 23-pin header (rows 42-64) | a misread of row 63, retracted in the same commit |
-| GND on the signal column | **J1-22 is `G` in Espressif's table.** The "departure" was my recollection of the layout, which put GPIO19/20 at J1 positions 13-14 where the real document has 3/46 |
-
-The published layout therefore has a **clean record** against this clone, and
-the 2026-10-12 enumeration **strengthens** the pin map by agreeing with it.
-The lesson is the inverse of the one that got written down and pushed: **the
-unreliable source was my memory of the document, not the document.**
-
-Checked against `docs.espressif.com/projects/esp-dev-kits/` →
-`esp32s3/esp32-s3-devkitc-1/user_guide_v1.1.html`, 2026-10-12.
-
-The signal column runs **3V3 at position 1, GND at position 22, all seven taps
-between**, so **no ground return has to cross the board** — the claim that has
-survived every revision above.
-
-**But "between" does not mean "adjacent".** The taps are at positions 4-10 and
-that column's GND is at 22, so each divider's ground leg runs 12-18 pitches
-(~30-46 mm). The nearest ground to the taps is the *opposite* column's position
-1. The no-crossing claim is literally true; do not read it as a short return.
-
-**COUNTING TRAP: breadboard columns are not perfboard holes, and the
-difference is the channel.** A to I looks like 9 columns and *is* 9 columns —
-but it is **10 pitches**, because the single visual step from E to F is the
-0.3 in channel — **worth 3 pitches, not 1** (it spans 3 pitches and contains
-2 missing hole positions). Perfboard has
-no channel, so the same devkit lands on columns 0 and 10 there:
-
-| | columns you can see | pitches |
-|---|---|---|
-| breadboard, A to I | 9 | **10** |
-| perfboard, continuous | **11 inclusive** | **10** |
-
-Quote the **pitch count**, never the column count, when carrying a dimension
-from one board to the other.
-
-**FOOTPRINT ON PERFBOARD: 11 columns × 22 rows**, with 9 free columns running
-underneath the devkit between the two pin rows. That underneath space is real
-estate — the dividers can live there if the devkit is socketed high enough,
-which is the reason `docs/shopping-list.md` specifies **female** headers.
-
-**Size the board from the hole count, not the centimetre label**, and do the
-accounting properly — **a draft of this paragraph got it backwards**:
-
-| | holes | devkit pin field | free beside it | free underneath |
-|---|---|---|---|---|
-| 5 × 7 cm | 19 × 27 = 513 | 11 × 22 | **8 × 27 = 216** | 9 × 22 = 198 |
-| 7 × 9 cm | 27 × 35 = 945 | 11 × 22 | **16 × 35 = 560** | 9 × 22 = 198 |
-
-That draft said 5 × 7 "does not fit" because "the devkit eats 22 of the 27
-rows, leaving five" — which treats the devkit's **11-column** footprint as if
-it spanned the full 19-column width. It does not. And it quoted 7 × 9 as
-"16 × 13 clear" — a corner rectangle of 208 holes, **fewer than the 216 a
-5 × 7 offers beside the devkit**. By its own metric the draft argued against
-its own conclusion.
-
-**7 × 9 is still the right buy**, for soldering room rather than necessity:
-560 contiguous holes against 216, with the actuation block, four J2 dividers,
-the J4 divider and two J5 resistors to place. But "5 × 7 does not fit" is not
-what the numbers say.
-
-**Footprint is the pin field, not the outline.** 11 × 22 holes is 25.4 ×
-53.3 mm of *pins*; the PCB overhangs at both ends (module/antenna one end,
-USB and buttons the other) by roughly 5 mm each, so the body covers ~25 rows.
-Budget rows against the outline.
-
-**Count the holes on the board you actually receive.** Commodity "7 × 9"
-protoboards are often ~24 × 34 rather than 27 × 35, and "5 × 7" ones 18 × 24 —
-and the hedge should be applied to both, not just to the one being rejected.
-
-**Pitch is 2.54 mm (0.1 in) — and the proof is that the board has been in a
-BREADBOARD since 0a.** A caliper reading of **1.9 mm** was taken 2026-10-12
-and briefly recorded as possibly the pitch. It is the **gap**: 2.54 mm pitch
-less a 0.635 mm square post (0.025 in) is **1.905 mm**. *(An earlier draft
-rounded the post to 0.64 first and then called the 1.90 agreement "to the
-hundredth" — a precision the inputs do not carry.)*
-
-The arithmetic is not what settles it. **Breadboards are 2.54 mm and the
-devkit seats in one — observed 2026-10-12.** A 1.9 mm part cannot mate with a
-2.54 mm socket strip, so the pitch is settled by mating, which is this file's
-own maxim.
-
-**Mind the provenance, because a pushed commit got it wrong.** That commit
-said the devkit "has been seated in a 2.54 mm breadboard **through every bench
-session**". It has not: through the bench work the ESP was **off the
-breadboard, connected by wires**, and only the divider junctions were in it —
-which `docs/shopping-list.md` had already recommended. The evidence is the
-2026-10-12 seating and nothing earlier. Conclusion unchanged, evidence
-corrected: an assumed history is not an observation, which is the same error
-this file logged twice on 2026-10-12 alone.
-
-Recorded because the trap is live for anyone measuring a header: **calipers
-laid between two pins read the gap, and the gap on 0.1 in hardware is a
-plausible-looking 1.9 mm.** If a span ever does need checking, measure across
-**ten pitches** rather than one gap, which multiplies the difference tenfold.
-**Measure outer edge of pin 1 to outer edge of pin 11**, not centre to centre:
-calipers land on pin faces and cannot find centres, so a centre-to-centre
-instruction reproduces the very jaw-placement ambiguity being warned about.
-
-| | 0.1 in pitch | a true 1.9 mm pitch |
-|---|---|---|
-| centre to centre (not measurable) | 25.40 mm | 19.00 mm |
-| **outer edge to outer edge** | **26.04 mm** | **19.64 mm** |
-
-*(10 × pitch + one 0.635 mm post. An earlier draft deleted the outer-edge row,
-leaving only the instruction that calipers cannot execute.)*
+**`docs/board-and-perfboard.md` is normative on all of it** — the 44-position
+enumeration in full, the per-GPIO evidence table and the two honest limits on
+it, the GPIO48 two-point test and the three drafts that got it wrong, the GND
+census, the footprint arithmetic, and the breadboard-column-versus-perfboard-
+pitch counting trap that costs a dimension every time it is forgotten.
 
 **GPIO8 is reserved and is the only pin this firmware ever drives ON A
 MACHINE-FACING NET** — `updateLed()` drives the onboard RGB LED on GPIO48, so
@@ -1686,80 +826,39 @@ Two things worth knowing about the chosen pins:
   which was wrong even before GPIO8 was claimed. It matters only if J3's NTC
   is ever wanted, since 0e takes temperature from the display bus instead.
 
-**The 5 V rail is now MEASURED (2026-10-04), so the
-divider is sized against a reading rather than the schematic** — which is
-the step that was skipped at J4. Unlike J4's open-collector line, the
-switch is driven through R45's **100 Ω**, so a 370 K divider loads it by
-about a millivolt and the unloaded arithmetic is valid here.
+**The 5 V rail is MEASURED (2026-10-04)**, so this divider is sized against
+a reading rather than the schematic — the step that was skipped at J4. The
+switch is driven through R45's **100 Ω**, so a 370 K divider loads it by about
+a millivolt and the unloaded arithmetic is valid here.
 
-**150 K / 220 K** divider on PB5 and PB6 into GPIO
-(5 V → 2.97 V, ~0.5 V over VIH; 13.5 µA load, dropping **1.35 mV** across
-R45).
+<!-- fact:divider-j2 150 K / 220 K -->
+**150 K / 220 K** on all four J2 direction lines into GPIO: 5 V → 2.97 V
+predicted, **2.89 V measured at the junction** (2026-10-19, lever held; 0 V at
+rest), **+415 mV** over the ESP32-S3 VIH of 2.475 V. 13.5 µA, dropping 1.35 mV
+across R45.
 
-**MEASURED AT THE JUNCTION 2026-10-19: 2.89 V with a lever held, 0 V at
-rest.** Against an ESP32-S3 VIH of **2.475 V** that is **+415 mV of margin**.
-This closes an item the bench list carried as open — *"we proved the firmware
-reads `1`, never wrote down the margin"*.
+**Never 220 K / 220 K** — 2.50 V against that same 2.475 V VIH is 25 mV of
+margin, which supply tolerance alone eats, and a pressed lever reads as not
+pressed. **And do not "correct" this pair to J4's 100 K / 220 K**: 0d rejects
+150 K / 220 K and 0c keeps it, and that is not a contradiction — J2's source is
+100 Ω, J4's is 9.4 kΩ.
 
-*(A draft wrote "+580 mV against a VIH of 2.31 V". **2.31 V is 0.7 × VDD, the
-74HC figure** — this file uses **2.475 V** nominal and **2.60 V** at a
-5 %-high rail, and quotes 2.475 V twelve lines below when rejecting
-220 K / 220 K. **A first version of this parenthetical then claimed the error "was caught and
-fixed in `docs/phase-0-status.md` in the commit that introduced it". It was
-not** — that file carried it in three further places, and saying otherwise
-closed the loop on a defect that was still open. A review found all three.
-Applying a correction in one file and announcing it as complete is strictly
-worse than not applying it, because it stops anyone looking.)*
+**`docs/taps-and-dividers.md` is normative on the arithmetic** — both corners,
+the 80 mV that is still unexplained between the predicted 2.97 V and the
+measured 2.89 V, the analyser-leakage question and why one bench reading does
+not retire a datasheet worst case, and the VIH figure a draft got wrong.
 
-**The 80 mV below the predicted 2.97 V is NOT fully accounted for, and this
-line used to say "nothing to chase".** The two causes it offered do not add
-up to 80 mV:
+**Not an optocoupler either**: its mA would drop ~1 V across the 1 K series
+network and could break the board's own threshold.
 
-- **a 4.86 V rail** would do it — but this file records that rail as
-  **measured at 5.0 V** (2026-10-04), so invoking 4.86 V contradicts its own
-  measurement;
-- **1 % resistor tolerance** moves the junction by at most **~24 mV**.
+The switch harness is **J2** (silkscreen `BOTONE`), 5 pins: +5 V, Steam,
+1Cup, 2Cup, Water. Gives real shot boundaries, flush events, and a true
+`first_drip_ms`.
 
-Together they leave **~59 mV unexplained** unless the rail really is lower
-than recorded. **Still nothing to act on** — the margin is +415 mV and a
-60 mV discrepancy threatens nothing — but it is an open discrepancy between
-two of this file's own numbers, not a closed question. Re-read the rail at
-the junction next time J2 is live.
+### 0d — flowmeter
 
-**And a logic analyser on the junction costs nothing measurable at room
-temperature.** Same reading, 2.89 V, probe on and probe off — the difference
-is below meter resolution, so under ~10 mV. A review had flagged this as
-worth up to **89 mV**, from a worst-case HC input leakage of 1 µA into the
-junction's 89 kΩ source impedance.
-
-**Grade the closure honestly: ONE reading on ONE line at ONE temperature does
-not retire a datasheet worst case.** The 1 µA figure is a max over the
-part's full temperature range; typical at 25 °C is an order lower, which is
-what was measured. The bench is not a boiler housing. What this establishes
-is that the analyser is fine to use on a J2 junction *on the bench*, which is
-all it is ever used for — not that the 89 mV bound is wrong.
-
-**Note it is specific to J2's high source impedance** — J5's junction is
-5.3 kΩ and could never have been affected.
-
-**0d rejects 150 K / 220 K and 0c keeps it — that is not a contradiction.**
-0c's corner is **+203 mV** (rail −5 %, VIH +5 %, 1 % resistors) because the
-switch is driven through **100 Ω**, so the divider barely loads it and the
-unloaded ratio holds. J4's source is **9.4 kΩ** — two orders of magnitude
-stiffer — which is what collapses the same pair to −45 mV there. **Do not
-"correct" 0c to J4's 100 K / 220 K** on the strength of the J4 warning; the
-pair is fine here and the source impedance is the whole difference.
-
-**Not an optocoupler**: its mA would drop ~1 V across the 1 K series
-network and could break the board's own threshold. Do NOT
-use 220 K / 220 K: 2.50 V against an ESP32-S3 VIH of 2.475 V leaves 25 mV
-of margin, which supply tolerance alone consumes, and a pressed button
-would read as not pressed. The switch harness is **J2** (silkscreen
-`BOTONE`), 5 pins: +5 V, Steam, 1Cup, 2Cup, Water. Gives real shot
-boundaries, flush events, and a true `first_drip_ms`.
-
-**0d — flowmeter. FIRST ATTEMPT CAUSED AN INVARIANT-1 VIOLATION
-(2026-10-03) — read `docs/phase-0-status.md` before touching J4.** A tap on
+**FIRST ATTEMPT CAUSED AN INVARIANT-1 VIOLATION (2026-10-03) — read
+`docs/phase-0-status.md` before touching J4.** A tap on
 J4 made the machine fault with `E01` while a 2Cup cycle was running;
 disconnecting it and power-cycling cleared the fault. **Nothing is known to have been
 damaged — the analyser's D1 input has not been re-checked**, and the
@@ -1779,6 +878,7 @@ That also closes the worn-label mystery: the marking first read as
 | | |
 |---|---|
 | **K-factor** | **2382 pulses/L**, 0.41 g/pulse |
+<!-- fact:digmesa-k-factor 2382 pulses/L -->
 | Flow range | **0.033 – 0.40 L/min** (0.55 – 6.67 ml/s) |
 | Pressure | **−1 to +0.3 bar** — a suction-side device |
 | Supply | **+3.8 to +20 VDC**, <8 mA |
@@ -1788,506 +888,80 @@ That also closes the worn-label mystery: the marking first read as
 | Temperature | −10 to +65 °C |
 | Mounting | **horizontal, contacts facing up** — confirmed as installed, 2026-10-09 |
 
-**Two long-standing hedges in this file are now resolved:**
+**Two hedges this file carried for weeks are resolved by it**: the "+2.8 V"
+supply figure was a different Digmesa product, and the "2386 / 2476 / 2436
+for 0° / 90° / 180°" note was four separate part numbers rather than one
+part's mounting positions. Ours has no suffix, so 0°, so 2382.
 
-- **"+2.8 V" was never this sensor.** It came from the **9NB nano brass**
-  datasheet, a different Digmesa product. +3.8 to +20 VDC is correct.
-- **The "2386 / 2476 / 2436 for 0° / 90° / 180° mounting orientation" note
-  was wrong about what those are.** They are not mounting positions of one
-  part — they are **separate part numbers** (`-B`, `-B90`, `-B180`, `-B270`),
-  each with its own measurement curve. Ours has no suffix, so 0°, so 2382.
-  Orientation matters enough that Digmesa sells four SKUs for it, which is
-  why the confirmed horizontal/contacts-up fitting is worth having recorded.
+**The datasheet also confirms the plumbing** — *"installed between the water
+container and the vibratory pump (on the suction side)"* — which closes a
+"whether that water passes the flowmeter is unverified" that this file
+carried from 2026-10-04.
 
-**The datasheet also confirms the plumbing**, which the operator traced the
-same day: *"specially designed for coffee machines that use vibratory pumps…
-installed between the water container and the vibratory pump (on the suction
-side)."* CLAUDE.md carried "whether that water passes the flowmeter is
-unverified" from 2026-10-04; it is now verified twice over.
+**Digmesa still say to calibrate**, and invariant 3 already requires it: log
+raw pulses, never millilitres.
 
-**Digmesa still say to calibrate**: *"The number of pulses per litre may
-differ depending on medium and installation… we recommend to calibrate."*
-Invariant 3 already requires that.
+#### What the J4 counts are is UNRESOLVED — and it is 460 lines of argument
 
-### WHAT THE J4 COUNTS ARE IS UNRESOLVED — 2026-10-09, one reading refuted
+**The whole investigation is in `docs/flowmeter-j4.md`, which is normative
+on it.** It is the largest open question in the project and the least
+useful thing to carry into a session that is not about it. What follows is
+only what changes a decision.
 
-**An earlier version of this section concluded "the J4 tap measures the pump,
-not flow". That conclusion is WITHDRAWN.** It was contradicted by the
-session's own strongest datum, which the same text filed as an open curiosity
-instead of as the refutation. What follows separates what was measured from
-what was inferred, because the measurements are sound and the inference was
-not.
+**The counts are ~5× the datasheet and nobody knows why.** Shot 2: 736
+pulses bracketed, 761 honest total over a 33.2 s pump window, against a
+~150 predicted from the datasheet at an assumed inlet. Two readings fit:
 
-#### Measured
-
-Two shots and a failed attempt, polled every 3 s, bracketed by idle.
-
-| | pulses | glitches | flow ring | display ring |
-|---|---|---|---|---|
-| idle before (7 samples, ~20 s of samples) | 967 → 967 | 4988 → 4988 | 0 | 27748 frozen |
-| pump running, 33.2 s sampled | 981 → 1717 (**736**) | 5123 → 9371 (**4248**) | 0 → **629** | +6086 at start, then +164 |
-| idle after (6 samples) | 1728 → 1728 | 9371 → 9371 | 629 | 33998 frozen |
-
-A further **25 counts** fall in the unsampled gaps at pump start and stop
-(967→981 and 1717→1728), so 736 is what two in-shot samples bracket and
-**761** is the honest total for the pump window. Not one count and not one
-glitch appears in either idle stretch.
-
-| run | yield | counted | glitch:count |
-|---|---|---|---|
-| shot 1 (machine failed to prime, air) | 36.5 g | 752 | 5.6 |
-| shot 2 (primed, clean) | 37.9 g | 736 | 5.8 |
-| **aborted — pump ran, NO water drawn** | **0 g** | **11** over 19.3 s | **7.8** |
-
-**The excess over the datasheet is ~5×, not ~8×.** The 8× figure divided by
-*yield*, and `docs/phase-0-status.md` states that yield is not inlet: the water
-splits between cup, puck retention and the 3-way dump, and the scale sees
-perhaps 60 % of it. At that assumption inlet ≈ 63 ml, the datasheet predicts
-~150 pulses, and 761/150 ≈ **5.1×**. The 60 % is an assumption, not a
-measurement.
-
-#### The reading that was published, and why it is dead
-
-"The counts are pump noise at ~22 Hz." **The aborted run refutes it:**
-
-| | |
+| reading | status |
 |---|---|
-| pump ran | **19.3 s** — display timer 2.6 → 19.3, which this file establishes IS the pump-on to pump-off measurement |
-| **sampled** window | **16.7 s** — the first sample came 2.6 s after pump-on, and no pre-run idle value was recorded |
-| pump-coupling at 22.17 Hz predicts, over the sampled window | 22.17 × 16.7 = **370 counts** |
-| observed | **11** |
-| | **34× out** |
-
-**Divide by the SAMPLED window, not the pump-on duration.** This table read
-16.7 s / 370 / 34× until 2026-10-12, then a sweep "corrected" it to
-19.3 s / 428 / 39× — which fixed the label and broke the ratio, because the 11
-counts were only ever observed across 16.7 s. Right duration, wrong
-denominator; the pre-sweep version had the right denominator with the wrong
-name for it. **Counts in the unsampled 2.6 s are unknown, and ~360 would have
-to be hiding there to overturn this.**
-
-**The strongest form of this is the GLITCH RATE, which measures coupling at
-the pin directly:**
-
-| | glitches/s |
-|---|---|
-| shot 2, pump + water | 4248 / 33.2 s **sampled** = **128.0** |
-| aborted, pump + no water | 86 / 16.7 s **sampled** = **5.15** |
-| | **24.9× collapse** |
-
-*(This table divided the aborted run by 19.3 s and shot 2 by its sampled
-33.2 s until 2026-10-12 — mismatched denominators, giving 4.5/s and 28.7×.
-Consistent windows give 5.15/s and 24.9×. The conclusion is unaffected.)*
-
-Rejected edges are the quantity most directly produced by electrical coupling,
-and they fall 29× when the only thing that changed is whether water moved.
-
-**Two weaker supports, graded as such.** The glitch:count *ratio* (7.8 against
-5.8) is consistent with unchanged edge quality but carries little information
-at **n = 11** — Poisson gives 7.8 ± ~2.5. And "capacitive coupling has no
-reason to care whether water flows" is **too strong as stated**: a vibratory
-pump that cannot draw water is a different electrical load — stroke, current
-waveform and armature travel all change — so coupling amplitude is not
-invariant with hydraulic load. 29× is almost certainly too large to explain
-that way, but the claim does not hold in general.
-
-#### The water reading is NOT refuted — one earlier objection to it was circular
-
-An earlier version argued the water reading also fails, because 22 Hz ÷ 2382
-pulses/L = **9.31 ml/s through the meter** against 1.14 g/s to the cup, which
-is "above the sensor's rated maximum". **That objection does not work**, for
-three reasons this file supplies itself:
-
-- the rated range is where K is **specified**, not a hydraulic limit, as this
-  same entry now states — so exceeding it is not evidence of anything;
-- it is **circular**: if the flow really is above the rated range then 2382 is
-  not the applicable K, so dividing by 2382 to show it is out of range proves
-  nothing;
-- and the recirculation subsection below **predicts exactly that figure** —
-  under it the meter sees throughput rather than delivered volume.
-
-**THE POSITION IS UNCHANGED AS OF 2026-10-17: one reading refuted, the other
-unresolved — and the gauge now leans toward this one.** See the recirculation
-subsection: the operator's routine gauge reading is weak evidence *for*
-water-plus-recirculation, not against it.
-
-*(A draft dated 2026-10-17 replaced this paragraph with "the position is
-NEITHER HOLDS after all", on the grounds that the OPV sits above 9 bar.
-**Withdrawn the same day** — that rested on "a relief valve cannot be exceeded
-at its own setpoint", which is false. The withdrawal reached the recirculation
-subsection and **not this one**, leaving the two contradicting each other
-~40 lines apart for one commit: a retraction applied in one place and missed
-in another is how every stale line in this file got here.)*
-
-**Note the 11 is a lower bound too.** Shot 2 got a gap correction (+25 counts
-in the unsampled windows at pump start and stop); the aborted run has the same
-structure — 2.6 s of pump-on before the first sample, and no pre-run idle
-value recorded — and is quoted flat. It would take ~360 counts hiding in that
-2.6 s to overturn the refutation, so the conclusion survives, but the
-asymmetry is real.
-
-#### What the bracket does and does not establish
-
-It separates **brewing from idle**. Nothing finer. The 3-way solenoid is
-energised for exactly the pump-run window and the pump triac fires for
-exactly that window; neither is separated by this experiment, and nobody
-established whether the heater fired during the idle stretches. The counts
-are **activity**-correlated. An earlier version asserted "it is the pump, not
-the heater, not the solenoid, not ambient" — that was a grade inflation which
-deleted this very caveat.
-
-#### Recirculation is STILL LIVE — and the gauge reading makes it MORE likely, not less
-
-It was killed on free-flush evidence — an OPV is closed below setpoint, and
-both calibration flushes were free flushes. That reasoning was then applied to
-shots, where the 5× evidence actually comes from, and this section re-opened
-it on the grounds that *"nobody has read this machine's own 0–16 bar gauge
-(`I.4220`) during a pour, and the OPV's relief setpoint is unrecorded"*.
-
-**BOTH HALVES OF THAT WERE WRONG, AND THE OPERATOR HAD THE ANSWER THE WHOLE
-TIME.** Asked directly on 2026-10-17: *"Normally the pressure goes up to
-roughly 9 bars. I watch it every time I pull a shot."* And on varying the
-grind: *"If I pull a coarse shot the pressure will barely rise. If I pull an
-ultra fine shot the pressure will rise higher than 9 bar. But not way
-higher."*
-
-**Grade it precisely, because it is an unusual kind of evidence.** This is not
-one instrumented reading; it is routine observation across many shots. That
-makes **n large and the repeatability real**, which is the part that matters
-here — and it makes the *numbers* soft: no value was recorded at the time, and
-nothing was read simultaneously with the flow counter.
-
-**A FIRST DRAFT OF THIS ENTRY USED THAT OBSERVATION TO DECLARE RECIRCULATION
-DEAD, AND THE DEDUCTION WAS BACKWARDS.** It argued: *"an ultra-fine shot
-exceeds 9 bar, and a relief valve cannot be exceeded at its own setpoint,
-therefore the OPV is above 9 bar, therefore a normal shot runs with it
-closed."*
-
-**The premise is false.** A spring relief valve has a *cracking* pressure, and
-pressure rises **above** it as flow through the valve increases — accumulation
-or pressure override, commonly 10–25 % above cracking at full flow. Being
-exceeded under flow is what these valves *do*. The whole chain rested on that
-one sentence.
-
-**Read the same observation against an OPV cracking at ~9 bar and it fits
-better than pure puck-dependence:**
-
-| grind | observed | OPV cracking at ~9 | no OPV in play |
-|---|---|---|---|
-| coarse | "barely rises" | puck passes all flow, never reaches 9, valve shut ✓ | low pressure ✓ |
-| normal | **"~9 bar, every time"** | puck reaches cracking, valve opens and **clamps** ✓ | 9 bar by coincidence, shot after shot ✗ |
-| ultra-fine | "higher than 9, **not way higher**" | nearly all flow through the valve, override to ~10–11 ✓ | rises toward the pump's ~15 bar deadhead ✗ |
-
-**A draft then argued "two things pure puck-dependence cannot explain and a
-clamp can" — the same number across varying grind, and no run toward
-deadhead. The first half is retracted** (see the dial-in paragraph below: the
-operator tunes grind toward ~9 bar, so those variables are not random), and
-the ✗ marks in the table's last column overstate it. The second half still
-stands and is weak.
-
-So: **this reading is not evidence either way.** The OPV setpoint is bounded
-as of 2026-10-19 — see below — and whether a normal shot reaches cracking is
-open.
-
-**THE MECHANISM, restored — a draft deleted it while strengthening the
-conclusion that depends on it**, which also left the "the recirculation
-subsection below predicts exactly that figure" forward reference above
-pointing at nothing. The meter is on the suction side (confirmed by the
-Digmesa datasheet and by tracing) and the relief leg returns to the tank-side
-T **upstream of the meter branch**, so with the OPV open the meter sees
-throughput rather than delivered volume. That is what predicts the ~9.3 ml/s
-figure the subsection above quotes.
-
-**Grade the plumbing claim honestly**: the inlet side is traced, the rest of
-the circuit is not — this file's hydraulics section covers the gauge branch
-only and says building a plumbing census is a next-time-in-there job.
-
-#### THE OPV IS 11 BAR — MEASURED 2026-10-19, the first hard number on that valve
-
-Blind basket in the portafilter, pump on, read off the machine's own gauge;
-the operator moved the OPV screw to confirm it acts and returned it. **The
-method is right**: a blind basket passes no water, so 100 % of pump output
-goes through the valve and the gauge reads the valve rather than the puck.
-
-**IT IS THE FULL-FLOW PRESSURE, NOT THE CRACKING PRESSURE, and a draft read
-it as the latter.** Maximum flow through a spring valve means maximum
-accumulation, so **cracking sits BELOW 11** — spring valves typically show
-10–25 % override at full flow, which would put it near **9–10 bar**. That
-figure is general spring-valve behaviour, not a measurement of this valve.
-
-**So a ~9 bar shot is NOT cleanly below cracking.** A draft wrote "4 bar below
-cracking, OPV closed, recirculation dead for shots" — **withdrawn**. A normal
-pull may sit right at the knee. That is the second pressure number this entry
-has over-read: first the premise that a relief valve cannot be exceeded at its
-setpoint, then this.
-
-**AND IT WAS ALREADY 11 BAR WHEN THE 2026-10-09 SHOTS WERE MEASURED** —
-confirmed with the operator. The screw was turned only to verify it acts. So
-the flow data is comparable across it and no confound is introduced.
-
-**One gap in that, stated rather than smoothed over: the screw's return to 11
-was not re-verified against the gauge.** The reading that established 11 bar
-was taken before the adjustment, and "I put it back" is an action, not a
-measurement. Re-read it with the blind basket at the next opportunity —
-experiment 0d-ii moves the screw twice more and the same applies there.
-
-**THE OPV SETTING IS ADJUSTABLE STATE, AND NOTHING RECORDS IT.** That puts it
-in the same class as `grind_epoch` (invariant 5): a number relative to a zero
-point that moves. Flow data taken either side of an adjustment is **not
-comparable**, and until 2026-10-19 nobody had established that this valve is
-adjustable in practice on this machine. If the schema ever grows a column for
-machine state, this belongs in it.
-
-**A DRAFT CLAIMED A TWO-COMPONENT ACCOUNT "NOW FITS WHERE NOTHING FITTED
-BEFORE" — baseline meter over-count plus relief on shots. WITHDRAWN: THE GAP
-IT EXPLAINS MAY NOT EXIST.**
-
-The 5× figure is not measured. It comes from dividing shot counts by an
-**assumed** inlet, using this file's own 60 % yield-to-inlet figure — which
-this same section already labels *"an assumption, not a measurement"*. Vary
-that one number and the gap closes:
-
-| flush over-count (OPV shut) | 5915 / 2382 = **2.483×** |
-|---|---|
-| apply that SAME factor to shot 2's 761 counts | 761 / 2.483 = **306 true pulses** |
-| at the datasheet 2382 pulses/L | **128.7 ml inlet** |
-| against a 37.9 g yield | **29.5 % reaches the cup** |
-
-**So a single constant over-count of 2.483×, with the OPV never opening,
-reproduces shot 2 exactly — provided ~30 % of inlet reaches the cup instead
-of 60 %.** One component, no relief, no gap.
-
-Two readings now fit the same data and **the only parameter separating them is
-one this file flags as unmeasured**. A draft took the softer number as firm
-because it supported the more interesting story.
-
-**WHICH MAKES THE SPLIT THE MEASUREMENT TO TAKE.** Every "~5×" in this
-document inherits that assumption. `inlet = yield + puck retention + 3-way
-dump`, and all three are weighable — see experiment 0d-i.
-
-**The free-flush half is untouched by any OPV question** — no basket, no
-pressure, nothing relieving, and the meter still read 5915–6508 pulses/L
-against a datasheet 2382. **The meter over-counts regardless**, and that has
-never depended on the valve.
-
-**AND THE "~9 BAR EVERY TIME" REPEATABILITY HAS A SIMPLER EXPLANATION THAN THE
-ONE THIS FILE REACHED FOR.** A draft argued pure puck-dependence "cannot
-explain landing on the same number across varying grind, dose and tamp", and
-inferred a regulator clamping at 9. **The operator dials the grind to pull a
-good shot, and ~9 bar is what that conventionally means.** Grind, dose and
-tamp do not vary randomly — they are tuned toward a target. The human is the
-feedback loop, and that was walked straight past.
-
-**This is the repo's recurring defect in its purest form.** The file asked for
-an experiment ("the cheapest thing that would settle it") that the operator
-performs every single morning. Nobody asked. Before adding an experiment to
-the list below, check whether it is already being done and merely unrecorded —
-this is now the **third** instance, after the GPIO silkscreen check and the
-`02.4` power-on string.
-
-#### The experiment that separates them
-
-**0d-i. WEIGH THE SPLIT. Do this one first — it is cheaper than everything
-below and every "~5×" in this document depends on it.**
-
-`inlet = yield + puck retention + 3-way dump`. Weigh the loaded portafilter
-dry, pull a normal shot catching the cup on the Bookoo, weigh the portafilter
-again (wet puck − dry = retention), and catch the drip-tray dump. Three
-weighings and a subtraction.
-
-**Until that number exists, the 5× is an assumption wearing a decimal point**,
-and a constant 2.483× over-count with a ~30 % split fits the same data with no
-relief at all.
-
-**0d-ii. RAISE THE OPV AND PULL ONE NORMAL SHOT.** The operator owns the
-adjustment since 2026-10-19, so pressure can be moved without touching the
-grind.
-
-It supersedes a coarse-shot version a draft put here, which moved pressure
-only through the puck and so changed grind, flow rate and contact time
-together. **This is NOT "one variable" either, and a draft said it was**:
-raising the OPV raises brew pressure, which moves flow rate and contact time
-with it. It changes *fewer* variables, and leaves the grind alone.
-
-Set the OPV to **~14 bar**, pull one otherwise-normal shot, set it back to 11.
-
-**READ THE GAUGE DURING THE SHOT. Without it the experiment can return a false
-null and you will not know.** A draft asserted "at 14 the valve is shut
-whatever its cracking pressure is" — that does not follow. By this section's
-own 10–25 % override, a 14 bar full-flow setting puts cracking at
-**11.2–12.7**, and removing a clamp at ~9 may let the puck drive the pull
-above that. The gauge is the only thing that tells you which happened:
-
-- **gauge stays well below ~11** → the valve was shut; the comparison is valid
-- **gauge pegs near 14** → it relieved anyway; the run is void, not a null
-- **gauge sits between ~11 and ~14** → **also void, and a draft left this band
-  uncovered** — it is exactly where this section's own cracking estimate
-  (11.2-12.7) lies, so the valve may be partly relieving and the run cannot be
-  read either way. Lower the OPV or coarsen the grind and repeat.
-
-**Then compare in CONSISTENT UNITS, which a draft did not.** The flushes'
-5915–6508 is per litre of *collected water*; a shot's counts per litre of
-*yield* is a different quantity, and shot 2 sits at 761 / 0.0379 L =
-**20 079 per litre of yield**. Comparing one to the other is meaningless. Do
-it in whichever of these the **0d-i** weighing makes available:
-
-| if 0d-i has been done | compare **counts per litre of measured inlet** against the flushes' 5915–6508 |
-|---|---|
-| if it has not | compare this shot's counts/yield against a **normal-pressure shot's** counts/yield, same grind, same session — a ratio, not an absolute |
-
-Record counts, yield, duration **and the gauge reading**. Deliberate throwaway
-shot; at 14 bar it will not taste like anything.
-
-**And re-verify the OPV reading after setting it back**, with the blind basket
-— the 11 bar figure is only as good as the last time the gauge was read
-against it, and this procedure moves the screw twice.
-
-**BOTH 0d-i AND 0d-ii NEED THE J4 TAP, WHICH MEANS REFITTING THE CONNECTOR BEHIND
-THE 2026-10-03 `E01` INCIDENT.** It is currently unplugged (see the bench-rig
-entry in `docs/phase-0-status.md`). **Watch for the fault on first contact**,
-and note that `+` connects to nothing, ever. This warning sat at the foot of a
-retired experiment and lost its antecedent in a restructure; it is the only
-safety-relevant line in this section and it covers everything in it.
-
-*(RETIRED THRESHOLDS, from the superseded coarse-shot version. Kept for the
-unit trap only, which is the part people get wrong: yield is not inlet, so a
-correctly-reading meter gives **2382 / 0.6 ≈ 3970 pulses per litre of
-YIELD**, not 2382 — and a confirming result would land at ~1.7× the datasheet
-and read as "nothing settled". **Do not use the 3970 as a live threshold**:
-the 60 % it rests on is exactly the number experiment 0d-i exists to replace,
-and the same arithmetic appears above with that caveat attached.)*
-
-*(A draft of this section promoted the analyser on `#` to first instead. That
-was wrong twice over: it contradicted `docs/phase-0-status.md`, which calls
-the analyser* **the wrong instrument** *because it produced the `E01` fault on
-2026-10-03 and its corrected 8.2 K conditioning has never been re-tested —
-400 lines from where the promotion was written, in the same file. And it
-justified the series resistor as protecting the analyser, inverting the
-documented hazard, which is protecting the machine.)*
-
-The rest are still worth running and none of them decides this on its own:
-
-1. **One shot and one free flush with the serial console DETACHED**, counts
-   read before and after, **durations recorded**. Detaching serial removes
-   the documented cause of display-ring drops (see the 0e entry) and gives
-   the second rate point that a single 22.2 Hz datum cannot provide.
-2. **Deliberately re-run the dry case** — pump on, no water drawn. If 11
-   counts reproduces, the counts track water and the withdrawn conclusion was
-   backwards. **Sample the WHOLE pump-on window this time** — baseline before
-   the lever, first sample at the lever — which is what the 2026-10-09 run
-   could not do and why its 11 is a lower bound. Over a full 19.3 s run,
-   coupling predicts **428**; over a 16.7 s sampled window, **370**.
-
-   **Thresholds, and they are judgement calls rather than derived**: under
-   ~50 counts is decisive for water (an order below either prediction); over
-   ~300 brings the coupling reading back. Between those, nothing is settled.
-   At n ≈ 11 the Poisson spread is ±3.3, so the interesting ambiguity sits far
-   below 300 — a result of 40 or 80 would need thinking about, not dismissing.
-
-#### Hypotheses that are DEAD, recorded so nobody re-derives them
-
-An earlier version of this entry deleted this block while the refuted
-arguments were still live in `docs/phase-0-status.md` and in the firmware.
-That is net information loss, and the opposite of this file's convention.
-
-1. **One count per pump stroke at exactly 50 Hz.** The flush data fitted it
-   with no free parameters (1209/50 = 24.2 s, 164/50 = 3.3 s, both implying
-   the same ~8 ml/s). **The shots came in at ~22 Hz.** Dead.
-2. **The rejected:counted ratio as a signature.** It held at 3.32 and 3.34
-   across an 8× volume change, which looked decisive. Both runs were free
-   flushes **at the same flow rate**, so duration scaled 8× too and any
-   time-proportional source reproduces it. It then moved to 5.8 on the shots.
-   It discriminates nothing.
-3. **Air in the line.** Shot 1 ran after a priming failure and the datasheet
-   names air as a measurement hazard, so this looked decisive. Shot 2 was
-   clean and agreed to 6 %.
-4. **The counts are pump noise** — see the refutation above. Dead at **34×**
-   on consistent windows (370 predicted against 11 observed over the same
-   16.7 s), with the glitch rate collapsing 25× alongside it.
-*(A draft added "water plus OPV recirculation" here as a fifth dead
-hypothesis on 2026-10-17, and it was **withdrawn the same day** — the
-deduction that killed it rested on "a relief valve cannot be exceeded at its
-own setpoint", which is false. See the recirculation subsection. It is live,
-and the gauge reading is weak evidence for it.)*
-
-#### The volume hole, which is the sharpest statement of the problem
-
-| | |
-|---|---|
-| shot 2, pulses over the pump window | **761** |
-| at the datasheet's 2382 pulses/L | **319 ml** |
-| yield to the cup | **37.9 g** |
-| inlet at this file's own 60 % assumption | **~63 ml** |
-| **unaccounted** | **~256 ml over 33 s** |
-
-*(A draft said 280 ml by subtracting only the 37.9 g cup yield while the table
-above already credits ~63 ml of inlet. 319 − 63 = **256**, which is also what
-this file's own 5.1× figure implies. Conclusion unaffected; the arithmetic was
-double-counting.)*
-
-**That is a mugful, and it is a clean dichotomy: either that water moved, or
-the meter is not counting volume.** It did not reach the cup.
-
-**Recirculation is the account that says it moved**, and as of 2026-10-17 it
-is live — see above. **If it is wrong, the meter is over-counting** and the
-mechanism is unidentified, because electrical coupling is dead (hypothesis 4).
-
-*(A draft asserted "nothing else on the traced circuit takes 256 ml". Only the
-**inlet** side is traced. This file's own hydraulics section opens by saying
-the connector census has no plumbing counterpart and that building one is a
-next-time-in-there job, covering the gauge branch only. Do not treat the
-circuit as surveyed.)*
-
-**ONE UNEXAMINED CANDIDATE if the meter is over-counting, and it is reasoning
-rather than measurement — nobody has looked at the waveform.** The meter is on
-the **suction** side of a vibratory pump firing at 50 Hz against ~9 bar. If
-that pulls the turbine into **flutter or cavitation** rather than smooth
-rotation, the extra edges are *real optical transitions*, not noise — which is
-why a filter aimed at electrical glitches would pass them.
-
-**Two objections, both raised the day it was written:**
-
-- **The dry run should have been its best case, and was its worst.** A pump
-  running with no water drawn is where cavitation is maximal, and it produced
-  **11 counts**. Unless "no water drawn" means nothing moved through the meter
-  at all — which the record does not settle — flutter predicts the opposite of
-  what was measured.
-- **"Counts scale with water" is not in the data.** Shot 1 gave **752 counts
-  at 36.5 g**, shot 2 **736 at 37.9 g** — more yield, fewer counts. What the
-  data supports is a **wet/dry binary**, nothing finer. A draft claimed scaling
-  and there are only two wet points, moving the wrong way.
-
-So it is a weak candidate, recorded so it is not re-derived as an obvious one.
-
-**The discriminator already exists in the experiment list: the analyser on
-`#`.** Digmesa specify a **square wave at ~50 % duty**. Flutter or cavitation
-shows as irregular widths and a duty cycle that is not 50 %. A clean square
-wave at 5× the expected rate means something else again, and would refute
-this too.
-
-#### The capacitor is a CANDIDATE, not a measured requirement
-
-**Nothing has been fitted and there is no before/after.** What was measured
-is the symptom. The J4 arithmetic is right — 73.1 kΩ source, 10 nF → 218 Hz,
-τ 731 µs, rise 1.6 ms against a ~31 ms half-period — but two things were
-overstated:
-
-- "pump hash ~150 Hz — crushed" is wrong. A single pole at 218 Hz attenuates
-  150 Hz by **1.69 dB**, i.e. ×0.83. Untouched. The argument that might work
-  is the 629 ring overflows, which imply bursts far above 12.8 kHz where a
-  218 Hz corner genuinely does kill them — but that has a competing
-  explanation and needs the before/after anyway.
-- An unexamined failure mode: 10 nF across 73 kΩ turns the falling edge into
-  a **~1.1 ms ramp** through the band residual noise lives in. ESP32-S3 pad
-  hysteresis is small, and a slow edge in noise is a classic multiple-
-  interrupt generator. **The capacitor could raise the glitch count.**
-
-It does not threaten invariant 1 — the cap blocks DC so the divider margins
-are untouched, the worst transient into the machine node is ~30 µA and an
-uncharged cap at connection draws ~43 µA.
+| **pump electrical noise** | **DEAD.** Refuted at 34× — a pump-on run with no water drawn gave **11** counts where coupling predicts 370 over the same sampled window, and the glitch rate collapsed 25× alongside it. |
+| **water, plus OPV recirculation** | **LIVE.** The meter is on the suction side and the relief leg returns upstream of it, so with the OPV open the meter sees throughput rather than delivered volume. |
+| **water, plus a constant meter over-count** | **LIVE.** A single 2.483× over-count with ~30 % of inlet reaching the cup reproduces shot 2 exactly, with no relief at all. |
+
+**THE 5× IS NOT MEASURED. It is shot counts divided by an ASSUMED inlet**,
+using a 60 %-of-inlet-reaches-the-cup figure that `docs/flowmeter-j4.md`
+itself labels an assumption rather than a measurement. Vary that one number and the gap closes. Every
+"~5×" in this repo inherits it.
+
+**SO DO EXPERIMENT 0d-i FIRST — WEIGH THE SPLIT.** `inlet = yield + puck
+retention + 3-way dump`, three weighings and a subtraction. Until it exists
+the 5× is an assumption wearing a decimal point. 0d-ii (raise the OPV, pull
+one shot, read the gauge during it) is second. Both are written up in full
+in the doc, including the void conditions that make 0d-ii return a false
+null if the gauge is not watched.
+
+**The free-flush over-count does not depend on the valve at all** — no
+basket, no pressure, nothing relieving, and the meter still read 5915–6508
+pulses/L against the datasheet's 2382. **The meter over-counts regardless.**
+
+**THE OPV IS 11 BAR — measured 2026-10-19 with a blind basket, and that is
+the FULL-FLOW pressure, not the cracking pressure**, which sits below it
+(spring valves typically show 10–25 % override at full flow). So a ~9 bar
+shot is **not** cleanly below cracking. It was already 11 bar when the
+2026-10-09 shots were measured, so the flow data is comparable across it.
+
+**THE OPV SETTING IS ADJUSTABLE STATE AND NOTHING RECORDS IT.** That puts it
+in the same class as `grind_epoch` (invariant 5): a number relative to a
+zero point that moves, so **flow data taken either side of an adjustment is
+not comparable**. If the schema ever grows a column for machine state, this
+belongs in it.
+
+**BOTH EXPERIMENTS NEED THE J4 TAP REFITTED**, which means going back behind
+the 2026-10-03 `E01` incident. It is currently unplugged. **Watch for the
+fault on first contact, and note that `+` connects to nothing, ever.**
+
+**And before adding any experiment to that list, check whether the operator
+already does it every morning.** The repo has asked for "the cheapest thing
+that would settle it" three times now — the gauge reading, the GPIO
+silkscreen check and the `02.4` power-on string — and all three were already
+being done and merely unrecorded.
+
+#### J4 — the connector and its conditioning
 
 **J4 pinout — roles MEASURED 2026-10-04**, with a DC pen meter, at the
 window in the 2S T-piece lead, nothing attached:
+
+<!-- fact:j4-conductor-map ground | yellow;;green | 5.0 V, steady through a flush;;black | 0.3 V parked;;continuity beep to J5 pin 1 -->
 
 | Marking | Role | Lead | What was actually read |
 |---|---|---|---|
@@ -2321,95 +995,34 @@ below. An earlier draft derived it from a duty-cycle figure taken off the
 wrong model's datasheet, which left it underdetermined (3.3 V and 5 V both
 fitted the single 2.5 V reading). Superseded by direct measurement.
 
-**J4 `#` NODE — SOLVED 2026-10-04.** Measured unpowered in Ω mode at the
-T-piece window, then cross-checked against the powered reading:
+**The J4 `#` node is a 10.04 kΩ pull-up to 5 V against a 147.4 kΩ pull-down**
+— both measured unpowered in Ω mode, 2026-10-04. Source impedance **9.4 kΩ**;
+`#` swings **0.3 V → 4.69 V**, both measured.
 
-| | |
-|---|---|
-| Pull-up, `#`→`+` | **10.04 kΩ** to 5 V |
-| Pull-down, `#`→`T` | **147.4 kΩ** |
-| Source impedance | R_pu ∥ R_pd = **9.4 kΩ** |
-| Predicted idle-high | 5 × 147.4/157.44 = **4.681 V** |
-| **Measured idle-high** | **4.69 V** — the model is right |
-
-`#` swings **0.3 V → 4.69 V**, both measured. The duty-cycle inference that
-an earlier draft used to argue "0–5 V" is no longer load-bearing.
-
-**The ESP32 divider is 100 K series + 220 K shunt → 3.13 V.** Working into
-a 9.4 kΩ source, the divider loads the node, so the unloaded ratio is not
-the answer:
-
-**This was specified as 120 K until 2026-10-08**, when the bag turned out to
-hold 100 K and 150 K. 100 K is not a fallback — it has roughly **double** the
-logic-high margin, because shrinking the series leg stiffens the divider
-against that 9.4 kΩ source. The arithmetic below is the reason the
-substitution is safe, and it is the reason 150 K is still not.
-
-| Divider | pin | nominal margin | worst case | over-rail corner |
-|---|---|---|---|---|
-| 8.2 K + 15 K | **2.15 V** | −321 mV | **FAILS** | — |
-| 150 K + 220 K | 2.71 V | +239 mV | **−45 mV, FAILS** | — |
-| 120 K + 220 K | 2.95 V | +472 mV | +177 mV | −13 mV |
-| **100 K + 220 K** | **3.13 V** | **+651 mV** | **+348 mV** | **+174 mV** |
-
-Worst case is a full corner: the machine's 5 V sagging 5 %, the ESP32's
-3.3 V rail 5 % high (VIH 2.60 V), **1 % tolerance on the divider pair, and
-±1 % meter error on the measured 10.04 kΩ and 147.4 kΩ**. An earlier
-version of this table omitted the last two and reported −20 mV and
-+201 mV — conclusions unchanged, margins flattering.
-
-**150 K / 220 K is the trap here**: it is in stock, it looks fine
-nominally, and it fails on tolerance stacking — exactly the reason
-220 K / 220 K was rejected for 0c. Do not substitute it.
-
+<!-- fact:divider-j4 100 K + 220 K -->
+**The ESP32 divider is 100 K + 220 K** (100 K series, 220 K shunt) **→
+3.13 V**, fitted since 2026-10-08. **Never 150 K**: it is in the drawer, it looks fine nominally, and
+it fails its corner at −45 mV.
+<!-- fact:j4-node-disturbance 134 mV|2.9 % -->
 The chosen divider disturbs the node by **134 mV (2.9 %)**, which leaves the
-machine's own reading unambiguously high.
+machine's own reading unambiguously high — and which is the figure hard
+invariant 1 cites as the only one of its three backed by a meter. *(The exact
+figures are **133.4 mV** and **2.851 %** — 4.681 V unloaded against
+**4.5476 V** loaded, the divider's 320 K sitting across the node's 147.4 K
+pull-down. This repo renders them **134 mV** and **2.9 %** everywhere, and
+those are the tagged values. A draft of this parenthetical wrote "134 mV is
+the exact figure, 4.681 against 4.548" — which subtracts to 133, in the one
+sentence telling readers to quote the mV when precision matters.)*
 
-**The one number 100 K is worse on: the over-rail corner.** With the machine
-rail 5 % high, the ESP rail 5 % low and tolerances aligned, the pin sits
-**174 mV above VDD**, where 120 K stays 13 mV below it. That is inside the
-ESP32-S3's **VDD + 0.3 V absolute maximum** with 126 mV to spare, and a clamp
-diode does not conduct meaningfully below ~0.4 V, so it is benign — recorded
-because it is the only axis on which the substitution loses, not because it
-is a problem. (With the ESP powered OFF and the machine on, the pin drives
-~24 µA into the dead rail through the clamp. 120 K gives ~23 µA; this is not
-a difference between them, and neither actuates anything.)
+**`docs/taps-and-dividers.md` is normative on the arithmetic** — the four-way
+divider comparison, the full tolerance corner, the low side, the over-rail
+corner, drift on the board's own resistors, and the 120 K that was specified
+until the bag was opened.
 
-**A parts claim in this file was wrong for a day.** "The 120 kΩ is in stock
-(2026-10-07)" was recorded from a verbal report and corrected on 2026-10-08
-when the bag was opened. In stock should mean counted.
-
-**Low side, which the high-side corner above does not cover:** the pin
-sits at **0.19 V** against an ESP32-S3 VIL of 0.25·VDD = **0.784 V** at a
-5 %-low rail, so **+590 mV**. Even at the datasheet's *maximum* saturation
-of 0.7 V rather than the measured 0.3 V, the pin is 0.45 V — still
-**+331 mV** clear.
-
-**Drift on the board's own 10.04 kΩ and 147.4 kΩ does not threaten this.**
-They were measured cold and unpowered and live next to a boiler, but they
-move together in the ratio and 340 kΩ ≫ 10 kΩ, so the margin is nearly
-flat: **+177 mV at ±1 %, +160 at ±5 %, +136 at ±10 %, +111 mV at ±15 %.**
-
-**The 4.681 V prediction matching 4.69 V to 0.2 % is luckier than the
-instrument.** It confirms the *model* — a resistive divider off the 5 V
-rail — not the precision of the two resistances, which is why the corner
-above still carries ±1 % meter error on them.
-
----
-
-### J4 `+` — the one hard safety rule, and it does not live in a table
-
-> **`+` is read-only, through a high-impedance meter, and nothing else.**
-> Nothing with an input clamp — no analyser, no GPIO, no divider — **and
-> nothing that sources or sinks current: never power the ESP32 from it,
-> never feed it from another supply, never hang a pull-up on it.** It is
-> the machine's own sensor rail off a 3 W IRM-03-5. A 20 MΩ DMM is fine,
-> and is how its 5.0 V was read on 2026-10-04.
-
-This block is deliberately **outside** the conditioning table. The rule has
-now been lost three times, each time because it was a table row and the
-table got rewritten when the divider changed. Rewrite the divider as often
-as you like; do not touch this.
+**The `+` conductor's read-only rule is NOT here.** It lives with the
+invariants at the top of this file, deliberately, because it has been lost
+from this spot three times — each time because it sat in or beside the
+conditioning table and the table was rewritten when the divider changed.
 
 **Conditioning, for the other two conductors:**
 
@@ -2419,6 +1032,8 @@ as you like; do not touch this.
 | ESP32 at J4 | **100 K + 220 K.** A 10 nF across the shunt is a **candidate, untested** — see the 0d entry; nothing has been fitted and it may raise the glitch count by slowing the edge. It does not threaten invariant 1 (DC blocked, ~30 µA worst transient). **Never 150 K** — it looks fine nominally and fails at −45 mV. |
 | At PA8/PA9 instead | **1 K series** — that is the *board* side, after its own conditioning. At J4 it would feed the raw sensor output into a 3.3 V GPIO. |
 
+<!-- fact:divider-j4 100 K + 220 K -->
+
 ---
 
 **`E01` is the dose-control fault**, from Ascaso's `MAN.29-V10` alarm table
@@ -2427,66 +1042,38 @@ as you like; do not touch this.
 Calibrate by weighing water on a Bookoo; invariant 3 means the K-factor is
 never baked in, and Digmesa's own datasheet recommends calibrating it.
 
-**0e — temperature. PATH DONE 2026-10-07** (shot 109); **what the number
-means is OPEN.** The J5 tap is
+### 0e — temperature
+
+**PATH DONE 2026-10-07** (shot 109); **what the number means is OPEN.** The J5 tap is
 wired to the ESP32 and `boiler_temp_start_c` / `machine_timer_s` land in
 the database off the machine's own display. Conditioning: 8.2 K series at
 the T-piece, 15 K shunt at the board, `ESD4`→GPIO4, `ESD1`→GPIO5, `VSS`
 ground direct, `Disp-P4` unterminated.
 
-**THE 15 K SHUNT FAILS ITS TOLERANCE CORNER AT −70 TO −87 mV — run
-2026-10-19, for the first time.** That is the as-built value and it decodes,
-so this is the record of what is fitted. **Fit 16.4 K** (two 8.2 K in
-series, 25 in stock), **+18 mV** against the pessimistic corner. A draft
-recommended 23.2 K, which puts the clamp into continuous conduction; a second
-said to fit nothing, on a hard-wall reading of VDD + 0.3 that the 8.2 K series
-resistor makes unnecessary. Both tables: `docs/phase-0-status.md`.
+**The as-built 15 K shunt decodes and FAILS its tolerance corner**, and the
+specified value is above, in the display-bus entry — stated once, not twice.
+The corner tables are in `docs/taps-and-dividers.md` and
+`docs/phase-0-status.md`.
 
-**A capacitor here is NOT currently justified, and a 2026-10-09 edit said it
-was.** That edit attributed 6086 dropped display edges to pump coupling and
-specified 10 nF. Both parts were wrong:
+**NEVER 10 nF ON `ESD1`/`ESD4`.** It is a 69 µs time constant against 36 µs
+clock highs — the clock never settles and **the bus stops decoding**, which
+presents as a wiring fault rather than a filter error. A 2026-10-09 edit
+specified it and was corrected to **~470 pF** the same day. The 470 pF is
+still only a **candidate**: the drops it was meant to fix are **not** pump
+coupling, their cause is unidentified, and `worst poll gap` is the
+discriminator — record it on the next capture before fitting anything.
+*(And the 470 pF has not been re-sized since the shunt went to 16.4 K: the
+source moves 6.9 kΩ → 7.2 kΩ.)* **`docs/taps-and-dividers.md` is normative
+on that arithmetic.**
 
-- **10 nF would have stopped the bus decoding.** Against a 6.9 kΩ source it
-  is a 69 µs time constant facing 36 µs clock highs — the clock never
-  settles, and it would have presented as a wiring fault rather than a filter
-  error. Corrected to 470 pF the same day.
-- **The drops are NOT coupling, and the actual cause is unidentified.** What
-  is established: they arrive as **one burst at pump start** (+6086) then
-  +164 across 30 s of pumping, and shot 1 gave a comparable figure over a
-  37.6 s run — **constant, not scaling with pump-on time**, which coupling
-  would. 6086 edges is 1.88 s of bus at this file's own 3244 edges/s, and the
-  display decoded the timer cleanly 0.5 → 33.7 s throughout, which a swamped
-  bus cannot do.
+**The GPIO4/5 swap signature and what `boiler_temp_start_c` means are both
+in the display-bus entry above.** The latter is the open half of this
+milestone: the path works, the number's meaning does not follow from it.
 
-  **But "serial polling" does not follow, and an earlier version asserted
-  it.** A 3 s poll would drop *periodically*, not in one burst — and the idle
-  rows of the table above were polled at the same cadence with the drop
-  counter **frozen**. What the evidence supports is "a one-off stall around
-  pour start"; candidates are the spool/BLE work at that moment or the serial
-  traffic, and they are not separated. **`worst poll gap` is the
-  discriminator and this repo already prints it** — record it on the next
-  capture.
 
-**`docs/phase-0-status.md` already carried ~470 pF for J5 before any of
-this**, as a *contingent second remedy* after raising the shunt to 16.4 K.
-Prefer that passage. Re-measure with the serial console detached before
-fitting anything here.
+### 0f — sit still
 
-**GPIO4 is the CLOCK and GPIO5 is the DATA, and getting it backwards is
-silent.** Swapped on 2026-10-09 during a rebuild: both lines still idled
-high, `pins` looked perfect, and `frames=0`. Zero frames with correct levels
-is the swapped-pair signature.
-
-**What `boiler_temp_start_c` actually means is narrower than migration
-008's comment claims.** Below ~88 °C the display tracks the real boiler and
-jitters ±1 °C; at 95 it holds ±0 °C for a minute, which no PID boiler does,
-and during post-steam cooldown it blinks ` 95` while the boiler is
-demonstrably hotter. The column is sampled immediately before a pour —
-always in that ambiguous range — so today it means **"at setpoint"**, not a
-verified temperature. Settling it needs a capture with the boiler pulled
-off setpoint and allowed to recover. See `docs/phase-0-status.md`.
-
-**0f — sit still.** 30 shots changing nothing, then compute the standard
+30 shots changing nothing, then compute the standard
 deviation of shot time and mean flow. That number is the noise floor, the
 Phase 3 deadband, and the honest go/no-go on closed-loop control. Do not
 skip this to get to the fun part.
@@ -2646,8 +1233,41 @@ NVS, not the filesystem.
 
 ## Reference
 
+**Every document in this repo, and what each one is for.** Before
+2026-10-19 this section was three bullets: `docs/phase-0-status.md` was
+cited inline a dozen times across the file and introduced nowhere, and
+`README.md` and `docs/overview.md` appeared nowhere in 2653 lines.
+
+| File | What it is | When to open it |
+|---|---|---|
+| **this file** | live conclusions, invariants, architecture | every session, automatically |
+| `README.md` | the public front page | writing about the project |
+| `docs/overview.md` | a visual tour of the PWA | explaining what it looks like |
+| `docs/phase-0-status.md` | **the bench record and the resume point** | before continuing any hardware work. Every bare "see `docs/phase-0-status.md`" above points here |
+| `docs/phase-0-plan.md` | the build plan, stage by stage | planning the next stage |
+| `docs/shopping-list.md` | what to buy; **supersedes** the plan's parts tables | before ordering anything |
+| `docs/machine-display-bus.md` | the J5 decode in full | opening a capture, or changing `display.cpp` |
+| `docs/machine-switches-j2.md` | the press-width record, the one-shot derivation | designing anything that presses a lever |
+| `docs/flowmeter-j4.md` | the counts investigation, the OPV, the experiments | anything to do with `inlet_pulses` |
+| `docs/taps-and-dividers.md` | every corner table, in one place | choosing or substituting a resistor |
+| `docs/board-and-perfboard.md` | the pin enumeration and the mechanics | laying out or drilling the board |
+| `docs/hydraulics.md` | the gauge branch | with the case open |
+
+**Code that wins over all of it**, because a document cannot be executed:
+
 - **Schema:** `server/migrations/001_init.sql` — read it before touching
   the data model. The comments explain why, not what.
+- **GPIO assignments:** `firmware/src/main.cpp` (0.9.0 names all seven).
+- **`BREW_GUARD_MS`:** `firmware/src/brew_guard.h`.
+- **The display decode as implemented:** `firmware/src/display.cpp` and
+  `tools/decode-display-bus.py`.
+
+**The fact check:** `tools/check-facts.py`, run by the `facts` CI job. It
+asserts that every `<!-- fact:… -->` marker agrees across files and is
+anchored to the prose beside it. It does **not** see untagged sites.
+
+**Outside this repo:**
+
 - **GaggiMate** (`jniebuhr/gaggimate`) — ESP32, BLE scales, shot logging,
   web UI. Read its scale abstraction and shot lifecycle first.
 - **Gaggiuino** — pressure/flow profiling, relevant from Phase 5.

@@ -50,7 +50,7 @@ it a row here.
 SAY THE OPPOSITE.** Until 2026-10-12 it read: *"This is the one J5 line where
 a careless connection could actuate the machine… The 8.2 K / 15 K divider is
 high-impedance and receive-only, so it is safe as specified."* Two defects, and together they made this the
-only paragraph in this file that **invited** an invariant-1 violation rather
+only paragraph in CLAUDE.md that **invited** an invariant-1 violation rather
 than warning against one. (It is not the only invariant-1 hazard documented
 here — `selftest` driving GPIO8 and the Phase-1 photoMOS on J2 position 1 are
 both hazards, but both are flagged as such.)
@@ -123,14 +123,15 @@ specified 10 nF. Both parts were wrong:
   is established: they arrive as **one burst at pump start** (+6086) then
   +164 across 30 s of pumping, and shot 1 gave a comparable figure over a
   37.6 s run — **constant, not scaling with pump-on time**, which coupling
-  would. 6086 edges is 1.88 s of bus at this file's own 3244 edges/s, and the
+  would. 6086 edges is 1.88 s of bus at this repo's own 3244 edges/s, and the
   display decoded the timer cleanly 0.5 → 33.7 s throughout, which a swamped
   bus cannot do.
 
   **But "serial polling" does not follow, and an earlier version asserted
   it.** A 3 s poll would drop *periodically*, not in one burst — and the idle
-  rows of the table above were polled at the same cadence with the drop
-  counter **frozen**. What the evidence supports is "a one-off stall around
+  rows of the shot-2 measurement table (now in `docs/flowmeter-j4.md`, under
+  *Measured*) were polled at the same cadence with the drop counter
+  **frozen**. What the evidence supports is "a one-off stall around
   pour start"; candidates are the spool/BLE work at that moment or the serial
   traffic, and they are not separated. **`worst poll gap` is the
   discriminator and this repo already prints it** — record it on the next
@@ -161,8 +162,8 @@ This closes an item the bench list carried as open — *"we proved the firmware
 reads `1`, never wrote down the margin"*.
 
 *(A draft wrote "+580 mV against a VIH of 2.31 V". **2.31 V is 0.7 × VDD, the
-74HC figure** — this file uses **2.475 V** nominal and **2.60 V** at a
-5 %-high rail, and quotes 2.475 V twelve lines below when rejecting
+74HC figure** — this project uses **2.475 V** nominal and **2.60 V** at a
+5 %-high rail, and CLAUDE.md quotes 2.475 V again when rejecting
 220 K / 220 K. **A first version of this parenthetical then claimed the error "was caught and
 fixed in `docs/phase-0-status.md` in the commit that introduced it". It was
 not** — that file carried it in three further places, and saying otherwise
@@ -174,15 +175,15 @@ worse than not applying it, because it stops anyone looking.)*
 line used to say "nothing to chase".** The two causes it offered do not add
 up to 80 mV:
 
-- **a 4.86 V rail** would do it — but this file records that rail as
-  **measured at 5.0 V** (2026-10-04), so invoking 4.86 V contradicts its own
-  measurement;
+- **a 4.86 V rail** would do it — but CLAUDE.md records that rail as
+  **measured at 5.0 V** (2026-10-04), so invoking 4.86 V contradicts a
+  measurement this repo already has;
 - **1 % resistor tolerance** moves the junction by at most **~24 mV**.
 
 Together they leave **~59 mV unexplained** unless the rail really is lower
 than recorded. **Still nothing to act on** — the margin is +415 mV and a
 60 mV discrepancy threatens nothing — but it is an open discrepancy between
-two of this file's own numbers, not a closed question. Re-read the rail at
+two of this repo's own numbers, not a closed question. Re-read the rail at
 the junction next time J2 is live.
 
 **And a logic analyser on the junction costs nothing measurable at room
@@ -269,7 +270,7 @@ is a problem. (With the ESP powered OFF and the machine on, the pin drives
 ~24 µA into the dead rail through the clamp. 120 K gives ~23 µA; this is not
 a difference between them, and neither actuates anything.)
 
-**A parts claim in this file was wrong for a day.** "The 120 kΩ is in stock
+**A parts claim in CLAUDE.md was wrong for a day.** "The 120 kΩ is in stock
 (2026-10-07)" was recorded from a verbal report and corrected on 2026-10-08
 when the bag was opened. In stock should mean counted.
 

@@ -67,7 +67,8 @@ Violating any of these is a bug, not a design choice.
 
    **AND IT WAS PINNED TO A SHUNT THIS FILE TELLS YOU NOT TO FIT, until
    2026-10-19.** 4.16 V / 17 % / 179 µA is the **as-built 15 K** (8.2 + 15
-   against the 4.7 K pull-up). Two other sections of this file supersede that
+   against the 4.7 K pull-up). The display-bus entry below, together with
+   `docs/taps-and-dividers.md` and `docs/shopping-list.md`, supersedes that
    in favour of **16.4 K**, which fails no tolerance corner — so the
    project's top-line invariant was quoting the value the build is meant to
    move away from. Both, for the record:
@@ -895,8 +896,8 @@ pulses bracketed, 761 honest total over a 33.2 s pump window, against a
 | **water, plus a constant meter over-count** | **LIVE.** A single 2.483× over-count with ~30 % of inlet reaching the cup reproduces shot 2 exactly, with no relief at all. |
 
 **THE 5× IS NOT MEASURED. It is shot counts divided by an ASSUMED inlet**,
-using this file's own 60 %-of-inlet-reaches-the-cup figure, which this file
-also labels an assumption. Vary that one number and the gap closes. Every
+using a 60 %-of-inlet-reaches-the-cup figure that `docs/flowmeter-j4.md`
+itself labels an assumption rather than a measurement. Vary that one number and the gap closes. Every
 "~5×" in this repo inherits it.
 
 **SO DO EXPERIMENT 0d-i FIRST — WEIGH THE SPLIT.** `inlet = yield + puck

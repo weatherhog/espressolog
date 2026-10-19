@@ -18,12 +18,15 @@
 
 ### Hydraulics — the pressure-gauge path
 
-**This is the first hydraulic entry in this file.** Everything above it is
-electrical: the connector census (J1–J5) has no plumbing counterpart, and
-building one is a next-time-in-there job. What follows covers the gauge
-branch only, because that is the only part anyone has looked at.
+**This is the only hydraulic material in the project.** When it was written
+it was the first hydraulic entry in CLAUDE.md, and everything around it there
+was electrical — the connector census (J1–J5) still has no plumbing
+counterpart, and building one is a next-time-in-there job. What follows
+covers the gauge branch only, because that is the only part anyone has
+looked at.
 
-Note also that every tap described above is a resistor on a logic line.
+Note also that every tap this project fits — see `docs/taps-and-dividers.md`
+— is a resistor on a logic line.
 Plumbing is a different risk class, and **whether invariant 1 covers it is
 undecided** — the invariant was written about electrical taps, and a tee,
 a leak or added dead volume all change what the machine does. Do not read

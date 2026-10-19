@@ -25,7 +25,7 @@
 
 ## The datasheet, in detail
 
-**Two long-standing hedges in this file are now resolved:**
+**Two long-standing hedges CLAUDE.md carried for weeks are now resolved:**
 
 - **"+2.8 V" was never this sensor.** It came from the **9NB nano brass**
   datasheet, a different Digmesa product. +3.8 to +20 VDC is correct.
@@ -91,7 +91,7 @@ measurement.
 
 | | |
 |---|---|
-| pump ran | **19.3 s** — display timer 2.6 → 19.3, which this file establishes IS the pump-on to pump-off measurement |
+| pump ran | **19.3 s** — display timer 2.6 → 19.3, which `docs/machine-display-bus.md` establishes IS the pump-on to pump-off measurement |
 | **sampled** window | **16.7 s** — the first sample came 2.6 s after pump-on, and no pre-run idle value was recorded |
 | pump-coupling at 22.17 Hz predicts, over the sampled window | 22.17 × 16.7 = **370 counts** |
 | observed | **11** |
@@ -156,7 +156,7 @@ NEITHER HOLDS after all", on the grounds that the OPV sits above 9 bar.
 at its own setpoint", which is false. The withdrawal reached the recirculation
 subsection and **not this one**, leaving the two contradicting each other
 ~40 lines apart for one commit: a retraction applied in one place and missed
-in another is how every stale line in this file got here.)*
+in another is how every stale line in this repo got here.)*
 
 **Note the 11 is a lower bound too.** Shot 2 got a gap correction (+25 counts
 in the unsampled windows at pump start and stop); the aborted run has the same
@@ -238,8 +238,8 @@ throughput rather than delivered volume. That is what predicts the ~9.3 ml/s
 figure the subsection above quotes.
 
 **Grade the plumbing claim honestly**: the inlet side is traced, the rest of
-the circuit is not — this file's hydraulics section covers the gauge branch
-only and says building a plumbing census is a next-time-in-there job.
+the circuit is not — `docs/hydraulics.md` covers the gauge branch only and
+says building a plumbing census is a next-time-in-there job.
 
 #### THE OPV IS 11 BAR — MEASURED 2026-10-19, the first hard number on that valve
 
@@ -427,7 +427,7 @@ The rest are still worth running and none of them decides this on its own:
 
 An earlier version of this entry deleted this block while the refuted
 arguments were still live in `docs/phase-0-status.md` and in the firmware.
-That is net information loss, and the opposite of this file's convention.
+That is net information loss, and the opposite of this repo's convention.
 
 1. **One count per pump stroke at exactly 50 Hz.** The flush data fitted it
    with no free parameters (1209/50 = 24.2 s, 164/50 = 3.3 s, both implying

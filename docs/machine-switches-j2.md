@@ -106,7 +106,7 @@ a timing constant:
 
 | | |
 |---|---|
-| this file, the **GPIO 7/15 confirmation row** | *"logged as 'correct GPIO mapping, taps of 345-480 ms'"* — **annotated 2026-10-19** |
+| `docs/board-and-perfboard.md`, the **GPIO 7/15 confirmation row** (it was in CLAUDE.md when this was written) | *"logged as 'correct GPIO mapping, taps of 345-480 ms'"* — **annotated 2026-10-19** |
 | `docs/phase-0-status.md`, the **Settled** table | *"taps of 345–480 ms"* — **annotated 2026-10-19** |
 | `docs/phase-0-status.md`, the ESP-power note | *"the grounding was identical for the 345-480 ms presses"* — uses it as a **dataset identifier**, which is legitimate: it names which session, and does not claim the range is the machine's |
 
@@ -184,7 +184,7 @@ it worked.* **Redo the measurement with the logic analyser on a J2 junction**
 analyser is in the bench plan, and it was connected on 2026-10-19 and not
 used for this.
 
-**Use the 74HC221, NOT the 74HC123 this file used to name.** The '123 is
+**Use the 74HC221, NOT the 74HC123 CLAUDE.md used to name.** The '123 is
 **retriggerable**: a new trigger edge restarts the pulse, so a GPIO
 oscillating faster than ~8 Hz — a boot loop, a brown-out, a floating pin —
 retriggers it continuously and holds the output high indefinitely. That is

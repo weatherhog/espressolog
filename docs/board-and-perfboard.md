@@ -33,8 +33,9 @@ steam) would have been polling an unconnected pad and lever B down could not
 have logged `steam`. It logged.
 
 **Do NOT call the functional chain "a higher grade" than the silkscreen read,
-as a first draft of this paragraph did.** By this file's own standard — see
-the lever A/B discussion above — a silkscreen read is a **one-link**
+as a first draft of this paragraph did.** By this repo's own standard — see
+the lever A/B grades in `docs/machine-switches-j2.md` — a silkscreen read is
+a **one-link**
 observation of exactly the claim being made (what is printed beside this
 pin). The functional chain is longer: operator picked by label (recalled, not
 recorded) → wire landed → firmware name → log line. It exercises more, and
@@ -44,7 +45,7 @@ inflated.
 
 | GPIO | What confirmed it, 2026-10-08/09 |
 |---|---|
-| 4, 5 | the bus **decoded frames**. A swapped pair gives `frames=0` — this file's own documented signature — so this fixes *which is which*, not merely that both are right |
+| 4, 5 | the bus **decoded frames**. A swapped pair gives `frames=0` — the signature CLAUDE.md documents — so this fixes *which is which*, not merely that both are right |
 | 6 | **736 counts** across shot 2, and `selftest` 500/500 at 100 Hz |
 | 7, 15 | **lever A**, logged as "correct GPIO mapping" — same full chain as 16/17. *(This row quoted "taps of 345-480 ms" as evidence until 2026-10-19; that is one session's presses, superseded above. The GPIO conclusion is unaffected — it never depended on the width.)* |
 | 16, 17 | lever B down logged `steam`, up logged `water` |
@@ -63,12 +64,13 @@ A 2026-10-12 review read the written bench procedure — *"jumper each of
 GPIO7/15/16/17 to 3V3 and back"* — and inferred the taps were header touches.
 I applied that as a correction. **The operator confirms they were lever
 presses on the machine.** The procedure records what was planned; the levers
-are what happened. Restored, and the divergence is now recorded in the
-pulse-width section above so the procedure is not cited this way again.
+are what happened. Restored, and the divergence is now recorded in
+`docs/machine-switches-j2.md`, with the pulse-width record, so the procedure
+is not cited this way again.
 
 So GPIO7/15 were exercised the same way as 16/17. **But the record is one
-link short of saying so**, and this file spends a paragraph above insisting on
-exactly that distinction: lever B has its own row quoting what was logged
+link short of saying so**, and `docs/machine-switches-j2.md` spends a
+paragraph insisting on exactly that distinction: lever B has its own row quoting what was logged
 (`B up logged water, B down logged steam`), while lever A's evidence is the
 summary row "All four switches | correct GPIO mapping" — a conclusion, not an
 observation. **CLOSED 2026-10-19 — ten of them, verbatim from the live tap:**
@@ -173,7 +175,7 @@ do what it looks like it does."* **It does what it looks like.**
 `c = RGB_BRIGHTNESS` for any non-zero value — so it lights the LED white.
 `__pinMode` carries the same special case at line 95. The sentinel is handled
 at every call site that matters. Mechanism right, consequence invented: the
-call site was never read, which is this file's most-logged error and was
+call site was never read, which is this repo's most-logged error and was
 committed three times in one session.
 
 **This fixes the LED net only. It does NOT make the board "v1.0".** Every
@@ -182,7 +184,7 @@ layout, and a clone can mix revisions. Claim the pin, not the revision —
 which is also why the table cell above carries ◆ rather than standing as part
 of the board read: **an LED net is not silkscreened and is not in the v1.1
 table either** (that document says 38), so that one cell comes from this
-measurement and from no other source in this file.
+measurement and from no other source anywhere in this repo.
 
 **THE ONE-SECOND TEST THIS ENTRY USED TO GIVE WAS WRONG, and would have
 produced the opposite answer.** It read: *"if the onboard status LED lights on
@@ -195,8 +197,8 @@ is informative only alongside `status`** — which is exactly what made the
 second row above evidence rather than noise.
 
 **A RETRACTION OF A RETRACTION, recorded because the second error is the one
-this file keeps making.** A draft of this entry deleted the old sentence
-*"this file and `main.cpp:377` both assert 48 flatly"*, calling it "a line
+this repo keeps making.** A draft of this entry deleted the old sentence
+*"CLAUDE.md and `main.cpp:377` both assert 48 flatly"*, calling it "a line
 number cited without being read". **That accusation was false and the original
 was correct.** `git show bb3ed26:firmware/src/main.cpp | sed -n '377p'` — bb3ed26
 being the commit that wrote the citation — returns exactly
@@ -385,7 +387,7 @@ hundredth" — a precision the inputs do not carry.)*
 
 The arithmetic is not what settles it. **Breadboards are 2.54 mm and the
 devkit seats in one — observed 2026-10-12.** A 1.9 mm part cannot mate with a
-2.54 mm socket strip, so the pitch is settled by mating, which is this file's
+2.54 mm socket strip, so the pitch is settled by mating, which is this repo's
 own maxim.
 
 **Mind the provenance, because a pushed commit got it wrong.** That commit
@@ -395,7 +397,7 @@ breadboard, connected by wires**, and only the divider junctions were in it —
 which `docs/shopping-list.md` had already recommended. The evidence is the
 2026-10-12 seating and nothing earlier. Conclusion unchanged, evidence
 corrected: an assumed history is not an observation, which is the same error
-this file logged twice on 2026-10-12 alone.
+this repo logged twice on 2026-10-12 alone.
 
 Recorded because the trap is live for anyone measuring a header: **calipers
 laid between two pins read the gap, and the gap on 0.1 in hardware is a

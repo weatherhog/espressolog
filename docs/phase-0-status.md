@@ -33,6 +33,7 @@ best-effort.**
 
 **And know what the hot-water guard costs — IT LOOKS TOO SHORT, 2026-10-19.**
 A lever-B draw blocks flash writes, uploads and SNTP for a flat
+<!-- fact:brew-guard-ms 75 s -->
 `BREW_GUARD_MS` (75 s). The bench question this paragraph used to ask —
 *"does lever B latch, and how long is a typical draw?"* — is half answered:
 **it latches** (observed), a second press stops it (observed), and left alone
@@ -389,6 +390,7 @@ Everything on the breadboard, all three T-pieces in the machine, firmware
 | **`selftest`** | **500/500, 0 glitches, 0 ring drops** at 100 Hz — 6.3× the rate at the sensor's rated max flow (0.40 L/min × 2382 = 15.9 Hz). The one thing host tests cannot establish, because a real shot has no independent count to check against. |
 | **All four switches** | correct GPIO mapping, no false reprogram. *(The "taps of 345–480 ms" this row carried is **one session's** presses — 2026-10-19 logged 195-295 ms and 80-90 ms. **The pump was watched answering only the six fast ones**, so the latching evidence is those; the longer ten give width only. See CLAUDE.md.)* |
 | **Lever B** | **plug inspection → functional.** B up logged `water`, B down logged `steam` |
+<!-- fact:divider-j4 100 K + 220 K -->
 | **J4 first contact** | **no `E01`.** The 100 K + 220 K is energised and the machine has not noticed — the tap that faulted it on 2026-10-03 |
 | **Worst poll gap** | **10 ms** on 2026-10-08 against that session's ~400 ms presses — **both halves of that ratio are superseded.** 2026-10-19 measured **42-57 ms** against **80-90 ms** presses, and missed two of six. The 40:1 headroom this row claimed is ~1.6:1. See the poll-gap reconciliation below; polling still stays, for reasons that are no longer this number |
 | 0d end to end | the PATH works — `inlet_pulses` reaches `shot_sample`. **What the numbers mean is unresolved**; see CLAUDE.md 0d |
@@ -1074,6 +1076,7 @@ day. Note how little of it is new:**
 - **The floor failure is the solid finding.** As built, 15 kΩ sits at
   **−70 to −87 mV**. It must not go onto the perfboard. This has survived
   every round.
+<!-- fact:divider-j5-shunt 16.4 K -->
 - **Fit 16.4 kΩ** — two 8.2 K in series, 25 in stock. **+18 mV** at the
   pessimistic floor corner, node disturbance **16.0 %** against the built
   16.8 %, loading 171 µA against 179 µA, and the clamp stays off at the
@@ -2088,6 +2091,7 @@ the display is back in temperature mode, so edges lost there cost nothing.
    in parallel with any of those shifts nothing), and it is recorded only
    so nobody later mistakes "drops to zero" for a measured pull-down.
 
+   <!-- fact:divider-j2 150 K / 220 K -->
    Divider **150 K / 220 K** into the GPIO (5 V → 2.97 V, 13.5 µA,
    dropping **1.35 mV** across R45). **The 5 V is measured, which is the
    step skipped at J4.**
@@ -2323,6 +2327,7 @@ the display is back in temperature mode, so edges lost there cost nothing.
    | Output | **NPN open collector**, 0 VDC active, saturation <0.7 V | Daitron + Digmesa product pages, corroborated |
    | Signal load | max 20 mA | as above |
    | Supply | **+3.8 to +20 VDC**, <8 mA | **the datasheet, retrieved 2026-10-09.** The "+2.8 V" that contradicted it was the 9NB nano brass — a different Digmesa product |
+   <!-- fact:digmesa-k-factor 2382 pulses/L -->
    | K-factor | **2382 pulses/L** for `#932-9525-B` Ø1.00 mm 0° | **the datasheet itself, retrieved 2026-10-09** |
    | Accuracy | ± 2.0 % | product pages |
 
@@ -2524,6 +2529,7 @@ the display is back in temperature mode, so edges lost there cost nothing.
      quotes the 2.9 % as the J4 figure. **134 mV / 2.85 % is correct**
      (unloaded 4.681 V against 4.548 V loaded). The 126 mV was wrong, in the
      one number the project's top-line invariant cites.
+     <!-- fact:j4-node-disturbance 134 mV|2.9 % -->
 
      **The mechanism is worth more than the fix.** The duplicated block ended
      with the sentence *"CLAUDE.md carries the corner table"* — it deferred to
@@ -2536,6 +2542,7 @@ the display is back in temperature mode, so edges lost there cost nothing.
      the *measurement* above (10.04 kΩ, 147.4 kΩ, 4.69 V) — this file is the
      bench record — and the fitted value: **100 K + 220 K since 2026-10-08**,
      the 120 K it was designed around never having been in stock.
+     <!-- fact:divider-j4 100 K + 220 K -->
      **Never 150 K**: in the drawer, fine nominally, fails at −45 mV.
 
      The earlier derivation here assumed a push-pull source and quoted

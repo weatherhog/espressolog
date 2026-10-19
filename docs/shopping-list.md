@@ -294,11 +294,14 @@ of them wrong is expensive, and one of them already was — the 0d tap made
 the machine fault and stop, which was loud rather than silent, but only
 because the machine caught it:
 
+<!-- fact:divider-j2 150 K / 220 K -->
 - **0c must be 150 K / 220 K, never 220 K / 220 K.** 220/220 gives 2.50 V
   against an ESP32-S3 VIH of 2.475 V. Supply tolerance alone eats that
   margin and a pressed button reads as not pressed.
 - **0d's J4 ANALYSER tap is 8.2 K series, one channel, `#` only, ground
-  to `T` direct.** The **ESP32 divider at J4 is 100 K + 220 K → 3.13 V**,
+  to `T` direct.**
+  <!-- fact:divider-j4 100 K + 220 K -->
+  The **ESP32 divider at J4 is 100 K + 220 K → 3.13 V**,
   solved 2026-10-04 from a measured 10.04 kΩ pull-up and 147.4 kΩ
   pull-down. **Do NOT substitute 150 K / 220 K** — it is in stock, it
   looks fine at 2.71 V, and it fails on tolerance stacking exactly as
@@ -313,6 +316,7 @@ because the machine caught it:
   hypothesis for the `E01` would make dangerous, and it has not been ruled
   out. The mechanism is **not** established; see the 0d entry before
   treating this as settled history.
+<!-- fact:divider-j5-shunt 16.4 K -->
 - **0e is 8.2 K / 15 K as built, and that FAILS its corner (−70 to −87 mV).
   Fit 8.2 K / 16.4 K** — two 8.2 K in series for the shunt, 25 in stock, no
   new parts. **+18 mV** at the pessimistic floor corner, and the clamp is not

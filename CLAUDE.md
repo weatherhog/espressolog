@@ -17,9 +17,10 @@ Violating any of these is a bug, not a design choice.
    briefly sinks microamps through 150 K is passive in the sense meant
    here; a photoMOS closing a 5 V common onto a direction line is not.
 
-   **How high-impedance, honestly:** J4 disturbs its node by **2.9 %**, J2
-   by ~1 mV, but **J5 pulls its line from 5.0 V to 4.16 V — a 17 %
-   disturbance at 179 µA**. **That J5 figure is CALCULATED, not measured, and
+   <!-- fact:j4-node-disturbance 134 mV|2.9 % -->
+   **How high-impedance, honestly:** J4 disturbs its node by **134 mV
+   (2.9 %)**, J2 by ~1 mV, but **J5 pulls its line from 5.0 V to 4.16 V —
+   a 17 % disturbance at 179 µA**. **That J5 figure is CALCULATED, not measured, and
    this clause called it measured until 2026-10-19.** It entered at `7182c56`
    as *"4.7 K pull-ups, so a 23.2 K divider leaves them at 4.16 V"* — the
    "so" is a derivation — and no meter reading of that node exists. The
@@ -233,6 +234,7 @@ lead routing. The conclusion is sound — a swap of 2/5 would have logged
   Left alone it runs for *"a couple of minutes"* (operator, approximate) and
   then returns to brewing mode on its own. Steam behaves the same way.
 
+  <!-- fact:brew-guard-ms 75 s -->
   **So `BREW_GUARD_MS = 75 s` can expire while the pump is still running** —
   a draw of "a couple of minutes" outlasts it. Note the mechanism precisely:
   `onRelease()` stores a **backdated** `pressed_at_ms`, so the guard runs from
@@ -715,6 +717,7 @@ passage was written about. **It is NOT the right value for the perfboard:**
 comes out at **−70 to −87 mV** (the spread is the unmetered 4.7 K pull-up's
 tolerance), worse than the −45 mV that got 150 K / 220 K rejected at J4.
 
+<!-- fact:divider-j5-shunt 16.4 K -->
 **Fit 16.4 K** — two 8.2 K in series, 25 in stock, **+18 mV** at the
 pessimistic corner. That is the value this repo specified before any of this.
 
@@ -1715,6 +1718,7 @@ the step that was skipped at J4. Unlike J4's open-collector line, the
 switch is driven through R45's **100 Ω**, so a 370 K divider loads it by
 about a millivolt and the unloaded arithmetic is valid here.
 
+<!-- fact:divider-j2 150 K / 220 K -->
 **150 K / 220 K** divider on PB5 and PB6 into GPIO
 (5 V → 2.97 V, ~0.5 V over VIH; 13.5 µA load, dropping **1.35 mV** across
 R45).
@@ -1802,6 +1806,7 @@ That also closes the worn-label mystery: the marking first read as
 | | |
 |---|---|
 | **K-factor** | **2382 pulses/L**, 0.41 g/pulse |
+<!-- fact:digmesa-k-factor 2382 pulses/L -->
 | Flow range | **0.033 – 0.40 L/min** (0.55 – 6.67 ml/s) |
 | Pressure | **−1 to +0.3 bar** — a suction-side device |
 | Supply | **+3.8 to +20 VDC**, <8 mA |
@@ -2387,6 +2392,7 @@ nominally, and it fails on tolerance stacking — exactly the reason
 
 The chosen divider disturbs the node by **134 mV (2.9 %)**, which leaves the
 machine's own reading unambiguously high.
+<!-- fact:j4-node-disturbance 134 mV|2.9 % -->
 
 **The one number 100 K is worse on: the over-rail corner.** With the machine
 rail 5 % high, the ESP rail 5 % low and tolerances aligned, the pin sits
@@ -2431,6 +2437,8 @@ conditioning table and the table was rewritten when the divider changed.
 | ESP32 at J4 | **100 K + 220 K.** A 10 nF across the shunt is a **candidate, untested** — see the 0d entry; nothing has been fitted and it may raise the glitch count by slowing the edge. It does not threaten invariant 1 (DC blocked, ~30 µA worst transient). **Never 150 K** — it looks fine nominally and fails at −45 mV. |
 | At PA8/PA9 instead | **1 K series** — that is the *board* side, after its own conditioning. At J4 it would feed the raw sensor output into a 3.3 V GPIO. |
 
+<!-- fact:divider-j4 100 K + 220 K -->
+
 ---
 
 **`E01` is the dose-control fault**, from Ascaso's `MAN.29-V10` alarm table
@@ -2448,7 +2456,8 @@ ground direct, `Disp-P4` unterminated.
 
 **THE 15 K SHUNT FAILS ITS TOLERANCE CORNER AT −70 TO −87 mV — run
 2026-10-19, for the first time.** That is the as-built value and it decodes,
-so this is the record of what is fitted. **Fit 16.4 K** (two 8.2 K in
+so this is the record of what is fitted. <!-- fact:divider-j5-shunt 16.4 K -->
+**Fit 16.4 K** (two 8.2 K in
 series, 25 in stock), **+18 mV** against the pessimistic corner. A draft
 recommended 23.2 K, which puts the clamp into continuous conduction; a second
 said to fit nothing, on a hard-wall reading of VDD + 0.3 that the 8.2 K series

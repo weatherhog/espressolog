@@ -62,6 +62,7 @@ static size_t pending_w_n = 0;
 //
 // 2026-10-19: the 15K shunt FAILS its tolerance corner at -70 to -87 mV (the
 // spread is the unmetered 4.7K pull-up's tolerance; quote the pessimistic
+// fact:divider-j5-shunt 16.4 K
 // figure). FIT 16.4K -- two 8.2K in series, +18 mV, and the clamp is not
 // conducting at the push-pull corner. There, the internal-pull-down case is
 // 2.41 V rather than 2.33 V -- still under VIH, so the warning above holds,
@@ -405,6 +406,7 @@ static void reportSwitch(const SwitchBank::Event& e) {
 //
 // NEITHER IS THE BINDING CASE. Lever B latches the same way and a hot-water
 // draw runs for "a couple of minutes" before the machine self-terminates, so
+// fact:brew-guard-ms 75 s
 // BREW_GUARD_MS (75 s) CAN EXPIRE WITH THE PUMP STILL RUNNING. See
 // brew_guard.h.
 //

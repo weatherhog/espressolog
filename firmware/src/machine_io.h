@@ -28,6 +28,7 @@
 // is calibrated against water and lives in `flowmeter_calibration`.
 //
 // THE DATASHEET IS IN HAND (2026-10-09): #932-9525-B, 1.00 mm, 0 deg,
+// fact:digmesa-k-factor 2382 pulses/L
 // 2382 pulses/L, 0.41 g/pulse, rated 0.033-0.40 L/min. The old "~2400 from
 // search summaries, spread 2386-2494" is retracted -- that spread was four
 // different PART NUMBERS (-B/-B90/-B180/-B270), not a tolerance. The rated

@@ -166,6 +166,7 @@ default behind `flow on`; `selftest` drives a known pulse train from GPIO8
 so the counting path is provable on the bench without the machine.
 
 **Calibrate empirically** — run water into a jug on the Bookoo, count pulses,
+<!-- fact:digmesa-k-factor 2382 pulses/L -->
 divide. **The datasheet is in hand (2026-10-09): 2382 pulses/L for
 `#932-9525-B`, Ø1.00 mm, 0°** — our exact part and orientation.
 

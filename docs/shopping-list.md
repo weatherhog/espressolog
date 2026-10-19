@@ -313,14 +313,16 @@ because the machine caught it:
   hypothesis for the `E01` would make dangerous, and it has not been ruled
   out. The mechanism is **not** established; see the 0d entry before
   treating this as settled history.
-- **0e is 8.2 K / 15 K as built — the perfboard should be 8.2 K / 16.4 K.**
-  The corner was run 2026-10-19: 15 K gives **−62 mV** (fails), 16.4 K gives
-  **+43 mV** and stays at 3.51 V in the push-pull case, under the 3.6 V
-  absolute maximum. Two 8.2 K in series; 25 in stock, no new parts.
-  **Do not go higher** — a draft recommended 23.2 K on logic-high margin alone
-  and that hits **3.89 V push-pull, over the absolute maximum**. The tap must
-  be safe whichever way the line is driven and the drive type is unestablished,
-  so both ends bind. See `docs/phase-0-status.md`.
+- **0e is 8.2 K / 15 K as built, and that FAILS its corner (−70 to −87 mV).
+  Buy nothing for it yet.** The shunt is squeezed from both sides: the
+  open-drain floor wants it big, the push-pull absolute maximum wants it
+  small, and **under this repo's J4 ceiling convention no value satisfies
+  both**. The drive type has never been tested, and one meter reading on the
+  J5 line settles it (sag to ~4.16 V = open-drain, ceiling gone, 18–22 K open
+  up). **When something is fitted it is 16.4 K** — two 8.2 K in series, 25 in
+  stock, no new parts, +18 mV. Drafts recommended 23.2 K (**3.90 V push-pull,
+  over the absolute maximum**) and 17.4 K (+9 mV ceiling headroom, marginal
+  the other way). See `docs/phase-0-status.md`.
 - **Do not enable an internal pull-down on 0e.** The internal ~45 K across the
   shunt leg drops the open-drain case below VIH. *(The 2.33 V in
   `main.cpp` is **15 K arithmetic**; at 16.4 K it is 2.41 V — still under the

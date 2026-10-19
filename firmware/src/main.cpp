@@ -55,12 +55,16 @@ static size_t pending_w_n = 0;
 // 3.5 V. Do NOT enable an internal pull-down — 45K in parallel with the 15K
 // leg drops the open-drain case to 2.33 V and the pin stops reading high.
 //
-// 2026-10-19: the 15K shunt FAILS its tolerance corner (-70 mV); the
-// perfboard should use 16.4K, where the pull-down case is 2.41 V -- still
-// under VIH, so the warning holds, but 2.33 V is 15K arithmetic and does not
-// carry across. The 4.16 V above is CALCULATED, never metered, and whether
-// this line is open-drain or push-pull has never been tested -- which is what
-// decides the shunt. See docs/phase-0-status.md.
+// 2026-10-19: the 15K shunt FAILS its tolerance corner at -70 to -87 mV (the
+// spread is the unmetered 4.7K pull-up's tolerance; quote the pessimistic
+// figure). Do NOT fit a replacement yet -- the open-drain floor and the
+// push-pull absolute maximum pull opposite ways and no value satisfies both
+// under this repo's J4 ceiling convention. 16.4K is the value when one is
+// fitted, where the pull-down case is 2.41 V -- still under VIH, so the
+// warning above holds, but 2.33 V is 15K arithmetic and does not carry
+// across. The 4.16 V above is CALCULATED, never metered, and whether this
+// line is open-drain or push-pull has never been tested -- one meter reading
+// decides both. See docs/phase-0-status.md.
 static constexpr uint8_t DISPLAY_CLK_PIN  = 4;
 static constexpr uint8_t DISPLAY_DATA_PIN = 5;
 

@@ -984,9 +984,9 @@ established**, so both columns bind:
 |---|---|---|---|---|---|---|
 | **15 kΩ — AS BUILT** | **−70 mV ✗** | **−87 mV ✗** | 3.418 V | +182 mV | **+17 mV** | 16.8 % |
 | 16.4 kΩ — the specified remedy | **+35 mV** | **+18 mV** | 3.523 V | +77 mV | **−88 mV** | 16.0 % |
-| 17.4 kΩ | +104 mV | +88 mV | 3.591 V | +9 mV | −156 mV | 15.6 % |
+| 17.4 kΩ | +104 mV | +88 mV | 3.591 V | **+9 mV** | −156 mV | 15.5 % |
 | 18 kΩ | +144 mV | +127 mV | 3.629 V | **−29 mV** | −194 mV | 15.2 % |
-| ~~23.2 kΩ~~ — **a draft's recommendation** | +438 mV | +422 mV | **3.889 V** | **−289 mV ✗** | −454 mV | 13.0 % |
+| ~~23.2 kΩ~~ — **a draft's recommendation** | +431 mV | +415 mV | **3.899 V** | **−299 mV ✗** | −464 mV | 13.0 % |
 
 *(OD = open-drain through the board's 4.7 K pull-ups, worst case for reading
 HIGH: machine rail −5 %, VIH 2.60 V, shunt −1 %, series and pull-up +1 %.
@@ -1044,8 +1044,10 @@ buys "+18 mV, thinner than the **25 mV** that got 220 K / 220 K rejected at
 0c". **That compares a corner figure against a nominal one.** The 25 mV is
 220 K / 220 K's *nominal* margin, which CLAUDE.md rejects precisely because
 "supply tolerance alone consumes" it — at the same corner this table uses,
-220 K / 220 K sits near **−250 mV**. Like for like, 16.4 K's +43 mV corner is
-not in the same category at all. **Mismatched kinds of number, and the
+220 K / 220 K sits near **−250 mV**. Like for like, 16.4 K's **+18 mV** corner
+is not in the same category at all — positive against deeply negative.
+*(Quote +18, the pessimistic pull-up case. A draft wrote +43 here, which is
+the favourable one, in the paragraph condemning favourable assumptions.)* **Mismatched kinds of number, and the
 mis-comparison is the entire reason the draft escalated past the ceiling.**
 
 **So: as built is wrong either way, and that part is not in doubt.**
@@ -1063,11 +1065,13 @@ mis-comparison is the entire reason the draft escalated past the ceiling.**
   4.7 K is assumed to err, and assuming in your own favour is how the 23.2 K
   recommendation happened.
 - **A draft called 16.4 kΩ "the only value that clears both". It is not** —
-  that was an artifact of a five-row table. Under the flat ceiling the window
-  runs **16.2 – 17.5 kΩ**, and **17.4 kΩ buys +88 mV**, nearly five times the
-  margin, while still clearing. It is not in stock as a single part, which is
-  the only reason 16.4 is preferred; say that rather than implying no
-  alternative exists.
+  that was an artifact of a five-row table; the window runs **16.2 – 17.5 kΩ**
+  under the flat ceiling. **But a second draft then promoted 17.4 kΩ on its
+  +88 mV floor margin alone, which is the same one-sided optimisation this
+  section exists to condemn.** 17.4 kΩ leaves **+9 mV** against the flat
+  ceiling where 16.4 leaves **+77 mV**: it trades a comfortable headroom for a
+  comfortable floor and ends up marginal at the other end. **16.4 kΩ is the
+  better-balanced value, not merely the one in stock.**
 
 **Why it decodes anyway at a negative corner**: a corner is not an operating
 point. The real rail is near 5.0 V, real 1 % parts are not all aligned, and
@@ -1132,8 +1136,10 @@ roughly [−33, 193] ms and bound nothing.
 
 **BUT THE 113 ms ALMOST CERTAINLY DOES NOT APPLY TO THE PRESS RUN, AND A FIRST
 DRAFT OF THIS PARAGRAPH RETRACTED THE BOUND ON THE ASSUMPTION THAT IT DID.**
-`main.cpp:321` zeroes `sw_max_gap` on every `switches on`, so the counter is
-per-arming, not per-session. The 113 ms belongs to whichever arming preceded
+`switchesSetEnabled()` in `main.cpp` zeroes `sw_max_gap` on every `switches
+on`, so the counter is per-arming, not per-session. *(A draft cited
+`main.cpp:321`; that is a comment line, the assignment is at 328 — a wrong
+line number inside the commit that added the cite-by-section rule.)* The 113 ms belongs to whichever arming preceded
 it; the press run was read at ~50 ms. **The bound survives.**
 
 **What does NOT survive is being able to show that from the record.** Nothing
@@ -1150,7 +1156,7 @@ around the experiment. So:
 
 *(Recorded in full because the first draft overcorrected — it widened the band
 to [−33, 193], declared the RC question dead on that basis, and did not check
-whether the counter resets. Reading `main.cpp:321` took one grep. This is the
+whether the counter resets. One grep for `sw_max_gap` would have shown it. This is the
 same read-the-call-site failure this repo logs more than any other, committed
 here in the direction of excessive caution rather than excessive confidence —
 which is still wrong, because it would have thrown away a real bound.)*
@@ -1795,11 +1801,17 @@ the display is back in temperature mode, so edges lost there cost nothing.
    for 0c as well as 0e, and it is why one box is the right shape rather
    than three.
 
-   Safe either way the line is driven: 3.23 V at the pin if push-pull,
-   2.69 V if open-drain via the board's 4.7K pull-ups (VIH 2.48 V), and the
-   machine's own high never drops below 4.16 V against a display needing
-   3.5 V. **Do not enable an internal pull-down** — 45K across the 15K leg
-   drops the open-drain case to 2.33 V and the pin stops reading high.
+   Safe either way the line is driven *at nominal*: 3.23 V at the pin if
+   push-pull, 2.69 V if open-drain via the board's 4.7K pull-ups (VIH 2.48 V),
+   and the machine's own high never drops below 4.16 V against a display
+   needing 3.5 V. **Do not enable an internal pull-down** — 45K across the 15K
+   leg drops the open-drain case to 2.33 V and the pin stops reading high.
+
+   **"SAFE EITHER WAY" IS A NOMINAL CLAIM AND THIS ENTRY DID NOT SAY SO.**
+   The corner was first run 2026-10-19 and the as-built 15 K **fails the
+   open-drain corner at −70 to −87 mV**. It decodes, so nothing is on fire;
+   but the perfboard must not copy it, and the 4.16 V quoted here is
+   calculated rather than metered. See the J5 corner section above.
    **The T-piece is built and verified** (2026-10-03). The machine runs
    normally through it and the tap decodes the live display with 0 %
    corrupt frames — which holds with or without the shunts; see

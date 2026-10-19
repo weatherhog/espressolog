@@ -295,15 +295,17 @@ safety argument** — and `firmware/test/host/brew_guard_test.cpp:72`.
 | `brew_guard.cpp`, the pump-running-during-press comment | still bare — revisit after the analyser redo |
 | `main.cpp`, the ring-headroom comment | still bare — revisit after the analyser redo |
 
-*(Both were `brew_guard.cpp:21` and `main.cpp:1109` until 2026-10-19. The
-second had already drifted to 1115, then 1120, then to 1120 when the commit that
-"fixed" the citation style edited `main.cpp` again. Two drifts in two
-commits on one citation is the argument for the rule, not an anecdote
-beside it.)*
+*(Both were cited by line until 2026-10-19. The `main.cpp` one drifted
+**three times in three commits** — 1109 → 1115 → 1120 → 1128 — each time
+because the commit "fixing" the citation style edited `main.cpp` in the same
+breath. A draft of this note recorded it as "two drifts", listed three
+numbers, repeated one of them, and quoted a final value that was already
+stale. **That is the argument for the rule, not an anecdote beside it:** a
+line number in a document is wrong by the time the document is saved.)*
 
-`brew_guard.cpp:21` and `main.cpp:1109` are comments about *timing headroom*
-where the exact figure is not load-bearing, which is why they are left rather
-than churned.
+The `brew_guard.cpp` pump-running comment and the `main.cpp` ring-headroom
+comment are about *timing headroom* where the exact figure is not
+load-bearing, which is why they are left rather than churned.
 
 **AND THAT TABLE WAS WRONG TOO — IT SAID "FOUR" AND THERE ARE AT LEAST SIX.**
 Two more cite 345-480 as **live evidence**, which is worse than citing it as
@@ -646,18 +648,29 @@ both hazards, but both are flagged as such.)
 **So: the 8.2 K / 15 K divider is correct on `ESD1` and `ESD4`** — correct as
 against the 8.2 K / 8.2 K that was mistakenly fitted, which is the error this
 passage was written about. **It is NOT the right value for the perfboard:**
-2026-10-19 ran its tolerance corner for the first time and it comes out at
-**−62 mV**, worse than the −45 mV that got 150 K / 220 K rejected at J4.
-**Fit 16.4 K** (two 8.2 K in series, 25 in stock) — the value this repo
-already specified. `docs/phase-0-status.md` has the table.
+2026-10-19 ran its tolerance corner for the first time and the as-built 15 K
+comes out at **−70 to −87 mV** (the spread is the unmetered 4.7 K pull-up's
+tolerance), worse than the −45 mV that got 150 K / 220 K rejected at J4.
 
-**Do NOT go higher, and a draft of this line said to.** It recommended 23.2 K
-on logic-high margin alone; that puts the pin at **3.89 V push-pull, 290 mV
-over the 3.6 V absolute maximum**. This tap is sized to be safe whichever way
-the line is driven and **the drive type has never been established**, so the
-ceiling binds as hard as the floor. 16.4 K is the only value that clears both.
-The built board decodes and is not an emergency; the perfboard should not copy
-it either way. **And the 15 K
+**BUT DO NOT FIT A REPLACEMENT YET, AND TWO DRAFTS OF THIS LINE SAID TO.** The
+first ordered 23.2 K, which puts the pin at **3.90 V push-pull — 300 mV over
+the 3.6 V absolute maximum**. The second ordered 16.4 K. Both optimised one
+end of a two-sided constraint:
+
+| ceiling convention | feasible window |
+|---|---|
+| flat 3.600 V (what the J5 text has always used) | 16.2 – 17.5 kΩ |
+| **VDD + 0.3 with the ESP rail −5 % (what the J4 section uses)** | **EMPTY** |
+
+**Under this repo's own stricter convention no value works**, because the tap
+is required to survive **either** drive type and **the drive type has never
+been tested**. So the next action is a meter, not a resistor: with the tap
+fitted, read the J5 line — sagging to ~4.16 V means open-drain and the ceiling
+never applies; holding ~5.0 V means push-pull. **That same reading retires the
+"4.16 V is calculated, not measured" correction in invariant 1.** When
+something is fitted it is **16.4 K**, at a thin **+18 mV**.
+`docs/phase-0-status.md` has both tables. The built board decodes and is not
+an emergency; the perfboard should not copy it either way. **And the 15 K
 shunt must NOT be fitted to `Disp-P4`.** Branch it through its 8.2 K for
 symmetry if you like, leave the far end open, and never hang anything on it
 that can source or sink current.
@@ -2351,12 +2364,14 @@ the database off the machine's own display. Conditioning: 8.2 K series at
 the T-piece, 15 K shunt at the board, `ESD4`→GPIO4, `ESD1`→GPIO5, `VSS`
 ground direct, `Disp-P4` unterminated.
 
-**THE 15 K SHUNT FAILS ITS TOLERANCE CORNER AT −62 mV — run 2026-10-19, for
-the first time.** That is the as-built value and it decodes, so this is the
-record of what is fitted; **the perfboard should use 16.4 K** (two 8.2 K in
-series), which is the remedy this repo had already specified. A draft
-recommended 23.2 K and that **exceeds the pin's 3.6 V absolute maximum in the
-push-pull case**, which the tap is required to survive. Table and both corners:
+**THE 15 K SHUNT FAILS ITS TOLERANCE CORNER AT −70 TO −87 mV — run
+2026-10-19, for the first time.** That is the as-built value and it decodes,
+so this is the record of what is fitted. **Do not fit a replacement until the
+drive type is metered**: the open-drain floor and the push-pull absolute-max
+ceiling pull opposite ways, and under this repo's own J4 ceiling convention
+*no* shunt value satisfies both. 16.4 K is the value when one is fitted, at
++18 mV. A draft recommended 23.2 K, which exceeds the pin's absolute maximum
+push-pull. Both tables and the one meter reading that collapses this:
 `docs/phase-0-status.md`.
 
 **A capacitor here is NOT currently justified, and a 2026-10-09 edit said it

@@ -18,6 +18,25 @@
 
 ---
 
+## The lever table's evidence grades
+
+All four are wired, and both levers share conductor 1 as their common.
+**All four conductor→function assignments are now functional.** 1Cup/2Cup
+came from lever-operated continuity on 2026-10-04; Steam/Water was plug
+inspection until **2026-10-08**, when the 0c tap went live and each lever
+direction was watched driving its own line into its own GPIO.
+
+**It is not quite the same grade as lever A's, and the difference is worth
+keeping.** Lever A's mapping is one link: a lever closes, a continuity pair
+closes. Lever B's is three — the tap test fixes conductor→GPIO→firmware
+name, and the conductor→*function* step still leans on the 2026-10-04
+behavioural observations (B up runs the pump, B down drives the boiler to
+165 °C), which were observed rather than instrumented, plus the breadboard
+lead routing. The conclusion is sound — a swap of 2/5 would have logged
+`steam` for B up — but it is a three-link claim, not a one-link one.
+
+---
+
 ## Steam drives the boiler to ~165 °C
 
 **And the display DOES detect it — captured 2026-10-05.** Through a steam

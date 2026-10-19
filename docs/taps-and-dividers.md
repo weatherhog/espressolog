@@ -106,6 +106,40 @@ shunt must NOT be fitted to `Disp-P4`.** Branch it through its 8.2 K for
 symmetry if you like, leave the far end open, and never hang anything on it
 that can source or sink current.
 
+### The J5 filter capacitor — a candidate, not a requirement
+
+**A capacitor here is NOT currently justified, and a 2026-10-09 edit said it
+was.** That edit attributed 6086 dropped display edges to pump coupling and
+specified 10 nF. Both parts were wrong:
+
+- **10 nF would have stopped the bus decoding.** Against a 6.9 kΩ source it
+  is a 69 µs time constant facing 36 µs clock highs
+  *(6.9 kΩ is the as-built 15 K arithmetic; at the specified 16.4 K it is
+  7.2 kΩ and 72 µs. Worse, not better — the conclusion is unaffected, but
+  do not reuse 6.9 kΩ when sizing the 470 pF.)* — the clock never
+  settles, and it would have presented as a wiring fault rather than a filter
+  error. Corrected to 470 pF the same day.
+- **The drops are NOT coupling, and the actual cause is unidentified.** What
+  is established: they arrive as **one burst at pump start** (+6086) then
+  +164 across 30 s of pumping, and shot 1 gave a comparable figure over a
+  37.6 s run — **constant, not scaling with pump-on time**, which coupling
+  would. 6086 edges is 1.88 s of bus at this file's own 3244 edges/s, and the
+  display decoded the timer cleanly 0.5 → 33.7 s throughout, which a swamped
+  bus cannot do.
+
+  **But "serial polling" does not follow, and an earlier version asserted
+  it.** A 3 s poll would drop *periodically*, not in one burst — and the idle
+  rows of the table above were polled at the same cadence with the drop
+  counter **frozen**. What the evidence supports is "a one-off stall around
+  pour start"; candidates are the spool/BLE work at that moment or the serial
+  traffic, and they are not separated. **`worst poll gap` is the
+  discriminator and this repo already prints it** — record it on the next
+  capture.
+
+**`docs/phase-0-status.md` already carried ~470 pF for J5 before any of
+this**, as a *contingent second remedy* after raising the shunt to 16.4 K.
+Prefer that passage. Re-measure with the serial console detached before
+fitting anything here.
 ---
 
 ## J2 — the switch tap

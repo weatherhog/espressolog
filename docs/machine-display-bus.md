@@ -19,6 +19,22 @@
 
 ---
 
+## Provenance — which machine, in which state
+
+**The display shows `02.4` for ~3 s at power-on** (read 2026-10-05). It is
+**probably a firmware version — that is an interpretation, not something
+observed**; all anyone has seen is the string. Which firmware, display
+controller or main MCU, is also unknown.
+
+Recorded anyway because every decode in this file came from **this machine
+in this state**: the glyph table, the bit offsets, the timer flag at 114,
+the 67/66 structure. If a future capture disagrees, check whether `02.4`
+still shows before assuming the protocol changed.
+
+---
+
+## The decode
+
 **Display bus — DECODED 2026-09-28 (0b done).** Captures and the decoder
 are in the repo: `analysis/captures/2026-09-28-display-bus-*.sr`,
 `tools/decode-display-bus.py`. Read those before touching this again.

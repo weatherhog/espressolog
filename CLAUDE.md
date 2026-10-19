@@ -5,6 +5,43 @@ Currently **Phase 0: logging only.**
 
 ---
 
+## Where things are — look here before grepping
+
+This file is auto-loaded into every session, so it carries **live
+conclusions** and nothing else. The measurements, corner tables and
+retraction histories that justify them moved out on 2026-10-19 to the files
+below. **A fact is never only in a moved file**: if a number matters to a
+decision, it is stated here too, and `tools/check-facts.py` fails CI when the
+two copies disagree.
+
+**Keyed by what you are about to do, not by filename** — the filenames are
+the thing you do not know yet.
+
+| If you are about to… | read | live conclusion, in one line |
+|---|---|---|
+| **touch any machine signal at all** | the invariants above — nothing else first | Phase 0 never actuates; drive hardware may exist only behind an **open jumper in series with its OUTPUT** |
+| **put anything on the J4 `+` conductor** | the `##` block under the invariants | **read-only, high-impedance meter, nothing else.** This rule has been lost three times |
+| **choose or substitute a divider resistor** | `docs/taps-and-dividers.md` | J2 **150 K / 220 K**, J4 **100 K + 220 K**, J5 **8.2 K / 16.4 K**, `Disp-P4` **no shunt ever** |
+| **write actuation or one-shot code** | `docs/machine-switches-j2.md` | a hold **> ~2 s REPROGRAMS** the stored duration; use a **74HC221**, never a '123; the RC is unchosen and failing short is **silent** |
+| **trust `BREW_GUARD_MS`** | `firmware/src/brew_guard.h`, then 0c here | it is 75 s, it is too short for a lever-B draw, **and it can fail to ARM entirely** — an unguarded invariant-2 exposure |
+| **parse or re-capture the display bus** | `docs/machine-display-bus.md` | 67/66 pair, **not** 133-bit frames; GPIO4 clock, GPIO5 data, and a swap is **silent** (`frames=0`, levels perfect) |
+| **read `boiler_temp_start_c`** | `docs/machine-display-bus.md` | at ` 95` it is indistinguishable from the **setpoint**, and that is the only range it is ever sampled in |
+| **believe a flowmeter pulse count** | `docs/flowmeter-j4.md` | counts are **~5× the datasheet and UNRESOLVED** — and the 5× itself divides by an **assumed** inlet |
+| **plan a flowmeter experiment** | `docs/flowmeter-j4.md` | **0d-i first** (weigh the split). And check whether the operator already does it every morning — three for three so far |
+| **compare flow data across sessions** | `docs/flowmeter-j4.md` | the **OPV is adjustable state and nothing records it** — invariant-5 class |
+| **pick a free GPIO, or drill the perfboard** | `docs/board-and-perfboard.md` | **GPIO48 is the LED, so GPIO38 is free**; GPIO33–37 unusable; 5Vin at position 21 beside GND at 22 is a **solder hazard** |
+| **tee into the water circuit** | `docs/hydraulics.md` | everything is 1/8, the **gauge end cannot be teed**, there are **no spare ports**, and **whether invariant 1 covers plumbing is UNDECIDED** |
+| **work out what has actually been built and bench-tested** | `docs/phase-0-status.md` | the bench record and the resume point |
+| **buy a part** | `docs/shopping-list.md` | supersedes the parts tables in `docs/phase-0-plan.md` |
+
+**The rule for everything above: changing a number in one of those files
+means grepping this file for it in the same commit.** This repo's
+most-logged defect is a fact corrected in one place while a stale copy
+survives in another; it has happened at least three times in the week to
+2026-10-19, and `tools/check-facts.py` only covers the tagged facts.
+
+---
+
 ## Hard invariants
 
 Violating any of these is a bug, not a design choice.
@@ -149,15 +186,12 @@ this loss record it is the point.
 
 ### Machine: Ascaso Dream PID
 
-**The display shows `02.4` for ~3 s at power-on** (read 2026-10-05). It is
-**probably a firmware version — that is an interpretation, not something
-observed**; all anyone has seen is the string. Which firmware, display
-controller or main MCU, is also unknown.
-
-Recorded anyway because every decode in this file came from **this machine
-in this state**: the glyph table, the bit offsets, the timer flag at 114,
-the 67/66 structure. If a future capture disagrees, check whether `02.4`
-still shows before assuming the protocol changed.
+**The display shows `02.4` for ~3 s at power-on** — probably a firmware
+version, but all anyone has seen is the string. It matters only as a
+provenance marker: **every decode in `docs/machine-display-bus.md` came from
+this machine in this state**, so if a future capture disagrees with the glyph
+table or the bit offsets, check whether `02.4` still shows before assuming
+the protocol changed.
 
 
 Control board MCU is an **STM32F030R8T6** (LQFP64, 64 KB flash). Read off
@@ -180,7 +214,7 @@ Pin map, from the traced schematic:
 | Pump_Ctrl | PA15 | → FODM3053 → BTA204S triac (random-phase) |
 | Solenoid_CTRL | PB12 | |
 | HTR_CTRL | PB15 | |
-| display link | PB7/PB8 or PB8/PB9 | **UNRESOLVED — and nothing below resolves it.** `PB7`/`PB8`/`PB9` appear nowhere else in this file; the J5 section decodes the bus without ever establishing which MCU pins it lands on. The cell said "see below" until 2026-10-19, pointing at nothing. |
+| display link | PB7/PB8 or PB8/PB9 | **UNRESOLVED, and nothing in this repo resolves it.** Checked 2026-10-19: `PB7`/`PB8`/`PB9` appear in exactly one other place, `docs/phase-0-plan.md`, which is where the ambiguity came from — *"either hardware I²C on PB8/PB9 or a bit-banged two-wire link on PB7/PB8"*. `docs/machine-display-bus.md` decodes the bus completely without ever establishing which MCU pins it lands on, and does not need to. The cell said "see below" until 2026-10-19, pointing at nothing. |
 
 **Switch electrical — MEASURED 2026-10-04**, not taken from the schematic:
 +5 V → R45 (100 R) → switch common. The common (J2 conductor 1) reads
@@ -217,19 +251,10 @@ likely unwired on a Dream"*. Both wrong:
 | B | Hot Water | Steam | **functional (3-link)** — the directions were already observed (Water runs the pump, Steam drives the boiler to 165 °C), and **2026-10-08 closed the conductor→function mapping** by watching each direction drive its own J2 line through the fitted tap. |
 
 All four are wired, and both levers share conductor 1 as their common.
-**All four conductor→function assignments are now functional.** 1Cup/2Cup
-came from lever-operated continuity on 2026-10-04; Steam/Water was plug
-inspection until **2026-10-08**, when the 0c tap went live and each lever
-direction was watched driving its own line into its own GPIO.
-
-**It is not quite the same grade as lever A's, and the difference is worth
-keeping.** Lever A's mapping is one link: a lever closes, a continuity pair
-closes. Lever B's is three — the tap test fixes conductor→GPIO→firmware
-name, and the conductor→*function* step still leans on the 2026-10-04
-behavioural observations (B up runs the pump, B down drives the boiler to
-165 °C), which were observed rather than instrumented, plus the breadboard
-lead routing. The conclusion is sound — a swap of 2/5 would have logged
-`steam` for B up — but it is a three-link claim, not a one-link one.
+**All four conductor→function assignments are functional** — but **lever A's
+is a one-link claim and lever B's is a three-link one**, and
+`docs/machine-switches-j2.md` keeps the difference. The conclusion is sound
+either way; the grades are not interchangeable.
 
 **Two consequences of lever B, found 2026-10-04 and not yet designed for:**
 
@@ -617,13 +642,19 @@ docs/              overview · phase-0-status · phase-0-plan · shopping-list
 
 ## Phase 0 milestones
 
-**0a — scale logging.** BLE, shot detection, spool, upload, UI. No machine
+### 0a — scale logging
+
+BLE, shot detection, spool, upload, UI. No machine
 contact. Most of the work, none of the risk. *This is where to start.*
 
-**0b — display bus.** Logic analyser on J5, offline reverse engineering.
+### 0b — display bus
+
+Logic analyser on J5, offline reverse engineering.
 Parallel track, no code yet.
 
-**0c — switch sensing. ALL FOUR direction lines are tapped** — the
+### 0c — switch sensing
+
+**ALL FOUR direction lines are tapped** — the
 operator asked for all functions (2026-10-04), which is sufficient reason
 on its own. Four dividers, four GPIOs; the common (position 1) is the supply and is
 never tapped **for sensing**.
@@ -800,8 +831,10 @@ The switch harness is **J2** (silkscreen `BOTONE`), 5 pins: +5 V, Steam,
 1Cup, 2Cup, Water. Gives real shot boundaries, flush events, and a true
 `first_drip_ms`.
 
-**0d — flowmeter. FIRST ATTEMPT CAUSED AN INVARIANT-1 VIOLATION
-(2026-10-03) — read `docs/phase-0-status.md` before touching J4.** A tap on
+### 0d — flowmeter
+
+**FIRST ATTEMPT CAUSED AN INVARIANT-1 VIOLATION (2026-10-03) — read
+`docs/phase-0-status.md` before touching J4.** A tap on
 J4 made the machine fault with `E01` while a 2Cup cycle was running;
 disconnecting it and power-cycling cleared the fault. **Nothing is known to have been
 damaged — the analyser's D1 input has not been re-checked**, and the
@@ -844,7 +877,7 @@ carried from 2026-10-04.
 **Digmesa still say to calibrate**, and invariant 3 already requires it: log
 raw pulses, never millilitres.
 
-### WHAT THE J4 COUNTS ARE IS UNRESOLVED — and it is 460 lines of argument
+#### What the J4 counts are is UNRESOLVED — and it is 460 lines of argument
 
 **The whole investigation is in `docs/flowmeter-j4.md`, which is normative
 on it.** It is the largest open question in the project and the least
@@ -898,6 +931,8 @@ already does it every morning.** The repo has asked for "the cheapest thing
 that would settle it" three times now — the gauge reading, the GPIO
 silkscreen check and the `02.4` power-on string — and all three were already
 being done and merely unrecorded.
+
+#### J4 — the connector and its conditioning
 
 **J4 pinout — roles MEASURED 2026-10-04**, with a DC pen meter, at the
 window in the 2S T-piece lead, nothing attached:
@@ -975,8 +1010,9 @@ conditioning table and the table was rewritten when the divider changed.
 Calibrate by weighing water on a Bookoo; invariant 3 means the K-factor is
 never baked in, and Digmesa's own datasheet recommends calibrating it.
 
-**0e — temperature. PATH DONE 2026-10-07** (shot 109); **what the number
-means is OPEN.** The J5 tap is
+### 0e — temperature
+
+**PATH DONE 2026-10-07** (shot 109); **what the number means is OPEN.** The J5 tap is
 wired to the ESP32 and `boiler_temp_start_c` / `machine_timer_s` land in
 the database off the machine's own display. Conditioning: 8.2 K series at
 the T-piece, 15 K shunt at the board, `ESD4`→GPIO4, `ESD1`→GPIO5, `VSS`
@@ -993,54 +1029,16 @@ recommended 23.2 K, which puts the clamp into continuous conduction; a second
 said to fit nothing, on a hard-wall reading of VDD + 0.3 that the 8.2 K series
 resistor makes unnecessary. Both tables: `docs/phase-0-status.md`.
 
-**A capacitor here is NOT currently justified, and a 2026-10-09 edit said it
-was.** That edit attributed 6086 dropped display edges to pump coupling and
-specified 10 nF. Both parts were wrong:
+**The J5 tap's capacitor and the GPIO4/5 swap signature are covered above**
+in the display-bus entry, and the 470 pF candidate's arithmetic is in
+`docs/taps-and-dividers.md`. **What `boiler_temp_start_c` means is also
+above**, and it is the open half of this milestone: the path works, the
+number's meaning does not follow from it.
 
-- **10 nF would have stopped the bus decoding.** Against a 6.9 kΩ source it
-  is a 69 µs time constant facing 36 µs clock highs
-  *(6.9 kΩ is the as-built 15 K arithmetic; at the specified 16.4 K it is
-  7.2 kΩ and 72 µs. Worse, not better — the conclusion is unaffected, but
-  do not reuse 6.9 kΩ when sizing the 470 pF.)* — the clock never
-  settles, and it would have presented as a wiring fault rather than a filter
-  error. Corrected to 470 pF the same day.
-- **The drops are NOT coupling, and the actual cause is unidentified.** What
-  is established: they arrive as **one burst at pump start** (+6086) then
-  +164 across 30 s of pumping, and shot 1 gave a comparable figure over a
-  37.6 s run — **constant, not scaling with pump-on time**, which coupling
-  would. 6086 edges is 1.88 s of bus at this file's own 3244 edges/s, and the
-  display decoded the timer cleanly 0.5 → 33.7 s throughout, which a swamped
-  bus cannot do.
 
-  **But "serial polling" does not follow, and an earlier version asserted
-  it.** A 3 s poll would drop *periodically*, not in one burst — and the idle
-  rows of the table above were polled at the same cadence with the drop
-  counter **frozen**. What the evidence supports is "a one-off stall around
-  pour start"; candidates are the spool/BLE work at that moment or the serial
-  traffic, and they are not separated. **`worst poll gap` is the
-  discriminator and this repo already prints it** — record it on the next
-  capture.
+### 0f — sit still
 
-**`docs/phase-0-status.md` already carried ~470 pF for J5 before any of
-this**, as a *contingent second remedy* after raising the shunt to 16.4 K.
-Prefer that passage. Re-measure with the serial console detached before
-fitting anything here.
-
-**GPIO4 is the CLOCK and GPIO5 is the DATA, and getting it backwards is
-silent.** Swapped on 2026-10-09 during a rebuild: both lines still idled
-high, `pins` looked perfect, and `frames=0`. Zero frames with correct levels
-is the swapped-pair signature.
-
-**What `boiler_temp_start_c` actually means is narrower than migration
-008's comment claims.** Below ~88 °C the display tracks the real boiler and
-jitters ±1 °C; at 95 it holds ±0 °C for a minute, which no PID boiler does,
-and during post-steam cooldown it blinks ` 95` while the boiler is
-demonstrably hotter. The column is sampled immediately before a pour —
-always in that ambiguous range — so today it means **"at setpoint"**, not a
-verified temperature. Settling it needs a capture with the boiler pulled
-off setpoint and allowed to recover. See `docs/phase-0-status.md`.
-
-**0f — sit still.** 30 shots changing nothing, then compute the standard
+30 shots changing nothing, then compute the standard
 deviation of shot time and mean flow. That number is the noise floor, the
 Phase 3 deadband, and the honest go/no-go on closed-loop control. Do not
 skip this to get to the fun part.
@@ -1200,8 +1198,41 @@ NVS, not the filesystem.
 
 ## Reference
 
+**Every document in this repo, and what each one is for.** This section
+cited `docs/phase-0-status.md` twelve times inline and introduced it zero
+times, and `README.md` and `docs/overview.md` appeared nowhere in 2635
+lines.
+
+| File | What it is | When to open it |
+|---|---|---|
+| **this file** | live conclusions, invariants, architecture | every session, automatically |
+| `README.md` | the public front page | writing about the project |
+| `docs/overview.md` | a visual tour of the PWA | explaining what it looks like |
+| `docs/phase-0-status.md` | **the bench record and the resume point** | before continuing any hardware work. The twelve inline citations above all point here |
+| `docs/phase-0-plan.md` | the build plan, stage by stage | planning the next stage |
+| `docs/shopping-list.md` | what to buy; **supersedes** the plan's parts tables | before ordering anything |
+| `docs/machine-display-bus.md` | the J5 decode in full | opening a capture, or changing `display.cpp` |
+| `docs/machine-switches-j2.md` | the press-width record, the one-shot derivation | designing anything that presses a lever |
+| `docs/flowmeter-j4.md` | the counts investigation, the OPV, the experiments | anything to do with `inlet_pulses` |
+| `docs/taps-and-dividers.md` | every corner table, in one place | choosing or substituting a resistor |
+| `docs/board-and-perfboard.md` | the pin enumeration and the mechanics | laying out or drilling the board |
+| `docs/hydraulics.md` | the gauge branch | with the case open |
+
+**Code that wins over all of it**, because a document cannot be executed:
+
 - **Schema:** `server/migrations/001_init.sql` — read it before touching
   the data model. The comments explain why, not what.
+- **GPIO assignments:** `firmware/src/main.cpp` (0.9.0 names all seven).
+- **`BREW_GUARD_MS`:** `firmware/src/brew_guard.h`.
+- **The display decode as implemented:** `firmware/src/display.cpp` and
+  `tools/decode-display-bus.py`.
+
+**The fact check:** `tools/check-facts.py`, run by the `facts` CI job. It
+asserts that every `<!-- fact:… -->` marker agrees across files and is
+anchored to the prose beside it. It does **not** see untagged sites.
+
+**Outside this repo:**
+
 - **GaggiMate** (`jniebuhr/gaggimate`) — ESP32, BLE scales, shot logging,
   web UI. Read its scale abstraction and shot lifecycle first.
 - **Gaggiuino** — pressure/flow profiling, relevant from Phase 5.

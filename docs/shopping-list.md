@@ -397,10 +397,10 @@ apart on the transistor, the drive-current claim and the box.
 
 | Part | Qty | Why this one |
 |---|---|---|
-| **AQY212EH, DIP-4** | **8** | 4 in service, 4 spare. **DATASHEET GRADE since 2026-10-17** — see "Datasheet read" below for what was read and what it settles. DIP-4 through-hole, SPST-NO (1 Form A) **AC/DC**, 60 V peak AC/DC, 0.55 A continuous, 5,000 V AC I/O isolation, all confirmed against Panasonic's own tables — **a 2011 catalogue and a 2005 mirror; the current per-part datasheet was NOT read** (see below). **Bare `AQY212EH` is the through-hole part; `…EHA` is the surface-mount terminal version, tube-packed, `…EHAX`/`…EHAZ` are the same SMD part on tape-and-reel (picked from the 1/2-pin or 3/4-pin side)** — so buy the bare suffix, and a listing that says `EHAX` is SMD whatever its photo shows. **Most listings are SOP-4 surface-mount, including other PhotoMOS families that carry no `EHA` suffix at all** — check the photo shows four long legs *and* that the part number starts `AQY212EH`. |
+| **AQY212EH, DIP-4** | **8** | 4 in service, 4 spare. **DATASHEET GRADE since 2026-10-17** — see "Datasheet read" below for what was read and what it settles. DIP-4 through-hole, SPST-NO (1 Form A) **AC/DC**, 60 V peak AC/DC, 0.55 A continuous, 5,000 V AC I/O isolation, all confirmed against Panasonic's own tables — **a 2011 catalogue and a 2005 mirror; the current per-part datasheet was NOT read** (see below). **Bare `AQY212EH` is the through-hole part; `…EHA` is the surface-mount terminal version, tube-packed, `…EHAX`/`…EHAZ` are the same SMD part on tape-and-reel (picked from the 1/2-pin or 3/4-pin side)** — so buy the bare suffix, and a listing that says `EHAX` is SMD whatever its photo shows. **Most listings are SOP-4 surface-mount, including other PhotoMOS families that carry no `EHA` suffix at all** — check the photo shows four long legs *and* that the printed part number is **exactly** `AQY212EH` with nothing after it (`AQY212EHA`, `EHAX` and `EHAZ` all *start* with `AQY212EH` and are all SMD). *(The "most listings are SOP-4" sentence is **listing grade** — an observation about sellers, not something either datasheet read supports — and sits in a datasheet-grade cell only because it is a purchasing warning.)* |
 | **`CD74HC221E`, PDIP-16** | 3 | **Verified 2026-10-12** against TI and Farnell: dual monostable, PDIP-16, 2–6 V, non-retriggerable ("once triggered, the outputs are independent of further trigger inputs"), active lifecycle, 5.2 mA output drive. `SN74HC221N` is scarce — TI is retiring PDIP. **A draft also listed `MC74HC221AN`, `TC74HC221AP` and `HD74HC221P` as equivalents; none could be verified**, and the nearest real hit, `MM74HC221AN`, is obsolete. Those were recollection. The `N`/`E`/`P` suffixes are through-hole; `D`/`PW`/`NS` are SMD. |
 | **BC547 or 2N3904, TO-92** | 10 | **LED drivers, one per photoMOS.** **NOT the 2N7000**, which a draft of this row specified: its V_GS(th) is 0.8–3.0 V, so a worst-case part driven from 3.3 V logic has **0.2 V of overdrive** and R_DS(on) is only characterised at V_GS = 4.5/10 V. That is the same works-on-the-bench-fails-in-service trap as the 1 kΩ below, in the part bought to avoid it. A bipolar has no threshold lottery — 0.7 V of V_BE, cleared with enormous margin. **Base resistor 8.2 kΩ and base-emitter 100 kΩ, both in stock.** |
-| **330 Ω or 390 Ω, 1 %** | 20 | **The one resistor value not in stock.** See the LED arithmetic below. |
+| **330 Ω, 1 %** *(390 Ω only for a box that stays cool)* | 20 | **The one resistor value not in stock.** See the LED arithmetic below **and the 85 °C note under "Datasheet read"** — the 3.0 mA guarantee is a 25 °C figure, which is why 330 Ω and not 390 Ω. |
 | **2-pin male header** | 3 | the disables. **Buy no shunts** — open is the specified state and a loose shunt in the box is a hazard. Cut from a 1×40 male strip. |
 | DIP-16 socket | 3 | wire the socket, verify, *then* insert the '221 — 16 hand-wired joints with no heat near the part. Pulling the IC is also a third disable, stronger than an open jumper. |
 | Machined **round-pin** SIP socket strip 1×40 | 2 | **DIP-4 sockets are not a stocked item.** Cut 2-way pieces, two per photoMOS, 0.3 in apart. Soldering the photoMOS directly is acceptable if you cannot get these: a socket contact going intermittent fails **open**, which is the safe direction here. |
@@ -409,7 +409,9 @@ apart on the transistor, the drive-current claim and the box.
 ### The LED drive, which this list did not previously cost at all
 
 **AQY212EH needs 5–10 mA recommended, and is only guaranteed to operate at
-3.0 mA** (typical 1.2 mA is not a design figure; guaranteed off below 0.4 mA).
+3.0 mA — at 25 °C** (typical 1.2 mA is not a design figure; guaranteed off
+below 0.4 mA; see the 85 °C note under "Datasheet read" for what the
+temperature caveat does to every figure in this section).
 Two consequences:
 
 - **1 kΩ is in stock and is the wrong value.** From 3.3 V it gives
@@ -426,7 +428,7 @@ Two consequences:
   transistor was needed for the drive current regardless of the test". **That
   is an over-claim** — HC guarantees ±4 mA at 4.5 V and `CD74HC221E` lists
   5.2 mA; at 3.3 V, sinking 6 mA through ~100 Ω of output impedance costs
-  ~0.6 V and still leaves ~4.5 mA, half again over the 3.0 mA guarantee. The
+  ~0.6 V and still leaves ~4.5 mA, half again over the 3.0 mA guarantee *(at 25 °C — see the 85 °C note under "Datasheet read")*. The
   '221 *can* drive this LED directly; it just cannot do it with the margin the
   5–10 mA recommendation wants. **The sufficient reason is the per-device
   test**, which needs each LED on its own path.
@@ -439,12 +441,12 @@ Two consequences:
 
 ### Datasheet read — 2026-10-17
 
-**Documents read (both are Panasonic's own text — A hosted by Panasonic, B a third-party copy; neither is a distributor's paraphrase):**
+**Documents read (both are Panasonic's own text — A downloaded from a Panasonic host, B a third-party copy; neither is a distributor's paraphrase):**
 
 | | Document | Date / revision | sha256 (first 16) |
 |---|---|---|---|
 | A | **Panasonic Relay Catalog Part 2: PhotoMOS & Solid State Relays**, `ca_semiconductor1154_en.pdf` from `mediap.industry.panasonic.eu`, 356 pp; AQY21•EH section is printed p.146-149, document id **`ds_x615_en_aqy21eh: 010611J`** | PDF created **2011-10-04** | `8459c7ae3ad528cb` |
-| B | **"GU-E PhotoMOS (AQY21•EH)"**, 4-page datasheet, `AQY212EH-Panasonic-datasheet-109895.pdf` from `datasheet.octopart.com` — a **third-party mirror** of a Panasonic datasheet bearing the "Matsushita Electric Works" copyright. *(Both A and B carry a "TESTING" banner on the first page, so it does not distinguish them.)* | PDF created **2005-03-07**, modified 2005-10-06 | `71c9b77a7bed8328` |
+| B | **"GU-E PhotoMOS (AQY21•EH)"**, 4-page datasheet, `AQY212EH-Panasonic-datasheet-109895.pdf` from `datasheet.octopart.com` — a **third-party mirror** of a Panasonic datasheet bearing the "Matsushita Electric Works" copyright. | PDF created **2005-03-07**, modified 2005-10-06 | `71c9b77a7bed8328` |
 
 *(Filenames and hosts in the table are as downloaded on 2026-10-17; the files on disk carry no URL provenance, so they cannot be re-confirmed from the PDFs themselves.)*
 
@@ -457,9 +459,13 @@ says nothing about 2011→now. **They do NOT agree on everything, and a first
 version said they did:** plots 8-(2), 1-(2) and 1-(3) are labelled "Current, A"
 / "Load current, A" in A and "mA" in B, so **B carries a unit defect that A
 had fixed**. And A's own feature text says "typ. 25 Ω (AQY211EH)" where its
-table says 0.25 Ω typ for that part (B's text says 25 Ω for the AQY210EH,
-whose table value is 18 Ω typ) — **prose in these documents is less reliable
-than the tables.** A search snippet (not the notice itself, unread) mentions a Panasonic dimensional-tolerance unification for DIP4 starting September 2025;
+table says 0.25 Ω typ for that part — **a genuine 100× error in A's prose**
+(it looks like a corrupted copy of B's sentence with the part number
+changed). B's text says "ON resistance of 25 Ω (AQY210EH)", which is **not** an
+error: 25 Ω is that part's table *maximum* (18 Ω typ). *(A first version
+listed both as prose-versus-table discrepancies; only one is.)* So the
+generalisation "prose is less reliable than the tables" rests on **one**
+defect. A search snippet (not the notice itself, unread) mentions a Panasonic dimensional-tolerance unification for DIP4 starting September 2025;
 **that touches package drawings, not electricals**, but it is a reason to
 re-fetch before the order if anything dimensional ever matters (the 0.3 in
 row spacing does).
@@ -484,33 +490,55 @@ row spacing does).
 **Things the datasheet changes or adds:**
 
 - **LED V_F: the 1.2 V assumption is fine**, slightly pessimistic at 25 °C
-  (1.14 V). Curve 7 (a sample, headed "All types") puts V_F at 5 mA between about 1.02 V
+  (1.14 V). Curve 7 (a sample, headed "All types"; *a first version called it
+  a "typical-sample curve", upgrading its grade*) puts V_F at 5 mA between about 1.02 V
   (+85 °C) and 1.22 V (−40 °C). 330 Ω from 3.3 V through a BC547 (V_CE(sat)
   ~0.1 V, an estimate) is **≈ 6.2 mA nominal**; with the rail 5 % low, V_F at
   the 1.5 V (50 mA) ceiling and V_CE 0.2 V it is still **≈ 4.3 mA**. Above 3.0
   mA either way.
-- **NEW — the 3.0 mA guarantee is a 25 °C figure, and the margin at 85 °C is
-  probably thinner than "unquantified" suggests.** The electrical table is
-  headed "Ambient temperature: 25 °C". The operate-current-vs-temperature plot
-  (curve 5 — headed "Sample: All types", i.e. a sample, not Panasonic's
-  statement of a typical unit) rises from ~0.6 mA at −40 °C to **~3.1 mA at
-  +85 °C**. At 25 °C the spec is 1.2 mA typ / 3.0 mA max, a ratio of 2.5; **if
-  the unit-to-unit spread scaled the same way, a worst-case unit at 85 °C
-  would need ~7.8 mA** (3.1 × 2.5) — *above* the 6 mA nominal drive. That is
-  an extrapolation, not a datasheet figure, and the 4.3-6 mA design does
-  clear the plotted curve itself. A box near a boiler can run warm. **The
-  caveat applies to every drive figure in this file:**
-  - **390 Ω is not a free substitute for 330 Ω.** Worst case (rail −5 %,
-    V_F 1.5 V, V_CE 0.2 V) gives ≈ 3.6 mA — about 17 % over the 85 °C curve.
-    **Buy 330 Ω**; 390 Ω is a fallback only for a box that stays cool.
+- **NEW — the 3.0 mA guarantee is a 25 °C figure, and what that means for the
+  drive depends on WHICH criterion you hold it to — this paragraph has to say
+  so, and a first version did not.** The electrical table is headed "Ambient
+  temperature: 25 °C". The operate-current-vs-temperature plot (curve 5,
+  headed "Sample: All types" — a sample, not Panasonic's statement of a
+  typical unit) rises from ~0.6 mA at −40 °C to **~3.1 mA at +85 °C**. Two
+  readings of that, and they disagree:
+
+  | | criterion | what it says about 330 Ω | about 390 Ω |
+  |---|---|---|---|
+  | **A** | **the plotted curve itself**: 3.1 mA at 85 °C | 5.75 mA at the 85 °C corner — **1.85×**, clears | 4.86 mA — **1.57×**, clears |
+  | **B** | **my extrapolation**: the table's 3.0 / 1.2 = 2.5× spread, applied at 85 °C, gives a worst-case unit needing **~7.8 mA** (3.1 × 2.5; plot 5 reads ~1.25 mA at 25 °C against 1.2 typ, so the ratio is at least self-consistent) | **fails** (5.75 < 7.8) | **fails** |
+
+  *(85 °C corner = rail 5 % low, V_F 1.02 V from curve 7, V_CE 0.2 V, resistor
+  +1 %. 25 °C worst case = V_F 1.5 V — the 50 mA maximum, deliberately
+  conservative — same rail, V_CE and resistor: 330 Ω ≈ 4.3 mA, 390 Ω ≈ 3.6 mA.
+  An earlier version quoted 390 Ω's 3.6 mA as "17 % over the 85 °C curve" while
+  mixing the 25 °C V_F ceiling with the 85 °C curve, and did not state the
+  resistor tolerance.)*
+
+  **Criterion B is an extrapolation of mine, not a datasheet figure, and two
+  things in the datasheet lean against holding the design to it**: Panasonic's
+  own **recommended I_F is 5-10 mA with no temperature qualifier**, and 330 Ω
+  puts nominal drive at 6.2 mA inside that range; and the **3.0 mA operate
+  spec is measured at I_L = max (550 mA)** whereas this circuit passes
+  ~0.1-1 mA, a condition the datasheet gives no operate-current figure for.
+  Neither is a proof that B is wrong. **Decision: buy 330 Ω** — it is the value
+  that satisfies A with margin and the datasheet's own recommendation, and it
+  costs nothing over 390 Ω. **If B is ever adopted, neither value is enough**:
+  270 Ω gives 7.0 mA at the 85 °C corner and 220 Ω 8.6 mA, both inside the
+  5-10 mA range, and that would be a judgment call for the operator, not a
+  datasheet requirement. **The BOM row and every drive figure below inherit this
+  caveat:**
+  - **390 Ω is a fallback only for a box that stays cool**, not a free
+    substitute.
   - **The "'221 can drive it directly at ~4.5 mA, half again over the 3.0 mA
-    guarantee" argument above is 25 °C reasoning.** At 85 °C the same figure
-    is ~1.45× the plotted curve, not 1.5× the guarantee.
-  - **The 1 kΩ / ~2 mA trap fails even a typical unit at 85 °C**, not only
-    some units at 25 °C.
+    guarantee" argument is 25 °C reasoning.** Against curve 5 at 85 °C it is
+    ~1.45× (4.5 / 3.1), not 1.5×, and under criterion B it fails.
+  - **The 1 kΩ / ~2 mA trap fails even a typical unit at 85 °C** (~2.1 mA
+    against 3.1), not only some units at 25 °C.
   - **"Guaranteed OFF below 0.4 mA" is also a 25 °C figure** — plot 6 shows
-    ~0.5 mA at −40 °C — but turn-off margin is a leakage question the 100 kΩ
-    base-emitter resistor already covers.
+    ~0.5 mA at −40 °C — but turn-off margin is a leakage question that the
+    100 kΩ base-emitter resistor already covers.
   Same "works on the bench, fails in service" family as the 1 kΩ trap.
 - **On-resistance is NOT specified at this circuit's current.** 0.85/2.5 Ω is
   at 550 mA. At ~0.1-1 mA the drop is **0.085-0.25 mV at 0.1 mA and 0.85-2.5 mV

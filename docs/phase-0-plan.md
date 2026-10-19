@@ -588,6 +588,11 @@ does not work:
     of the two single-FET failure sites per device is dangerous, and the pair
     needs **F_hi shorted in both devices**, not "any FET in each".
 
+    **[SUPERSEDED IN PART by the 2026-10-19 review below: this squaring
+    assumes independent, equal failure rates, and the "Redundancy is slightly
+    better" paragraph further down explains why neither holds. Read the two
+    together; the arithmetic stands, its assumptions do not.]**
+
     **That is up to a factor of FOUR on the pair, not two, and a draft said
     "up to half".** Halving each device's *dangerous*-failure rate squares
     across two devices in series: (F/2)² = F²/4.
@@ -624,28 +629,55 @@ does not work:
     AND A 2026-10-19 REVIEW SHOWED WHY. It holds only under equal, independent
     failure rates, and both assumptions lean the wrong way:**
 
-    - **F_hi is the stressed FET.** With 5 V on the F_hi side and the line at
-      0 V, F_hi's channel is off and its body diode reverse-biased, so F_hi
-      carries essentially the whole off-state voltage; F_lo's diode is forward
-      and F_lo carries about a diode drop at most. The failure that matters
-      is a short in the FET under stress, so its rate is plausibly *higher*
-      than F_lo's, not equal.
-    - **A surge stresses F_hi in both devices at once.** The common-cause
-      point below is not a separate caveat: it is the same two FETs, which
-      makes the required double failure positively correlated and erodes the
-      squaring the factor-of-four argument relies on.
+    - **F_hi is the stressed FET — in a single device.** With 5 V across one
+      device and the line at 0 V, F_hi's channel is off and its body diode
+      reverse-biased, so F_hi carries essentially the whole off-state voltage;
+      F_lo's diode is forward and F_lo carries about a diode drop at most.
+      **In the series pair it is a fraction of the 5 V**, set by the floating
+      middle node (leakage at DC, capacitive division for a fast transient)
+      until the other device fails. And 5 V is ~8 % of a 60 V part's rating,
+      so "its short rate is plausibly *higher* than F_lo's" is **speculation**,
+      not a finding — hence "plausibly", and nothing here is quantified.
+    - **A surge can stress the same FET in both devices at once — and which
+      FET depends on the surge's polarity.** A positive-going transient on the
+      +5 V side loads F_hi of both devices; a negative-going one swaps the
+      roles and loads F_lo of both, which are the FETs whose short *fails
+      safe*. Correlation across the two devices is directionally right for a
+      fast transient (the off-capacitances are similar), so the common-cause
+      point below is **not** a separate caveat: it is the same two FETs, and
+      it erodes the squaring the factor-of-four argument relies on — for the
+      polarity of surge that matters.
     - **A drain-source short is not the only way to conduct.** The two gates
-      are joined. A gate-to-drain failure of F_hi pulls the shared gate to
-      about the +5 V side and turns on **both** channels — one failure site
-      per device, no body-diode logic involved, and the polarity refinement
-      does nothing for it. Nobody has data on its rate against a D-S short;
-      it is **not** excluded by anything read.
+      are joined, and the gate drive is source-referenced and floating (an
+      isolated photodiode array). A gate-to-drain failure of **F_hi** holds
+      the shared gate near the +5 V side, about 5 V above the low-side
+      terminal, so **both** channels turn on: one failure site per device, no
+      body-diode logic involved. A gate-to-drain failure of **F_lo** ties the
+      gate to the low-side drain, holds both channels off, and **fails
+      safe-open** — so the F_hi-only restriction applies here too, and **the
+      polarity refinement is not irrelevant to this mode** *(a first version
+      said it "does nothing for it", which is wrong)*. What this mode adds is
+      a failure population that is **not a drain-source short and is not
+      limited by any body diode**. Nobody has data on its rate against a D-S
+      short; it is **not** excluded by anything read.
 
-    **Net: the polarity refinement is real and removes one failure
-    population, but the honest statement is "somewhere between a little
-    better and no better", not "better". The datasheet read neither raises
-    nor lowers the case for four parts** — what the pair does not give is
-    unchanged.
+    **Net — RELATIVE TO THE EARLIER DRAFT'S "slightly better", not to a
+    single device:** the polarity refinement is real and removes one failure
+    population, but the honest statement is "somewhere between a little better
+    and no better than that draft said". **A pair still needs two
+    independent-enough failures where one device needs one, so it remains
+    better than a single device** — what is in doubt is *how much*, and the
+    squaring the factor-of-four paragraph relies on. **The datasheet read
+    neither raises nor lowers the case for four parts** — what the pair does
+    not give is unchanged.
+
+    **Two statements elsewhere in this section are body-diode-only and do not
+    cover the gate-to-drain mode above:** the lead bullet ("each device needs
+    an internal short in the polarity-relevant FET") and the "~0.8 V"
+    arithmetic. *(The "~1.2 V" in the "what the old text got wrong"
+    paragraph was changed to "~0.8 V" in the first review-fix commit without
+    an annotation; 0.8 V is right per the HALF-CORRECTED paragraph earlier in
+    this section.)*
   - **Common cause.** Two identical parts from the same reel, in series, in
     the same thermal environment, seeing the same surge history on the same
     node. A surge on J2 — the plausible cause of an output short — presents
@@ -666,13 +698,16 @@ does not work:
       path — and since 2026-10-12 that is settled hardware, not just a
       constraint: each photoMOS gets a **BC547 or 2N3904** with an 8.2 kΩ
       base resistor and a 100 kΩ base-emitter resistor, fed through **330 Ω**
-      for ~6 mA. AQY212EH is guaranteed to operate only at **3.0 mA**
-      (typical 1.2 mA is not a design figure). **The transistor's reason is
+      for ~6 mA. AQY212EH is guaranteed to operate only at **3.0 mA — at 25 °C**
+      (typical 1.2 mA is not a design figure; `docs/shopping-list.md`, "85 °C
+      note" under "Datasheet read", is normative on what the temperature
+      caveat does to these figures). **The transistor's reason is
       this test, not the drive current** — a draft claimed "a 74HC221 at 3.3 V
       cannot source that reliably, so the transistor was needed regardless",
       which over-claims: `CD74HC221E` lists 5.2 mA drive, and at 3.3 V the
       part still delivers ~4.5 mA into this LED, half again over the 3.0 mA
-      guarantee. It can drive it; it cannot do so with the margin the
+      guarantee *(at 25 °C; ~1.45× the plotted 85 °C curve, and short of an
+      extrapolated worst case — see the shopping list)*. It can drive it; it cannot do so with the margin the
       5–10 mA recommendation wants. **And not a 2N7000** — V_GS(th) 0.8–3.0 V
       leaves a worst-case part 0.2 V of overdrive from 3.3 V logic. 
 

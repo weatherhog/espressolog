@@ -78,6 +78,10 @@ REQUIRED = {
     # Firmware constant with a known-insufficient value and four prose
     # sites discussing it. The header is the source of truth.
     "brew-guard-ms":       {"min_sites": 4, "claude_md": True},
+    # Which colour is which conductor on the J4 lead. The one divergence in
+    # this repo that could put a probe on the wrong wire -- and `+` is the
+    # conductor with the read-only rule.
+    "j4-conductor-map":    {"min_sites": 2, "claude_md": True},
 }
 
 SCAN_SUFFIXES = (".md", ".h", ".cpp", ".c", ".go", ".sql", ".py")

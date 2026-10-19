@@ -937,6 +937,8 @@ being done and merely unrecorded.
 **J4 pinout — roles MEASURED 2026-10-04**, with a DC pen meter, at the
 window in the 2S T-piece lead, nothing attached:
 
+<!-- fact:j4-conductor-map yellow|green|black|continuity beep to J5 pin 1|5.0 V, steady through a flush|0.3 V parked -->
+
 | Marking | Role | Lead | What was actually read |
 |---|---|---|---|
 | `T` | **ground** | yellow | continuity beep to J5 pin 1 `VSS`; **no resistance value recorded** |
@@ -1018,16 +1020,10 @@ the database off the machine's own display. Conditioning: 8.2 K series at
 the T-piece, 15 K shunt at the board, `ESD4`→GPIO4, `ESD1`→GPIO5, `VSS`
 ground direct, `Disp-P4` unterminated.
 
-**THE 15 K SHUNT FAILS ITS TOLERANCE CORNER AT −70 TO −87 mV — run
-2026-10-19, for the first time.** That is the as-built value and it decodes,
-so this is the record of what is fitted.
-
-<!-- fact:divider-j5-shunt 16.4 K -->
-**Fit 16.4 K** (two 8.2 K in series, 25 in stock), **+18 mV** against the
-pessimistic corner. A draft
-recommended 23.2 K, which puts the clamp into continuous conduction; a second
-said to fit nothing, on a hard-wall reading of VDD + 0.3 that the 8.2 K series
-resistor makes unnecessary. Both tables: `docs/phase-0-status.md`.
+**The as-built 15 K shunt decodes and FAILS its tolerance corner**, and the
+specified value is above, in the display-bus entry — stated once, not twice.
+The corner tables are in `docs/taps-and-dividers.md` and
+`docs/phase-0-status.md`.
 
 **The J5 tap's capacitor and the GPIO4/5 swap signature are covered above**
 in the display-bus entry, and the 470 pF candidate's arithmetic is in

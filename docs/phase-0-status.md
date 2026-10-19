@@ -2226,11 +2226,21 @@ the display is back in temperature mode, so edges lost there cost nothing.
    symbol-reading below is now a record of how it was guessed, not of what
    is known:
 
+   <!-- fact:j4-conductor-map yellow|green|black|continuity beep to J5 pin 1|5.0 V, steady through a flush|0.3 V parked -->
+
    | Marking | Role | On the 2S T-piece lead | Measured |
    |---|---|---|---|
    | `T` (middle) | **ground** | yellow | continuity beep to J5 pin 1 `VSS`; **no resistance value recorded** |
    | `+` | **+5 V supply** | green | 5.0 V, steady through a flush |
    | `#` | **signal** | black | 0.3 V parked, **2.5 V averaged during flow** |
+
+   **Normative home for the conductor map is CLAUDE.md**, which carries the
+   same three rows beside the J4 conditioning. This copy is the **bench
+   record** and keeps what CLAUDE.md does not: that `T` is the middle
+   conductor, which symbols were guessed right, and the confidence-label
+   lesson below. The three roles and the three colours are tagged on both
+   sides, so `tools/check-facts.py` fails if they ever diverge — which is
+   the one divergence here that could put a probe on the wrong wire.
 
    The guesses that turned out right: `T` as the IEC earth symbol ⏚ (a
    stem on a bar), `#` as a square-wave symbol ⌍. Both were labelled

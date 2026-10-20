@@ -708,9 +708,11 @@ Net Phase-0 actuation risk goes **up** with this decision. It is still the
 right call — see the build argument in `docs/phase-0-plan.md` — but it is a
 trade, and the mitigation is physical — pos 1 segregated in the harness — not
 textual. The pos-1-side jumper placement and the sense divider are **not**
-bridge mitigations (the plan withdrew both; see `docs/phase-0-plan.md`, "Two
-things that bound the firmware-side failures" and "The failure neither
-mechanism bounds"). See invariant 1 as amended 2026-10-12.
+bridge mitigations (the plan withdrew both as bridge mitigations — it keeps
+the placement, so the photoMOS sees no voltage in Phase 0; see
+`docs/phase-0-plan.md`, "Two things that bound the firmware-side failures" and
+"The failure neither mechanism bounds"). See invariant 1 as amended
+2026-10-12.
 
 The supporting arguments, neither settled: **Steam** drives the boiler to
 165 °C, which would contaminate `boiler_temp_start_dc` — though the display

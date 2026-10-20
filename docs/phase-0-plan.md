@@ -431,9 +431,12 @@ A **photoMOS relay** (AQY212, TLP222A) across common↔direction is a genuine
 contact replacement: bidirectional, no saturation offset, optically isolated.
 It does what the lever does. Its on-resistance is irrelevant here — a few ohms
 against a loop of ≥5 kΩ, not against R45's 100 Ω as first written. **Its
-off-state leakage is at most 1 µA** (Panasonic, at V_L = max; **no typical
-is given for the AQY212EH** — the 100 pA typical in the same family sheet is
-the AQY210EH's), which is what makes an un-commanded device a non-conductor:
+off-state leakage is at most 1 µA** (Panasonic, at V_L = max; **the table gives
+no typical for the AQY212EH** — the 100 pA typical in the family sheet's
+feature text is the AQY210EH's. **Plot 9-(2) does show an AQY212EH leakage
+curve** at 25 °C: a sample curve on a log axis, read here only to an order of
+magnitude, roughly 1-100 pA over 0-60 V), which is what makes an
+un-commanded device a non-conductor:
 1 µA into 5-50 kΩ is 5-50 mV at the direction line — **at 25 °C only**: the
 leakage table is headed "Ambient temperature 25 °C", junction leakage rises
 steeply with temperature, the box sits near a boiler, and no document gives
@@ -446,10 +449,14 @@ derived from the usual forms at 3.3 V (0.5·VDD+0.2 = 1.85 V; 0.7·VDD =
 it is simply unsourced in this repo. Read the STM32F030 datasheet before
 leaning on any of it).
 *(This sentence said "nanoamps … 1 nA into even 50 kΩ is
-50 µV" until 2026-10-20. That was a thousand times better than the one
-datasheet figure for this part, and it was labelled "the quantitative basis
-for the series-pair argument"; the basis is the 1 µA maximum, and the
-argument does not need better.)*
+50 µV" until 2026-10-20, and a first correction called that "a thousand times
+better than the one datasheet figure" and denied any typical exists. Both
+overreached: the figure sat between the plotted picoamps and the 1 µA maximum,
+so it was consistent with the datasheet's plot, merely about 100× pessimistic
+against it; and plot 9-(2) is a datasheet-grade curve the correction missed.
+The safe basis for the series-pair argument is still the 1 µA maximum, which
+is also the figure that matters when the box is hot, and the argument does
+not need better.)*
 
 **CLAUDE.md's "not an optocoupler" warning does not apply here.** That is
 about *sensing* — milliamps through the sense network would break the board's
@@ -549,16 +556,16 @@ does not work:
   presses with the lever**, every shot. The divider cannot distinguish an
   operator press from a shorted photoMOS or a harness bridge — that is the
   whole reason 0c exists. As a fault detector it false-positives on every
-  pour. The only sub-case it catches is a **sustained** high past ~2 s, and
-  the firmware already flags that as `REPROGRAM` *(on release only: a hold
-  that has ended, ≥2 s; a line already high when the firmware first saw it is
-  adopted as a press it did not witness and the alarm is suppressed, and a
-  permanent bridge never releases, so only the on-demand `status` line shows
-  it: `high?` for a bridge that predates boot or `switches on`, `(Ns!)` only
-  for one that formed later — and only if the tap reads high at all, which the
-  sense-tap paragraph below calls indeterminate; see `machine_io.cpp` and
-  `main.cpp`)*. It was cited three times as
-  a mitigation and is worth close to nothing.
+  pour. The only sub-case it could catch is a **sustained** high past ~2 s,
+  which the firmware flags as `REPROGRAM` — but narrowly: the flag is raised
+  **on release only**, for a hold of ≥2 s that has ended. A line already
+  high when the firmware first saw it is adopted as a press it did not
+  witness and the alarm is suppressed, and a permanent bridge never
+  releases, so only the on-demand `status` line shows it: `high?` for a
+  bridge that predates boot or `switches on`, `(Ns!)` only for one that
+  formed later — and only if the tap reads high at all, which the sense-tap
+  paragraph below calls indeterminate (see `machine_io.cpp` and `main.cpp`).
+  It was cited three times as a mitigation and is worth close to nothing.
 
   What *would* work is a readback **qualified by the one-shot**: a high
   outside the ~120 ms window following a commanded trigger, and not

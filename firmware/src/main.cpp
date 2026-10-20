@@ -62,7 +62,7 @@ static size_t pending_w_n = 0;
 //
 // 2026-10-19: the 15K shunt FAILS its tolerance corner at -70 to -87 mV (the
 // spread is the unmetered 4.7K pull-up's tolerance; quote the pessimistic
-// fact:divider-j5-shunt 16.4 K
+// fact:divider-j5-shunt@1 16.4 K
 // figure). FIT 16.4K -- two 8.2K in series, +18 mV, and the clamp is not
 // conducting at the push-pull corner. There, the internal-pull-down case is
 // 2.41 V rather than 2.33 V -- still under VIH, so the warning above holds,

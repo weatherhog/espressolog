@@ -2562,6 +2562,18 @@ the display is back in temperature mode, so edges lost there cost nothing.
      (unloaded 4.681 V against 4.548 V loaded). The 126 mV was wrong, in the
      one number the project's top-line invariant cites.
      <!-- fact:j4-node-disturbance 134 mV|2.9 % -->
+     *(WEAK ANCHOR, left so deliberately. This paragraph is the drift
+     narrative itself: it quotes the wrong rendering, the right one, and the
+     exact ratio in three consecutive sentences, so every window either has
+     several satisfiers or isolates the WRONG sentence. `@3` was tried and
+     reverted — it leaves exactly one satisfier, which is why the weak-anchor
+     report went quiet, but that satisfier is the "is correct" line rather
+     than the one this marker is for. (This note deliberately does not quote
+     the figures: a draft did, and became a satisfier in the very window it
+     describes.) Corrupting the
+     marker's own sentence still passed. Multiplicity is machine-checkable;
+     which sentence is authoritative is not. Contorting this paragraph would
+     delete the record it exists for.)*
 
      **The mechanism is worth more than the fix.** The duplicated block ended
      with the sentence *"CLAUDE.md carries the corner table"* — it deferred to

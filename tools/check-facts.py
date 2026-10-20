@@ -57,6 +57,31 @@ line, so a second marker after one of those is swallowed into its value.
 And a marker's own text is never evidence: every marker is stripped from the
 context window before needles are searched for.
 
+`fact:<id>@<n>` TIGHTENS THE WINDOW for that one marker: the needles must
+appear within n lines of it instead of CONTEXT_LINES. The window is SYMMETRIC: `@n` is n lines
+either side, not n lines down. `photomos-guarantee-25c@2` relies on that --
+its satisfier is two lines ABOVE its marker. The cost is that a comment or
+paragraph above a tight marker is inside the window too, so quoting the value
+there re-weakens it; see brew_guard.h, where the narrative had to stop
+quoting the numbers. Use `@1` on a headline site -- the sentence next to the
+marker -- whenever the surrounding paragraph legitimately repeats the value, which in this repo is most of them:
+a retraction narrative quotes the number, a warning restates it, a comparison
+names it twice. With the default window those repetitions SATISFY the needle,
+so the anchor proves only that the paragraph mentions the value somewhere and
+the headline itself can be edited freely. Verified by planting: before `@1`,
+changing "134 mV (2.9 %)" to "126 mV (2.7 %)" at the 0d site PASSED, rescued
+by the parenthetical nine lines below that quotes both renderings.
+
+The alternative was rewording those repetitions, and a draft of this change
+did exactly that. It is the wrong trade twice over: the repetitions are the
+deliberately-kept history this repo exists to preserve, and swapping a literal
+for "that same pair" introduced a WRONG REFERENT -- the pronoun bound to the
+nearest antecedent, which was the J4 divider, inverting the claim into "0d
+rejects 100 K / 220 K". Do not contort prose to satisfy this script.
+
+`@n` is part of the id token, not the value, so it does not participate in the
+agreement check: two sites of one fact may carry different windows.
+
 A TAG PINS PRESENCE, NOT MEANING, and that is a limit of the design rather
 than a bug to be fixed with a cleverer needle. A site that keeps the needle's
 literal while promoting a different value -- a parenthetical "(330 ohm, 1 %
@@ -71,9 +96,12 @@ have one, and it would still miss "390 ohm only for a cool box" because that
 phrase does not contain ", 1 %". What the check does catch is the realistic
 drift: a number edited, a qualifier dropped, a marker lost, a typo that
 shifts a digit. It does NOT catch a qualifier dropped at a site whose
-neighbour, within CONTEXT_LINES, carries the same literal -- shopping-list's
-parts-table row for the 330 ohm resistor is covered by the LED-drive lead
-nine lines below it, and that was reproduced.
+neighbour, within CONTEXT_LINES, carries the same literal. The example this
+paragraph used to give -- shopping-list's 330 ohm parts row rescued by the
+LED-drive lead nine lines below -- NO LONGER REPRODUCES, and is kept only as
+the shape of the problem: that site has one satisfier today and planting the
+dropped qualifier now fails. The weak-anchor report at the end of a run
+lists the live ones instead of this prose guessing at them.
 
 WHAT IT STILL DOES NOT CATCH, stated plainly so nobody trusts it further
 than it goes: an UNTAGGED site. If a seventh place states the K-factor and
@@ -135,6 +163,12 @@ REQUIRED = {
     # Firmware constant with a known-insufficient value and four prose
     # sites discussing it. The header is the source of truth.
     "brew-guard-ms":       {"min_files": 4, "claude_md": True},
+    # The constant itself, as opposed to the seconds every prose site quotes.
+    # One file on purpose -- there is nowhere else for it -- so this entry
+    # buys only "the tag still exists", which is the point: `brew-guard-ms`
+    # sat ON this line and did not guard it, because the comment above
+    # satisfied the seconds needle. 75000 -> 25000 passed. Review, 2026-10-20.
+    "brew-guard-ms-const": {"min_files": 1, "claude_md": False},
     # Which colour is which conductor on the J4 lead. The one divergence in
     # this repo that could put a probe on the wrong wire -- and `+` is the
     # conductor with the read-only rule.
@@ -165,7 +199,15 @@ SKIP_PATHS = {"tools/check-facts.py"}
 # was silently ignored, and the registry could not notice a site that never
 # registered in the first place. Found by review, 2026-10-19.
 MARKER = re.compile(
-    r"(?:<!--|//|--|#)\s*fact:([a-z0-9][a-z0-9-]*)\s+(.+?)\s*(?:-->|$)"
+    # `(@\S*)?` is deliberately loose. With `(@\d+)?` a typo like `@1x`, `@ `
+    # or a bare `@` made the whole pattern fail to match, so the marker was
+    # SILENTLY DROPPED -- not reported, just gone -- and its text was not
+    # stripped from a neighbour's context either, so its value could vacuously
+    # anchor a sibling marker. Planted `@1x` plus `FIT 16.4K -> FIT 15K` and
+    # the run was green with the superseded shunt back in the firmware and
+    # min_files still satisfied. Matching loosely and validating below turns
+    # a typo into an error. Found by review, 2026-10-20.
+    r"(?:<!--|//|--|#)\s*fact:([a-z0-9][a-z0-9-]*)(@\S*)?\s+(.+?)\s*(?:-->|$)"
 )
 
 
@@ -289,6 +331,7 @@ def tracked_files():
 def collect():
     root = repo_root()
     sites = defaultdict(list)
+    errors_at_parse = []
     for path in tracked_files():
         try:
             lines = open(os.path.join(root, path), encoding="utf-8").read().splitlines()
@@ -306,8 +349,45 @@ def collect():
             # first, which let a site lose its tag without the build noticing.
             # Found 2026-10-19 while tagging the photoMOS drive figures.
             for m in MARKER.finditer(line):
-                lo = max(0, i - CONTEXT_LINES)
-                hi = min(len(lines), i + CONTEXT_LINES + 1)
+                # `@n` on the id tightens this marker's window. See the
+                # docstring: the default of 10 lines is satisfied by the
+                # paragraph's own restatements of the value, so a headline
+                # site needs @1 to actually guard its headline.
+                suffix = m.group(2)
+                # isdecimal(), not isdigit(): isdigit() accepts '²' and the
+                # int() below then raises ValueError instead of this error.
+                if suffix and not suffix[1:].isdecimal():
+                    errors_at_parse.append(
+                        f"{path}:{i + 1} fact:{m.group(1)} has a malformed window "
+                        f"suffix {suffix!r}. It must be `@` followed by digits, "
+                        f"e.g. `@1`. A malformed suffix used to drop the marker "
+                        f"silently."
+                    )
+                    suffix = None
+                span = int(suffix[1:]) if suffix else CONTEXT_LINES
+                if suffix and span == 0:
+                    # @0 leaves only the marker's own line, which is stripped
+                    # of its marker -- so every needle fails and the message
+                    # blames the prose. Same reasoning as the upper bound:
+                    # reject the typo rather than act on it.
+                    errors_at_parse.append(
+                        f"{path}:{i + 1} fact:{m.group(1)} has @0, which leaves no "
+                        f"lines to search. The smallest useful window is @1, the "
+                        f"marker's own line and its neighbours."
+                    )
+                    span = CONTEXT_LINES
+                elif span > CONTEXT_LINES:
+                    # `@n` exists to TIGHTEN. Widening silently would make a
+                    # weak anchor look deliberate, so it is an error rather
+                    # than a clamp -- a clamp would hide the typo.
+                    errors_at_parse.append(
+                        f"{path}:{i + 1} fact:{m.group(1)} has @{span}, above the "
+                        f"CONTEXT_LINES default of {CONTEXT_LINES}. `@n` tightens "
+                        f"the window; it is not a way to widen one."
+                    )
+                    span = CONTEXT_LINES
+                lo = max(0, i - span)
+                hi = min(len(lines), i + span + 1)
                 # No marker's text is evidence for anything. Stripping only
                 # line i left an ADJACENT marker line's value in the window,
                 # so two facts with overlapping needles on neighbouring lines
@@ -320,16 +400,17 @@ def collect():
                     {
                         "path": path,
                         "line": i + 1,
-                        "value": m.group(2),
+                        "span": span,
+                        "lines": lines,
+                        "value": m.group(3),
                         "context": normalise(context),
                     }
                 )
-    return sites
+    return sites, errors_at_parse
 
 
 def main():
-    sites = collect()
-    errors = []
+    sites, errors = collect()
 
     for fact, entries in sorted(sites.items()):
         # 1. agreement
@@ -350,9 +431,11 @@ def main():
                 if n and not needle_in(n, e["context"]):
                     errors.append(
                         f"fact:{fact} at {e['path']}:{e['line']} claims {needle.strip()!r} "
-                        f"but no such text appears within {CONTEXT_LINES} lines of the "
-                        f"marker. Either the prose changed and the tag did not, or the "
-                        f"tag is on the wrong line."
+                        f"but no such text appears within {e['span']} lines of the "
+                        f"marker. Either the prose changed and the tag did not, the "
+                        f"tag is on the wrong line, or — at a tight @n — the line was "
+                        f"rewrapped without changing the value, which is a cost of "
+                        f"@n and is fixed by rewrapping back or widening it."
                     )
 
     # 3. registry
@@ -383,6 +466,99 @@ def main():
                 f"arithmetic behind it moves to docs/."
             )
 
+    # WEAK ANCHORS, reported and not failed. A needle satisfied by two or more
+    # distinct lines in its window cannot tell which of them was edited, so the
+    # anchor proves the paragraph mentions the value, not that the
+    # authoritative sentence still says it. `@1` on the headline is usually the
+    # fix. It is a warning rather than an error because some are unavoidable --
+    # a retraction that quotes both the old and the new rendering is the thing
+    # this repo exists to keep. Three review rounds found these one at a time;
+    # this prints the list instead.
+    #
+    # TWO LIMITS, both real. Hits are counted PER LINE while anchoring runs on
+    # the joined window, so a needle satisfied only ACROSS a line break scores
+    # zero here -- that is not "no satisfier", it is "not auditable this way",
+    # and it is reported separately rather than silently skipped. And a case
+    # with exactly ONE satisfier is not weak by this measure even when that
+    # line is not the authoritative one: nothing in the file says which
+    # sentence is authoritative, so only multiplicity is machine-checkable.
+    # `brew-guard-ms` on the constant had one satisfier and was invisible to
+    # this; it took a planted edit to find. A draft of this comment listed it
+    # as something the report catches. It does not.
+    #
+    # SO A SILENT REPORT IS NOT A GUARANTEE. phase-0-status's
+    # j4-node-disturbance site went quiet under @3 while still failing a
+    # planted edit to its own sentence, because @3's one remaining satisfier
+    # was the NEXT sentence. It is back on the default window, annotated as
+    # deliberately weak. Only a planted edit proves an anchor.
+    weak = []
+    spans = []
+    for fact, entries in sorted(sites.items()):
+        for e in entries:
+            lines = e["lines"]
+            i = e["line"] - 1
+
+            def hits_for(needle, span):
+                n = normalise(needle)
+                return [
+                    j + 1
+                    for j in range(max(0, i - span), min(len(lines), i + span + 1))
+                    if needle_in(n, normalise(MARKER.sub("", lines[j])))
+                ]
+
+            needles = [nd for nd in split_needles(e["value"]) if normalise(nd)]
+            # A needle that failed anchoring is already an error; reporting it
+            # here too would print "not auditable for weakness" beside its own
+            # failure. The gate used to sit above this pass and a comment here
+            # claimed we were past it; moving the pass earlier made that false.
+            needles = [nd for nd in needles if needle_in(normalise(nd), e["context"])]
+            if not needles:
+                continue
+
+            per = {nd: hits_for(nd, e["span"]) for nd in needles}
+            if any(len(h) >= 2 for h in per.values()):
+                # Smallest window leaving exactly one satisfier for EVERY needle
+                # of this marker. Per-needle hints could flip exit 0 to 1 when a
+                # sibling disagreed -- the same class as the regression the
+                # comment above records. Found by review, 2026-10-20.
+                fix = next(
+                    (
+                        f"@{n}"
+                        for n in range(1, e["span"])
+                        if all(len(hits_for(nd, n)) == 1 for nd in needles)
+                    ),
+                    None,
+                )
+                for nd, h in per.items():
+                    if len(h) >= 2:
+                        weak.append(
+                            f"  weak anchor: fact:{fact} at {e['path']}:{e['line']} "
+                            f"({nd.strip()!r} satisfied by lines {h}) -- "
+                            + (
+                                f"{fix} leaves one satisfier for every needle here"
+                                f" -- CHECK IT IS THE AUTHORITATIVE LINE; the count"
+                                f" is machine-checkable and the choice is not"
+                                if fix
+                                else "no window isolates one; annotate it as deliberate"
+                            )
+                        )
+            for nd, h in per.items():
+                if not h:
+                    spans.append(
+                        f"  spans lines: fact:{fact} at {e['path']}:{e['line']} "
+                        f"({nd.strip()!r}) -- satisfied across a line break, so "
+                        f"multiplicity cannot be judged"
+                    )
+
+    if weak:
+        print(f"\n{len(weak)} weak anchor(s), not a failure:")
+        for w in weak:
+            print(w)
+    if spans:
+        print(f"\n{len(spans)} needle(s) satisfied across a line break:")
+        for sp in spans:
+            print(sp)
+
     if errors:
         print("FACT CHECK FAILED\n", file=sys.stderr)
         for err in errors:
@@ -391,9 +567,13 @@ def main():
 
     total = sum(len(v) for v in sites.values())
     print(f"fact check OK: {len(sites)} facts, {total} sites agree and are anchored.")
+
+
     for fact, rule in sorted(REQUIRED.items()):
         files = sorted({e["path"] for e in sites.get(fact, [])})
-        print(f"  {fact:22s} {len(files)} files: {', '.join(files)}")
+        print(f"  {fact:22s} {len(files)} file{'' if len(files) == 1 else 's'}: {', '.join(files)}")
+
+
     return 0
 
 

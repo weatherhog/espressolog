@@ -32,9 +32,19 @@ public:
   // conservative guess, not a measurement, and it is the dominant cost of the
   // hot-water path — see busy(). Measuring a real draw would let it shrink.
   //
+  // fact:brew-guard-ms@1 75 s
   // 75000 ms = 75 s. Every prose site that quotes this constant quotes the
   // seconds; this header is the source of truth for both.
-  // fact:brew-guard-ms 75 s
+  //
+  // The line below needs its OWN anchor: `brew-guard-ms` pins the SECONDS,
+  // and the comment above satisfies it, so an edit to the constant passed the
+  // check while the tag sat on that very line. Found by review 2026-10-20.
+  //
+  // This note deliberately does not restate either number. `@n` is a
+  // SYMMETRIC window, so a quoted value a line or two above the marker is
+  // inside it and would re-weaken the anchor on the next rewrap. A draft did
+  // quote them and review reproduced exactly that.
+  // fact:brew-guard-ms-const@1 75000
   static constexpr uint32_t BREW_GUARD_MS = 75000;
 
   // Everything main.cpp knows, passed in. Nothing is read from a global.

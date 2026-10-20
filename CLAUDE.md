@@ -295,7 +295,7 @@ either way; the grades are not interchangeable.
   Left alone it runs for *"a couple of minutes"* (operator, approximate) and
   then returns to brewing mode on its own. Steam behaves the same way.
 
-  <!-- fact:brew-guard-ms 75 s -->
+  <!-- fact:brew-guard-ms@1 75 s -->
   **So `BREW_GUARD_MS = 75 s` can expire while the pump is still running** —
   a draw of "a couple of minutes" outlasts it. Note the mechanism precisely:
   `onRelease()` stores a **backdated** `pressed_at_ms`, so the guard runs from
@@ -451,9 +451,9 @@ far end open, and never hang anything on it that can source or sink current —
 in particular **not the shunt**. `docs/shopping-list.md` specifies exactly
 that, and it is the built configuration.
 
-<!-- fact:divider-j5-shunt 16.4 K -->
-**`ESD1` and `ESD4` are 8.2 K series + 16.4 K shunt.** 16.4 K is two 8.2 K in
-series, 25 in stock. The **as-built 15 K is superseded** — it fails its
+<!-- fact:divider-j5-shunt@1 16.4 K -->
+**`ESD1` and `ESD4` are 8.2 K series + 16.4 K shunt.** The shunt is two
+8.2 K in series, and there are 25 of those in stock. The **as-built 15 K is superseded** — it fails its
 tolerance corner at −70 to −87 mV, worse than the −45 mV that got 150 K / 220 K
 rejected at J4. 16.4 K comes out at **+18 mV**.
 
@@ -835,7 +835,7 @@ a reading rather than the schematic — the step that was skipped at J4. The
 switch is driven through R45's **100 Ω**, so a 370 K divider loads it by about
 a millivolt and the unloaded arithmetic is valid here.
 
-<!-- fact:divider-j2 150 K / 220 K -->
+<!-- fact:divider-j2@1 150 K / 220 K -->
 **150 K / 220 K** on all four J2 direction lines into GPIO: 5 V → 2.97 V
 predicted, **2.89 V measured at the junction** (2026-10-19, lever held; 0 V at
 rest), **+415 mV** over the ESP32-S3 VIH of 2.475 V. 13.5 µA, dropping 1.35 mV
@@ -1007,7 +1007,7 @@ fitted the single 2.5 V reading). Superseded by direct measurement.
 **The ESP32 divider is 100 K + 220 K** (100 K series, 220 K shunt) **→
 3.13 V**, fitted since 2026-10-08. **Never 150 K**: it is in the drawer, it looks fine nominally, and
 it fails its corner at −45 mV.
-<!-- fact:j4-node-disturbance 134 mV|2.9 % -->
+<!-- fact:j4-node-disturbance@1 134 mV|2.9 % -->
 The chosen divider disturbs the node by **134 mV (2.9 %)**, which leaves the
 machine's own reading unambiguously high — and which is the figure hard
 invariant 1 cites as the only one of its three backed by a meter. *(The exact
@@ -1268,7 +1268,16 @@ cited inline a dozen times across the file and introduced nowhere, and
 
 **The fact check:** `tools/check-facts.py`, run by the `facts` CI job. It
 asserts that every `<!-- fact:… -->` marker agrees across files and is
-anchored to the prose beside it. It does **not** see untagged sites.
+anchored to the prose beside it. `<!-- fact:<id>@1 … -->` tightens that one
+marker's window to the adjacent line, which is what a headline site needs
+when the paragraph around it legitimately repeats the value. The script also
+reports **weak anchors** — a needle satisfied by more than one line in its
+window — as a warning rather than a failure.
+
+It does **not** see untagged sites, and **it pins literals, not
+relationships**: `BREW_GUARD_MS = 75000` and "75 s" are two separate facts,
+so nothing stops them being changed apart. Only a human reading
+`brew_guard.h`'s "75000 ms = 75 s" ties them.
 
 **Outside this repo:**
 

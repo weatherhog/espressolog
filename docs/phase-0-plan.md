@@ -114,7 +114,8 @@ exercised against the real machine and logged correctly; lever B's conductor
 mapping went from plug inspection to functional in the same session. See
 `docs/phase-0-status.md`. Four
 polled, debounced lines, each press emitted with its backdated start and
-duration, and a hold past 2 s flagged as a timer reprogram — which is the
+duration, and a hold past 2 s flagged, on release, as a timer reprogram
+(a line already high at first sight is adopted and not flagged) — which is the
 machine rewriting its own configuration and the reason this machine's 1Cup
 is ~10.5 s rather than 15 s with nothing recording when that happened.
 
@@ -552,8 +553,11 @@ does not work:
   the firmware already flags that as `REPROGRAM` *(on release only: a hold
   that has ended, ≥2 s; a line already high when the firmware first saw it is
   adopted as a press it did not witness and the alarm is suppressed, and a
-  permanent bridge never releases, so only the status line shows it — see
-  `machine_io.cpp` and `main.cpp`)*. It was cited three times as
+  permanent bridge never releases, so only the on-demand `status` line shows
+  it: `high?` for a bridge that predates boot or `switches on`, `(Ns!)` only
+  for one that formed later — and only if the tap reads high at all, which the
+  sense-tap paragraph below calls indeterminate; see `machine_io.cpp` and
+  `main.cpp`)*. It was cited three times as
   a mitigation and is worth close to nothing.
 
   What *would* work is a readback **qualified by the one-shot**: a high
@@ -698,7 +702,8 @@ does not work:
     outside this section's own 0.4-0.65 V estimate) at 25 °C the line is
     ~4.2-4.3 V and the pin ~2.50-2.55 V unscaled, ~2.43-2.48 V after the
     measured shortfall — ON the threshold, not clearly above it; combine it
-    with the hot case and the pin reaches ~2.6 V or more. **So the honest
+    with the hot case and the pin is ~2.5-2.6 V scaled, up to ~2.7 V unscaled —
+    at or above 2.475 V either way. **So the honest
     statement is: probably not high at 25 °C, INDETERMINATE at box temperature
     and across the diode estimate's own uncertainty.** Between VIL (0.25·VDD =
     0.784 V at a 5 %-low rail, as `docs/taps-and-dividers.md` uses; 0.825 V at
@@ -975,8 +980,10 @@ construction, not by text:
   **[THE "STRICTLY LESS EXPOSURE" CLAIM IS WITHDRAWN — see "Does not work"
   under "Two things that bound the firmware-side failures": a series open blocks
   identically on either side, and for the harness-bridge hazard this
-  placement is mildly WORSE. It is kept for sequencing and so the photoMOS
-  sees no voltage in Phase 0, not as a bridge mitigation.]**
+  placement is mildly WORSE. It is kept so the photoMOS sees no voltage in
+  Phase 0 — the one good reason for the placement — not as a bridge
+  mitigation. (Sequencing is the argument for the shared LED-supply jumper,
+  not for this one.)]**
 - keep pos 1 **physically segregated** in the harness and on the board — its
   own conductor run, maximum spacing from the four direction lines, and no
   shared via column;

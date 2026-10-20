@@ -400,7 +400,7 @@ apart on the transistor, the drive-current claim and the box.
 | **AQY212EH, DIP-4** | **8** | 4 in service, 4 spare. **DATASHEET GRADE since 2026-10-17** — see "Datasheet read" below for what was read and what it settles. DIP-4 through-hole, SPST-NO (1 Form A) **AC/DC**, 60 V peak AC/DC, 0.55 A continuous, 5,000 V AC I/O isolation, all confirmed against Panasonic's own tables — **a 2011 catalogue and a 2005 mirror; the current per-part datasheet was NOT read** (see below). **Bare `AQY212EH` is the through-hole part; `…EHA` is the surface-mount terminal version, tube-packed, `…EHAX`/`…EHAZ` are the same SMD part on tape-and-reel (picked from the 1/2-pin or 3/4-pin side)** — so buy the bare suffix, and a listing that says `EHAX` is SMD whatever its photo shows. **Most listings are SOP-4 surface-mount, including other PhotoMOS families that carry no `EHA` suffix at all** — check the photo shows four long legs *and* that the printed part number is **exactly** `AQY212EH` with nothing after it (`AQY212EHA`, `EHAX` and `EHAZ` all *start* with `AQY212EH` and are all SMD). *(The "most listings are SOP-4" sentence is **listing grade** — an observation about sellers, not something either datasheet read supports — and sits in a datasheet-grade cell only because it is a purchasing warning.)* |
 | **`CD74HC221E`, PDIP-16** | 3 | **Verified 2026-10-12** against TI and Farnell: dual monostable, PDIP-16, 2–6 V, non-retriggerable ("once triggered, the outputs are independent of further trigger inputs"), active lifecycle, 5.2 mA output drive. `SN74HC221N` is scarce — TI is retiring PDIP. **A draft also listed `MC74HC221AN`, `TC74HC221AP` and `HD74HC221P` as equivalents; none could be verified**, and the nearest real hit, `MM74HC221AN`, is obsolete. Those were recollection. The `N`/`E`/`P` suffixes are through-hole; `D`/`PW`/`NS` are SMD. |
 | **BC547 or 2N3904, TO-92** | 10 | **LED drivers, one per photoMOS.** **NOT the 2N7000**, which a draft of this row specified: its V_GS(th) is 0.8–3.0 V, so a worst-case part driven from 3.3 V logic has **0.2 V of overdrive** and R_DS(on) is only characterised at V_GS = 4.5/10 V. That is the same works-on-the-bench-fails-in-service trap as the 1 kΩ below, in the part bought to avoid it. A bipolar has no threshold lottery — 0.7 V of V_BE, cleared with enormous margin. **Base resistor 8.2 kΩ and base-emitter 100 kΩ, both in stock.** |
-| **330 Ω, 1 %** *(390 Ω only for a box that stays cool)* | 20 | **The one resistor value not in stock.** See the LED arithmetic below **and the 85 °C note under "Datasheet read"** — the operate guarantee is 3.0 mA at 25 °C only, which is why 330 Ω and not 390 Ω. <!-- fact:led-drive-resistor 330 Ω, 1 % --> <!-- fact:photomos-guarantee-25c 3.0 mA at 25 °C --> |
+| **330 Ω, 1 %** *(390 Ω only for a box that stays cool — "cool" is undefined: no ambient has been measured inside the box, so read this as "only after measuring it")* | 20 | **The one resistor value not in stock.** See the LED arithmetic below **and the 85 °C note under "Datasheet read"** — the operate guarantee is 3.0 mA at 25 °C only, which is why 330 Ω and not 390 Ω. <!-- fact:led-drive-resistor 330 Ω, 1 % --> <!-- fact:photomos-guarantee-25c 3.0 mA at 25 °C --> |
 | **2-pin male header** | 3 | the disables. **Buy no shunts** — open is the specified state and a loose shunt in the box is a hazard. Cut from a 1×40 male strip. |
 | DIP-16 socket | 3 | wire the socket, verify, *then* insert the '221 — 16 hand-wired joints with no heat near the part. Pulling the IC is also a third disable, stronger than an open jumper. |
 | Machined **round-pin** SIP socket strip 1×40 | 2 | **DIP-4 sockets are not a stocked item.** Cut 2-way pieces, two per photoMOS, 0.3 in apart. Soldering the photoMOS directly is acceptable if you cannot get these: a socket contact going intermittent fails **open**, which is the safe direction here. |
@@ -428,7 +428,7 @@ Two consequences:
   current.** A draft said "a 74HC221 at 3.3 V cannot source 3.0 mA, so the
   transistor was needed for the drive current regardless of the test". **That
   is an over-claim** — HC guarantees ±4 mA at 4.5 V and `CD74HC221E` lists
-  5.2 mA; at 3.3 V, sinking 6 mA through ~100 Ω of output impedance costs
+  5.2 mA; at 3.3 V, sourcing 6 mA through ~100 Ω of output impedance costs
   ~0.6 V and still leaves ~4.5 mA, half again over the 3.0 mA guarantee *(at 25 °C — see the 85 °C note under "Datasheet read")*. The
   '221 *can* drive this LED directly; it just cannot do it with the margin the
   5–10 mA recommendation wants. **The sufficient reason is the per-device
@@ -466,7 +466,9 @@ changed). B's text says "ON resistance of 25 Ω (AQY210EH)", which is **not** an
 error: 25 Ω is that part's table *maximum* (18 Ω typ). *(A first version
 listed both as prose-versus-table discrepancies; only one is.)* So the
 generalisation "prose is less reliable than the tables" rests on **one**
-defect. A search snippet (not the notice itself, unread) mentions a Panasonic dimensional-tolerance unification for DIP4 starting September 2025;
+clear defect — and the family sheet's feature paragraphs are written around
+the AQY210EH/211EH (a "0.13 A with 5 mA" claim, a "25 Ω" on-resistance), so
+**do not lift a figure from them for the AQY212EH.** A search snippet (not the notice itself, unread) mentions a Panasonic dimensional-tolerance unification for DIP4 starting September 2025;
 **that touches package drawings, not electricals**, but it is a reason to
 re-fetch before the order if anything dimensional ever matters (the 0.3 in
 row spacing does).
@@ -477,7 +479,7 @@ row spacing does).
 |---|---|
 | Package / type | DIP 4-pin, 1 Form A, **AC/DC dual use** (A: "AC/DC dual use", "Peak AC, DC"); 6.4 × 4.78 × 3.2 mm |
 | Load | **60 V peak AC/DC, 0.55 A continuous, 1.5 A peak (100 ms, DC)** |
-| Isolation | **5,000 V AC** I/O; I/O resistance ≥ 1,000 MΩ at 500 V DC; C_iso 0.8 pF typ. *(A draft appended "reinforced" to the voltage. That is a **certification class** under IEC 60664 / 62368, not an isolation-voltage figure, and nothing read supports it — the documents quote a withstand voltage and nothing about creepage, clearance or class. Not load-bearing here: both sides of this barrier are SELV, so it is a 5 V-to-3.3 V separation and not a mains barrier.)* |
+| Isolation | **5,000 V AC** I/O; I/O resistance ≥ 1,000 MΩ at 500 V DC; C_iso 0.8 pF typ. *(**Reinforced insulation is Panasonic's own feature claim, not something this repo can certify.** Both documents print "Reinforced insulation 5,000 V type", "More than 0.4 mm internal insulation distance between inputs and outputs" and "Conforms to EN41003, EN60950 (reinforced insulation)", and the type table has a "Reinforced" column. What was **not** read is the certification itself — creepage and clearance figures, or any approval report. A 2026-10-19 correction said "nothing read supports it" and that the documents say nothing about class; **that was wrong** and overlooked the family sheet's own header. Grade: manufacturer's claim, certification unread. Not load-bearing here: both sides of this barrier are SELV, so it is a 5 V-to-3.3 V separation and not a mains barrier.)* |
 | LED operate current | **1.2 mA typ, 3.0 mA max** at I_L = max, **25 °C** |
 | LED turn-off current | **0.4 mA min, 1.1 mA typ** — "guaranteed OFF below 0.4 mA" is right |
 | LED forward drop | **1.25 V typ, 1.5 V max at I_F = 50 mA; 1.14 V typ at 5 mA** |

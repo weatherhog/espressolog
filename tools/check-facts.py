@@ -78,9 +78,11 @@ nine lines below it, and that was reproduced.
 WHAT IT STILL DOES NOT CATCH, stated plainly so nobody trusts it further
 than it goes: an UNTAGGED site. If a seventh place states the K-factor and
 carries no marker, this script is blind to it. The registry below is the
-partial answer -- it pins a minimum number of sites per fact, so deleting
-a tagged site fails rather than silently shrinking coverage -- but adding
-an untagged one still passes. Tag new sites as you write them.
+partial answer -- it pins a minimum number of FILES per fact (and, for the
+two photoMOS drive facts only, a minimum number of sites), so deleting a
+tagged file's last marker fails rather than silently shrinking coverage --
+but adding an untagged one still passes, and deleting a second marker inside
+a file that keeps another passes for every fact that has no `min_sites`. Tag new sites as you write them.
 """
 
 import os
@@ -182,7 +184,9 @@ def needle_in(needle, context):
     NOT reject a following letter: normalise() strips markdown emphasis and
     backticks, which GLUES words together ("pin 1 `VSS`" becomes "pin 1vss"),
     and a letter-rejecting end boundary failed a live site on exactly that.
-    So "75s" still matches inside "75 seconds" -- an open hole, stated here.
+    So "75s" still matches inside "75 seconds", and a needle that ENDS in a
+    digit still matches a decimal prefix ("pin 1" inside "pin 1.5") -- open
+    holes, stated here. No live needle ends in a digit.
     Review of 271a1f9 found the start-only version let the signed, comma and
     trailing-digit cases through. Known false failure, deliberately kept: a needle
     glued to a period with no space ("stock.330") is rejected, because the

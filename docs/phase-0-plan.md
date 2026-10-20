@@ -428,10 +428,15 @@ A **photoMOS relay** (AQY212, TLP222A) across common↔direction is a genuine
 contact replacement: bidirectional, no saturation offset, optically isolated.
 It does what the lever does. Its on-resistance is irrelevant here — a few ohms
 against a loop of ≥5 kΩ, not against R45's 100 Ω as first written. **Its
-off-state leakage is nanoamps**, which is what makes an un-commanded device a
-non-conductor: 1 nA into even 50 kΩ is 50 µV at the direction line. *(That
-figure was dropped by a 2026-10-12 rewrite and is restored — it is the
-quantitative basis for the series-pair argument.)*
+off-state leakage is at most 1 µA** (Panasonic, at V_L = max; **no typical
+is given for the AQY212EH** — the 100 pA typical in the same family sheet is
+the AQY210EH's), which is what makes an un-commanded device a non-conductor:
+1 µA into 5-50 kΩ is 5-50 mV at the direction line, far under the board's
+logic-low threshold. *(This sentence said "nanoamps … 1 nA into even 50 kΩ is
+50 µV" until 2026-10-20. That was a thousand times better than the one
+datasheet figure for this part, and it was labelled "the quantitative basis
+for the series-pair argument"; the basis is the 1 µA maximum, and the
+argument does not need better.)*
 
 **CLAUDE.md's "not an optocoupler" warning does not apply here.** That is
 about *sensing* — milliamps through the sense network would break the board's
@@ -549,6 +554,19 @@ does not work:
   the machine — two more parts at ~€1.50 each is not a close call. Detection
   alone does not help here: it tells you after the damage.
 
+  **CURRENT CONCLUSION (2026-10-20), stated once so the history below need not
+  be read to use it.** The pair is **better than one device** — it needs a
+  conduction-causing fault in *each* device, and the healthy one blocks any
+  single fault — **by an amount nobody has quantified, and not "squared"**.
+  A device can fail conducting by more routes than the body-diode picture
+  shows (a drain-source short of its +5 V-side FET; a gate-to-drain fault on
+  that FET, if the unread gate model holds; a full-device short), and the two
+  devices' faults are correlated by surge and thermal history. The pair also
+  **hides its own first failure**, which only the per-device test finds. The
+  datasheet read neither raises nor lowers the case for four parts. The
+  paragraphs below are the working behind this, kept because earlier drafts
+  overclaimed in both directions.
+
   **There is no tension with the build rationale, and an earlier draft claimed
   there was.** Fitting the parts now exists so Phase 1 is not a soldering job.
   Building two and later wanting four *is* that soldering job. Four is what
@@ -560,11 +578,12 @@ does not work:
     MOSFETs, sources common, body diodes opposed — that is what makes it
     bidirectional. The drive here is **DC of fixed polarity** (pos 1 = +5 V),
     so one shorted FET leaves the other's body diode forward-biased and the
-    device conducts at ~0.6 V. Two such half-failures give ~1.2 V of drop and
-    still leave ~4.2 V at the direction line, far above an STM32F0 VIH of
-    ≈1.79 V. *(A draft said ~0.6 V per diode and ~3.8 V; 0.6 V is a ~1 mA
-    figure and this loop runs at ~0.1-1 mA, where a silicon diode drops
-    ~0.35-0.45 V. Conclusion unaffected.)* So the chain needs two
+    device conducts at one diode drop. Two such half-failures give roughly
+    1.0-1.3 V of drop and still leave ~3.7-4.0 V at the direction line, far
+    above an STM32F0 VIH of ≈1.79 V. *(Diode figures: see the "voltage
+    arithmetic" paragraph below — an estimate, not a Panasonic number.
+    Conclusion unaffected by any value from 0.35 to 0.65 V per diode.)*
+    So the chain needs two
     *half*-failures, not two full shorts — **and a single-FET short is a more
     probable event than a full device short, so the pair buys less than
     squaring a full-short probability.**
@@ -619,19 +638,23 @@ does not work:
     swapping its pins only swaps which FET is F_hi. The "common cause" and
     "hides its own first failure" points below are unchanged.
 
-    **The voltage arithmetic above is HALF-CORRECTED, and a draft froze it by
-    calling it "unchanged".** The passage still reads "~0.6 V" and "~1.2 V of
-    drop" next to "~4.2 V at the direction line", and 5 − 1.2 = **3.8**, not
-    4.2. The 4.2 belongs to the *corrected* drop: the parenthetical that
-    follows says 0.6 V is a ~1 mA figure while this loop runs at ~0.1-1 mA,
-    where a silicon diode drops ~0.35-0.45 V — about **0.8 V for two**.
-    **So 4.2 V is right and the 0.6 / 1.2 figures beside it are superseded.**
-    Quote ~0.4 V per diode and ~0.8 V for the pair.
+    **The voltage arithmetic, settled — and it was corrected in the wrong
+    direction once.** The sentence above first read "~0.6 V per diode, ~1.2 V
+    for two, ~4.2 V at the line", which is internally inconsistent (5 − 1.2 =
+    3.8). A first correction then said 0.6 V is a ~1 mA figure and moved the
+    drop DOWN to ~0.35-0.45 V at this loop's ~0.1-1 mA. **That moved it the
+    wrong way:** 0.6 V is about right at the TOP of that current range, and a
+    silicon junction drops roughly 60 mV per decade of current, so at 0.1 mA
+    it is ~0.54 V, not ~0.4 V. **Quote ~0.5-0.65 V per diode, ~1.0-1.3 V for
+    the pair, ~3.7-4.0 V at the line.** This is an estimate from the junction
+    equation: **no document read gives the AQY212EH's body-diode
+    characteristic**, so it is inferred, and the conclusion (far above VIH)
+    does not depend on it.
 
     **What the old text got wrong, and why it was believable:** it called the
     failure "one shorted FET leaves *the other's* body diode forward-biased"
     as though that held for either FET. It is the standard photoMOS picture
-    and the conclusion (two half-failures give ~0.8 V, far above VIH) holds
+    and the conclusion (two half-failures leave the line far above VIH) holds
     for the case it describes; it just omitted that the other case blocks.
 
     **"Redundancy is slightly *better* than the draft said" WAS TOO STRONG,
@@ -657,8 +680,12 @@ does not work:
       it erodes the squaring the factor-of-four argument relies on — for the
       polarity of surge that matters.
     - **A drain-source short is not the only way to conduct.** The two gates
-      are joined, and the gate drive is source-referenced and floating (an
-      isolated photodiode array). A gate-to-drain failure of **F_hi** holds
+      are joined. **The model below assumes the gate drive is source-referenced
+      and floating (an isolated photodiode array) — that is INFERENCE: neither
+      document draws or describes it, the schematic shows only a light arrow
+      onto the joined gates, and real PhotoMOS parts also contain gate-discharge
+      circuitry that nothing read shows. The conclusions that follow depend on
+      that unread structure.** A gate-to-drain failure of **F_hi** holds
       the shared gate near the +5 V side, about 5 V above the low-side
       terminal, so **both** channels turn on: one failure site per device, no
       body-diode logic involved. A gate-to-drain failure of **F_lo** ties the
@@ -685,7 +712,8 @@ does not work:
     an internal short in the polarity-relevant FET") and the "~0.8 V"
     arithmetic. *(The "~1.2 V" in the "what the old text got wrong"
     paragraph was changed to "~0.8 V" in the first review-fix commit without
-    an annotation; 0.8 V is right per the HALF-CORRECTED paragraph earlier in
+    an annotation, and that figure was itself wrong; it now carries no drop
+    figure and defers to the voltage-arithmetic paragraph earlier in
     this section.)*
   - **Common cause.** Two identical parts from the same reel, in series, in
     the same thermal environment, seeing the same surge history on the same

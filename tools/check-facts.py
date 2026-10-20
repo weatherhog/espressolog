@@ -189,7 +189,8 @@ def needle_in(needle, context):
     NOT reject a following letter: normalise() strips markdown emphasis and
     backticks, which GLUES words together ("pin 1 `VSS`" becomes "pin 1vss"),
     and a letter-rejecting end boundary failed a live site on exactly that.
-    So "75s" still matches inside "75 seconds" -- an open hole, stated here.
+    So "75s" still matches inside "75 seconds" -- after normalise() collapses
+    the space, "75 seconds" is "75seconds" -- an open hole, stated here.
     Some live needles end in a digit after normalise() (the J4 conductor row
     and the 3 W IRM-03-5 rule), which is why the end boundary exists; the
     history of how it was found is in the commit log, not here, because a

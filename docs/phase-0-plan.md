@@ -439,10 +439,11 @@ steeply with temperature, the box sits near a boiler, and no document gives
 the slope. 5-50 mV is far under any logic-low threshold (the plan quotes no
 VIL figure for the machine's STM32F0, only its VIH of ≈1.79 V, **which is
 itself unsourced** — it appears only in this plan, in two places, and is not
-derivable from the usual forms at 3.3 V (0.5·VDD+0.2 = 1.85 V; 0.7·VDD =
-2.31 V; the STM32F0 FT-pin form, recalled from memory and NOT verified, is
-0.475·VDD+0.2 ≈ 1.77 V); read the STM32F030 datasheet before leaning on any
-of it).
+derived from the usual forms at 3.3 V (0.5·VDD+0.2 = 1.85 V; 0.7·VDD =
+2.31 V). The STM32F0 FT-pin form, recalled from memory and NOT verified, is
+0.475·VDD+0.2 ≈ 1.77 V — close to 1.79 V, so the figure may well be right;
+it is simply unsourced in this repo. Read the STM32F030 datasheet before
+leaning on any of it).
 *(This sentence said "nanoamps … 1 nA into even 50 kΩ is
 50 µV" until 2026-10-20. That was a thousand times better than the one
 datasheet figure for this part, and it was labelled "the quantitative basis
@@ -548,7 +549,11 @@ does not work:
   operator press from a shorted photoMOS or a harness bridge — that is the
   whole reason 0c exists. As a fault detector it false-positives on every
   pour. The only sub-case it catches is a **sustained** high past ~2 s, and
-  the firmware already flags that as `REPROGRAM`. It was cited three times as
+  the firmware already flags that as `REPROGRAM` *(on release only: a hold
+  that has ended, ≥2 s; a line already high when the firmware first saw it is
+  adopted as a press it did not witness and the alarm is suppressed, and a
+  permanent bridge never releases, so only the status line shows it — see
+  `machine_io.cpp` and `main.cpp`)*. It was cited three times as
   a mitigation and is worth close to nothing.
 
   What *would* work is a readback **qualified by the one-shot**: a high
@@ -689,11 +694,15 @@ does not work:
     line moves to ~3.7-4.4 V and the pin to ~2.2-2.64 V (~2.16-2.57 V after
     the measured ~3 % shortfall), so nominal VIH of 2.475 V sits INSIDE the
     band. And the verdict depends on the diode estimate this section calls
-    unsourced: at 0.35 V per diode (the lower figure an earlier draft used)
-    the line is ~4.3 V and the pin ~2.55 V, above 2.475 V. **So the honest
+    unsourced: at 0.35 V per diode (the lower figure an earlier draft used, and
+    outside this section's own 0.4-0.65 V estimate) at 25 °C the line is
+    ~4.2-4.3 V and the pin ~2.50-2.55 V unscaled, ~2.43-2.48 V after the
+    measured shortfall — ON the threshold, not clearly above it; combine it
+    with the hot case and the pin reaches ~2.6 V or more. **So the honest
     statement is: probably not high at 25 °C, INDETERMINATE at box temperature
     and across the diode estimate's own uncertainty.** Between VIL (0.25·VDD =
-    0.784 V, as `docs/taps-and-dividers.md` uses) and VIH a GPIO read is
+    0.784 V at a 5 %-low rail, as `docs/taps-and-dividers.md` uses; 0.825 V at
+    nominal 3.3 V) and VIH a GPIO read is
     **undefined**, not "LOW" — a first version of this paragraph said "LOW".
     The old ~4.2 V figure gave ~2.50 V at the pin, i.e. exactly on the
     threshold, so this is not a new problem; it was borderline and never
@@ -963,6 +972,11 @@ construction, not by text:
   shorted part identically, but leaves the live machine conductor dead-ending
   on a bare jumper pad instead of resting permanently on a semiconductor
   terminal. Strictly less exposure, zero cost;
+  **[THE "STRICTLY LESS EXPOSURE" CLAIM IS WITHDRAWN — see "Does not work"
+  under "Two things that bound the firmware-side failures": a series open blocks
+  identically on either side, and for the harness-bridge hazard this
+  placement is mildly WORSE. It is kept for sequencing and so the photoMOS
+  sees no voltage in Phase 0, not as a bridge mitigation.]**
 - keep pos 1 **physically segregated** in the harness and on the board — its
   own conductor run, maximum spacing from the four direction lines, and no
   shared via column;
@@ -970,8 +984,8 @@ construction, not by text:
   a line reading high with nothing commanded means a bridge or a failed part.
   **[WITHDRAWN 2026-10-12 — see the "readback that already exists" bullet in
   "The failure neither mechanism bounds": the divider cannot tell a lever
-  press from a bridge, and in the double half-failure case it probably does
-  not read high at all.]**
+  press from a bridge, and in the double half-failure case it may or may not
+  read high — indeterminate, per the sense-tap paragraph there.]**
 
 #### The argument against, recorded rather than dropped
 

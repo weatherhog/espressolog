@@ -706,12 +706,16 @@ while pos 1 stayed out of the harness.**
 
 Net Phase-0 actuation risk goes **up** with this decision. It is still the
 right call — see the build argument in `docs/phase-0-plan.md` — but it is a
-trade, and the mitigations are physical (jumper on the **pos-1 side**, pos 1
-segregated in the harness), not textual. *(A third mitigation, "the existing
-sense divider used as a bridge detector", was listed here until 2026-10-20 and
-was withdrawn in `docs/phase-0-plan.md` on 2026-10-12: the divider cannot tell
-a lever press from a bridge, and in the double half-failure case it probably
-does not read high.)* See invariant 1 as amended 2026-10-12.
+trade, and the mitigation is physical — pos 1 segregated in the harness — not
+textual. *(Two more were listed here until 2026-10-20 and are not mitigations
+for the harness-bridge hazard. **The jumper on the pos-1 side** keeps the
+photoMOS dead in Phase 0, but `docs/phase-0-plan.md` ("Two things that bound
+the firmware-side failures") calls it mildly WORSE for a harness bridge,
+because it extends the live 5 V node onto a bare header pad. **The existing
+sense divider as a bridge detector** was withdrawn there on 2026-10-12: it
+cannot tell a lever press from a bridge, and in the double half-failure case
+it may or may not read high — indeterminate.)* See invariant 1 as amended
+2026-10-12.
 
 The supporting arguments, neither settled: **Steam** drives the boiler to
 165 °C, which would contaminate `boiler_temp_start_dc` — though the display

@@ -709,10 +709,11 @@ does not work:
     - **The two LEDs in a pair cannot share one drive.** Each needs its own
       path — and since 2026-10-12 that is settled hardware, not just a
       constraint: each photoMOS gets a **BC547 or 2N3904** with an 8.2 kΩ
-      base resistor and a 100 kΩ base-emitter resistor, fed through **330 Ω, 1 %**
-      for ~6 mA. AQY212EH is guaranteed to operate only at **3.0 mA at 25 °C**
-      (typical 1.2 mA is not a design figure; `docs/shopping-list.md`, the "85 °C note" under "Datasheet read", is normative on what the temperature
-      caveat does to these figures).
+      base resistor and a 100 kΩ base-emitter resistor, fed through
+      **330 Ω, 1 %** for ~6 mA. AQY212EH is guaranteed to operate only at **3.0 mA at 25 °C**
+      (typical 1.2 mA is not a design figure; `docs/shopping-list.md`, the
+      "85 °C note" under "Datasheet read", is normative on what the
+      temperature caveat does to these figures).
       <!-- fact:led-drive-resistor 330 Ω, 1 % -->
       <!-- fact:photomos-guarantee-25c 3.0 mA at 25 °C --> **The transistor's reason is
       this test, not the drive current** — a draft claimed "a 74HC221 at 3.3 V

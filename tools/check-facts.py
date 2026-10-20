@@ -57,6 +57,15 @@ line, so a second marker after one of those is swallowed into its value.
 And a marker's own text is never evidence: every marker is stripped from the
 context window before needles are searched for.
 
+A TAG PINS PRESENCE, NOT MEANING, and that is a limit of the design rather
+than a bug to be fixed with a cleverer needle. A site that keeps the needle's
+literal while promoting a different value -- a parenthetical "(330 ohm, 1 %
+is the hot-box option)", or a struck-through rejected value -- still passes,
+because the check cannot read intent. Review caught five such rewrites on
+2026-10-19 and none is closable without a negative-needle syntax that this
+script does not have. What the check does catch is the realistic drift: a
+number edited, a qualifier dropped, a marker lost.
+
 WHAT IT STILL DOES NOT CATCH, stated plainly so nobody trusts it further
 than it goes: an UNTAGGED site. If a seventh place states the K-factor and
 carries no marker, this script is blind to it. The registry below is the
@@ -147,6 +156,17 @@ SKIP_PATHS = {"tools/check-facts.py"}
 MARKER = re.compile(
     r"(?:<!--|//|--|#)\s*fact:([a-z0-9][a-z0-9-]*)\s+(.+?)\s*(?:-->|$)"
 )
+
+
+def needle_in(needle, context):
+    """Substring match, but a needle that starts like a number or a word
+    must not match in the MIDDLE of one: "330 ohm, 1 %" is not present in
+    "1330 ohm, 1 %", and "2.9 %" is not present in "12.9 %". Without this the
+    check pinned a character sequence, not a value. Found by review of
+    00439f6."""
+    if needle[0].isalnum():
+        return re.search(r"(?<![0-9a-z.])" + re.escape(needle), context) is not None
+    return needle in context
 
 
 def split_needles(value):
@@ -287,7 +307,7 @@ def main():
         for e in entries:
             for needle in split_needles(e["value"]):
                 n = normalise(needle)
-                if n and n not in e["context"]:
+                if n and not needle_in(n, e["context"]):
                     errors.append(
                         f"fact:{fact} at {e['path']}:{e['line']} claims {needle.strip()!r} "
                         f"but no such text appears within {CONTEXT_LINES} lines of the "
@@ -305,8 +325,8 @@ def main():
         if len(entries) < rule.get("min_sites", 0):
             errors.append(
                 f"fact:{fact} has {len(entries)} tagged site(s), REQUIRED says at "
-                f"least {rule['min_sites']}. A marker was deleted from a file "
-                f"that still has another."
+                f"least {rule['min_sites']}. A marker was deleted or lost, or the "
+                f"minimum was raised past what is tagged."
             )
         if len(files) < rule["min_files"]:
             errors.append(

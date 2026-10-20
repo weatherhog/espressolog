@@ -179,18 +179,18 @@ def needle_in(needle, context):
     The start boundary rejects a preceding word character (any script),
     digit, `.`, `,` or `-`: so `-134 mV` (normalise() turns a minus sign into
     `-`) does not satisfy "134 mV", nor `1,330` satisfy "330". The end
-    boundary rejects a following digit, or a following `.` and digit, so
-    "330 ohm, 1 %" does not match "330 ohm, 1 %5", and "pin 1" matches
-    neither "pin 10" nor "pin 1.5" (but does match "pin 1." at a sentence end). It deliberately does
+    boundary rejects a following digit, or a following `.`, `,` or `-` and
+    digit, so "330 ohm, 1 %" does not match "330 ohm, 1 %5", and "pin 1"
+    matches none of "pin 10", "pin 1.5", "pin 1,5", "pin 1-5" (but does match
+    "pin 1." or "pin 1, and" -- punctuation, no digit after). It deliberately does
     NOT reject a following letter: normalise() strips markdown emphasis and
     backticks, which GLUES words together ("pin 1 `VSS`" becomes "pin 1vss"),
     and a letter-rejecting end boundary failed a live site on exactly that.
-    So "75s" still matches inside "75 seconds" -- an open hole, stated here. The
-    decimal-prefix case ("pin 1" inside "pin 1.5") WAS open and is closed:
-    four live needles end in a digit after normalise() ("continuity beep to
-    J5 pin 1" and "3 W IRM-03-5", each in two files, facts j4-conductor-map
-    and j4-plus-readonly), and this docstring used to say no live needle did.
-    Reproduced by mutating "J5 pin 1" to "J5 pin 1.5", which passed.
+    So "75s" still matches inside "75 seconds" -- an open hole, stated here.
+    Some live needles end in a digit after normalise() (the J4 conductor row
+    and the 3 W IRM-03-5 rule), which is why the end boundary exists; the
+    history of how it was found is in the commit log, not here, because a
+    docstring cannot be checked against its own count.
     Review of 271a1f9 found the start-only version let the signed, comma and
     trailing-digit cases through. Known false failure, deliberately kept: a needle
     glued to a period with no space ("stock.330") is rejected, because the
@@ -200,7 +200,7 @@ def needle_in(needle, context):
     boundary entirely and is a plain substring. None exists today."""
     if needle[0].isalnum():
         return re.search(
-            r"(?<![\w.,\-])" + re.escape(needle) + r"(?![0-9]|\.[0-9])", context
+            r"(?<![\w.,\-])" + re.escape(needle) + r"(?![0-9]|[.,\-][0-9])", context
         ) is not None
     return needle in context
 

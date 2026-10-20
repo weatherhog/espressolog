@@ -294,13 +294,13 @@ of them wrong is expensive, and one of them already was — the 0d tap made
 the machine fault and stop, which was loud rather than silent, but only
 because the machine caught it:
 
-<!-- fact:divider-j2 150 K / 220 K -->
+<!-- fact:divider-j2@1 150 K / 220 K -->
 - **0c must be 150 K / 220 K, never 220 K / 220 K.** 220/220 gives 2.50 V
   against an ESP32-S3 VIH of 2.475 V. Supply tolerance alone eats that
   margin and a pressed button reads as not pressed.
 - **0d's J4 ANALYSER tap is 8.2 K series, one channel, `#` only, ground
   to `T` direct.**
-  <!-- fact:divider-j4 100 K + 220 K -->
+  <!-- fact:divider-j4@1 100 K + 220 K -->
   The **ESP32 divider at J4 is 100 K + 220 K → 3.13 V**,
   solved 2026-10-04 from a measured 10.04 kΩ pull-up and 147.4 kΩ
   pull-down. **Do NOT substitute 150 K / 220 K** — it is in stock, it
@@ -402,7 +402,7 @@ apart on the transistor, the drive-current claim and the box.
 | **BC547 or 2N3904, TO-92** | 10 | **LED drivers, one per photoMOS.** **NOT the 2N7000**, which a draft of this row specified: its V_GS(th) is 0.8–3.0 V, so a worst-case part driven from 3.3 V logic has **0.2 V of overdrive** and R_DS(on) is only characterised at V_GS = 4.5/10 V. That is the same works-on-the-bench-fails-in-service trap as the 1 kΩ below, in the part bought to avoid it. A bipolar has no threshold lottery — 0.7 V of V_BE, cleared with enormous margin. **Base resistor 8.2 kΩ and base-emitter 100 kΩ, both in stock.** |
 | **330 Ω, 1 %** *(390 Ω only for a box that stays cool — "cool" is undefined: no ambient has been measured inside the box, so read this as "only after measuring it")* | 20 | **The one resistor value not in stock.** See the LED arithmetic below **and the 85 °C note under "Datasheet read"** — the operate guarantee is 3.0 mA at 25 °C only, so the drive is sized with
 margin: both values clear the plotted 85 °C curve, 330 Ω at 1.85× and 390 Ω at
-1.57×, and neither clears the extrapolated criterion B. <!-- fact:led-drive-resistor 330 Ω, 1 % --> <!-- fact:photomos-guarantee-25c 3.0 mA at 25 °C --> |
+1.57×, and neither clears the extrapolated criterion B. <!-- fact:led-drive-resistor 330 Ω, 1 % --> <!-- fact:photomos-guarantee-25c@2 3.0 mA at 25 °C --> |
 | **2-pin male header** | 3 | the disables. **Buy no shunts** — open is the specified state and a loose shunt in the box is a hazard. Cut from a 1×40 male strip. |
 | DIP-16 socket | 3 | wire the socket, verify, *then* insert the '221 — 16 hand-wired joints with no heat near the part. Pulling the IC is also a third disable, stronger than an open jumper. |
 | Machined **round-pin** SIP socket strip 1×40 | 2 | **DIP-4 sockets are not a stocked item.** Cut 2-way pieces, two per photoMOS, 0.3 in apart. Soldering the photoMOS directly is acceptable if you cannot get these: a socket contact going intermittent fails **open**, which is the safe direction here. |

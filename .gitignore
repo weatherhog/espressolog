@@ -16,7 +16,18 @@ web/.vite/
 
 # Python
 analysis/.ipynb_checkpoints/
-analysis/__pycache__/
+# Any __pycache__, not just analysis/. One appeared under tools/ on
+# 2026-10-20 and was caught in `git diff --stat` while STAGED; it never
+# reached a commit, and `git log --all --diff-filter=A -- '*.pyc'` is empty.
+# THE CAUSE IS KNOWN and it is the auditing of this very script: loading
+# check-facts.py by file path (importlib spec_from_file_location, which is how
+# its weak-anchor audit and planted-edit checks are run) imports it as a
+# module and caches it. Three earlier versions of this comment were wrong --
+# one invented a mechanism, one said it "reached a commit", one called the
+# cause unknown on the grounds that "nothing imports check-facts.py", which
+# is false precisely when you are checking it.
+__pycache__/
+*.pyc
 analysis/.venv/
 
 .DS_Store

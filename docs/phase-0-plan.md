@@ -296,8 +296,9 @@ the worst place to do it. **Read the rule there, not here.**
 
 Two things follow for this board:
 
-- **a disable on the LED supply alone is not sufficient** — see the disables
-  section below for what is actually fitted;
+- **a disable on the LED supply alone is not sufficient** — see
+  "Two things that bound the firmware-side failures", below, for what is
+  actually fitted;
 - **"the board is still Phase 0" becomes checkable by looking at it** for
   every clause but one. GPIO8 stays operationally bounded; CLAUDE.md says so.
 
@@ -368,7 +369,8 @@ described in `docs/phase-0-status.md`.
       o             JUMPER (a) — one per driven line, OPEN THROUGHOUT PHASE 0.
                     On this side so the photoMOS sees no voltage in Phase 0.
       o             (A series open blocks the same on either side; that is not
-      |             the reason. See the disables section.)
+      |             the reason. See "Two things that bound the
+      |             firmware-side failures".)
       |
   [photoMOS]        DRIVE, device 1 of 2.
       |
@@ -436,9 +438,11 @@ leakage table is headed "Ambient temperature 25 °C", junction leakage rises
 steeply with temperature, the box sits near a boiler, and no document gives
 the slope. 5-50 mV is far under any logic-low threshold (the plan quotes no
 VIL figure for the machine's STM32F0, only its VIH of ≈1.79 V, **which is
-itself unsourced** — it appears nowhere else in the repo and is not derivable
-from the usual forms at 3.3 V (0.5·VDD+0.2 = 1.85 V; 0.7·VDD = 2.31 V); read
-the STM32F030 datasheet before leaning on any of it).
+itself unsourced** — it appears only in this plan, in two places, and is not
+derivable from the usual forms at 3.3 V (0.5·VDD+0.2 = 1.85 V; 0.7·VDD =
+2.31 V; the STM32F0 FT-pin form, recalled from memory and NOT verified, is
+0.475·VDD+0.2 ≈ 1.77 V); read the STM32F030 datasheet before leaning on any
+of it).
 *(This sentence said "nanoamps … 1 nA into even 50 kΩ is
 50 µV" until 2026-10-20. That was a thousand times better than the one
 datasheet figure for this part, and it was labelled "the quantitative basis
@@ -494,7 +498,8 @@ breaks the *control* path only — precisely the path a shorted output does not
 use. Put an **open jumper in series with the photoMOS OUTPUT** instead and a
 shorted part is still an open circuit. Same component, one position along,
 and it is what amended invariant 1 requires. The LED-supply disable is **also fitted** — see
-the disables section, which is normative on the count — for sequencing
+"Two things that bound the firmware-side failures", which is normative on
+the count — for sequencing
 reasons rather than because it makes this claim true.
 
 **In Phase 1, with the jumpers fitted, the failure is real and unmitigated.**
@@ -664,30 +669,40 @@ does not work:
     estimate of ~0.4-0.65 V per diode, ~0.8-1.3 V for the pair, ~3.6-4.2 V at
     the line**, and **no document read gives the AQY212EH's body-diode
     characteristic.** **The 3.6 V low end includes the drop across R45
-    (100 Ω) at 1 mA, ≤0.1 V** — 5 − 1.3 alone is 3.7 V. **Diode drop also falls ~2 mV/K
+    (100 Ω) at 1 mA, ≤0.1 V** — 5 − 1.3 alone is 3.7 V.
+    **Diode drop also falls ~2 mV/K
     per junction**, so near a boiler at 60-85 °C each diode could be 70-120 mV
     lower than at 25 °C and the line 0.14-0.24 V HIGHER than the band above —
     the same temperature argument made for the leakage figure. The conclusion
     that the line stays far above the board's VIH holds across all of that.
 
-    **BUT ONE CONSEQUENCE DOES DEPEND ON IT: THE SENSE TAP.** Through the
-    150 K / 220 K divider (×0.5946) a line at 3.6-4.2 V puts the pin at
-    ~2.14-2.50 V. Against that: this repo uses an ESP32-S3 VIH of **2.475 V**
-    nominal and **2.60 V** at a 5 %-high rail, and its own bench reading of a
-    lever press was **2.89 V against a predicted 2.97 V** (~3 % low) — scaled
-    the same way, the top of the band is ~2.43 V. So **the whole band sits
+    **BUT ONE CONSEQUENCE DOES DEPEND ON IT: THE SENSE TAP.** Through the 150
+    K / 220 K divider (×0.5946) a line at 3.6-4.2 V puts the pin at ~2.14-2.50
+    V. Against that: this repo uses an ESP32-S3 VIH of **2.475 V** nominal and
+    **2.60 V** at a 5 %-high rail, and its own bench reading of a lever press
+    was **2.89 V against a predicted 2.97 V** (~3 % low) — scaled the same
+    way, the top of the band is ~2.43 V. So **at 25 °C the whole band sits
     below 2.60 V and all but its extreme top end below 2.475 V: the tap
-    PROBABLY DOES NOT READ HIGH in the double half-failure case**, and at box
-    temperatures the diode coefficient above pushes the top end up to ~2.6 V,
-    where it might. Between VIL and VIH a GPIO read is **undefined**, not
-    "LOW" — a first version of this paragraph said "LOW". The old ~4.2 V figure
-    gave ~2.50 V at the pin, i.e. exactly on the threshold, so this is not a
-    new problem; it was borderline and never stated. A lever press reads 2.89 V
-    against under ~2.5 V here, so the two levels differ — but this repo's taps
-    are digital inputs and nothing here claims the divider detects the
-    failure. See the withdrawn readback bullet under "The failure neither
-    mechanism bounds", and note the "already a detector" sentence under
-    "What this changes in the harness" is the same withdrawn idea.
+    PROBABLY DOES NOT READ HIGH.** **At box temperature that statement does
+    not hold, and it is stronger than the evidence.** The temperature
+    coefficient above is assumed, not measured here, but if it applies the
+    line moves to ~3.7-4.4 V and the pin to ~2.2-2.64 V (~2.16-2.57 V after
+    the measured ~3 % shortfall), so nominal VIH of 2.475 V sits INSIDE the
+    band. And the verdict depends on the diode estimate this section calls
+    unsourced: at 0.35 V per diode (the lower figure an earlier draft used)
+    the line is ~4.3 V and the pin ~2.55 V, above 2.475 V. **So the honest
+    statement is: probably not high at 25 °C, INDETERMINATE at box temperature
+    and across the diode estimate's own uncertainty.** Between VIL (0.25·VDD =
+    0.784 V, as `docs/taps-and-dividers.md` uses) and VIH a GPIO read is
+    **undefined**, not "LOW" — a first version of this paragraph said "LOW".
+    The old ~4.2 V figure gave ~2.50 V at the pin, i.e. exactly on the
+    threshold, so this is not a new problem; it was borderline and never
+    stated. A lever press reads 2.89 V against under ~2.5 V here, so the two
+    levels differ — but this repo's taps are digital inputs and nothing here
+    claims the divider detects the failure. See the withdrawn readback bullet
+    under "The failure neither mechanism bounds", and note the "already a
+    detector" sentence under "What this changes in the harness" is the same
+    withdrawn idea.
 
     **What the old text got wrong, and why it was believable:** it called the
     failure "one shorted FET leaves *the other's* body diode forward-biased"

@@ -182,7 +182,10 @@ def needle_in(needle, context):
     boundary rejects a following digit, or a following `.`, `,` or `-` and
     digit, so "330 ohm, 1 %" does not match "330 ohm, 1 %5", and "pin 1"
     matches none of "pin 10", "pin 1.5", "pin 1,5", "pin 1-5" (but does match
-    "pin 1." or "pin 1, and" -- punctuation, no digit after). It deliberately does
+    "pin 1." or "pin 1, and" -- punctuation, no digit after). A consequence
+    worth knowing: an UNSPACED list or range after a needle ("150k,220k",
+    "0.4-0.65" when the needle is "0.4") is rejected too. No live site is
+    affected. It deliberately does
     NOT reject a following letter: normalise() strips markdown emphasis and
     backticks, which GLUES words together ("pin 1 `VSS`" becomes "pin 1vss"),
     and a letter-rejecting end boundary failed a live site on exactly that.

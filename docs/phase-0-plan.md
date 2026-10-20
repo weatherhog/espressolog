@@ -431,8 +431,12 @@ against a loop of ≥5 kΩ, not against R45's 100 Ω as first written. **Its
 off-state leakage is at most 1 µA** (Panasonic, at V_L = max; **no typical
 is given for the AQY212EH** — the 100 pA typical in the same family sheet is
 the AQY210EH's), which is what makes an un-commanded device a non-conductor:
-1 µA into 5-50 kΩ is 5-50 mV at the direction line, far under the board's
-logic-low threshold. *(This sentence said "nanoamps … 1 nA into even 50 kΩ is
+1 µA into 5-50 kΩ is 5-50 mV at the direction line — **at 25 °C only**: the
+leakage table is headed "Ambient temperature 25 °C", junction leakage rises
+steeply with temperature, the box sits near a boiler, and no document gives
+the slope. 5-50 mV is far under any logic-low threshold (the plan quotes no
+VIL figure for the machine's STM32F0, only its VIH of ≈1.79 V; read the
+STM32F030 datasheet before leaning on that). *(This sentence said "nanoamps … 1 nA into even 50 kΩ is
 50 µV" until 2026-10-20. That was a thousand times better than the one
 datasheet figure for this part, and it was labelled "the quantitative basis
 for the series-pair argument"; the basis is the 1 µA maximum, and the
@@ -558,9 +562,12 @@ does not work:
   be read to use it.** The pair is **better than one device** — it needs a
   conduction-causing fault in *each* device, and the healthy one blocks any
   single fault — **by an amount nobody has quantified, and not "squared"**.
-  A device can fail conducting by more routes than the body-diode picture
-  shows (a drain-source short of its +5 V-side FET; a gate-to-drain fault on
-  that FET, if the unread gate model holds; a full-device short), and the two
+  **The decision stands: four parts, with the per-device test.** A device can
+  fail conducting by more routes than the body-diode picture shows — for
+  example a drain-source short of its +5 V-side FET, a gate-to-drain fault on
+  that FET (if the unread gate model holds), a full-device short, or a fault
+  in the gate drive that leaves the gate charged; this is a list of
+  examples, not a census — and the two
   devices' faults are correlated by surge and thermal history. The pair also
   **hides its own first failure**, which only the per-device test finds. The
   datasheet read neither raises nor lowers the case for four parts. The
@@ -582,7 +589,8 @@ does not work:
     1.0-1.3 V of drop and still leave ~3.7-4.0 V at the direction line, far
     above an STM32F0 VIH of ≈1.79 V. *(Diode figures: see the "voltage
     arithmetic" paragraph below — an estimate, not a Panasonic number.
-    Conclusion unaffected by any value from 0.35 to 0.65 V per diode.)*
+    Conclusion — that the line stays far above VIH — is unaffected by any value
+    from 0.35 to 0.65 V per diode, a band wider than the estimate.)*
     So the chain needs two
     *half*-failures, not two full shorts — **and a single-FET short is a more
     probable event than a full device short, so the pair buys less than
@@ -598,7 +606,7 @@ does not work:
     intrinsic diode (anode at source, cathode at drain, hence opposed), and
     nothing in either document gives an off-state forward characteristic. So
     **"body diodes opposed" is inferred from the MOSFET symbol, not read from
-    a table**, and the ~0.35-0.6 V figure above remains a silicon-diode
+    a table**, and the diode-drop figures above remain a silicon-junction
     estimate, not a Panasonic number. (`TLP222A` was not checked; the sentence
     above names it only by analogy.)
 
@@ -638,18 +646,29 @@ does not work:
     swapping its pins only swaps which FET is F_hi. The "common cause" and
     "hides its own first failure" points below are unchanged.
 
-    **The voltage arithmetic, settled — and it was corrected in the wrong
-    direction once.** The sentence above first read "~0.6 V per diode, ~1.2 V
-    for two, ~4.2 V at the line", which is internally inconsistent (5 − 1.2 =
-    3.8). A first correction then said 0.6 V is a ~1 mA figure and moved the
-    drop DOWN to ~0.35-0.45 V at this loop's ~0.1-1 mA. **That moved it the
-    wrong way:** 0.6 V is about right at the TOP of that current range, and a
-    silicon junction drops roughly 60 mV per decade of current, so at 0.1 mA
-    it is ~0.54 V, not ~0.4 V. **Quote ~0.5-0.65 V per diode, ~1.0-1.3 V for
-    the pair, ~3.7-4.0 V at the line.** This is an estimate from the junction
-    equation: **no document read gives the AQY212EH's body-diode
-    characteristic**, so it is inferred, and the conclusion (far above VIH)
-    does not depend on it.
+    **The voltage arithmetic, and how it moved.** The sentence above first
+    read "~0.6 V per diode, ~1.2 V for two, ~4.2 V at the line", which is
+    internally inconsistent (5 − 1.2 = 3.8). A first correction then said 0.6 V
+    is a ~1 mA figure and moved the drop DOWN to ~0.35-0.45 V at this loop's
+    ~0.1-1 mA. **That direction is doubtful, but not shown wrong:** the
+    ideal-diode slope is 59.5 mV per decade of current at n = 1, so 0.6 V at
+    1 mA implies ~0.54 V at 0.1 mA — but a real junction has n between 1 and
+    2 (60-120 mV per decade), and a larger die (this part's R_on is 0.85 Ω)
+    has a higher saturation current and so a LOWER drop at a given current.
+    The 0.6 V anchor is itself unsourced. **So the honest statement is an
+    estimate of ~0.4-0.65 V per diode, ~0.8-1.3 V for the pair, ~3.6-4.2 V at
+    the line**, and **no document read gives the AQY212EH's body-diode
+    characteristic.** The conclusion that the line stays far above VIH holds
+    across that whole band.
+
+    **BUT ONE CONSEQUENCE DOES DEPEND ON IT: THE SENSE TAP.** Through the
+    150 K / 220 K divider (×0.595) a line at 3.6-4.2 V puts the pin at
+    ~2.1-2.5 V, **straddling the ESP32-S3's VIH of 2.475 V**. In the double
+    half-failure case the tap may therefore read LOW, and the old 4.2 V figure
+    (2.50 V at the pin) hid that by sitting just over the line. Nothing here
+    claims the divider detects this case — see the withdrawn readback bullet
+    above, and note the "already a detector" sentence in the disables section
+    is the same withdrawn idea.
 
     **What the old text got wrong, and why it was believable:** it called the
     failure "one shorted FET leaves *the other's* body diode forward-biased"
@@ -709,7 +728,7 @@ does not work:
 
     **Two statements elsewhere in this section are body-diode-only and do not
     cover the gate-to-drain mode above:** the lead bullet ("each device needs
-    an internal short in the polarity-relevant FET") and the "~0.8 V"
+    an internal short in the polarity-relevant FET") and the diode-drop
     arithmetic. *(The "~1.2 V" in the "what the old text got wrong"
     paragraph was changed to "~0.8 V" in the first review-fix commit without
     an annotation, and that figure was itself wrong; it now carries no drop
@@ -915,6 +934,9 @@ construction, not by text:
   shared via column;
 - the sense divider on each direction line is already a **detector** for this:
   a line reading high with nothing commanded means a bridge or a failed part.
+  **[WITHDRAWN 2026-10-12 — see the "readback that already exists" bullet in
+  the output-jumper section: the divider cannot tell a lever press from a
+  bridge, and in the double half-failure case it may not read high at all.]**
 
 #### The argument against, recorded rather than dropped
 

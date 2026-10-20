@@ -61,10 +61,19 @@ A TAG PINS PRESENCE, NOT MEANING, and that is a limit of the design rather
 than a bug to be fixed with a cleverer needle. A site that keeps the needle's
 literal while promoting a different value -- a parenthetical "(330 ohm, 1 %
 is the hot-box option)", or a struck-through rejected value -- still passes,
-because the check cannot read intent. Review caught five such rewrites on
-2026-10-19 and none is closable without a negative-needle syntax that this
-script does not have. What the check does catch is the realistic drift: a
-number edited, a qualifier dropped, a marker lost.
+because the check cannot read intent. The parenthetical and the strikethrough
+cannot be closed by any needle, positive or negative, since the literal that
+is the VALUE and the literal that is the REJECTED ALTERNATIVE are the same
+string. A bare promoted value ("390 ohm, 1 %" standing where "330 ohm, 1 %"
+was) COULD be closed by a negative needle -- a `!needle` form meaning "must
+be absent from the context" is about five lines -- but this script does not
+have one, and it would still miss "390 ohm only for a cool box" because that
+phrase does not contain ", 1 %". What the check does catch is the realistic
+drift: a number edited, a qualifier dropped, a marker lost, a typo that
+shifts a digit. It does NOT catch a qualifier dropped at a site whose
+neighbour, within CONTEXT_LINES, carries the same literal -- shopping-list's
+parts-table row for the 330 ohm resistor is covered by the LED-drive lead
+nine lines below it, and that was reproduced.
 
 WHAT IT STILL DOES NOT CATCH, stated plainly so nobody trusts it further
 than it goes: an UNTAGGED site. If a seventh place states the K-factor and
@@ -163,9 +172,28 @@ def needle_in(needle, context):
     must not match in the MIDDLE of one: "330 ohm, 1 %" is not present in
     "1330 ohm, 1 %", and "2.9 %" is not present in "12.9 %". Without this the
     check pinned a character sequence, not a value. Found by review of
-    00439f6."""
+    00439f6.
+
+    The start boundary rejects a preceding word character (any script),
+    digit, `.`, `,` or `-`: so `-134 mV` (normalise() turns a minus sign into
+    `-`) does not satisfy "134 mV", nor `1,330` satisfy "330". The end
+    boundary rejects a following DIGIT only, so "330 ohm, 1 %" does not match
+    "330 ohm, 1 %5" and "pin 1" does not match "pin 10". It deliberately does
+    NOT reject a following letter: normalise() strips markdown emphasis and
+    backticks, which GLUES words together ("pin 1 `VSS`" becomes "pin 1vss"),
+    and a letter-rejecting end boundary failed a live site on exactly that.
+    So "75s" still matches inside "75 seconds" -- an open hole, stated here.
+    Review of 271a1f9 found the start-only version let the signed, comma and
+    trailing-digit cases through. Known false failure, deliberately kept: a needle
+    glued to a period with no space ("stock.330") is rejected, because the
+    alternative is allowing "0.330" to match "330".
+
+    A needle that STARTS with a non-alphanumeric ("+5 V", "(x)") skips the
+    boundary entirely and is a plain substring. None exists today."""
     if needle[0].isalnum():
-        return re.search(r"(?<![0-9a-z.])" + re.escape(needle), context) is not None
+        return re.search(
+            r"(?<![\w.,\-])" + re.escape(needle) + r"(?![0-9])", context
+        ) is not None
     return needle in context
 
 

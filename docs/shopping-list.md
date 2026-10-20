@@ -557,7 +557,8 @@ row spacing does).
   non-issue.
 - **Body diodes: NOT specified.** The output schematic is two common-source
   N-MOSFETs; neither document draws or characterises a body diode. See the
-  re-graded **"two photoMOS in series per driven line"** bullet in `phase-0-plan.md` (under "The failure neither mechanism bounds"), which this
+  re-graded **"two photoMOS in series per driven line"** bullet in
+  `phase-0-plan.md` (under "The failure neither mechanism bounds"), which this
   read settles at "topology datasheet, body diode inferred" and refines.
 - **Not settled here:** TLP222A (the plan's alternate) was not read.
 

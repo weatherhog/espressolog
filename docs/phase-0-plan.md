@@ -503,8 +503,16 @@ from the capture files.
 active low** — bit 49 LEFT (enters `PrG`, then decreases), bit 58 RIGHT
 (increases). Semantics are from the Ascaso manual, not inference, and all
 four payload combinations have been observed. `docs/machine-display-bus.md`
-is normative. The firmware already uses this: it is what sets
-`SETPOINT_TOUCHED`.
+is normative.
+
+**THE FIRMWARE DECODES THE BUTTON BITS AND DOES ESSENTIALLY NOTHING WITH
+THEM — a draft of this entry said they are "what sets `SETPOINT_TOUCHED`",
+which is false.** `display.cpp` latches `touched` from the **blink period**
+and from the **`PrG` banner text**; the button bits land in `btn`, whose only
+consumer is a `status` printf. So the decode is free and present, and the
+setpoint-edit detection would survive the buttons being ignored entirely.
+Worth knowing before building on them: the bits are **proven**, not
+load-bearing.
 
 **DRIVE THE CONTACTS, NOT THE BUS.** Injecting a frame bit on `ESD1` would
 need two things this project does not have:
@@ -519,20 +527,29 @@ pattern unchanged** — same AQY212EH, same one-shot, same open jumper in
 series with the output — and the bus then serves as readback rather than as
 the drive path.
 
-**THE HOLD HAZARD IS WORSE HERE THAN ON THE LEVERS, and that inverts the
-usual intuition that buttons are the gentler target.**
+**THE HOLD HAZARD IS NASTIER IN CONSEQUENCE AND LOOSER IN TIMING, and a
+draft of this entry got the second half backwards.**
 
-| line | hold hazard |
-|---|---|
-| J2 levers | **> ~2 s reprograms** that direction's stored duration |
-| **button 23 (RIGHT) alone** | **~3 s is `PrS` — an IMMEDIATE FACTORY RESET** |
+| line | hold hazard | bound |
+|---|---|---|
+| J2 levers | reprograms that direction's stored duration | **> ~2 s** |
+| **button 23 (RIGHT) alone** | **`PrS` — an IMMEDIATE FACTORY RESET** | **~3 s** |
 
-And the `SET UP` gesture *requires* holding 23 while pressing 22 for ~3 s, so
-any design that can reach the menu is a design whose nearest failure mode is
-the factory reset. **The one-shot is more necessary here, not less**, and a
-one-shot sized for the levers is not automatically safe here: the levers'
-bound is ~2 s and this one is ~3 s *for a different button combination*, so
-the RC argument has to be re-run rather than inherited.
+That draft concluded *"the one-shot is more necessary here, not less… the RC
+has to be re-run rather than inherited"*. **It does not follow. 3 s is a
+LOOSER bound than 2 s**, so a one-shot sized to stay clear of the levers'
+~2 s is automatically clear of the button's ~3 s. The RC **is** inherited on
+this axis; the levers are what constrain it.
+
+**What IS true is the consequence, and one design cost.** A lever reprogram
+is recoverable by reprogramming; a factory reset is not — so the *stakes* of
+a stuck-on output are higher even though the *threshold* is further away. And
+a one-shot short enough for the levers **forecloses the `SET UP` menu
+entirely**, since entering it needs a ~3 s hold: fine if the scope is the
+setpoint, a hard limit if anything ever wants a menu parameter.
+
+*(The same draft called `PrS` a "combination". It is button 23 **alone** —
+the combination is the `SET UP` gesture, 23 held while 22 is pressed.)*
 
 **THE ATTRACTIVE PART: this is the only actuation path in the project with
 closed-loop verification.** Press, and the display reports the new setpoint
@@ -542,9 +559,18 @@ of inactivity as the natural commit. That is worth more than the convenience
 of setting a temperature.
 
 **Not scoped, not costed, nothing built.** It needs its own design pass:
-which contacts are reachable without modifying the display assembly, whether
-two more photoMOS fit the board as laid out, and the RC re-derived against
-the 3 s bound. **It does not gate anything in Phase 0.**
+which contacts are reachable without modifying the display assembly, and
+whether the parts fit the board as laid out. **It does not gate anything in
+Phase 0.**
+
+**The device count is FOUR, not two, and a draft said "two more photoMOS".**
+The J2 pattern this entry calls "unchanged" is **two in series per driven
+contact** — that series pair is the whole answer to a photoMOS failing short.
+Two buttons therefore need **four devices, consuming all four spares** on the
+current order, plus **four more one-shot channels**, where a dual '221 gives
+two. Three '221s are on the order and cover the levers; the buttons would
+need more. That is the real cost, and it is why this is a design pass rather
+than an increment.
 
 #### The failure neither mechanism bounds
 

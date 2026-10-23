@@ -344,41 +344,53 @@ because the machine caught it:
 | **XH board headers: 3, 4 and 5 pin** | 3 | **×5 each, decided 2026-10-12.** The perfboard gets one socket per harness: **3-pin J4** (`B3B-XH-A`), **4-pin J5** (`B4B-XH-A`), **5-pin J2** (`B5B-XH-A`). **The pin counts self-key** — nothing can be cross-plugged, so do not standardise them to one size for tidiness. Side-entry `S`-series if the printed box has a side gland; decide before designing the box. **Gender:** the board takes the **male** headers and the cable end takes the **female** housing from the pre-crimped kit — XH has no cable-mount male part at all, which is why the machine end still needs balance extension leads. |
 | Perfboard **7 × 9 cm** ×2 + **FEMALE** pin headers ×5 | 6 | The dividers want to live on a board, not in mid-air. **Female** so the ESP32 sockets in and comes out — soldering the devkit down means it cannot be swapped or easily reflashed. **Size settled 2026-10-12: 7 × 9, not 5 × 7.** The devkit's footprint is 11 columns × 22 rows (pin rows 10 pitches apart, 22 pins long) and a 5 × 7 board is only ~27 rows, so the devkit alone would take 22 of them. Count the holes on what arrives; centimetre labels vary. **Buy 2 boards** — the dividers can live in the 9 free columns *under* the socketed devkit, which is tight soldering with the actuation block on the same board, and a second board is cheaper than discovering that with copper committed. **Buy 5 header strips**: 1×40 is the standard item, you cut each to 22 (losing the position you cut through), you need two, and female strips do not snap cleanly like male ones so the first one is practice. |
 | Second mixed balance-lead pack | 7 | **Insurance.** The 4S is the only lead that fits J2 and there is no spare if a strip-and-solder goes wrong. The T-pieces are the most laborious part of the build and the pack is seven euro. |
-| ~~ABS project box, ~120 x 80 x 40 mm~~ **PRINTED, not bought** | 0 | ESP32 mounts **outside** the machine. **The 120 × 80 size is WRONG and would not have fitted** — it was chosen when the perfboard was assumed 5 × 7; the board is now **70 × 90 mm**, and a 120 × 80 external box has ~112 × 72 of interior. Operator is printing one instead: **~110 × 100 × 40 internal**, **SETTLED 2026-10-23: print the box LAST, and build ONE board.**
+| ~~ABS project box, ~120 x 80 x 40 mm~~ **PRINTED, not bought** | 0 | ESP32 mounts **outside** the machine. ~~120 × 80~~ would not have fitted — it predates the board being 70 × 90 mm. Operator prints one: **~110 × 100 × 40 internal**. **SETTLED 2026-10-23 — print it LAST, build ONE board; see the note under this table.** |
+| Cable gland or grommet | 3 | Where the harness leaves the case |
+| Nylon cable ties / adhesive tie mounts | 4 | Keep the tap away from the boiler and off moving parts |
 
-*The premise that forced this early was stale.* This row read *"the box is
-the item with lead time, so it should not be the thing that forces the
+### The box and the board count — SETTLED 2026-10-23
+
+**Print the box LAST, and build ONE board in service.**
+
+**The premise that forced this early was stale.** The box row read *"the box
+is the item with lead time, so it should not be the thing that forces the
 layout"* — true when the box was an ABS part to buy, **false now it is
 printed**: hours, on the operator's own printer, €0. A printed box is the
-*last* thing made, not the constraint.
+*last* thing made, sized to the finished board, not the constraint that
+forces its shape.
 
-*And two boards did not fit it anyway.* 70 × 90 mm each against ~110 × 100
-internal: side by side is 140 × 90 **or** 70 × 180, and neither fits in any
-orientation.
-
-**One board in service, and the deciding argument is invariant 1, not
-space.** A sense board plus a drive board means **J2 position 1 (+5 V common)
-hops between boards.** The 0c entry already records pos 1 riding in the loom
-as buying a new failure mode — +5 V through R45, 2.54 mm from four direction
-lines, where a whisker or bridge starts a cycle and reprograms the stored
-timer within 2 s. A board-to-board hop adds exposure on exactly that path in
+**One board, and the deciding argument is invariant 1 rather than space.** A
+sense board plus a drive board means **J2 position 1 (+5 V common) hops
+between boards** — the conductor the 0c entry already records as buying a new
+failure mode, +5 V through R45 running 2.54 mm from four direction lines,
+where a whisker or bridge starts a cycle and reprograms the stored timer
+within 2 s. A board-to-board hop adds exposure on exactly that path in
 exchange for soldering comfort. **Still buy two**: the second is the
-practice/spare piece, and at €3 it is cheaper than discovering a ruined one
+practice/spare piece, and at ~€3 it is cheaper than discovering a ruined one
 with copper committed.
 
-*Space was never the binding constraint.* Against ~29 discrete parts, 5
-sockets and 3 XH connectors:
+**Space is tight but was never the binding constraint**, against ~29 discrete
+parts, 5 sockets and 3 XH connectors:
 
 | | 27 × 35 (nominal) | 24 × 34 (commodity) |
 |---|---|---|
 | free beside the devkit | 560 holes | 442 |
 | free underneath it | 198 | 198 |
 
-**Only 9 resistors are on the board** — every series leg lives in its
-T-piece, so the board carries 4 × J2 shunt, 1 × J4 shunt and 4 × 8.2 K
-making the two J5 shunts. Sized as sized for the board plus connector height plus wire bend radius, and for **three** harnesses (J5, J2's five wires and four dividers, J4). **PETG or ASA, not PLA** — it lives beside an espresso machine and PLA softens around 60 °C. |
-| Cable gland or grommet | 3 | Where the harness leaves the case |
-| Nylon cable ties / adhesive tie mounts | 4 | Keep the tap away from the boiler and off moving parts |
+**Resistor count, corrected.** A draft of this note said "only 9 resistors are
+on the board", which counts the **sense** side alone — 4 × J2 shunt, 1 × J4
+shunt, and 4 × 8.2 K making the two J5 shunts, every series leg living in its
+T-piece. **The actuation block adds ~14 more**: 330 Ω, 8.2 K and 100 K per
+photoMOS × 4, plus the '221 timing resistors. **~23 in total**, and the
+"space was never binding" conclusion rests on the right number, not the
+flattering one.
+
+*(A draft also argued "two boards did not fit the box anyway" — 140 × 90 or
+70 × 180 against ~110 × 100 internal. **That is circular** once the box is
+printed last and sized to whatever is built. The non-circular objection is
+height: two boards stacked over a socketed devkit do not fit 40 mm.)*
+
+---
 
 **Power the ESP32 from its own isolated supply** (any ordinary USB phone
 charger). The machine's 5 V comes from an isolated IRM-03-5 module, so

@@ -1668,10 +1668,16 @@ the display is back in temperature mode, so edges lost there cost nothing.
 
 ## WHAT PHASE 0 STILL OWES — 2026-10-23
 
-**Every DECISION is closed as of today. What is left is measurement and
-assembly, and no amount of discussion shortens either.** Recorded as a split
-because "finalise Phase 0" is ambiguous and the two halves have very
-different costs.
+**Every decision the BUILD waits on is closed as of today. What is left is
+measurement and assembly, and no amount of discussion shortens either.**
+Recorded as a split because "finalise Phase 0" is ambiguous and the two
+halves have very different costs.
+
+*(A draft said "every DECISION is closed", which is too strong. **Three are
+still open and none blocks the build**: whether invariant 1 covers plumbing
+(UNDECIDED, `docs/hydraulics.md`), the J4 10 nF candidate and the J5 470 pF
+candidate — the last two untested remedies for symptoms whose cause is
+unidentified, both marked "do not buy yet".)*
 
 ### Decisions — CLOSED
 
@@ -1694,9 +1700,17 @@ different costs.
 | **`boiler_temp_start_c`'s meaning** | a capture with the boiler pulled off setpoint | 0e's open half |
 | **0f re-run** | 30 shots carrying `machine_timer_s` | the Phase 3 deadband |
 
-**Only the first is doable tonight** — the rig is semi-permanent, the three
-T-pieces carry their series resistors, and the analyser on a J2 junction is
-measured as harmless (2.89 V probe on and off, under meter resolution).
+**Only the first is doable tonight** — the rig is semi-permanent and the
+three T-pieces carry their series resistors.
+
+**Grade the analyser clearance as `docs/taps-and-dividers.md` grades it, not
+as "harmless", which a draft of this line wrote.** The reading is 2.89 V
+probe-on and probe-off, a difference under meter resolution — but that file
+is explicit that **one reading on one line at one temperature does not retire
+a datasheet worst case** (1 µA of HC leakage into an 89 kΩ source is up to
+89 mV), and what it clears is **bench** use. This measurement is machine-on,
+which is not the case that was cleared. Very probably fine; not the same
+claim.
 
 ### Assembly — unblocked, nothing waiting on it
 
@@ -1710,8 +1724,16 @@ merely unpowered, not merely un-commanded". Populating and bench-testing them
 is the 2026-10-08 build decision; closing a jumper is the thing Phase 0 never
 does. **Recorded because "we are fitting actuation hardware, so we are
 already actuating" is an easy slip and it dissolves the only mechanism
-enforcing the goal.** The jumpers come out when Phase 1 is a deliberate
-decision with the RC chosen — not as a side effect of the board being built.
+enforcing the goal.**
+
+**THE JUMPER GOES IN FOR PHASE 1; IT IS NOT THERE IN PHASE 0 — and a draft of
+this paragraph said the opposite** ("the jumpers come out when Phase 1 is a
+deliberate decision"), inverting the safety state in the sentence meant to
+protect it. The specified Phase 0 state is **a 2-pin header with NO shunt
+fitted** — `docs/phase-0-plan.md` calls that the specified state, and
+`docs/shopping-list.md` says *"buy no shunts — open is the specified state"*.
+Phase 1 is what **fits** the shunt and closes the path. Open is the resting
+state; closing it is the deliberate act, with the RC chosen first.
 
 ---
 

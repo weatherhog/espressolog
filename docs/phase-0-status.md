@@ -1666,6 +1666,55 @@ the display is back in temperature mode, so edges lost there cost nothing.
    a ~2 s cup lift — no need to wait; a quick bump is ignored).
 5. Tasting notes on the Capture tab (4 taps). Everything else is automatic.
 
+## WHAT PHASE 0 STILL OWES — 2026-10-23
+
+**Every DECISION is closed as of today. What is left is measurement and
+assembly, and no amount of discussion shortens either.** Recorded as a split
+because "finalise Phase 0" is ambiguous and the two halves have very
+different costs.
+
+### Decisions — CLOSED
+
+| | |
+|---|---|
+| J5 shunt | **16.4 K** (2 × 8.2 K), the as-built 15 K superseded |
+| Board count | **one in service**, second as spare — the deciding argument is that two boards make J2 pos 1 hop between them |
+| Box | **printed LAST**, after the board is laid out. The lead-time premise that forced it early was stale |
+| One-shot part | **74HC221**, never the '123 |
+| Drive scope | **sense four, drive two** (1Cup, 2Cup) |
+| Phase 1 buttons | **scoped, not built** — see `docs/phase-0-plan.md` |
+
+### Measurements — OPEN, and these gate things
+
+| | needs | gates |
+|---|---|---|
+| **Minimum latching press width** | analyser on a J2 junction, machine on | **the one-shot RC.** Current bound is "under ~140 ms" from poller-quantised readings — [23, 137] ms true. Not enough to choose R and C |
+| **The '221's pulse at 3.3 V** | the parts, a breadboard | the RC again. `t_W = 0.7·R·C` is characterised at **4.5 V**; this runs at 3.3 V where the coefficient is not guaranteed |
+| **0d-i — weigh the split** | portafilter, scale, drip tray | **every "~5×" in this repo.** The figure divides by an *assumed* inlet |
+| **`boiler_temp_start_c`'s meaning** | a capture with the boiler pulled off setpoint | 0e's open half |
+| **0f re-run** | 30 shots carrying `machine_timer_s` | the Phase 3 deadband |
+
+**Only the first is doable tonight** — the rig is semi-permanent, the three
+T-pieces carry their series resistors, and the analyser on a J2 junction is
+measured as harmless (2.89 V probe on and off, under meter resolution).
+
+### Assembly — unblocked, nothing waiting on it
+
+Order per `docs/shopping-list.md`, solder, bench-test the drive block
+**off-machine**, leave every drive-leg jumper **open**.
+
+**PHASE 0 FITS DRIVE HARDWARE; IT DOES NOT ACTUATE.** Invariant 1 permits the
+photoMOS, the '221 and the LED drivers on the board **only while an open
+jumper in series with their OUTPUT leaves them unable to conduct** — "not
+merely unpowered, not merely un-commanded". Populating and bench-testing them
+is the 2026-10-08 build decision; closing a jumper is the thing Phase 0 never
+does. **Recorded because "we are fitting actuation hardware, so we are
+already actuating" is an easy slip and it dissolves the only mechanism
+enforcing the goal.** The jumpers come out when Phase 1 is a deliberate
+decision with the RC chosen — not as a side effect of the board being built.
+
+---
+
 ## Next milestones, in order
 
 1. **0f — noise floor — DONE 2026-09-28.** `analysis/0f-noise-floor.ipynb`

@@ -492,6 +492,60 @@ constraint. What remains unpriced is **one-shot channels** — a dual '221 gives
 two, enough for one per *line*, not one per *device* — so a second '221 or a
 different gating scheme. Three '221s are on the order, which covers it.
 
+#### A SECOND Phase 1 candidate: the setpoint buttons — scoped 2026-10-23, nothing built
+
+**The question "can the ESP change the brew temperature?" has been asked and
+is worth recording before it is re-derived.** Reading them is long settled;
+driving them is not, and this entry exists so the next person does not start
+from the capture files.
+
+**What is settled.** The buttons are **bits 49 and 58 of the 67-bit frame,
+active low** — bit 49 LEFT (enters `PrG`, then decreases), bit 58 RIGHT
+(increases). Semantics are from the Ascaso manual, not inference, and all
+four payload combinations have been observed. `docs/machine-display-bus.md`
+is normative. The firmware already uses this: it is what sets
+`SETPOINT_TOUCHED`.
+
+**DRIVE THE CONTACTS, NOT THE BUS.** Injecting a frame bit on `ESD1` would
+need two things this project does not have:
+
+| | |
+|---|---|
+| **which end sources the 67-bit frame** | **UNRECORDED.** The buttons sit on the display panel, so display→main is the natural reading — but that is inference, and decoding a frame says nothing about who sourced it. |
+| **the drive type of `ESD1`** | **UNTESTED** — the same open question that governs the J5 shunt. Open-drain on its 4.7 K pull-up means a second device can pull it low; push-pull means fighting a driver. |
+
+A photoMOS across each physical switch needs neither. It is the **J2 lever
+pattern unchanged** — same AQY212EH, same one-shot, same open jumper in
+series with the output — and the bus then serves as readback rather than as
+the drive path.
+
+**THE HOLD HAZARD IS WORSE HERE THAN ON THE LEVERS, and that inverts the
+usual intuition that buttons are the gentler target.**
+
+| line | hold hazard |
+|---|---|
+| J2 levers | **> ~2 s reprograms** that direction's stored duration |
+| **button 23 (RIGHT) alone** | **~3 s is `PrS` — an IMMEDIATE FACTORY RESET** |
+
+And the `SET UP` gesture *requires* holding 23 while pressing 22 for ~3 s, so
+any design that can reach the menu is a design whose nearest failure mode is
+the factory reset. **The one-shot is more necessary here, not less**, and a
+one-shot sized for the levers is not automatically safe here: the levers'
+bound is ~2 s and this one is ~3 s *for a different button combination*, so
+the RC argument has to be re-run rather than inherited.
+
+**THE ATTRACTIVE PART: this is the only actuation path in the project with
+closed-loop verification.** Press, and the display reports the new setpoint
+on a bus already decoded. Levers and pump are fire-and-hope; here the ESP can
+step, read, and step again until it reaches target, with the documented 3 s
+of inactivity as the natural commit. That is worth more than the convenience
+of setting a temperature.
+
+**Not scoped, not costed, nothing built.** It needs its own design pass:
+which contacts are reachable without modifying the display assembly, whether
+two more photoMOS fit the board as laid out, and the RC re-derived against
+the 3 s bound. **It does not gate anything in Phase 0.**
+
 #### The failure neither mechanism bounds
 
 **A photoMOS fails short** — that is the characteristic MOSFET failure mode.

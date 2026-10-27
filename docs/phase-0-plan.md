@@ -41,7 +41,7 @@ work and none of the danger.
 - ESP32 connects to a Bookoo as BLE central, samples at 10 Hz
 - Detect shot start/end from weight rate of change
 - Buffer the curve in RAM, write to flash on completion
-- Publish to a server, write to SQLite using `schema.sql`
+- Publish to a server, write to SQLite using `server/migrations/`
 - Serve the web UI
 
 **Second scale.** You have two. Pair both: one under the cup, one for
@@ -80,8 +80,10 @@ Real shot boundaries and flush events from the machine itself.
 - Idle low, **high when pressed** (+5 V → R45 100 R → switch common),
   measured 2026-10-04.
 - **The stored durations are not constants.** This machine's 1Cup is ~10.5 s,
-  not the 15 s default, because it was reprogrammed by hand; 2Cup's stored
-  value is unknown. An earlier version of these bullets quoted 15 s and 60 s
+  not the 15 s default, because it was reprogrammed by hand; **2Cup is 45 s**,
+  not the 60 s default, set deliberately by the operator and recorded
+  2026-10-19 *(this bullet said "unknown" until 2026-10-27; every other site
+  had been updated)*. An earlier version of these bullets quoted 15 s and 60 s
   as properties of the model. They are user-modifiable state.
 
 Sense with a **resistor divider straight into an ESP32 GPIO**. Not an
@@ -356,9 +358,17 @@ decoding, which would present as a wiring fault rather than a filter error.
 section called them "a measured requirement"; what was measured is the
 symptom, and no capacitor has been fitted. The J4 case has an unexamined
 failure mode (a ~1.1 ms edge through the noise band can *raise* the glitch
-count) and the J5 case rests on drops that look like serial polling rather
-than coupling. **Leave the footprints, decide after the re-measurement**
-described in `docs/phase-0-status.md`.
+count) and the J5 case rests on drops whose cause is **unidentified**.
+**Leave the footprints, decide after the re-measurement** described in
+`docs/phase-0-status.md`.
+
+*(This said the J5 drops "look like serial polling rather than coupling"
+until 2026-10-27. `docs/taps-and-dividers.md` is normative and retracts
+that: a 3 s poll would drop periodically, not in one burst, and idle rows
+polled at the same cadence had the counter frozen. Coupling is still
+excluded; what replaces polling is "a one-off stall around pour start",
+with the spool/BLE work and the serial traffic unseparated. `worst poll
+gap` is the discriminator.)*
 
 #### Topology, per actuated line
 
@@ -491,6 +501,86 @@ below and `docs/shopping-list.md`), and the GPIO budget is **not** the
 constraint. What remains unpriced is **one-shot channels** — a dual '221 gives
 two, enough for one per *line*, not one per *device* — so a second '221 or a
 different gating scheme. Three '221s are on the order, which covers it.
+
+#### A SECOND Phase 1 candidate: the setpoint buttons — scoped 2026-10-23, nothing built
+
+**The question "can the ESP change the brew temperature?" has been asked and
+is worth recording before it is re-derived.** Reading them is long settled;
+driving them is not, and this entry exists so the next person does not start
+from the capture files.
+
+**What is settled.** The buttons are **bits 49 and 58 of the 67-bit frame,
+active low** — bit 49 LEFT (enters `PrG`, then decreases), bit 58 RIGHT
+(increases). Semantics are from the Ascaso manual, not inference, and all
+four payload combinations have been observed. `docs/machine-display-bus.md`
+is normative.
+
+**THE FIRMWARE DECODES THE BUTTON BITS AND DOES ESSENTIALLY NOTHING WITH
+THEM — a draft of this entry said they are "what sets `SETPOINT_TOUCHED`",
+which is false.** `display.cpp` latches `touched` from the **blink period**
+and from the **`PrG` banner text**; the button bits land in `btn`, whose only
+consumer is a `status` printf. So the decode is free and present, and the
+setpoint-edit detection would survive the buttons being ignored entirely.
+Worth knowing before building on them: the bits are **proven**, not
+load-bearing.
+
+**DRIVE THE CONTACTS, NOT THE BUS.** Injecting a frame bit on `ESD1` would
+need two things this project does not have:
+
+| | |
+|---|---|
+| **which end sources the 67-bit frame** | **UNRECORDED.** The buttons sit on the display panel, so display→main is the natural reading — but that is inference, and decoding a frame says nothing about who sourced it. |
+| **the drive type of `ESD1`** | **UNTESTED** — the same open question that governs the J5 shunt. Open-drain on its 4.7 K pull-up means a second device can pull it low; push-pull means fighting a driver. |
+
+A photoMOS across each physical switch needs neither. It is the **J2 lever
+pattern unchanged** — same AQY212EH, same one-shot, same open jumper in
+series with the output — and the bus then serves as readback rather than as
+the drive path.
+
+**THE HOLD HAZARD IS NASTIER IN CONSEQUENCE AND LOOSER IN TIMING, and a
+draft of this entry got the second half backwards.**
+
+| line | hold hazard | bound |
+|---|---|---|
+| J2 levers | reprograms that direction's stored duration | **> ~2 s** |
+| **button 23 (RIGHT) alone** | **`PrS` — an IMMEDIATE FACTORY RESET** | **~3 s** |
+
+That draft concluded *"the one-shot is more necessary here, not less… the RC
+has to be re-run rather than inherited"*. **It does not follow. 3 s is a
+LOOSER bound than 2 s**, so a one-shot sized to stay clear of the levers'
+~2 s is automatically clear of the button's ~3 s. The RC **is** inherited on
+this axis; the levers are what constrain it.
+
+**What IS true is the consequence, and one design cost.** A lever reprogram
+is recoverable by reprogramming; a factory reset is not — so the *stakes* of
+a stuck-on output are higher even though the *threshold* is further away. And
+a one-shot short enough for the levers **forecloses the `SET UP` menu
+entirely**, since entering it needs a ~3 s hold: fine if the scope is the
+setpoint, a hard limit if anything ever wants a menu parameter.
+
+*(The same draft called `PrS` a "combination". It is button 23 **alone** —
+the combination is the `SET UP` gesture, 23 held while 22 is pressed.)*
+
+**THE ATTRACTIVE PART: this is the only actuation path in the project with
+closed-loop verification.** Press, and the display reports the new setpoint
+on a bus already decoded. Levers and pump are fire-and-hope; here the ESP can
+step, read, and step again until it reaches target, with the documented 3 s
+of inactivity as the natural commit. That is worth more than the convenience
+of setting a temperature.
+
+**Not scoped, not costed, nothing built.** It needs its own design pass:
+which contacts are reachable without modifying the display assembly, and
+whether the parts fit the board as laid out. **It does not gate anything in
+Phase 0.**
+
+**The device count is FOUR, not two, and a draft said "two more photoMOS".**
+The J2 pattern this entry calls "unchanged" is **two in series per driven
+contact** — that series pair is the whole answer to a photoMOS failing short.
+Two buttons therefore need **four devices, consuming all four spares** on the
+current order, plus **four more one-shot channels**, where a dual '221 gives
+two. Three '221s are on the order and cover the levers; the buttons would
+need more. That is the real cost, and it is why this is a design pass rather
+than an increment.
 
 #### The failure neither mechanism bounds
 
@@ -1015,7 +1105,25 @@ section should still wait for a 0f re-run.
 
 ---
 
-## Suggested architecture
+## Suggested architecture — SUPERSEDED, kept as the day-one plan
+
+> **This section is the original day-one sketch, and the diagram below is
+> the SUPERSEDED one — it is kept, not corrected.** `CLAUDE.md`'s
+> *Architecture (decided — don't relitigate)* is normative and differs on
+> the transport: **HTTP POST for shot upload plus a WebSocket for live**,
+> with MQTT carrying only the Home Assistant summary entities. Go there
+> for the current picture; do not read the one below as live.
+>
+> The section was left unmarked until 2026-10-27, so the plan was still
+> advertising a decision the architecture had reversed — and doing it in a
+> picture, which is what a newcomer reads. **A first attempt at this fix
+> that same day redrew the diagram instead of marking it** — which broke
+> this repo's keep-the-superseded-claim rule, and took MQTT out of the
+> picture altogether while both `CLAUDE.md`'s normative diagram and the
+> prose below keep it for the Home Assistant summary leg. Banner added and
+> the original diagram restored after review. The day-one sketch has no HA
+> leg because the decision postdates it; that is what superseded looks
+> like, and it is not a reason to redraw it.
 
 ```
 Bookoo #1 ──BLE──┐
@@ -1031,10 +1139,15 @@ display bus ─────┘                          web app ──┘
 **Why the tablet only talks to the server:** Web Bluetooth doesn't exist
 on iPadOS in any browser, and a tablet that falls asleep mid-shot must
 never be able to lose a shot. The ESP32 owns the radio and the timing;
-the tablet is a screen.
+the tablet is a screen. *(This part survives unchanged.)*
 
-**Why MQTT:** 10 Hz of samples is nothing, you get fan-out for free, and
-when Phase 1 arrives the command path is already there.
+**NOT MQTT, and this said "Why MQTT" until 2026-10-27.** `CLAUDE.md`:
+*"HTTP POST, not MQTT, for shot upload in Phase 0. Simpler, curl-able, and
+the flash spool already handles retries. MQTT arrives in Phase 1 when
+there's a command path to carry."* The original argument — fan-out is free
+and Phase 1 needs the command path — was not wrong about Phase 1; it was
+wrong that Phase 0 should pay for it early. MQTT still carries the Home
+Assistant summary entities.
 
 **Spool locally.** ESP32 writes each completed shot to flash and retries
 the upload. Never lose a shot because the server was rebooting.

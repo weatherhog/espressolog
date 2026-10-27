@@ -705,9 +705,8 @@ fitted; what was measured is the symptom. J4's 10 nF (73.1 kΩ, 218 Hz) is
 arithmetically sound but attenuates 150 Hz by only 1.69 dB — "crushed" was
 wrong — and could *raise* the glitch count by turning the falling edge into a
 ~1.1 ms ramp through the noise band. J5's case is weaker still: those drops
-look like serial polling, not coupling (one burst at pump start, constant
-across two runs of different length, and this file already documents polling
-as the cause). If J5 ever gets one it is **470 pF, never 10 nF** — a
+are **not coupling** (one burst at pump start, constant across two runs of
+different length) **but their cause is UNIDENTIFIED**. If J5 ever gets one it is **470 pF, never 10 nF** — a
 2026-10-09 edit specified 10 nF, which against a 6.9 kΩ source is a 69 µs
 time constant facing 36 µs clock highs and would have stopped the bus
 decoding while presenting as a wiring fault.
@@ -868,15 +867,26 @@ Without J5 connected, the J2 dividers have no reference.
 - **J2 position 1** (+5 V common) — **not connected on this rig.** That is
   the only claim here that is an observation.
 
-  **CLAUDE.md contradicts itself about WHEN it enters the harness, and this
-  is safety-relevant, so it is flagged rather than quietly decided.**
-  Invariant 1 says *"from Phase 1 provisioning onward J2 position 1 rides in
-  the loom"*; the 0c section says *"Position 1 therefore rides in the
-  **Phase 0** harness"*. Both sit in the normative file and they are not the
-  same answer. A draft of this entry added a third statement and thereby
-  picked a side. **Do not resolve it from a bench-rig note** — that conductor
-  is where a bridge to a direction line starts a cycle and reprograms a
-  stored timer within 2 s, and no jumper on the board is in that path.
+  **RESOLVED 2026-10-27, in CLAUDE.md, in favour of PHASE 0.** Invariant 1
+  now reads *"**From PHASE 0 onward** J2 position 1 (+5 V common) rides in
+  the loom"*, which agrees with the 0c section (*"Position 1 therefore
+  rides in the **Phase 0** harness"*) and with the decision both derive
+  from: `docs/phase-0-plan.md` records *"SETTLED 2026-10-12: position 1
+  rides in the Phase 0 harness"*. **The exposure is live now, not at Phase
+  1** — that conductor is where a bridge to a direction line starts a cycle
+  and reprograms a stored timer within 2 s, and no jumper on the board is
+  in that path.
+
+  **What this entry said until then, and why it was right to say it:**
+  invariant 1 read *"from Phase 1 provisioning onward"*, the 0c section
+  said Phase 0, both sat in the normative file, and this entry flagged the
+  disagreement rather than picking a side — *"do not resolve it from a
+  bench-rig note"*. That was the correct call: the resolution came from the
+  plan's settled decision, not from this rig. Kept because the next person
+  to find two normative sentences disagreeing should do the same thing.
+
+  None of it changes the bench fact at the top of this bullet: position 1
+  is **not connected on this rig**, whatever phase the harness is in.
 - **J4's T-piece** — the breadboard circuit sits idle. With nothing on the
   junction, GPIO6 is pulled low through 220 kΩ: a defined level, harmless.
   **`+` must never be connected to anything**, which is why the whole T-piece
@@ -1617,12 +1627,24 @@ reading"**, with `2026-10-03-display-bus-buttons.sr` and bench garbage as
 the two fixtures. Recorded explicitly because "require three" is the
 cheaper-looking option and is the one someone will reach for.
 
-**`dropped` counts edges, and serial polling causes them.** During a
+**`dropped` counts edges, and serial polling is SUFFICIENT to cause them —
+it is not established as the cause of any other drop event.** During a
 polling loop `dropped` went 0 → 10266, then froze there across ~1500
 further frames once polling stopped. That shows polling is **sufficient**
 to cause drops; it does not show it is **necessary**, and because the brew
 overlapped the polling, **a brew has not been shown clean with no serial
 attached.**
+
+**Do not carry this over to the pump-start burst.** That is a different
+event — one burst of ~6086 edges at pump start, +164 across 30 s of
+pumping — and `docs/taps-and-dividers.md` is normative on it and retracted
+"serial polling" as its cause: a 3 s poll would drop *periodically*, not in
+one burst, and idle rows polled at the same cadence had the counter frozen.
+Its cause is **unidentified**; the candidates are the spool/BLE work at
+pour start and the serial traffic, unseparated, and `worst poll gap` is the
+discriminator. *(The headline here read "and serial polling causes them"
+until 2026-10-27, which the paragraph under it then walked back. The flat
+claim was the one a reader quoted.)*
 
 The ring tolerates a longer stall than the code comment implies.
 `DBUS_RING = 512` gives 511 usable slots, and the comment's "~50 ms" is the
@@ -1665,6 +1687,77 @@ the display is back in temperature mode, so edges lost there cost nothing.
 4. Pull the shot; lift the cup whenever it's done (0a.4 ends the shot on
    a ~2 s cup lift — no need to wait; a quick bump is ignored).
 5. Tasting notes on the Capture tab (4 taps). Everything else is automatic.
+
+## WHAT PHASE 0 STILL OWES — 2026-10-23
+
+**Every decision the BUILD waits on is closed as of today. What is left is
+measurement and assembly, and no amount of discussion shortens either.**
+Recorded as a split because "finalise Phase 0" is ambiguous and the two
+halves have very different costs.
+
+*(A draft said "every DECISION is closed", which is too strong. **Three are
+still open and none blocks the build**: whether invariant 1 covers plumbing
+(UNDECIDED, `docs/hydraulics.md`), the J4 10 nF candidate and the J5 470 pF
+candidate — the last two untested remedies for symptoms whose cause is
+unidentified, both marked "do not buy yet".)*
+
+### Decisions — CLOSED
+
+| | |
+|---|---|
+| J5 shunt | **16.4 K** (2 × 8.2 K), the as-built 15 K superseded |
+| Board count | **one in service**, second as spare — the deciding argument is that two boards make J2 pos 1 hop between them |
+| Box | **printed LAST**, after the board is laid out. The lead-time premise that forced it early was stale |
+| One-shot part | **74HC221**, never the '123 |
+| Drive scope | **sense four, drive two** (1Cup, 2Cup) |
+| Phase 1 buttons | **scoped, not built** — see `docs/phase-0-plan.md` |
+
+### Measurements — OPEN, and these gate things
+
+| | needs | gates |
+|---|---|---|
+| **Minimum latching press width** | analyser on a J2 junction, machine on | **the one-shot RC.** Current bound is "under ~140 ms" from poller-quantised readings — [23, 137] ms true. Not enough to choose R and C |
+| **The '221's pulse at 3.3 V** | the parts, a breadboard | the RC again. `t_W = 0.7·R·C` is characterised at **4.5 V**; this runs at 3.3 V where the coefficient is not guaranteed |
+| **0d-i — weigh the split** | portafilter, scale, drip tray | **every "~5×" in this repo.** The figure divides by an *assumed* inlet |
+| **`boiler_temp_start_c`'s meaning** | a capture with the boiler pulled off setpoint | 0e's open half |
+| **0f re-run** | 30 shots carrying `machine_timer_s` | the Phase 3 deadband |
+
+**Only the first is doable tonight** — the rig is semi-permanent and the
+three T-pieces carry their series resistors.
+
+**Grade the analyser clearance as `docs/taps-and-dividers.md` grades it, not
+as "harmless", which a draft of this line wrote.** The reading is 2.89 V
+probe-on and probe-off, a difference under meter resolution — but that file
+is explicit that **one reading on one line at one temperature does not retire
+a datasheet worst case** (1 µA of HC leakage into an 89 kΩ source is up to
+89 mV), and what it clears is **bench** use. This measurement is machine-on,
+which is not the case that was cleared. Very probably fine; not the same
+claim.
+
+### Assembly — unblocked, nothing waiting on it
+
+Order per `docs/shopping-list.md`, solder, bench-test the drive block
+**off-machine**, leave every drive-leg jumper **open**.
+
+**PHASE 0 FITS DRIVE HARDWARE; IT DOES NOT ACTUATE.** Invariant 1 permits the
+photoMOS, the '221 and the LED drivers on the board **only while an open
+jumper in series with their OUTPUT leaves them unable to conduct** — "not
+merely unpowered, not merely un-commanded". Populating and bench-testing them
+is the 2026-10-08 build decision; closing a jumper is the thing Phase 0 never
+does. **Recorded because "we are fitting actuation hardware, so we are
+already actuating" is an easy slip and it dissolves the only mechanism
+enforcing the goal.**
+
+**THE JUMPER GOES IN FOR PHASE 1; IT IS NOT THERE IN PHASE 0 — and a draft of
+this paragraph said the opposite** ("the jumpers come out when Phase 1 is a
+deliberate decision"), inverting the safety state in the sentence meant to
+protect it. The specified Phase 0 state is **a 2-pin header with NO shunt
+fitted** — `docs/phase-0-plan.md` calls that the specified state, and
+`docs/shopping-list.md` says *"buy no shunts — open is the specified state"*.
+Phase 1 is what **fits** the shunt and closes the path. Open is the resting
+state; closing it is the deliberate act, with the RC chosen first.
+
+---
 
 ## Next milestones, in order
 

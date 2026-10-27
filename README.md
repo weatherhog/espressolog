@@ -27,10 +27,14 @@ A visual tour is in [docs/overview.md](docs/overview.md).
 **The front display bus is decoded.** The Ascaso's mainboard talks to its
 display over a plain synchronous serial link — *not* I²C, whatever sigrok's
 decoder claims when you point it at the same pins. ~9.9 kHz clock, data sampled
-on the rising edge, 133-bit frames every ~41 ms, three 7-segment fields at known
-bit offsets. Idle it carries boiler temperature; during a brew it carries the
-machine's own shot timer in tenths of a second. Protocol and probe point are in
-[CLAUDE.md](CLAUDE.md); the decoder is
+on the rising edge, and a **67-bit frame followed by a 66-bit frame** every
+~41 ms — the 67 carries the button state, the 66 the digits, at known bit
+offsets. (The two usually arrive glued together; a "133-bit frame" is that
+merge artefact, not a frame, and a parser keyed on 133 bits throws away digit
+readings exactly when the machine is working hardest.) Idle it carries boiler
+temperature; during a brew it carries the
+machine's own shot timer in tenths of a second. The full decode is in
+[docs/machine-display-bus.md](docs/machine-display-bus.md); the decoder is
 [tools/decode-display-bus.py](tools/decode-display-bus.py) and the raw logic
 analyser captures it was derived from are in [analysis/captures](analysis/captures).
 As far as I can tell nobody had published this.
@@ -55,16 +59,27 @@ server/     Go. SQLite via modernc (no CGO), embedded migrations, PWA served
             from embed.FS, WebSocket live stream.
 web/        Vite + React PWA.
 analysis/   Notebooks and scripts reading the SQLite file directly.
-docs/       Phase plan and the current status document.
-tools/      Display-bus decoder.
+docs/       Getting started, the phase plan and status, and one file per
+            hardware subsystem (display bus, switches, flowmeter, dividers,
+            board layout, hydraulics).
+tools/      Display-bus decoder, and check-facts.py (a CI job).
 ```
 
-Start with [docs/phase-0-status.md](docs/phase-0-status.md) — it is the resume
-point, and it records the traps as well as the results.
+**To build and run anything, start with
+[docs/getting-started.md](docs/getting-started.md)** — prerequisites and the
+clone-to-running sequence for all four components. Three of the four need no
+hardware.
+
+For the state of the hardware work, see
+[docs/phase-0-status.md](docs/phase-0-status.md) — the resume point is its
+**"What Phase 0 still owes"** section, and the file records the traps as well
+as the results.
 
 ## Running it on your machine
 
-Hardware-specific and not packaged for reuse, but nothing is hidden:
+Hardware-specific and not packaged for reuse, but nothing is hidden. The
+commands are in [docs/getting-started.md](docs/getting-started.md); the
+hardware caveats are here:
 
 - Copy `firmware/include/secrets.h.example` to `secrets.h` and fill it in. Those
   are seed defaults only — on first boot they go into NVS, which is the runtime

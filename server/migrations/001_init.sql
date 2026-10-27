@@ -168,7 +168,50 @@ CREATE TABLE shot (
   -- measured (derived from shot_sample)
   first_drip_ms     INTEGER,            -- true puck-resistance signal once the
                                         -- switch is sensed: pump-on to first liquid
-  stop_ms           INTEGER,            -- when the pump stopped
+  stop_ms           INTEGER,            -- intent: when the pump stopped.
+                                        -- Weight-derived in 0a/0c; there is no
+                                        -- pump-stop signal. What the detector
+                                        -- stores depends on the path that ended
+                                        -- the shot, and ONLY THE NORMAL ONE IS
+                                        -- BACKDATED:
+                                        --
+                                        --   flat stop  - backdated STOP_WINDOW_MS
+                                        --     (2 s) from the sample that confirmed
+                                        --     it; yield_at_stop_g is that instant
+                                        --   truncated  - the confirming sample,
+                                        --     not backdated (yield_at_stop_g is
+                                        --     still that instant)
+                                        --   cup lifted - the last retained sample,
+                                        --     and yield_at_stop_g is the PEAK, not
+                                        --     that sample's weight. A lift during
+                                        --     SETTLING overwrites an already-
+                                        --     backdated value, so it can sit
+                                        --     STOP_WINDOW_MS + SETTLE_MS (~7 s,
+                                        --     not 5 s) after the real stop
+                                        --   reject     - the sub-5 g abort assigns
+                                        --     NONE of these: stop_ms = 0,
+                                        --     yield_at_stop_g = 0,
+                                        --     settle_offset_g = 0. Always carries
+                                        --     excluded = 1; that flag is the only
+                                        --     thing that marks it
+                                        --
+                                        -- THESE CASES ARE NOT EXCLUSIVE: a shot
+                                        -- truncated at 60 s and THEN lifted reads
+                                        -- truncated = 1 with lift-derived values,
+                                        -- so branching on truncated alone is wrong.
+                                        --
+                                        -- SO A QUERY CANNOT ASSUME THE ~2 s, and
+                                        -- nothing here marks the lift path:
+                                        -- settle_offset_g = 0 is the nearest tell
+                                        -- and a flat stop can hit 0 by coincidence.
+                                        -- Seven of the first 46 shots are lifts.
+                                        -- firmware/src/detector.h is normative.
+                                        --
+                                        -- This comment asserted the backdating
+                                        -- unconditionally for part of 2026-10-27,
+                                        -- then put the lift at 5 s and the paths at
+                                        -- mutually exclusive, across the three
+                                        -- reviews that day.
   stopped_by        TEXT CHECK (stopped_by IN
                       ('manual','board_timer','auto_weight','fault') OR stopped_by IS NULL),
   s_since_flush     REAL,               -- brew temp proxy on a single boiler
@@ -322,9 +365,25 @@ CREATE INDEX ix_event_shot ON machine_event(shot_id);
 -- stable reading is recorded blind, and when a shot closes it
 -- claims the last unattributed weighing before it started.
 --
--- A stable event is |dw/dt| < 0.05 g/s for >= 1.5 s, weight > 5 g,
--- no shot in progress, and within a plausibility window (12-24 g
--- for a dose). Re-placing the cup produces several events; the
+-- A stable event is a per-sample |delta| <= 250 mg AND a span
+-- (max-min) <= 300 mg over the hold, sustained >= 1 s, weight
+-- > 5 g, and no shot in progress. firmware/src/detector.h is
+-- normative on all five.
+--
+-- THE 12-24 g PLAUSIBILITY WINDOW IS APPLIED AT ATTRIBUTION, NOT
+-- HERE. This table wants every stable reading the scale actually
+-- saw; narrowing it at capture is what makes a wrong dose
+-- un-diagnosable later.
+--
+-- This comment said "|dw/dt| < 0.05 g/s for >= 1.5 s" and listed
+-- the plausibility window as part of the stable test until
+-- 2026-10-27. Both were stale against detector.h: the flow-window
+-- rule needed 2.2 s and a dose cup sits for ~2.0 s, so shot 20's
+-- dose was missed by 0.2 s. CLAUDE.md was corrected the same week
+-- and this copy was left behind -- in the file CLAUDE.md names as
+-- winning over all documentation, which is the worst place for it.
+--
+-- Re-placing the cup produces several events; the
 -- last one wins and the earlier ones stay here unattributed,
 -- which is exactly what you want when a dose looks wrong and you
 -- need to see what the scale actually saw.
@@ -364,6 +423,16 @@ SELECT
   -- prefer a real weighing, fall back to the bag's portion target
   COALESCE(s.dose_in_g, b.portion_target_g) - s.dose_ground_g   AS retention_g,
   CASE WHEN s.dose_in_g IS NULL THEN 'estimated' ELSE 'measured' END AS retention_basis,
+  -- Both inherit stop_ms's path-dependence: ~2 s backdated on a normal
+  -- stop, NOT backdated when truncated = 1, and the lift instant -- up to
+  -- STOP_WINDOW_MS + SETTLE_MS (~7 s) late -- when the cup was lifted.
+  -- Those cases are NOT exclusive: a truncated shot can also be a lift.
+  -- The sub-5 g abort assigns no stop_ms at all, so it lands here as
+  -- total_s = 0.0 with pour_s NULL. NEITHER v_shot definition filters
+  -- excluded (v_dialin does), so filter it yourself, as
+  -- analysis/overshoot.py does. See the stop_ms comment on table shot.
+  -- machine_timer_s is the machine's own pump-on to pump-off time and
+  -- carries none of this.
   (s.stop_ms - s.first_drip_ms) / 1000.0                        AS pour_s,
   s.stop_ms / 1000.0                                            AS total_s,
   t.overall, t.balance, t.notes AS taste_notes

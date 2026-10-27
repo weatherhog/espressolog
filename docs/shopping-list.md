@@ -280,7 +280,7 @@ tighter than they need to be for the sake of a few euro.
 | 150 kΩ | 10 | 0c switch divider, series leg (**×4** — all four J2 lines). **In stock 2026-10-07.** |
 | 220 kΩ | 10 | Ground leg: **×4 at J2** (1Cup, 2Cup, Steam, Water) **+ ×1 at J4** = **5**. **In stock.** |
 | 10 nF ceramic | — | **CANDIDATE, do not buy yet.** ×1 across the J4 220 K shunt, 218 Hz. Nothing has been fitted and there is no before/after; it may raise the glitch count by slowing the falling edge to ~1.1 ms through the noise band. Decide after the re-measurement in `phase-0-status.md`. |
-| 470 pF ceramic | — | **CANDIDATE, weaker case than J4's.** ×2 across the J5 shunts — **now 16.4 kΩ, not the 15 kΩ this row used to name**, so the sizing below needs redoing before it is bought. **Never 10 nF** (69 µs against 36 µs clock highs stops the bus decoding). But the J5 drops look like serial polling, not coupling. `phase-0-status.md` already carried this value as a contingent remedy after raising the shunt to 16.4 K — **that raise is no longer contingent; the capacitor still is.** |
+| 470 pF ceramic | — | **CANDIDATE, weaker case than J4's.** ×2 across the J5 shunts — **now 16.4 kΩ, not the 15 kΩ this row used to name**, so the sizing below needs redoing before it is bought. **Never 10 nF** (69 µs against 36 µs clock highs stops the bus decoding). But the J5 drops are **not coupling, and their cause is unidentified** — `docs/taps-and-dividers.md` is normative and retracted "serial polling" on 2026-10-19. `phase-0-status.md` already carried this value as a contingent remedy after raising the shunt to 16.4 K — **that raise is no longer contingent; the capacitor still is.** |
 | 1 kΩ | 10 | 0d flowmeter, **at PA8/PA9 only** — the board side, after its own conditioning. **Never at J4.** **In stock.** |
 | 8.2 kΩ (J4) | — | **J4 ANALYSER tap only: 8.2 kΩ, one channel, `#` only, no shunt.** The ESP32 tap at J4 is **100 K + 220 K** — see the 0d entry in `docs/phase-0-status.md`. Covered by the 8.2 kΩ bag above. |
 | **330 Ω, 1 %** *(390 Ω only for a box that stays cool — "cool" is undefined: no ambient has been measured inside the box, so read this as "only after measuring it"; see the 85 °C note under "Datasheet read")* | 20 | **PhotoMOS LED drive, ×4 — NOT IN STOCK, added 2026-10-12.** AQY212EH is guaranteed to operate at 3.0 mA **at 25 °C** (see the 85 °C note under "Datasheet read") and wants 5–10 mA; 330 Ω from 3.3 V gives ~6 mA. **Do not substitute the in-stock 1 kΩ** — it gives ~2 mA, above typical and below guaranteed, which is the one range that works on the bench and fails in service. 680 Ω if driving from 5 V instead. <!-- fact:led-drive-resistor 330 Ω, 1 % --> <!-- fact:photomos-guarantee-25c 3.0 mA at 25 °C --> |
@@ -344,15 +344,53 @@ because the machine caught it:
 | **XH board headers: 3, 4 and 5 pin** | 3 | **×5 each, decided 2026-10-12.** The perfboard gets one socket per harness: **3-pin J4** (`B3B-XH-A`), **4-pin J5** (`B4B-XH-A`), **5-pin J2** (`B5B-XH-A`). **The pin counts self-key** — nothing can be cross-plugged, so do not standardise them to one size for tidiness. Side-entry `S`-series if the printed box has a side gland; decide before designing the box. **Gender:** the board takes the **male** headers and the cable end takes the **female** housing from the pre-crimped kit — XH has no cable-mount male part at all, which is why the machine end still needs balance extension leads. |
 | Perfboard **7 × 9 cm** ×2 + **FEMALE** pin headers ×5 | 6 | The dividers want to live on a board, not in mid-air. **Female** so the ESP32 sockets in and comes out — soldering the devkit down means it cannot be swapped or easily reflashed. **Size settled 2026-10-12: 7 × 9, not 5 × 7.** The devkit's footprint is 11 columns × 22 rows (pin rows 10 pitches apart, 22 pins long) and a 5 × 7 board is only ~27 rows, so the devkit alone would take 22 of them. Count the holes on what arrives; centimetre labels vary. **Buy 2 boards** — the dividers can live in the 9 free columns *under* the socketed devkit, which is tight soldering with the actuation block on the same board, and a second board is cheaper than discovering that with copper committed. **Buy 5 header strips**: 1×40 is the standard item, you cut each to 22 (losing the position you cut through), you need two, and female strips do not snap cleanly like male ones so the first one is practice. |
 | Second mixed balance-lead pack | 7 | **Insurance.** The 4S is the only lead that fits J2 and there is no spare if a strip-and-solder goes wrong. The T-pieces are the most laborious part of the build and the pack is seven euro. |
-| ~~ABS project box, ~120 x 80 x 40 mm~~ **PRINTED, not bought** | 0 | ESP32 mounts **outside** the machine. **The 120 × 80 size is WRONG and would not have fitted** — it was chosen when the perfboard was assumed 5 × 7; the board is now **70 × 90 mm**, and a 120 × 80 external box has ~112 × 72 of interior. Operator is printing one instead: **~110 × 100 × 40 internal**, **but decide
-the one-board-or-two question BEFORE printing** — this list says buy two
-boards because the dividers under a socketed devkit are tight soldering
-alongside the actuation block. Two 70 × 90 boards side by side need ≥180 mm,
-and stacking them over a socketed devkit will not fit in 40 mm of height. The
-box is the item with lead time, so it should not be the thing that forces the
-layout. Sized as sized for the board plus connector height plus wire bend radius, and for **three** harnesses (J5, J2's five wires and four dividers, J4). **PETG or ASA, not PLA** — it lives beside an espresso machine and PLA softens around 60 °C. |
+| ~~ABS project box, ~120 x 80 x 40 mm~~ **PRINTED, not bought** | 0 | ESP32 mounts **outside** the machine. ~~120 × 80~~ would not have fitted — it predates the board being 70 × 90 mm. Operator prints one: **~110 × 100 × 40 internal**. **SETTLED 2026-10-23 — print it LAST, build ONE board; see the note under this table.** |
 | Cable gland or grommet | 3 | Where the harness leaves the case |
 | Nylon cable ties / adhesive tie mounts | 4 | Keep the tap away from the boiler and off moving parts |
+
+### The box and the board count — SETTLED 2026-10-23
+
+**Print the box LAST, and build ONE board in service.**
+
+**The premise that forced this early was stale.** The box row read *"the box
+is the item with lead time, so it should not be the thing that forces the
+layout"* — true when the box was an ABS part to buy, **false now it is
+printed**: hours, on the operator's own printer, €0. A printed box is the
+*last* thing made, sized to the finished board, not the constraint that
+forces its shape.
+
+**One board, and the deciding argument is invariant 1 rather than space.** A
+sense board plus a drive board means **J2 position 1 (+5 V common) hops
+between boards** — the conductor the 0c entry already records as buying a new
+failure mode, +5 V through R45 running 2.54 mm from four direction lines,
+where a whisker or bridge starts a cycle and reprograms the stored timer
+within 2 s. A board-to-board hop adds exposure on exactly that path in
+exchange for soldering comfort. **Still buy two**: the second is the
+practice/spare piece, and at ~€3 it is cheaper than discovering a ruined one
+with copper committed.
+
+**Space is tight but was never the binding constraint**, against ~29 discrete
+parts, 5 sockets and 3 XH connectors:
+
+| | 27 × 35 (nominal) | 24 × 34 (commodity) |
+|---|---|---|
+| free beside the devkit | 560 holes | 442 |
+| free underneath it | 198 | 198 |
+
+**Resistor count, corrected.** A draft of this note said "only 9 resistors are
+on the board", which counts the **sense** side alone — 4 × J2 shunt, 1 × J4
+shunt, and 4 × 8.2 K making the two J5 shunts, every series leg living in its
+T-piece. **The actuation block adds ~14 more**: 330 Ω, 8.2 K and 100 K per
+photoMOS × 4, plus the '221 timing resistors. **~23 in total**, and the
+"space was never binding" conclusion rests on the right number, not the
+flattering one.
+
+*(A draft also argued "two boards did not fit the box anyway" — 140 × 90 or
+70 × 180 against ~110 × 100 internal. **That is circular** once the box is
+printed last and sized to whatever is built. The non-circular objection is
+height: two boards stacked over a socketed devkit do not fit 40 mm.)*
+
+---
 
 **Power the ESP32 from its own isolated supply** (any ordinary USB phone
 charger). The machine's 5 V comes from an isolated IRM-03-5 module, so

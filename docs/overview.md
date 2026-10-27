@@ -57,7 +57,9 @@ The Ascaso's mainboard drives its front display over a two-wire link. It is
 **not I²C**, though sigrok's I²C decoder will happily "decode" it as endless
 writes to address `0x00` — which is how you know you're on the wrong track. It's
 plain synchronous serial: ~9.9 kHz clock, data sampled on the rising edge,
-133-bit frames every ~41 ms, three seven-segment fields at fixed bit offsets.
+a 67-bit frame then a 66-bit frame every ~41 ms, three seven-segment fields
+at fixed bit offsets. (They usually arrive glued together — a "133-bit frame"
+is that merge artefact, not a frame.)
 
 Idle it carries **boiler temperature**. During a brew the machine takes the
 display over for its **own shot timer, in tenths of a second** — which is a

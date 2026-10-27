@@ -18,8 +18,11 @@ bool BrewGuard::pressGuard(uint8_t line, uint32_t now_ms) const {
 
 bool BrewGuard::busy(uint32_t now_ms, const Inputs& in) const {
   // 1. A LEVER HELD RIGHT NOW. SwitchBank emits an Event only on RELEASE, so
-  //    for the 345-480 ms of the press itself the pump is running and the
-  //    event path knows nothing yet.
+  //    for the duration of the press itself the pump is running and the
+  //    event path knows nothing yet. (80-295 ms over the 2026-10-19 session;
+  //    this cited "345-480 ms" until 2026-10-27, which is the superseded
+  //    2026-10-08 range -- CLAUDE.md says do not quote it. Nothing here
+  //    turns on the number.)
   //
   //    Two bounds, both learned the hard way. `pressed` includes a level
   //    ADOPTED at the first poll and never witnessed going high — a floating

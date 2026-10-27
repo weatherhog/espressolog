@@ -1766,12 +1766,14 @@ state; closing it is the deliberate act, with the RC chosen first.
 
    **σ = 0.21 g/s on mean flow (12.2 %) and 3.43 s on shot time (14.2 %)**,
    over n=46: Moonwalker @ 7.9, one grind epoch, detector 0a.6 only, 46 of
-   78 recorded shots. *(**That 78 is contested and is probably wrong.**
-   `analysis/0f-noise-floor.ipynb` prints `all shots 80` and
-   `server/internal/store/store.go` says "18 of 80 shots"; every other
-   figure in this paragraph matches that same 80-shot run. Flagged
-   2026-10-27, not corrected — no shot data is in the repo to recount
-   from. See CLAUDE.md's lift-path entry.)* Robust estimates agree (MAD × 1.4826), flow shows no
+   78 recorded shots. *(**That 78 is a transcription slip; the snapshot was
+   80.** `analysis/0f-noise-floor.ipynb` prints `all shots 80`, and
+   `009_unwrite_unconfirmed_recipe.sql`, `store.go` and `web/src/Capture.jsx`
+   all say 80 for the same 2026-09-29 snapshot — as does every other figure
+   in this paragraph. Left as written rather than silently corrected, per
+   this repo's retraction convention. **And 80 is the SNAPSHOT, not the
+   archive**: line 75 of this file counts **137** shots in production on
+   2026-10-13. Flagged 2026-10-27.)* Robust estimates agree (MAD × 1.4826), flow shows no
    drift across five weeks, and bean age is not a confound
    (corr = +0.13 over 16–39 days off roast).
 

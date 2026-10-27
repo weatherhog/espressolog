@@ -1194,7 +1194,7 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   | **cup lifted** (`finalizeLifted`) | the last retained sample | `running_max`, which may be earlier |
 
   <!-- fact:stop-ms-backdating backdated STOP_WINDOW_MS -->
-  <!-- fact:stop-ms-row-mapping flat stop — the normal one | backdated `STOP_WINDOW_MS`;;`truncated = 1` (`MAX_SHOT_MS`, 60 s) | the confirming sample, **not** backdated;;**cup lifted** (`finalizeLifted`) | the last retained sample -->
+  <!-- fact:stop-ms-row-mapping | flat stop — the normal one | backdated `STOP_WINDOW_MS` | the weight at that instant |;;| `truncated = 1` (`MAX_SHOT_MS`, 60 s) | the confirming sample, **not** backdated | that same instant |;;| **cup lifted** (`finalizeLifted`) | the last retained sample | `running_max`, which may be earlier | -->
 
   **THE ROWS ARE NOT MUTUALLY EXCLUSIVE.** `finalizeLifted()` never clears
   `res.truncated`, so a shot force-stopped at 60 s and *then* lifted during
@@ -1221,26 +1221,43 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   turned that into *"~15 % of the archive"*. Both are wrong. There is no
   chronological "first 46", and **46 is not the archive**: it is what
   survives five filters (`yield ≥ 15 g`, `excluded = 0`, one bean, one dial,
-  one `detector_version`), and `overshoot.py` drops shot 37 by id on top of
-  that, so **the set it counts seven out of is 45** — 45 − 7 = 38, which is
-  the `n=38` its own docstring reports.
+  one `detector_version`), and `overshoot.py` drops ids 25, 26 and 37 — net
+  effect shot 37, since 25/26 are already `excluded` — so **the set it counts
+  seven out of is 45**: 45 − 7 = 38, the `n=38` its own docstring reports.
 
-  **How big the archive is, this repo states THREE times and not
-  identically**: `analysis/0f-noise-floor.ipynb` prints `all shots 80`,
-  `server/internal/store/store.go` says *"18 of 80 shots"*, and
-  `docs/phase-0-status.md` says *"46 of 78 recorded shots"*. **80, INFERRED**
-  — two sites to one, and every other figure in that status.md paragraph
-  (σ 0.21 / 3.43, 12.2 % / 14.2 %, n=46, corr +0.13) matches the notebook's
-  stored 80-shot run exactly, so that paragraph is a transcription of the run
-  that printed 80 and its 78 is the outlier. **Not measured here**: this repo
-  carries no shot data, so nobody has recounted it. A draft of this passage
-  called it a two-way standoff and "not resolvable" — it had missed
-  `store.go` entirely, which is the same under-surveyed-denominator mistake
-  this paragraph exists to correct.
+  **"THE ARCHIVE" IS TWO DIFFERENT NUMBERS AND THE SCOPE IS THE WHOLE
+  POINT.** **80 is the 2026-09-29 ANALYSIS SNAPSHOT** — measured, and
+  `server/migrations/009_unwrite_unconfirmed_recipe.sql` already says it in
+  as many words: *"VERIFIED ON 80 ROWS, RUNS AGAINST MORE. The snapshot is
+  2026-09-29"*. **Production is larger and was counted at 137**
+  (`docs/phase-0-status.md`, 2026-10-13, `user_version = 8`, counted twice —
+  live and in an `integrity_check ok` backup). Neither `v_shot` definition
+  filters, so a shot row is a shot.
 
-  Even on 80, the lift **rate** is unknown and 7/45 does not approximate it:
-  the filter strips low-yield and `excluded` shots, which are the ones most
-  likely to BE lifts.
+  **Both numbers are MEASURED; what was wrong was stating one of them
+  unscoped.** Five files outside this one state a total —
+  `analysis/0f-noise-floor.ipynb`, `009_unwrite_unconfirmed_recipe.sql`
+  (twice), `server/internal/store/store.go` and `web/src/Capture.jsx`, all
+  **80 for the snapshot**; and `docs/phase-0-status.md`, which says **137**
+  twice (production) and **78** once. That 78 is a transcription slip, not a
+  rival count: every other figure in its paragraph (σ 0.21 / 3.43,
+  12.2 % / 14.2 %, n=46, corr +0.13) matches the notebook's 80-shot run
+  exactly. *(A draft of this sentence said "six files", copied from a review
+  without recounting — in the paragraph about not copying denominators.)*
+
+  **Two drafts of this passage got it wrong in the same way**, which is why
+  the scope is stated before the number now. The first called it a two-way
+  standoff, having missed `store.go`. The second said *"the archive is 80"*
+  and *"nobody has recounted it"* — missing three more sites, including the
+  137 **in a file that same commit edited**, and contradicted by `009`'s
+  recount of 80 and status.md's recount of 137. A commit correcting an
+  under-surveyed denominator under-surveyed it twice.
+
+  The lift **rate** is unknown against either number, and 7/45 does not
+  approximate it: the filter strips low-yield and `excluded` shots, which
+  are the ones most likely to BE lifts — `finalizeLifted()` sets
+  `valid = running_max >= REJECT_MIN_MG`, so a sub-5 g lift becomes
+  `excluded = 1` and `CLEAN` drops it by rule.
 
   **It was a `check-facts` fact for one commit on 2026-10-27**, which froze
   the wrong denominator into CI, and the tag was **withdrawn rather than

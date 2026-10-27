@@ -219,10 +219,12 @@ CREATE TABLE shot (
                                         -- shots. That is a COUNT over the 45 rows
                                         -- its filter admits (excluded = 0, yield >=
                                         -- 15 g, one bean, one dial, one detector
-                                        -- version, shot 37 dropped by id) -- NOT a
-                                        -- rate, and NOT over the archive, which is 80
-                                        -- (inferred: two sites say 80, one says 78).
-                                        -- Do not derive a percentage from it.
+                                        -- version, ids 25/26/37 dropped) -- NOT a
+                                        -- rate, and those 45 are a subset of the
+                                        -- 2026-09-29 analysis snapshot, NOT of
+                                        -- production, which is larger. Do not derive
+                                        -- a percentage from it, and do not read any
+                                        -- of these as a row count for THIS database.
                                         -- firmware/src/detector.h is normative.
                                         --
                                         -- This comment asserted the backdating

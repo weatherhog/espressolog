@@ -59,15 +59,17 @@ struct ShotResult {
   // analysis/overshoot.py records SEVEN lift-terminated shots, found by
   // requiring a >= 4 s tail rather than trusting the field. THAT SEVEN HAS
   // NO ARCHIVE-WIDE DENOMINATOR. Its filter admits only excluded = 0,
-  // yield >= 15 g, one bean, one dial, one detector version, and drops shot
-  // 37 by id, leaving 45 rows -- 45 - 7 = 38, the n=38 its docstring
-  // reports. The archive is larger: 80, INFERRED -- 0f-noise-floor.ipynb
-  // and store.go both say 80, docs/phase-0-status.md says 78 and is the
-  // outlier (its other figures transcribe the 80-shot run). Nobody has
-  // recounted it; this repo carries no shot data. The lift RATE is
-  // therefore unknown, and 7/45 does not approximate it
-  // -- the filter strips the low-yield and excluded shots most likely to BE
-  // lifts. Seven is that script's prose; this repo carries no shot data.
+  // yield >= 15 g, one bean, one dial, one detector version, and drops ids
+  // 25, 26 and 37 (net effect 37; 25/26 are already excluded), leaving 45
+  // rows -- 45 - 7 = 38, the n=38 its docstring reports. Those 45 are a
+  // subset of the 2026-09-29 ANALYSIS SNAPSHOT, which is not the archive:
+  // production is larger and has been counted separately. CLAUDE.md's
+  // lift-path entry carries both numbers and their scopes; deliberately NOT
+  // restated here, because restating it is how this drifted twice. The lift
+  // RATE is unknown against either, and 7/45 does not approximate it -- the
+  // filter strips the low-yield and excluded shots most likely to BE lifts
+  // (finalizeLifted() sets valid = running_max >= REJECT_MIN_MG, so a
+  // sub-5 g lift lands as excluded = 1). Seven is that script's prose.
   // Said "seven of the first 46 logged shots" until 2026-10-27, and was
   // briefly a check-facts fact, which froze the wrong denominator into CI.
   // Shot 37 is NOT on this path — its decline never crossed LIFT_DROP_MG, so

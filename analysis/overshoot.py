@@ -33,8 +33,9 @@ TWO EXCLUSIONS, both earned rather than assumed
   after stop_ms at all -- the curve ends exactly there because the cup was
   lifted and the detector finalised at the peak. (Said "seven of the 46"
   until 2026-10-27, which disagreed with this docstring's own n=38: 46 - 7
-  is 39. 46 is the notebook's clean set; CLEAN drops shot 37 on top of it,
-  so this query returns 45 and 45 - 7 = 38.) Their settle_offset_g is 0 by
+  is 39. 46 is the notebook's clean set; CLEAN drops ids 25, 26 and 37 on
+  top of it -- net effect shot 37, since 25/26 are already excluded -- so
+  this query returns 45 and 45 - 7 = 38.) Their settle_offset_g is 0 by
   construction, not by measurement, and pooling them drags the mean down
   while telling you nothing. Detected here by requiring a >=4 s tail rather
   than by trusting the field.

@@ -29,9 +29,12 @@ FINDINGS (2026-09-28, n=38 after exclusions)
 
 TWO EXCLUSIONS, both earned rather than assumed
 
-  Lift-terminated shots. Seven of the 46 have NO samples after stop_ms at
-  all -- the curve ends exactly there because the cup was lifted and the
-  detector finalised at the peak. Their settle_offset_g is 0 by
+  Lift-terminated shots. Seven of the 45 rows CLEAN returns have NO samples
+  after stop_ms at all -- the curve ends exactly there because the cup was
+  lifted and the detector finalised at the peak. (Said "seven of the 46"
+  until 2026-10-27, which disagreed with this docstring's own n=38: 46 - 7
+  is 39. 46 is the notebook's clean set; CLEAN drops shot 37 on top of it,
+  so this query returns 45 and 45 - 7 = 38.) Their settle_offset_g is 0 by
   construction, not by measurement, and pooling them drags the mean down
   while telling you nothing. Detected here by requiring a >=4 s tail rather
   than by trusting the field.

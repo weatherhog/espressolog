@@ -220,9 +220,9 @@ CREATE TABLE shot (
                                         -- its filter admits (excluded = 0, yield >=
                                         -- 15 g, one bean, one dial, one detector
                                         -- version, shot 37 dropped by id) -- NOT a
-                                        -- rate, and NOT over the archive, whose size
-                                        -- this repo states as both 78 and 80. Do not
-                                        -- derive a percentage from it.
+                                        -- rate, and NOT over the archive, which is 80
+                                        -- (inferred: two sites say 80, one says 78).
+                                        -- Do not derive a percentage from it.
                                         -- firmware/src/detector.h is normative.
                                         --
                                         -- This comment asserted the backdating

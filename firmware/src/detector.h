@@ -61,9 +61,11 @@ struct ShotResult {
   // NO ARCHIVE-WIDE DENOMINATOR. Its filter admits only excluded = 0,
   // yield >= 15 g, one bean, one dial, one detector version, and drops shot
   // 37 by id, leaving 45 rows -- 45 - 7 = 38, the n=38 its docstring
-  // reports. The archive is larger and this repo states its size twice and
-  // differently: 0f-noise-floor.ipynb prints 80, docs/phase-0-status.md
-  // says 78. So the lift RATE is unknown, and 7/45 does not approximate it
+  // reports. The archive is larger: 80, INFERRED -- 0f-noise-floor.ipynb
+  // and store.go both say 80, docs/phase-0-status.md says 78 and is the
+  // outlier (its other figures transcribe the 80-shot run). Nobody has
+  // recounted it; this repo carries no shot data. The lift RATE is
+  // therefore unknown, and 7/45 does not approximate it
   // -- the filter strips the low-yield and excluded shots most likely to BE
   // lifts. Seven is that script's prose; this repo carries no shot data.
   // Said "seven of the first 46 logged shots" until 2026-10-27, and was

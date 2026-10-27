@@ -107,7 +107,7 @@ WHAT IT STILL DOES NOT CATCH, stated plainly so nobody trusts it further
 than it goes: an UNTAGGED site. If a seventh place states the K-factor and
 carries no marker, this script is blind to it. The registry below is the
 partial answer -- it pins a minimum number of FILES per fact (and, for the
-two photoMOS drive facts only, a minimum number of sites), so deleting a
+four facts that carry `min_sites`, a minimum number of sites), so deleting a
 tagged file's last marker fails rather than silently shrinking coverage --
 but adding an untagged one still passes, and deleting a second marker inside
 a file that keeps another passes for every fact that has no `min_sites`. Tag new sites as you write them.
@@ -190,8 +190,9 @@ REQUIRED = {
     # sentence, each of which corrected it in some of these three files and
     # not the others. Untagged duplication is exactly what this script is
     # for, and these were the most-restated untagged facts in the repo.
-    # min_sites is set because all three facts crowd into the same three
-    # files: min_files alone cannot see one of the three markers deleted.
+    # min_sites is set because these facts crowd into the same few files:
+    # min_files alone cannot see a second marker deleted from a file that
+    # keeps another one.
     "stop-ms-backdating":  {"min_files": 3, "min_sites": 3, "claude_md": True},
     # The lift-during-SETTLING overwrite. Its whole history is a wrong
     # bound: 5 s where it is STOP_WINDOW_MS + SETTLE_MS, understated by
@@ -207,9 +208,15 @@ REQUIRED = {
     # is CLAUDE.md-only because the other files say it in prose that no
     # shared needle can normalise to.
     "stop-ms-row-mapping": {"min_files": 1, "claude_md": True},
-    # The constants the prose quotes as "2 s" and "~7 s". Without these,
-    # STOP_WINDOW_MS 2000 -> 3000 passes every other fact while seven prose
-    # sites silently go stale -- the `brew-guard-ms-const` trap exactly.
+    # The constants the prose quotes as "2 s" and "5 s", and whose SUM it
+    # quotes as "~7 s". Without these, STOP_WINDOW_MS 2000 -> 3000 passed
+    # every other fact while seven prose sites went stale -- the
+    # `brew-guard-ms-const` trap exactly.
+    #
+    # IT IS NOT SHUT, only narrowed, and `brew-guard-ms-const` has the same
+    # limit: this pins LITERALS, NOT RELATIONSHIPS. Editing the constant and
+    # its own marker together is green while every prose site still says 2 s.
+    # What it buys is that the half-edit -- the realistic one -- fails.
     "stop-window-ms-const": {"min_files": 1, "claude_md": False},
     "settle-ms-const":      {"min_files": 1, "claude_md": False},
     # NO `lift-count-46`. It was tagged 2026-10-27 and WITHDRAWN the same

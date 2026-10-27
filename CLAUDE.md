@@ -1194,7 +1194,7 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   | **cup lifted** (`finalizeLifted`) | the last retained sample | `running_max`, which may be earlier |
 
   <!-- fact:stop-ms-backdating backdated STOP_WINDOW_MS -->
-  <!-- fact:stop-ms-row-mapping flat stop — the normal one | backdated `STOP_WINDOW_MS`;;`truncated = 1` (`MAX_SHOT_MS`, 60 s) | the confirming sample, **not** backdated -->
+  <!-- fact:stop-ms-row-mapping flat stop — the normal one | backdated `STOP_WINDOW_MS`;;`truncated = 1` (`MAX_SHOT_MS`, 60 s) | the confirming sample, **not** backdated;;**cup lifted** (`finalizeLifted`) | the last retained sample -->
 
   **THE ROWS ARE NOT MUTUALLY EXCLUSIVE.** `finalizeLifted()` never clears
   `res.truncated`, so a shot force-stopped at 60 s and *then* lifted during
@@ -1225,19 +1225,31 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   that, so **the set it counts seven out of is 45** — 45 − 7 = 38, which is
   the `n=38` its own docstring reports.
 
-  **How big the archive is, this repo states twice and differently**:
-  `analysis/0f-noise-floor.ipynb` prints `all shots 80`,
-  `docs/phase-0-status.md` says *"46 of 78 recorded shots"*. Unresolved, and
-  not resolvable here — **this repo carries no shot data**, and the seven is
-  `overshoot.py`'s prose rather than anything recomputable. So the lift
-  **rate** is unknown, and it is not safely approximated by 7/45 either: the
-  filter strips low-yield and `excluded` shots, which are the ones most
+  **How big the archive is, this repo states THREE times and not
+  identically**: `analysis/0f-noise-floor.ipynb` prints `all shots 80`,
+  `server/internal/store/store.go` says *"18 of 80 shots"*, and
+  `docs/phase-0-status.md` says *"46 of 78 recorded shots"*. **80, INFERRED**
+  — two sites to one, and every other figure in that status.md paragraph
+  (σ 0.21 / 3.43, 12.2 % / 14.2 %, n=46, corr +0.13) matches the notebook's
+  stored 80-shot run exactly, so that paragraph is a transcription of the run
+  that printed 80 and its 78 is the outlier. **Not measured here**: this repo
+  carries no shot data, so nobody has recounted it. A draft of this passage
+  called it a two-way standoff and "not resolvable" — it had missed
+  `store.go` entirely, which is the same under-surveyed-denominator mistake
+  this paragraph exists to correct.
+
+  Even on 80, the lift **rate** is unknown and 7/45 does not approximate it:
+  the filter strips low-yield and `excluded` shots, which are the ones most
   likely to BE lifts.
 
   **It was a `check-facts` fact for one commit on 2026-10-27**, which froze
-  the wrong denominator into CI. The tag was **withdrawn rather than
-  corrected**: none of 45, 46, 78 or 80 is a number this repo can defend
-  today, and a tag asserting one of them is worse than no tag.
+  the wrong denominator into CI, and the tag was **withdrawn rather than
+  corrected**. Note what is and is not defensible: **45 is** — it is
+  reproducible from the notebook funnel plus `CLEAN`, and 45 − 7 = 38
+  matches the docstring. What is not is the **rate**, which is the only
+  thing worth pinning, so no tag was re-added. A correct future tag would
+  pin "seven over the 45 rows `overshoot.py` admits" and claim nothing
+  about the archive.
 
   **Shot 37 is not on this path** either way: its decline never crossed
   `LIFT_DROP_MG`, so `finalizeLifted()` never ran for it — and the query

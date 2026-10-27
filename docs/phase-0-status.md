@@ -2235,14 +2235,16 @@ state; closing it is the deliberate act, with the RC chosen first.
 
    **DECIDED 2026-09-28: `SETTLE_MS` stays at 5000 ms — don't relitigate.**
    Shortening it to 2500 would tighten `yield_final_g` (σ 0.07 vs 0.12) but
-   redefines the field and breaks comparability across all 46 logged shots,
+   redefines the field and breaks comparability across the 46-shot clean
+   set (a filtered cohort, not the archive — see CLAUDE.md),
    for a metric nobody is optimising. It costs nothing for stop-at-weight:
    `SETTLE_MS` governs what is *logged*, while a Phase 1 controller reads
    the scale at +2 s for its own trigger. The two are independent.
 
    The earlier note here (median +0.40 g over n=46) was computed on a
-   contaminated population and is superseded. **Seven of those 46 shots
-   have no samples after `stop_ms` at all** — the cup was lifted and the
+   contaminated population and is superseded. **`overshoot.py` records
+   seven shots with no samples after `stop_ms` at all** — a count over the
+   45 rows its filter admits, not a rate over the archive — the cup was lifted and the
    detector finalised at the peak, so their `settle_offset_g = 0` is
    structural, not measured. `overshoot.py` detects them by requiring a
    ≥4 s tail rather than trusting the field. Shot 37 is also excluded:

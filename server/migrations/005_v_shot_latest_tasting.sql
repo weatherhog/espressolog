@@ -17,6 +17,7 @@ SELECT
   -- stop, NOT backdated when truncated = 1, and the lift instant -- up to
   -- STOP_WINDOW_MS + SETTLE_MS (~7 s) late -- when the cup was lifted.
   -- Those cases are NOT exclusive: a truncated shot can also be a lift.
+  -- fact:stop-ms-lift-bound STOP_WINDOW_MS + SETTLE_MS|~7 s
   -- The sub-5 g abort assigns no stop_ms at all, so it lands here as
   -- total_s = 0.0 with pour_s NULL. NEITHER v_shot definition filters
   -- excluded (v_dialin does), so filter it yourself, as

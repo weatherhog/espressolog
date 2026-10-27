@@ -196,11 +196,28 @@ REQUIRED = {
     # The lift-during-SETTLING overwrite. Its whole history is a wrong
     # bound: 5 s where it is STOP_WINDOW_MS + SETTLE_MS, understated by
     # exactly the backdating the paragraph exists to explain.
-    "stop-ms-lift-bound":  {"min_files": 3, "min_sites": 3, "claude_md": True},
-    # The count AND its scope. `excluded = 0` is a needle because the drift
-    # that actually happened was the qualifier being dropped, not the seven:
-    # overshoot.py's filter is what makes it seven rather than a census.
-    "lift-count-46":       {"min_files": 3, "min_sites": 3, "claude_md": True},
+    # Four files: the trio plus BOTH v_shot definitions, which restate it for
+    # query writers. 001_init.sql carries two sites (the column and the view),
+    # which is what min_sites is here to see -- min_files alone cannot notice
+    # one of them going.
+    "stop-ms-lift-bound":  {"min_files": 4, "min_sites": 5, "claude_md": True},
+    # CLAUDE.md's table is the only place stating WHICH path backdates, and a
+    # plain needle pins presence, not mapping: swapping the two rows' middle
+    # cells inverted the claim and passed. This is the `;;` row form, and it
+    # is CLAUDE.md-only because the other files say it in prose that no
+    # shared needle can normalise to.
+    "stop-ms-row-mapping": {"min_files": 1, "claude_md": True},
+    # The constants the prose quotes as "2 s" and "~7 s". Without these,
+    # STOP_WINDOW_MS 2000 -> 3000 passes every other fact while seven prose
+    # sites silently go stale -- the `brew-guard-ms-const` trap exactly.
+    "stop-window-ms-const": {"min_files": 1, "claude_md": False},
+    "settle-ms-const":      {"min_files": 1, "claude_md": False},
+    # NO `lift-count-46`. It was tagged 2026-10-27 and WITHDRAWN the same
+    # day: the value pinned "seven of the first 46", and 46 is a five-filter
+    # cohort, not the archive -- overshoot.py's own set is 45, and the repo
+    # states the archive as both 78 and 80. A tag that asserts an
+    # indefensible denominator is worse than no tag, because CI then defends
+    # it. Do not re-add one until the archive size is settled from data.
 }
 
 SCAN_SUFFIXES = (".md", ".h", ".cpp", ".c", ".go", ".sql", ".py")

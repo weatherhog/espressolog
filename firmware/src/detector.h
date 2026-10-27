@@ -56,16 +56,20 @@ struct ShotResult {
   // The lift path is not rare and nothing in this struct flags it:
   // valid/fault/truncated all read as a normal stop, settle_offset_mg == 0 is
   // the nearest tell and a flat stop can hit 0 by coincidence.
-  // Seven of the first 46 logged shots are in it (analysis/overshoot.py,
-  // which finds them by requiring a >= 4 s tail rather than trusting the
-  // field). SEVEN IS SCOPED TO THAT SCRIPT'S FILTER, not to the archive: its
-  // query admits only excluded = 0, yield >= 15 g, one bean, one dial, one
-  // detector version, so a lift under 5 g (excluded = 1) or one that peaked
-  // under 15 g is invisible to it. Do not read it as a census either way.
-  // fact:lift-count-46 Seven of the first 46|excluded = 0
+  // analysis/overshoot.py records SEVEN lift-terminated shots, found by
+  // requiring a >= 4 s tail rather than trusting the field. THAT SEVEN HAS
+  // NO ARCHIVE-WIDE DENOMINATOR. Its filter admits only excluded = 0,
+  // yield >= 15 g, one bean, one dial, one detector version, and drops shot
+  // 37 by id, leaving 45 rows -- 45 - 7 = 38, the n=38 its docstring
+  // reports. The archive is larger and this repo states its size twice and
+  // differently: 0f-noise-floor.ipynb prints 80, docs/phase-0-status.md
+  // says 78. So the lift RATE is unknown, and 7/45 does not approximate it
+  // -- the filter strips the low-yield and excluded shots most likely to BE
+  // lifts. Seven is that script's prose; this repo carries no shot data.
+  // Said "seven of the first 46 logged shots" until 2026-10-27, and was
+  // briefly a check-facts fact, which froze the wrong denominator into CI.
   // Shot 37 is NOT on this path — its decline never crossed LIFT_DROP_MG, so
-  // finalizeLifted() never ran for it — though that rests on overshoot.py's
-  // prose, not on shot data, which this repo does not carry.
+  // finalizeLifted() never ran for it, and the query removes it by id anyway.
   //
   // A FOURTH path assigns this field nothing at all: the sub-5 g flat abort
   // (detector.cpp:348-359) returns true with stop_ms, yield_at_stop_mg and
@@ -176,7 +180,7 @@ public:
   // 2026-09-04: 13 s of flat weight, stop never fired). A 2 s net delta
   // averages the jitter out. Only checked once the shot has substance
   // (running_max ≥ REJECT_MIN_MG) so a pre-infusion soak isn't a stop.
-  static constexpr uint32_t STOP_WINDOW_MS  = 2000;
+  static constexpr uint32_t STOP_WINDOW_MS  = 2000;  // fact:stop-window-ms-const@1 STOP_WINDOW_MS  = 2000
   static constexpr int32_t  STOP_DELTA_MG   = 300;
   // Below REJECT_MIN_MG the stop rule doesn't apply (a pre-infusion soak is
   // flat and sub-5 g). So a false trigger — a knock, a drip — needs its own
@@ -184,7 +188,7 @@ public:
   // record: flat for ABORT_FLAT_MS while still under 5 g → reject. Longer
   // than any soak on this machine.
   static constexpr uint32_t ABORT_FLAT_MS   = 8000;
-  static constexpr uint32_t SETTLE_MS       = 5000;
+  static constexpr uint32_t SETTLE_MS       = 5000;  // fact:settle-ms-const@1 SETTLE_MS       = 5000
   static constexpr int32_t  REJECT_MIN_MG   = 5000;
   static constexpr int32_t  LIFT_DROP_MG    = 5000;   // cup this far below peak = being lifted
   static constexpr uint32_t LIFT_HOLD_MS    = 2000;   // sustained this long = really lifted, not a bump

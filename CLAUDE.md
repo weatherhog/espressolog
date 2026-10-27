@@ -1194,6 +1194,7 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   | **cup lifted** (`finalizeLifted`) | the last retained sample | `running_max`, which may be earlier |
 
   <!-- fact:stop-ms-backdating backdated STOP_WINDOW_MS -->
+  <!-- fact:stop-ms-row-mapping flat stop — the normal one | backdated `STOP_WINDOW_MS`;;`truncated = 1` (`MAX_SHOT_MS`, 60 s) | the confirming sample, **not** backdated -->
 
   **THE ROWS ARE NOT MUTUALLY EXCLUSIVE.** `finalizeLifted()` never clears
   `res.truncated`, so a shot force-stopped at 60 s and *then* lifted during
@@ -1211,17 +1212,38 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   really is bounded by `SETTLE_MS`.) It also zeroes `settle_offset_g`.
   `valid`/`fault`/`truncated` read exactly as a normal stop;
   `settle_offset_g = 0` is the nearest tell
-  and a flat stop can hit 0 by coincidence. **Seven of the first 46 logged
-  shots are in it** (`analysis/overshoot.py`, which finds them by requiring
-  a ≥ 4 s tail rather than trusting the field). **Seven is scoped to that
-  script's filter, not to the archive** — it admits only `excluded = 0`,
-  yield ≥ 15 g, one bean, one dial, one `detector_version`, so a lift under
-  5 g (`excluded = 1`) or one peaking under 15 g never reaches the count. <!-- fact:lift-count-46 Seven of the first 46|excluded = 0 -->
-  **Shot 37 is not on this path**: its decline never crossed `LIFT_DROP_MG`,
-  so `finalizeLifted()` never ran for it — though that rests on
-  `overshoot.py`'s prose, not on shot data, which this repo does not carry.
-  So "subtract 2 s" is right for
-  the common case and wrong for ~15 % of the archive.
+  and a flat stop can hit 0 by coincidence. **`analysis/overshoot.py`
+  records seven lift-terminated shots**, found by requiring a ≥ 4 s tail
+  rather than trusting the field.
+
+  **THAT SEVEN HAS NO ARCHIVE-WIDE DENOMINATOR, AND THIS FILE GAVE IT ONE
+  UNTIL 2026-10-27.** It read *"seven of the first 46 logged shots"* and
+  turned that into *"~15 % of the archive"*. Both are wrong. There is no
+  chronological "first 46", and **46 is not the archive**: it is what
+  survives five filters (`yield ≥ 15 g`, `excluded = 0`, one bean, one dial,
+  one `detector_version`), and `overshoot.py` drops shot 37 by id on top of
+  that, so **the set it counts seven out of is 45** — 45 − 7 = 38, which is
+  the `n=38` its own docstring reports.
+
+  **How big the archive is, this repo states twice and differently**:
+  `analysis/0f-noise-floor.ipynb` prints `all shots 80`,
+  `docs/phase-0-status.md` says *"46 of 78 recorded shots"*. Unresolved, and
+  not resolvable here — **this repo carries no shot data**, and the seven is
+  `overshoot.py`'s prose rather than anything recomputable. So the lift
+  **rate** is unknown, and it is not safely approximated by 7/45 either: the
+  filter strips low-yield and `excluded` shots, which are the ones most
+  likely to BE lifts.
+
+  **It was a `check-facts` fact for one commit on 2026-10-27**, which froze
+  the wrong denominator into CI. The tag was **withdrawn rather than
+  corrected**: none of 45, 46, 78 or 80 is a number this repo can defend
+  today, and a tag asserting one of them is worse than no tag.
+
+  **Shot 37 is not on this path** either way: its decline never crossed
+  `LIFT_DROP_MG`, so `finalizeLifted()` never ran for it — and the query
+  removes it by id regardless.
+  So "subtract 2 s" is right for the common case and wrong on **every**
+  lift, at a rate this repo cannot state.
 
   **A FOURTH PATH ASSIGNS NONE OF THESE FIELDS**, so it is not in the table
   and `settle_offset = final − at_stop` does not hold there: the sub-5 g

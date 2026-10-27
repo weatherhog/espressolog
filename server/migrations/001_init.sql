@@ -215,12 +215,14 @@ CREATE TABLE shot (
                                         -- nothing here marks the lift path:
                                         -- settle_offset_g = 0 is the nearest tell
                                         -- and a flat stop can hit 0 by coincidence.
-                                        -- Seven of the first 46 shots are lifts,
-                                        -- but that is overshoot.py's FILTERED
-                                        -- count (excluded = 0, yield >= 15 g, one
-                                        -- bean, one dial, one detector version),
-                                        -- not a census of the archive.
-                                        -- fact:lift-count-46 Seven of the first 46|excluded = 0
+                                        -- overshoot.py records seven lift-terminated
+                                        -- shots. That is a COUNT over the 45 rows
+                                        -- its filter admits (excluded = 0, yield >=
+                                        -- 15 g, one bean, one dial, one detector
+                                        -- version, shot 37 dropped by id) -- NOT a
+                                        -- rate, and NOT over the archive, whose size
+                                        -- this repo states as both 78 and 80. Do not
+                                        -- derive a percentage from it.
                                         -- firmware/src/detector.h is normative.
                                         --
                                         -- This comment asserted the backdating
@@ -231,7 +233,11 @@ CREATE TABLE shot (
                                         -- left unscoped here while CLAUDE.md and
                                         -- detector.h were both scoped -- this repo's
                                         -- signature defect, in the commit fixing the
-                                        -- previous instance of it.
+                                        -- previous instance of it. Then all three were
+                                        -- scoped to a denominator that was itself
+                                        -- wrong (46 is a filtered cohort, not the
+                                        -- archive) and briefly CI-enforced. Review,
+                                        -- 2026-10-27.
   stopped_by        TEXT CHECK (stopped_by IN
                       ('manual','board_timer','auto_weight','fault') OR stopped_by IS NULL),
   s_since_flush     REAL,               -- brew temp proxy on a single boiler
@@ -447,6 +453,7 @@ SELECT
   -- stop, NOT backdated when truncated = 1, and the lift instant -- up to
   -- STOP_WINDOW_MS + SETTLE_MS (~7 s) late -- when the cup was lifted.
   -- Those cases are NOT exclusive: a truncated shot can also be a lift.
+  -- fact:stop-ms-lift-bound STOP_WINDOW_MS + SETTLE_MS|~7 s
   -- The sub-5 g abort assigns no stop_ms at all, so it lands here as
   -- total_s = 0.0 with pour_s NULL. NEITHER v_shot definition filters
   -- excluded (v_dialin does), so filter it yourself, as

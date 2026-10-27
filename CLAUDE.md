@@ -1177,12 +1177,51 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
 - **stop** — **the weight is FLAT: ≤ `STOP_DELTA_MG` (0.3 g) net over the
   last `STOP_WINDOW_MS` (2 s)**, and only checked once the shot has
   substance (`running_max ≥ REJECT_MIN_MG`, 5 g) so a pre-infusion soak is
-  not a stop. **`stop_ms` is where that window OPENED, not where it
-  closed** — `detector.cpp` hands the ring entry from `t − STOP_WINDOW_MS`
+  not a stop. **On that path `stop_ms` is where the window OPENED, not where
+  it closed** — `detector.cpp` hands the ring entry from `t − STOP_WINDOW_MS`
   to `enterSettling()`, so the recorded stop is backdated ~2 s from the
   sample that confirmed it (*"the plateau began at `t_then`; that's the
-  stop"*). `yield_at_stop_g` is read at that same instant, so the pair
-  agrees with itself; a reader who assumes "closed" is 2 s out on both.
+  stop"*), and `yield_at_stop_g` is read at that same instant.
+
+  **THE BACKDATING IS NOT UNIVERSAL — two other paths finalize a shot and
+  neither backdates.** `firmware/src/detector.h` is normative; the live
+  conclusion is that a query cannot assume the ~2 s:
+
+  | path | `stop_ms` | `yield_at_stop_g` |
+  |---|---|---|
+  | flat stop — the normal one | backdated `STOP_WINDOW_MS` | the weight at that instant |
+  | `truncated = 1` (`MAX_SHOT_MS`, 60 s) | the confirming sample, **not** backdated | that same instant |
+  | **cup lifted** (`finalizeLifted`) | the last retained sample | `running_max`, which may be earlier |
+
+  **THE ROWS ARE NOT MUTUALLY EXCLUSIVE.** `finalizeLifted()` never clears
+  `res.truncated`, so a shot force-stopped at 60 s and *then* lifted during
+  settling reads `truncated = 1` with lift-derived values. **A query that
+  branches on `truncated` alone picks row 2 and gets row 3.**
+
+  **THE LIFT PATH IS NOT AN EDGE CASE AND NOTHING FLAGS IT.** A lift during
+  SETTLING — stop the shot, pick the cup up — *overwrites* the backdated
+  `stop_ms` that `enterSettling()` had already stored correctly. That check
+  runs before the settle window expires, so the lift lands as late as the
+  confirming sample + `SETTLE_MS` — and because the value it overwrites was
+  that sample − `STOP_WINDOW_MS`, **`stop_ms` ends up to
+  `STOP_WINDOW_MS + SETTLE_MS`, ~7 s, after the real stop, not 5 s.**
+  (Off the `truncated` entry there is no backdating to undo, so that one
+  really is bounded by `SETTLE_MS`.) It also zeroes `settle_offset_g`.
+  `valid`/`fault`/`truncated` read exactly as a normal stop;
+  `settle_offset_g = 0` is the nearest tell
+  and a flat stop can hit 0 by coincidence. **Seven of the first 46 logged
+  shots are in it** (`analysis/overshoot.py`, which finds them by requiring
+  a ≥ 4 s tail rather than trusting the field — and excludes shot 37 as a
+  further slow lift, so seven is a floor). So "subtract 2 s" is right for
+  the common case and wrong for ~15 % of the archive.
+
+  **A FOURTH PATH ASSIGNS NONE OF THESE FIELDS**, so it is not in the table
+  and `settle_offset = final − at_stop` does not hold there: the sub-5 g
+  flat abort (`detector.cpp:348-359`) leaves `stop_ms`, `yield_at_stop_g`
+  and `settle_offset_g` at zero while `yield_final_g` is `running_max`. It
+  is spooled and ingested like any other record and `store.go` marks it
+  `excluded = 1` — **but neither `v_shot` definition filters on `excluded`**
+  (`v_dialin` does), so a query must do it, as `analysis/overshoot.py` does.
 
   **This line said "`dw/dt < 0.1 g/s` for 1.5 s" until 2026-10-27, and
   `firmware/src/detector.h` had already rejected that rule in writing.**
@@ -1205,6 +1244,24 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   the withdrawn `dw/dt` rule, when there is no stop threshold any more. So
   "the header is normative" was true of the rule and not of that line.
   Both corrected 2026-10-27.
+
+  **AND THAT CORRECTION OVER-REACHED IN ITS TURN — a second pre-push review
+  caught it the same day.** It asserted the backdating, and the "same
+  instant" pairing, unconditionally and in all three sites at once, when
+  only the flat-stop path does either; the exceptions above were already
+  sitting in `detector.cpp` and in this repo's own shot archive. Twice in
+  one day the same sentence went from a wrong statement to a confident one
+  that was wrong somewhere else — which is the argument for reading
+  `detector.cpp` rather than whichever sentence most recently replaced it.
+
+  **AND A THIRD REVIEW, THE SAME DAY AGAIN, FOUND FOUR THINGS WRONG WITH
+  THAT FIX.** It put the SETTLING overwrite at `SETTLE_MS` when it is
+  `STOP_WINDOW_MS + SETTLE_MS` — **understating it by exactly the 2 s the
+  paragraph exists to explain** — described `finalizeLifted()` with only
+  its POURING call site's hold-and-trim, presented `truncated` as exclusive
+  of the lift path, and called the `settle_offset` identity universal.
+  Three rounds on one sentence, and each round was right about the thing it
+  replaced and wrong about something adjacent to it.
 - **SETTLING** — keep sampling 5 s more → `yield_final_g`.
   `settle_offset_g = final − at_stop`.
 - **reject** — final yield < 5 g (a drip or a knock, not a shot)

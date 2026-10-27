@@ -21,13 +21,66 @@ struct ShotResult {
   bool     fault;          // cup removed mid-pour
   bool     truncated;      // hit the uint16 t_ms ceiling, stop was forced
   uint32_t started_at_ms;  // millis() of t=0 (backdated to the flow crossing)
-  // t where the flat window OPENED — backdated STOP_WINDOW_MS from the
-  // sample that confirmed the stop (detector.cpp passes the ring entry at
-  // t − STOP_WINDOW_MS into enterSettling: "the plateau began at t_then").
-  // Said "t of first sample below the stop threshold" until 2026-10-27,
-  // left from the withdrawn dw/dt rule; there is no stop threshold now.
+  // Where the detector judged the pour to have ended. HOW that is derived
+  // depends on which path finalized the shot, and ONLY THE FIRST BACKDATES:
+  //
+  //   flat stop (the normal one) — backdated STOP_WINDOW_MS from the sample
+  //     that confirmed it: detector.cpp passes the ring entry at
+  //     t − STOP_WINDOW_MS into enterSettling(), "the plateau began at
+  //     t_then; that's the stop".
+  //   truncated (MAX_SHOT_MS) — the confirming sample itself, NOT backdated.
+  //   finalizeLifted() — the last retained sample. Not backdated.
+  //
+  // finalizeLifted() HAS TWO CALL SITES AND THEY ARE NOT ALIKE. From POURING
+  // (detector.cpp:323-334) the drop must persist LIFT_HOLD_MS and the
+  // descending transition is trimmed off buf first. From SETTLING (:374) it
+  // fires on the FIRST sample below running_max − LIFT_DROP_MG, with no hold
+  // and no trim — and that site also OVERWRITES the value enterSettling()
+  // had already stored correctly. It is checked before the settle_until
+  // expiry, so the lift can land as late as the confirming sample +
+  // SETTLE_MS. How far that moves stop_ms depends on WHICH value is being
+  // overwritten: entered from the flat stop it replaces that sample −
+  // STOP_WINDOW_MS, so stop_ms ends up to STOP_WINDOW_MS + SETTLE_MS (~7 s)
+  // later than the stop — NOT SETTLE_MS alone. Entered from the truncated
+  // path there was no backdating to undo, so there the bound really is
+  // SETTLE_MS.
+  //
+  // truncated IS NOT EXCLUSIVE OF THE LIFT PATH. finalizeLifted() never
+  // clears res.truncated, so a shot force-stopped at MAX_SHOT_MS and then
+  // lifted during settling carries truncated = 1 with lift-derived stop_ms
+  // and yield_at_stop_mg. Branching on truncated alone picks the wrong
+  // derivation for both fields.
+  //
+  // The lift path is not rare and nothing in this struct flags it:
+  // valid/fault/truncated all read as a normal stop, settle_offset_mg == 0 is
+  // the nearest tell and a flat stop can hit 0 by coincidence. Seven of the
+  // first 46 logged shots are in it (analysis/overshoot.py, which finds them
+  // by requiring a >= 4 s tail rather than trusting the field; its own
+  // docstring excludes shot 37 as a further slow lift, so seven is a floor).
+  //
+  // A FOURTH path assigns this field nothing at all: the sub-5 g flat abort
+  // (detector.cpp:348-359) returns true with stop_ms, yield_at_stop_mg and
+  // settle_offset_mg left at their res = {} zeros. It is spooled and
+  // ingested like any other record, but store.go marks it excluded = 1,
+  // 'reject: under 5 g' — the flag is the only thing keeping those zeros out
+  // of a query, and NEITHER v_shot definition filters on it.
+  //
+  // Said "t of first sample below the stop threshold" until 2026-10-27, left
+  // from the withdrawn dw/dt rule; there is no stop threshold now. The fix
+  // for that then asserted the backdating unconditionally — true of the flat
+  // stop only — and a second pre-push review caught it the same day. A third
+  // review, the same day again, found that fix had put the SETTLING overwrite
+  // at SETTLE_MS rather than STOP_WINDOW_MS + SETTLE_MS, carried only the
+  // POURING site's hold-and-trim, read truncated as exclusive of the lift,
+  // and called the settle_offset identity universal.
   uint32_t stop_ms;
-  int32_t  yield_at_stop_mg;   // weight at that same instant, so the pair agrees
+  // The yield stop_ms is paired with, so settle_offset_mg = final − at_stop
+  // holds on every path that ASSIGNS these fields — which is every path but
+  // the sub-5 g abort above, where all three stay 0 while yield_final_mg is
+  // running_max. It is the weight AT stop_ms only on the flat-stop and
+  // truncated paths; finalizeLifted() stores running_max, which may be an
+  // earlier sample than the one stop_ms names.
+  int32_t  yield_at_stop_mg;
   int32_t  yield_final_mg;
   int32_t  settle_offset_mg;   // final − at_stop. THE PHASE-1 CALIBRATION.
   int32_t  peak_flow_mgps;

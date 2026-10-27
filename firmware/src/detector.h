@@ -55,8 +55,11 @@ struct ShotResult {
   // valid/fault/truncated all read as a normal stop, settle_offset_mg == 0 is
   // the nearest tell and a flat stop can hit 0 by coincidence. Seven of the
   // first 46 logged shots are in it (analysis/overshoot.py, which finds them
-  // by requiring a >= 4 s tail rather than trusting the field; its own
-  // docstring excludes shot 37 as a further slow lift, so seven is a floor).
+  // by requiring a >= 4 s tail rather than trusting the field). Seven is the
+  // count, NOT a floor: overshoot.py also sets shot 37 aside, but that one's
+  // decline never crossed LIFT_DROP_MG, so finalizeLifted() never ran for it
+  // — a physical slow lift the detector finished through finishShot(), with a
+  // real settle window and a measured settle_offset_mg. Different population.
   //
   // A FOURTH path assigns this field nothing at all: the sub-5 g flat abort
   // (detector.cpp:348-359) returns true with stop_ms, yield_at_stop_mg and

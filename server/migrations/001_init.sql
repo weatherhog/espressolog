@@ -188,12 +188,22 @@ CREATE TABLE shot (
                                         --     backdated value, so it can sit
                                         --     STOP_WINDOW_MS + SETTLE_MS (~7 s,
                                         --     not 5 s) after the real stop
-                                        --   reject     - the sub-5 g abort assigns
-                                        --     NONE of these: stop_ms = 0,
+                                        --   reject     - the sub-5 g FLAT ABORT
+                                        --     (detector.cpp:348-359) assigns NONE
+                                        --     of these: stop_ms = 0,
                                         --     yield_at_stop_g = 0,
-                                        --     settle_offset_g = 0. Always carries
-                                        --     excluded = 1; that flag is the only
-                                        --     thing that marks it
+                                        --     settle_offset_g = 0
+                                        --
+                                        -- excluded = 1 / 'reject: under 5 g' DOES
+                                        -- NOT identify that abort. spool.cpp flags
+                                        -- a reject as (!valid && !fault), and two
+                                        -- other paths qualify -- a lift, or a flat
+                                        -- stop, that ends under 5 g -- both of
+                                        -- which assign real values. The ZEROS are
+                                        -- the tell, not the flag -- and even they
+                                        -- are not airtight: a lift trimmed back to
+                                        -- no samples (detector.cpp:328-332) also
+                                        -- stores stop_ms = 0.
                                         --
                                         -- THESE CASES ARE NOT EXCLUSIVE: a shot
                                         -- truncated at 60 s and THEN lifted reads

@@ -86,8 +86,8 @@ safety argument** — and `firmware/test/host/brew_guard_test.cpp:72`.
 |---|---|
 | `docs/phase-0-plan.md`, the photoMOS-pair safety argument | **annotated 2026-10-19** |
 | `brew_guard_test.cpp`, the `press_long_enough` case | **annotated 2026-10-19** |
-| `brew_guard.cpp`, the pump-running-during-press comment | still bare — revisit after the analyser redo |
-| `main.cpp`, the ring-headroom comment | still bare — revisit after the analyser redo |
+| `brew_guard.cpp`, the pump-running-during-press comment | **annotated 2026-10-27** — now cites 80–295 ms (2026-10-19) and records that 345–480 was the superseded range |
+| `main.cpp`, the ring-headroom comment | **annotated 2026-10-27**, same way, plus *a shorter press makes the stall worse, not better, so the point stands a fortiori* |
 
 *(Both were cited by line until 2026-10-19. The `main.cpp` one then drifted on
 **four consecutive commits**, every time because the commit "fixing" the
@@ -98,7 +98,18 @@ in a document is wrong by the time the document is saved; `grep` is not.)*
 
 The `brew_guard.cpp` pump-running comment and the `main.cpp` ring-headroom
 comment are about *timing headroom* where the exact figure is not
-load-bearing, which is why they are left rather than churned.
+load-bearing. **That was the argument for leaving them bare, and it did not
+survive**: a stale number a reader cannot tell is stale costs more than the
+churn does, so both were annotated on 2026-10-27 rather than changed —
+the figure is corrected and the superseded range is named as superseded.
+
+**This paragraph and the two rows above still said "still bare" in the same
+commit that annotated them**, which is the **third** occasion this file's
+own account of the citation sites was wrong — the third time in the
+paragraph condemning the first two. It differs from the first two only in
+being caught by a pre-push review instead of reaching `main`. The lesson is
+not "try harder": **a document cannot track the state of source it does not
+contain.** `grep -rn '345.480'` is the authority, and it is the only one.
 
 **AND THAT TABLE WAS WRONG TOO — IT SAID "FOUR" AND THERE ARE AT LEAST SIX.**
 Two more cite 345-480 as **live evidence**, which is worse than citing it as

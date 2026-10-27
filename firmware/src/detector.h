@@ -21,8 +21,13 @@ struct ShotResult {
   bool     fault;          // cup removed mid-pour
   bool     truncated;      // hit the uint16 t_ms ceiling, stop was forced
   uint32_t started_at_ms;  // millis() of t=0 (backdated to the flow crossing)
-  uint32_t stop_ms;        // t of first sample below the stop threshold
-  int32_t  yield_at_stop_mg;
+  // t where the flat window OPENED — backdated STOP_WINDOW_MS from the
+  // sample that confirmed the stop (detector.cpp passes the ring entry at
+  // t − STOP_WINDOW_MS into enterSettling: "the plateau began at t_then").
+  // Said "t of first sample below the stop threshold" until 2026-10-27,
+  // left from the withdrawn dw/dt rule; there is no stop threshold now.
+  uint32_t stop_ms;
+  int32_t  yield_at_stop_mg;   // weight at that same instant, so the pair agrees
   int32_t  yield_final_mg;
   int32_t  settle_offset_mg;   // final − at_stop. THE PHASE-1 CALIBRATION.
   int32_t  peak_flow_mgps;

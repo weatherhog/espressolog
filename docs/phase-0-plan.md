@@ -1107,19 +1107,31 @@ section should still wait for a 0f re-run.
 
 ## Suggested architecture — SUPERSEDED, kept as the day-one plan
 
-> **This section is the original day-one sketch. `CLAUDE.md`'s
+> **This section is the original day-one sketch, and the diagram below is
+> the SUPERSEDED one — it is kept, not corrected.** `CLAUDE.md`'s
 > *Architecture (decided — don't relitigate)* is normative and differs on
-> the transport.** The diagram below was left unmarked until 2026-10-27,
-> so the plan was still advertising a decision the architecture had
-> reversed — and doing it in a picture, which is what a newcomer reads.
+> the transport: **HTTP POST for shot upload plus a WebSocket for live**,
+> with MQTT carrying only the Home Assistant summary entities. Go there
+> for the current picture; do not read the one below as live.
+>
+> The section was left unmarked until 2026-10-27, so the plan was still
+> advertising a decision the architecture had reversed — and doing it in a
+> picture, which is what a newcomer reads. **A first attempt at this fix
+> that same day redrew the diagram instead of marking it** — which broke
+> this repo's keep-the-superseded-claim rule, and took MQTT out of the
+> picture altogether while both `CLAUDE.md`'s normative diagram and the
+> prose below keep it for the Home Assistant summary leg. Banner added and
+> the original diagram restored after review. The day-one sketch has no HA
+> leg because the decision postdates it; that is what superseded looks
+> like, and it is not a reason to redraw it.
 
 ```
 Bookoo #1 ──BLE──┐
 Bookoo #2 ──BLE──┤
-                 ├── ESP32-S3 ──HTTP POST──► server ──► SQLite
-switch sense ────┤    (10 Hz)   (+ WebSocket  (homelab)     │
-flowmeter ───────┤               for live)                  │
-display bus ─────┘                          web app ────────┘
+                 ├── ESP32-S3 ──MQTT──► server ──► SQLite
+switch sense ────┤    (10 Hz)          (homelab)      │
+flowmeter ───────┤                                    │
+display bus ─────┘                          web app ──┘
                                                  │
                                               tablet
 ```

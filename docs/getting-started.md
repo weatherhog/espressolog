@@ -15,8 +15,8 @@ they are safety rules, not style.
 | server | Go | **1.27+** (`server/go.mod`) |
 | web | Node + npm | **22** (what CI uses) |
 | firmware (build) | PlatformIO | `pip install platformio` |
-| firmware (host tests) | a C++ compiler | `clang++` by default; `make CXX=g++` works |
-| analysis | Python 3 + `pandas numpy matplotlib` | no manifest yet — install by hand |
+| firmware (host tests) | a C++ compiler | whatever `c++` is — clang++ on macOS, usually g++ on Linux. `make CXX=clang++` pins it |
+| analysis | Python 3 + `pandas numpy matplotlib jupyterlab` | no manifest yet — install by hand |
 
 ## Server + web UI (the usual entry point)
 
@@ -60,6 +60,15 @@ display decode, the spool or the brew guard — no board, no machine:
 cd firmware/test/host && make
 ```
 
+**That builds with whatever `c++` resolves to, which is not what the
+Makefile looks like it says.** `CXX ?= clang++` never fires: `?=` assigns
+only when a variable's origin is `undefined`, and `CXX` already has origin
+`default` from make's built-in rules. So the line is inert and you get
+clang++ on macOS, g++ on most Linux. Both compile it. Pin one with
+`make CXX=clang++` — a command-line assignment does override. *(The
+prerequisites table claimed "clang++ by default" until 2026-10-27, which
+was true only by accident, on macOS.)*
+
 **Flashing is the one step that needs hardware**, and specifically this
 hardware: an ESP32-S3-DevKitC-1 clone, N16R8 (16 MB flash, 8 MB octal
 PSRAM). `platformio.ini` sets `memory_type = qio_opi` for it; on a different
@@ -70,15 +79,22 @@ and must stay that way.
 ## Analysis notebooks
 
 ```bash
-pip install pandas numpy matplotlib
+pip install pandas numpy matplotlib jupyterlab
 cd analysis && jupyter lab 0f-noise-floor.ipynb
 ```
 
-The notebook expects `analysis/espressolog.db`. Its first cell fetches that
-from the author's deployment over `ssh`/`scp`, which will not work for you —
-**point it at a local database instead**, e.g. the `server/espressolog.db`
-the steps above create. The standalone scripts (`overshoot.py`,
-`backfill_recipe.py`) use only the standard library but need the same file.
+The notebook expects `analysis/espressolog.db`, which is gitignored and not
+in the repo. Nothing fetches it for you: the first cell is **markdown**, and
+under *"Refreshing the data"* it gives the author's manual `ssh`/`scp`
+recipe, which will not work for you. Run the first *code* cell without that
+file and sqlite silently creates an empty one, so the error you actually get
+is `no such table: v_shot`.
+
+**Point `DB` at a local database instead** — e.g. the `server/espressolog.db`
+the steps above create, which has all nine migrations applied and therefore
+the view. It will be empty, so the notebook runs and computes nothing. The
+standalone scripts (`overshoot.py`, `backfill_recipe.py`) use only the
+standard library but need the same file.
 
 ## What CI checks
 

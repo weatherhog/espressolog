@@ -1177,7 +1177,12 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
 - **stop** — **the weight is FLAT: ≤ `STOP_DELTA_MG` (0.3 g) net over the
   last `STOP_WINDOW_MS` (2 s)**, and only checked once the shot has
   substance (`running_max ≥ REJECT_MIN_MG`, 5 g) so a pre-infusion soak is
-  not a stop. `stop_ms` is where that window closed.
+  not a stop. **`stop_ms` is where that window OPENED, not where it
+  closed** — `detector.cpp` hands the ring entry from `t − STOP_WINDOW_MS`
+  to `enterSettling()`, so the recorded stop is backdated ~2 s from the
+  sample that confirmed it (*"the plateau began at `t_then`; that's the
+  stop"*). `yield_at_stop_g` is read at that same instant, so the pair
+  agrees with itself; a reader who assumes "closed" is 2 s out on both.
 
   **This line said "`dw/dt < 0.1 g/s` for 1.5 s" until 2026-10-27, and
   `firmware/src/detector.h` had already rejected that rule in writing.**
@@ -1188,6 +1193,18 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   is normative and carries the evidence**; this file carried the rule the
   code was written to replace, which is the worst place for it, because
   CLAUDE.md is auto-loaded and `detector.h` is not.
+
+  **That rewrite then got `stop_ms` backwards in the same breath — it said
+  "where that window closed" — and a pre-push review caught it the same
+  day.** Worth recording because it is the over-correction this repo's
+  retraction convention exists to catch: the sentence being replaced
+  (*"`stop_ms` = when it first dropped below"*) was describing the right
+  *instant* under the wrong *rule*, and rewriting the rule moved a correct
+  detail to an incorrect one. **`detector.h`'s own field comment was stale
+  too** — *"t of first sample below the stop threshold"*, left over from
+  the withdrawn `dw/dt` rule, when there is no stop threshold any more. So
+  "the header is normative" was true of the rule and not of that line.
+  Both corrected 2026-10-27.
 - **SETTLING** — keep sampling 5 s more → `yield_final_g`.
   `settle_offset_g = final − at_stop`.
 - **reject** — final yield < 5 g (a drip or a knock, not a shot)

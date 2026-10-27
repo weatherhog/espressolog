@@ -168,7 +168,13 @@ CREATE TABLE shot (
   -- measured (derived from shot_sample)
   first_drip_ms     INTEGER,            -- true puck-resistance signal once the
                                         -- switch is sensed: pump-on to first liquid
-  stop_ms           INTEGER,            -- when the pump stopped
+  stop_ms           INTEGER,            -- intent: when the pump stopped. What
+                                        -- the detector actually stores is where
+                                        -- the flat window OPENED -- backdated
+                                        -- STOP_WINDOW_MS from the sample that
+                                        -- confirmed the stop. Weight-derived in
+                                        -- 0a/0c; there is no pump-stop signal.
+                                        -- yield_at_stop_g is the same instant.
   stopped_by        TEXT CHECK (stopped_by IN
                       ('manual','board_timer','auto_weight','fault') OR stopped_by IS NULL),
   s_since_flush     REAL,               -- brew temp proxy on a single boiler
@@ -322,9 +328,25 @@ CREATE INDEX ix_event_shot ON machine_event(shot_id);
 -- stable reading is recorded blind, and when a shot closes it
 -- claims the last unattributed weighing before it started.
 --
--- A stable event is |dw/dt| < 0.05 g/s for >= 1.5 s, weight > 5 g,
--- no shot in progress, and within a plausibility window (12-24 g
--- for a dose). Re-placing the cup produces several events; the
+-- A stable event is a per-sample |delta| <= 250 mg AND a span
+-- (max-min) <= 300 mg over the hold, sustained >= 1 s, weight
+-- > 5 g, and no shot in progress. firmware/src/detector.h is
+-- normative on all five.
+--
+-- THE 12-24 g PLAUSIBILITY WINDOW IS APPLIED AT ATTRIBUTION, NOT
+-- HERE. This table wants every stable reading the scale actually
+-- saw; narrowing it at capture is what makes a wrong dose
+-- un-diagnosable later.
+--
+-- This comment said "|dw/dt| < 0.05 g/s for >= 1.5 s" and listed
+-- the plausibility window as part of the stable test until
+-- 2026-10-27. Both were stale against detector.h: the flow-window
+-- rule needed 2.2 s and a dose cup sits for ~2.0 s, so shot 20's
+-- dose was missed by 0.2 s. CLAUDE.md was corrected the same week
+-- and this copy was left behind -- in the file CLAUDE.md names as
+-- winning over all documentation, which is the worst place for it.
+--
+-- Re-placing the cup produces several events; the
 -- last one wins and the earlier ones stay here unattributed,
 -- which is exactly what you want when a dose looks wrong and you
 -- need to see what the scale actually saw.

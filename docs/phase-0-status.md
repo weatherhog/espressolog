@@ -867,15 +867,26 @@ Without J5 connected, the J2 dividers have no reference.
 - **J2 position 1** (+5 V common) — **not connected on this rig.** That is
   the only claim here that is an observation.
 
-  **CLAUDE.md contradicts itself about WHEN it enters the harness, and this
-  is safety-relevant, so it is flagged rather than quietly decided.**
-  Invariant 1 says *"from Phase 1 provisioning onward J2 position 1 rides in
-  the loom"*; the 0c section says *"Position 1 therefore rides in the
-  **Phase 0** harness"*. Both sit in the normative file and they are not the
-  same answer. A draft of this entry added a third statement and thereby
-  picked a side. **Do not resolve it from a bench-rig note** — that conductor
-  is where a bridge to a direction line starts a cycle and reprograms a
-  stored timer within 2 s, and no jumper on the board is in that path.
+  **RESOLVED 2026-10-27, in CLAUDE.md, in favour of PHASE 0.** Invariant 1
+  now reads *"**From PHASE 0 onward** J2 position 1 (+5 V common) rides in
+  the loom"*, which agrees with the 0c section (*"Position 1 therefore
+  rides in the **Phase 0** harness"*) and with the decision both derive
+  from: `docs/phase-0-plan.md` records *"SETTLED 2026-10-12: position 1
+  rides in the Phase 0 harness"*. **The exposure is live now, not at Phase
+  1** — that conductor is where a bridge to a direction line starts a cycle
+  and reprograms a stored timer within 2 s, and no jumper on the board is
+  in that path.
+
+  **What this entry said until then, and why it was right to say it:**
+  invariant 1 read *"from Phase 1 provisioning onward"*, the 0c section
+  said Phase 0, both sat in the normative file, and this entry flagged the
+  disagreement rather than picking a side — *"do not resolve it from a
+  bench-rig note"*. That was the correct call: the resolution came from the
+  plan's settled decision, not from this rig. Kept because the next person
+  to find two normative sentences disagreeing should do the same thing.
+
+  None of it changes the bench fact at the top of this bullet: position 1
+  is **not connected on this rig**, whatever phase the harness is in.
 - **J4's T-piece** — the breadboard circuit sits idle. With nothing on the
   junction, GPIO6 is pulled low through 220 kΩ: a defined level, harmless.
   **`+` must never be connected to anything**, which is why the whole T-piece
@@ -1616,12 +1627,24 @@ reading"**, with `2026-10-03-display-bus-buttons.sr` and bench garbage as
 the two fixtures. Recorded explicitly because "require three" is the
 cheaper-looking option and is the one someone will reach for.
 
-**`dropped` counts edges, and serial polling causes them.** During a
+**`dropped` counts edges, and serial polling is SUFFICIENT to cause them —
+it is not established as the cause of any other drop event.** During a
 polling loop `dropped` went 0 → 10266, then froze there across ~1500
 further frames once polling stopped. That shows polling is **sufficient**
 to cause drops; it does not show it is **necessary**, and because the brew
 overlapped the polling, **a brew has not been shown clean with no serial
 attached.**
+
+**Do not carry this over to the pump-start burst.** That is a different
+event — one burst of ~6086 edges at pump start, +164 across 30 s of
+pumping — and `docs/taps-and-dividers.md` is normative on it and retracted
+"serial polling" as its cause: a 3 s poll would drop *periodically*, not in
+one burst, and idle rows polled at the same cadence had the counter frozen.
+Its cause is **unidentified**; the candidates are the spool/BLE work at
+pour start and the serial traffic, unseparated, and `worst poll gap` is the
+discriminator. *(The headline here read "and serial polling causes them"
+until 2026-10-27, which the paragraph under it then walked back. The flat
+claim was the one a reader quoted.)*
 
 The ring tolerates a longer stall than the code comment implies.
 `DBUS_RING = 512` gives 511 usable slots, and the comment's "~50 ms" is the

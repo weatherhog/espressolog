@@ -213,14 +213,22 @@ CREATE TABLE shot (
                                         -- nothing here marks the lift path:
                                         -- settle_offset_g = 0 is the nearest tell
                                         -- and a flat stop can hit 0 by coincidence.
-                                        -- Seven of the first 46 shots are lifts.
+                                        -- Seven of the first 46 shots are lifts,
+                                        -- but that is overshoot.py's FILTERED
+                                        -- count (excluded = 0, yield >= 15 g, one
+                                        -- bean, one dial, one detector version),
+                                        -- not a census of the archive.
                                         -- firmware/src/detector.h is normative.
                                         --
                                         -- This comment asserted the backdating
                                         -- unconditionally for part of 2026-10-27,
                                         -- then put the lift at 5 s and the paths at
                                         -- mutually exclusive, across the three
-                                        -- reviews that day.
+                                        -- reviews that day. The lift count was then
+                                        -- left unscoped here while CLAUDE.md and
+                                        -- detector.h were both scoped -- this repo's
+                                        -- signature defect, in the commit fixing the
+                                        -- previous instance of it.
   stopped_by        TEXT CHECK (stopped_by IN
                       ('manual','board_timer','auto_weight','fault') OR stopped_by IS NULL),
   s_since_flush     REAL,               -- brew temp proxy on a single boiler

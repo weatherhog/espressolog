@@ -228,7 +228,7 @@ static void printDisplay(Stream& out) {
 // (strapping), 19/20 (native USB), 26-32 (flash) and 33-37 (octal PSRAM on
 // this N16R8 module — configuring one of those typically crashes the
 // firmware). The silkscreen check is DONE (2026-10-12) and the pin map is
-// confirmed label-to-die for all eight pins -- see CLAUDE.md's GPIO budget,
+// confirmed label-to-die for all seven pins -- see CLAUDE.md's GPIO budget,
 // which is normative. This comment told the reader to confirm it for four
 // days after it was closed; do not re-add an imperative here, point at
 // CLAUDE.md instead.
@@ -1140,8 +1140,10 @@ void loop() {
   // call net.tick(), whose HTTP path is synchronous with a 3 s connect and
   // 5 s response timeout. With the server unreachable and a record pending,
   // loop() stalls seconds at a time; the 64-entry sample queue holds ~3-6 s,
-  // the 512-entry display ring ~50 ms, and a 345-480 ms switch press is
-  // missed outright. It is a candidate explanation for the one burst of
+  // the 512-entry display ring ~50 ms, and a switch press (80-295 ms,
+  // 2026-10-19) is missed outright. (Cited "345-480 ms" until 2026-10-27:
+  // the superseded 2026-10-08 range. A SHORTER press makes the stall worse,
+  // not better, so the point stands a fortiori.) It is a candidate explanation for the one burst of
   // ~6086 dropped display edges at pump start that docs/phase-0-status.md
   // records as unexplained — not proof, but it predicts that signature.
   //

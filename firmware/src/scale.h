@@ -21,7 +21,9 @@ struct ScaleSample {
 
 // Dual-Bookoo manager around the vendored remote_scales library: slot per
 // role, role bound to a MAC in NVS, reconnect with backoff (the Themis
-// sleeps after ~15 min — reconnection is a steady state, not an error).
+// sleeps after ~9 min idle, MEASURED — reconnection is a steady state, not
+// an error. This said ~15 min until 2026-10-27; that figure's source was
+// never recorded and docs/phase-0-status.md already carried the measured 9).
 // Stage 1 uses only the YIELD slot; the DOSE slot arrives in stage 5.
 class ScaleManager {
 public:

@@ -705,9 +705,8 @@ fitted; what was measured is the symptom. J4's 10 nF (73.1 kΩ, 218 Hz) is
 arithmetically sound but attenuates 150 Hz by only 1.69 dB — "crushed" was
 wrong — and could *raise* the glitch count by turning the falling edge into a
 ~1.1 ms ramp through the noise band. J5's case is weaker still: those drops
-look like serial polling, not coupling (one burst at pump start, constant
-across two runs of different length, and this file already documents polling
-as the cause). If J5 ever gets one it is **470 pF, never 10 nF** — a
+are **not coupling** (one burst at pump start, constant across two runs of
+different length) **but their cause is UNIDENTIFIED**. If J5 ever gets one it is **470 pF, never 10 nF** — a
 2026-10-09 edit specified 10 nF, which against a 6.9 kΩ source is a 69 µs
 time constant facing 36 µs clock highs and would have stopped the bus
 decoding while presenting as a wiring fault.

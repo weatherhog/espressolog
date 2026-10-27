@@ -408,8 +408,16 @@ The rest are still worth running and none of them decides this on its own:
 
 1. **One shot and one free flush with the serial console DETACHED**, counts
    read before and after, **durations recorded**. Detaching serial removes
-   the documented cause of display-ring drops (see the 0e entry) and gives
+   **one of the two unseparated candidates** for the display-ring drops —
+   the other is the spool/BLE work at pour start — and gives
    the second rate point that a single 22.2 Hz datum cannot provide.
+
+   *(This said serial was "the documented cause" until 2026-10-27, citing
+   "the 0e entry" in CLAUDE.md, which never said it.
+   `docs/taps-and-dividers.md` retracts the cause as unidentified, so the
+   experiment is still worth running but it **separates two candidates**
+   rather than removing a known cause. Record `worst poll gap`: that is
+   the actual discriminator.)*
 2. **Deliberately re-run the dry case** — pump on, no water drawn. If 11
    counts reproduces, the counts track water and the withdrawn conclusion was
    backwards. **Sample the WHOLE pump-on window this time** — baseline before

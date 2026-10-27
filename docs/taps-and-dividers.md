@@ -283,8 +283,22 @@ of 0.7 V rather than the measured 0.3 V, the pin is 0.45 V — still
 
 **Drift on the board's own 10.04 kΩ and 147.4 kΩ does not threaten this.**
 They were measured cold and unpowered and live next to a boiler, but they
-move together in the ratio and 340 kΩ ≫ 10 kΩ, so the margin is nearly
-flat: **+177 mV at ±1 %, +160 at ±5 %, +136 at ±10 %, +111 mV at ±15 %.**
+move together in the ratio and the divider ≫ 10 kΩ, so the margin is
+nearly flat.
+
+> **THESE DRIFT FIGURES ARE THE SUPERSEDED 120 K ONES — do not quote them.**
+> Until 2026-10-27 this paragraph read *"340 kΩ ≫ 10 kΩ … +177 mV at ±1 %,
+> +160 at ±5 %, +136 at ±10 %, +111 mV at ±15 %"*. **340 kΩ is 120 K + 220 K**,
+> and **+177 mV is exactly the 120 K worst-case cell in the table above** —
+> the whole sequence was computed for the divider this file rejects. The
+> built divider is **100 K + 220 K = 320 kΩ**, whose worst case is **+348 mV**
+> (table above, authoritative). The ±5/±10/±15 % drift sequence for 320 kΩ
+> **has not been recomputed** and is deliberately not guessed at here. The
+> *conclusion* is unaffected and in fact strengthened — 100 K starts
+> 171 mV further clear than 120 K and drift is a second-order effect on the
+> ratio — but the four numbers were wrong, which is this repo's signature
+> defect: a value corrected in the table and left standing in the prose
+> beside it.
 
 **The 4.681 V prediction matching 4.69 V to 0.2 % is luckier than the
 instrument.** It confirms the *model* — a resistive divider off the 5 V

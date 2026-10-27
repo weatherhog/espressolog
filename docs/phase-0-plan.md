@@ -41,7 +41,7 @@ work and none of the danger.
 - ESP32 connects to a Bookoo as BLE central, samples at 10 Hz
 - Detect shot start/end from weight rate of change
 - Buffer the curve in RAM, write to flash on completion
-- Publish to a server, write to SQLite using `schema.sql`
+- Publish to a server, write to SQLite using `server/migrations/`
 - Serve the web UI
 
 **Second scale.** You have two. Pair both: one under the cup, one for
@@ -80,8 +80,10 @@ Real shot boundaries and flush events from the machine itself.
 - Idle low, **high when pressed** (+5 V → R45 100 R → switch common),
   measured 2026-10-04.
 - **The stored durations are not constants.** This machine's 1Cup is ~10.5 s,
-  not the 15 s default, because it was reprogrammed by hand; 2Cup's stored
-  value is unknown. An earlier version of these bullets quoted 15 s and 60 s
+  not the 15 s default, because it was reprogrammed by hand; **2Cup is 45 s**,
+  not the 60 s default, set deliberately by the operator and recorded
+  2026-10-19 *(this bullet said "unknown" until 2026-10-27; every other site
+  had been updated)*. An earlier version of these bullets quoted 15 s and 60 s
   as properties of the model. They are user-modifiable state.
 
 Sense with a **resistor divider straight into an ESP32 GPIO**. Not an
@@ -356,9 +358,17 @@ decoding, which would present as a wiring fault rather than a filter error.
 section called them "a measured requirement"; what was measured is the
 symptom, and no capacitor has been fitted. The J4 case has an unexamined
 failure mode (a ~1.1 ms edge through the noise band can *raise* the glitch
-count) and the J5 case rests on drops that look like serial polling rather
-than coupling. **Leave the footprints, decide after the re-measurement**
-described in `docs/phase-0-status.md`.
+count) and the J5 case rests on drops whose cause is **unidentified**.
+**Leave the footprints, decide after the re-measurement** described in
+`docs/phase-0-status.md`.
+
+*(This said the J5 drops "look like serial polling rather than coupling"
+until 2026-10-27. `docs/taps-and-dividers.md` is normative and retracts
+that: a 3 s poll would drop periodically, not in one burst, and idle rows
+polled at the same cadence had the counter frozen. Coupling is still
+excluded; what replaces polling is "a one-off stall around pour start",
+with the spool/BLE work and the serial traffic unseparated. `worst poll
+gap` is the discriminator.)*
 
 #### Topology, per actuated line
 
@@ -1095,15 +1105,21 @@ section should still wait for a 0f re-run.
 
 ---
 
-## Suggested architecture
+## Suggested architecture — SUPERSEDED, kept as the day-one plan
+
+> **This section is the original day-one sketch. `CLAUDE.md`'s
+> *Architecture (decided — don't relitigate)* is normative and differs on
+> the transport.** The diagram below was left unmarked until 2026-10-27,
+> so the plan was still advertising a decision the architecture had
+> reversed — and doing it in a picture, which is what a newcomer reads.
 
 ```
 Bookoo #1 ──BLE──┐
 Bookoo #2 ──BLE──┤
-                 ├── ESP32-S3 ──MQTT──► server ──► SQLite
-switch sense ────┤    (10 Hz)          (homelab)      │
-flowmeter ───────┤                                    │
-display bus ─────┘                          web app ──┘
+                 ├── ESP32-S3 ──HTTP POST──► server ──► SQLite
+switch sense ────┤    (10 Hz)   (+ WebSocket  (homelab)     │
+flowmeter ───────┤               for live)                  │
+display bus ─────┘                          web app ────────┘
                                                  │
                                               tablet
 ```
@@ -1111,10 +1127,15 @@ display bus ─────┘                          web app ──┘
 **Why the tablet only talks to the server:** Web Bluetooth doesn't exist
 on iPadOS in any browser, and a tablet that falls asleep mid-shot must
 never be able to lose a shot. The ESP32 owns the radio and the timing;
-the tablet is a screen.
+the tablet is a screen. *(This part survives unchanged.)*
 
-**Why MQTT:** 10 Hz of samples is nothing, you get fan-out for free, and
-when Phase 1 arrives the command path is already there.
+**NOT MQTT, and this said "Why MQTT" until 2026-10-27.** `CLAUDE.md`:
+*"HTTP POST, not MQTT, for shot upload in Phase 0. Simpler, curl-able, and
+the flash spool already handles retries. MQTT arrives in Phase 1 when
+there's a command path to carry."* The original argument — fan-out is free
+and Phase 1 needs the command path — was not wrong about Phase 1; it was
+wrong that Phase 0 should pay for it early. MQTT still carries the Home
+Assistant summary entities.
 
 **Spool locally.** ESP32 writes each completed shot to flash and retries
 the upload. Never lose a shot because the server was rebooting.

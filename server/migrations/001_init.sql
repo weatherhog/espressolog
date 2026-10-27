@@ -178,6 +178,7 @@ CREATE TABLE shot (
                                         --   flat stop  - backdated STOP_WINDOW_MS
                                         --     (2 s) from the sample that confirmed
                                         --     it; yield_at_stop_g is that instant
+                                        -- fact:stop-ms-backdating backdated STOP_WINDOW_MS
                                         --   truncated  - the confirming sample,
                                         --     not backdated (yield_at_stop_g is
                                         --     still that instant)
@@ -188,6 +189,7 @@ CREATE TABLE shot (
                                         --     backdated value, so it can sit
                                         --     STOP_WINDOW_MS + SETTLE_MS (~7 s,
                                         --     not 5 s) after the real stop
+                                        -- fact:stop-ms-lift-bound STOP_WINDOW_MS + SETTLE_MS|~7 s
                                         --   reject     - the sub-5 g FLAT ABORT
                                         --     (detector.cpp:348-359) assigns NONE
                                         --     of these: stop_ms = 0,
@@ -218,6 +220,7 @@ CREATE TABLE shot (
                                         -- count (excluded = 0, yield >= 15 g, one
                                         -- bean, one dial, one detector version),
                                         -- not a census of the archive.
+                                        -- fact:lift-count-46 Seven of the first 46|excluded = 0
                                         -- firmware/src/detector.h is normative.
                                         --
                                         -- This comment asserted the backdating

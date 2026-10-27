@@ -1193,6 +1193,8 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   | `truncated = 1` (`MAX_SHOT_MS`, 60 s) | the confirming sample, **not** backdated | that same instant |
   | **cup lifted** (`finalizeLifted`) | the last retained sample | `running_max`, which may be earlier |
 
+  <!-- fact:stop-ms-backdating backdated STOP_WINDOW_MS -->
+
   **THE ROWS ARE NOT MUTUALLY EXCLUSIVE.** `finalizeLifted()` never clears
   `res.truncated`, so a shot force-stopped at 60 s and *then* lifted during
   settling reads `truncated = 1` with lift-derived values. **A query that
@@ -1204,7 +1206,7 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   runs before the settle window expires, so the lift lands as late as the
   confirming sample + `SETTLE_MS` — and because the value it overwrites was
   that sample − `STOP_WINDOW_MS`, **`stop_ms` ends up to
-  `STOP_WINDOW_MS + SETTLE_MS`, ~7 s, after the real stop, not 5 s.**
+  `STOP_WINDOW_MS + SETTLE_MS`, ~7 s, after the real stop, not 5 s.** <!-- fact:stop-ms-lift-bound@1 STOP_WINDOW_MS + SETTLE_MS|~7 s -->
   (Off the `truncated` entry there is no backdating to undo, so that one
   really is bounded by `SETTLE_MS`.) It also zeroes `settle_offset_g`.
   `valid`/`fault`/`truncated` read exactly as a normal stop;
@@ -1214,7 +1216,7 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   a ≥ 4 s tail rather than trusting the field). **Seven is scoped to that
   script's filter, not to the archive** — it admits only `excluded = 0`,
   yield ≥ 15 g, one bean, one dial, one `detector_version`, so a lift under
-  5 g (`excluded = 1`) or one peaking under 15 g never reaches the count.
+  5 g (`excluded = 1`) or one peaking under 15 g never reaches the count. <!-- fact:lift-count-46 Seven of the first 46|excluded = 0 -->
   **Shot 37 is not on this path**: its decline never crossed `LIFT_DROP_MG`,
   so `finalizeLifted()` never ran for it — though that rests on
   `overshoot.py`'s prose, not on shot data, which this repo does not carry.

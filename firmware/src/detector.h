@@ -30,6 +30,7 @@ struct ShotResult {
   //     t_then; that's the stop".
   //   truncated (MAX_SHOT_MS) — the confirming sample itself, NOT backdated.
   //   finalizeLifted() — the last retained sample. Not backdated.
+  // fact:stop-ms-backdating backdated STOP_WINDOW_MS
   //
   // finalizeLifted() HAS TWO CALL SITES AND THEY ARE NOT ALIKE. From POURING
   // (detector.cpp:323-334) the drop must persist LIFT_HOLD_MS and the
@@ -44,6 +45,7 @@ struct ShotResult {
   // later than the stop — NOT SETTLE_MS alone. Entered from the truncated
   // path there was no backdating to undo, so there the bound really is
   // SETTLE_MS.
+  // fact:stop-ms-lift-bound STOP_WINDOW_MS + SETTLE_MS|~7 s
   //
   // truncated IS NOT EXCLUSIVE OF THE LIFT PATH. finalizeLifted() never
   // clears res.truncated, so a shot force-stopped at MAX_SHOT_MS and then
@@ -53,16 +55,17 @@ struct ShotResult {
   //
   // The lift path is not rare and nothing in this struct flags it:
   // valid/fault/truncated all read as a normal stop, settle_offset_mg == 0 is
-  // the nearest tell and a flat stop can hit 0 by coincidence. Seven of the
-  // first 46 logged shots are in it (analysis/overshoot.py, which finds them
-  // by requiring a >= 4 s tail rather than trusting the field). SEVEN IS
-  // SCOPED TO THAT SCRIPT'S FILTER, not to the archive: its query admits only
-  // excluded = 0, yield >= 15 g, one bean, one dial, one detector version, so
-  // a lift under 5 g (excluded = 1) or one that peaked under 15 g is invisible
-  // to it. Do not read it as a census either way. Shot 37 is NOT on this path
-  // — its decline never crossed LIFT_DROP_MG, so finalizeLifted() never ran
-  // for it — though that rests on overshoot.py's prose, not on shot data,
-  // which this repo does not carry.
+  // the nearest tell and a flat stop can hit 0 by coincidence.
+  // Seven of the first 46 logged shots are in it (analysis/overshoot.py,
+  // which finds them by requiring a >= 4 s tail rather than trusting the
+  // field). SEVEN IS SCOPED TO THAT SCRIPT'S FILTER, not to the archive: its
+  // query admits only excluded = 0, yield >= 15 g, one bean, one dial, one
+  // detector version, so a lift under 5 g (excluded = 1) or one that peaked
+  // under 15 g is invisible to it. Do not read it as a census either way.
+  // fact:lift-count-46 Seven of the first 46|excluded = 0
+  // Shot 37 is NOT on this path — its decline never crossed LIFT_DROP_MG, so
+  // finalizeLifted() never ran for it — though that rests on overshoot.py's
+  // prose, not on shot data, which this repo does not carry.
   //
   // A FOURTH path assigns this field nothing at all: the sub-5 g flat abort
   // (detector.cpp:348-359) returns true with stop_ms, yield_at_stop_mg and

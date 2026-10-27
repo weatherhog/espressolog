@@ -186,6 +186,21 @@ REQUIRED = {
     # The 3.0 mA operate guarantee is a 25 C figure. The value pins both the
     # number and its temperature, so a site that drops the qualifier fails.
     "photomos-guarantee-25c":   {"min_files": 2, "min_sites": 5, "claude_md": False},
+    # The stop_ms trio, tagged 2026-10-27 after FIVE review rounds on one
+    # sentence, each of which corrected it in some of these three files and
+    # not the others. Untagged duplication is exactly what this script is
+    # for, and these were the most-restated untagged facts in the repo.
+    # min_sites is set because all three facts crowd into the same three
+    # files: min_files alone cannot see one of the three markers deleted.
+    "stop-ms-backdating":  {"min_files": 3, "min_sites": 3, "claude_md": True},
+    # The lift-during-SETTLING overwrite. Its whole history is a wrong
+    # bound: 5 s where it is STOP_WINDOW_MS + SETTLE_MS, understated by
+    # exactly the backdating the paragraph exists to explain.
+    "stop-ms-lift-bound":  {"min_files": 3, "min_sites": 3, "claude_md": True},
+    # The count AND its scope. `excluded = 0` is a needle because the drift
+    # that actually happened was the qualifier being dropped, not the seven:
+    # overshoot.py's filter is what makes it seven rather than a census.
+    "lift-count-46":       {"min_files": 3, "min_sites": 3, "claude_md": True},
 }
 
 SCAN_SUFFIXES = (".md", ".h", ".cpp", ".c", ".go", ".sql", ".py")

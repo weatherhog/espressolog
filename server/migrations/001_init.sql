@@ -197,13 +197,12 @@ CREATE TABLE shot (
                                         -- excluded = 1 / 'reject: under 5 g' DOES
                                         -- NOT identify that abort. spool.cpp flags
                                         -- a reject as (!valid && !fault), and two
-                                        -- other paths qualify -- a lift, or a flat
-                                        -- stop, that ends under 5 g -- both of
-                                        -- which assign real values. The ZEROS are
-                                        -- the tell, not the flag -- and even they
-                                        -- are not airtight: a lift trimmed back to
-                                        -- no samples (detector.cpp:328-332) also
-                                        -- stores stop_ms = 0.
+                                        -- other routes qualify: a lift under 5 g,
+                                        -- and anything reaching finishShot() --
+                                        -- flat stop OR truncated -- whose final
+                                        -- yield lands under 5 g. Those assign a
+                                        -- real stop_ms. So read the FIELDS, not
+                                        -- the flag. No single column is a proof.
                                         --
                                         -- THESE CASES ARE NOT EXCLUSIVE: a shot
                                         -- truncated at 60 s and THEN lifted reads

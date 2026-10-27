@@ -55,18 +55,22 @@ struct ShotResult {
   // valid/fault/truncated all read as a normal stop, settle_offset_mg == 0 is
   // the nearest tell and a flat stop can hit 0 by coincidence. Seven of the
   // first 46 logged shots are in it (analysis/overshoot.py, which finds them
-  // by requiring a >= 4 s tail rather than trusting the field). Seven is the
-  // count, NOT a floor: overshoot.py also sets shot 37 aside, but that one's
-  // decline never crossed LIFT_DROP_MG, so finalizeLifted() never ran for it
-  // — a physical slow lift the detector finished through finishShot(), with a
-  // real settle window and a measured settle_offset_mg. Different population.
+  // by requiring a >= 4 s tail rather than trusting the field). SEVEN IS
+  // SCOPED TO THAT SCRIPT'S FILTER, not to the archive: its query admits only
+  // excluded = 0, yield >= 15 g, one bean, one dial, one detector version, so
+  // a lift under 5 g (excluded = 1) or one that peaked under 15 g is invisible
+  // to it. Do not read it as a census either way. Shot 37 is NOT on this path
+  // — its decline never crossed LIFT_DROP_MG, so finalizeLifted() never ran
+  // for it — though that rests on overshoot.py's prose, not on shot data,
+  // which this repo does not carry.
   //
   // A FOURTH path assigns this field nothing at all: the sub-5 g flat abort
   // (detector.cpp:348-359) returns true with stop_ms, yield_at_stop_mg and
   // settle_offset_mg left at their res = {} zeros. It is spooled and
   // ingested like any other record, but store.go marks it excluded = 1,
-  // 'reject: under 5 g' — the flag is the only thing keeping those zeros out
-  // of a query, and NEITHER v_shot definition filters on it.
+  // 'reject: under 5 g' — which keeps it out of any query that honours the
+  // flag, though the flag is broader than this path (see 001_init.sql) and
+  // NEITHER v_shot definition filters on it.
   //
   // Said "t of first sample below the stop threshold" until 2026-10-27, left
   // from the withdrawn dw/dt rule; there is no stop threshold now. The fix

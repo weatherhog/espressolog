@@ -1211,11 +1211,14 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   `settle_offset_g = 0` is the nearest tell
   and a flat stop can hit 0 by coincidence. **Seven of the first 46 logged
   shots are in it** (`analysis/overshoot.py`, which finds them by requiring
-  a ≥ 4 s tail rather than trusting the field). **Seven is the count, not a
-  floor** — `overshoot.py` sets shot 37 aside too, but its decline never
-  crossed `LIFT_DROP_MG`, so `finalizeLifted()` never ran for it: a physical
-  slow lift the detector finished through `finishShot()`, with a real settle
-  window and a measured `settle_offset_g`. So "subtract 2 s" is right for
+  a ≥ 4 s tail rather than trusting the field). **Seven is scoped to that
+  script's filter, not to the archive** — it admits only `excluded = 0`,
+  yield ≥ 15 g, one bean, one dial, one `detector_version`, so a lift under
+  5 g (`excluded = 1`) or one peaking under 15 g never reaches the count.
+  **Shot 37 is not on this path**: its decline never crossed `LIFT_DROP_MG`,
+  so `finalizeLifted()` never ran for it — though that rests on
+  `overshoot.py`'s prose, not on shot data, which this repo does not carry.
+  So "subtract 2 s" is right for
   the common case and wrong for ~15 % of the archive.
 
   **A FOURTH PATH ASSIGNS NONE OF THESE FIELDS**, so it is not in the table

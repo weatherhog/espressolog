@@ -1772,8 +1772,10 @@ state; closing it is the deliberate act, with the RC chosen first.
    all say 80 for the same 2026-09-29 snapshot — as does every other figure
    in this paragraph. Left as written rather than silently corrected, per
    this repo's retraction convention. **And 80 is the SNAPSHOT, not the
-   archive**: line 75 of this file counts **137** shots in production on
-   2026-10-13. Flagged 2026-10-27.)* Robust estimates agree (MAD × 1.4826), flow shows no
+   archive**: the *"The deploy and the flash — 2026-10-13"* section of this
+   file counts **137** shots in production. Flagged 2026-10-27. (Cited as
+   "line 75" in a draft — a line number into a markdown document, which
+   this repo names as its own worked example of a citation that rots.)* Robust estimates agree (MAD × 1.4826), flow shows no
    drift across five weeks, and bean age is not a confound
    (corr = +0.13 over 16–39 days off roast).
 

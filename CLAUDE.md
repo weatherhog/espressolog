@@ -1231,19 +1231,33 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   as many words: *"VERIFIED ON 80 ROWS, RUNS AGAINST MORE. The snapshot is
   2026-09-29"*. **Production is larger and was counted at 137**
   (`docs/phase-0-status.md`, 2026-10-13, `user_version = 8`, counted twice —
-  live and in an `integrity_check ok` backup). Neither `v_shot` definition
-  filters, so a shot row is a shot.
+  live and in an `integrity_check ok` backup). **009 also carries a
+  production ESTIMATE that the count supersedes** — *"production is at 8
+  with ~30 more shots"*, i.e. ~110, written the day before the 137 was
+  counted. Take the count, not the estimate.
+
+  Neither `v_shot` definition **filters**, so neither drops a shot — but
+  only `005`'s picks a single tasting, and `001`'s `LEFT JOIN tasting`
+  multiplies a twice-tasted shot into two rows, which is why `005` exists.
+  The snapshot ran at `user_version 6`, so `005` was in force and its
+  `SELECT * FROM v_shot` is one row per shot. 80 → 137 is growth, not view
+  scope.
 
   **Both numbers are MEASURED; what was wrong was stating one of them
   unscoped.** Five files outside this one state a total —
   `analysis/0f-noise-floor.ipynb`, `009_unwrite_unconfirmed_recipe.sql`
   (twice), `server/internal/store/store.go` and `web/src/Capture.jsx`, all
-  **80 for the snapshot**; and `docs/phase-0-status.md`, which says **137**
-  twice (production) and **78** once. That 78 is a transcription slip, not a
+  **80 for the snapshot**; and `docs/phase-0-status.md`, which states
+  **137** at **three** sites (the live count, its backup copy, and the
+  post-migration simulation) and **78** once. That 78 is a transcription
+  slip, not a
   rival count: every other figure in its paragraph (σ 0.21 / 3.43,
   12.2 % / 14.2 %, n=46, corr +0.13) matches the notebook's 80-shot run
-  exactly. *(A draft of this sentence said "six files", copied from a review
-  without recounting — in the paragraph about not copying denominators.)*
+  exactly. *(Two drafts of this sentence miscounted: "six files", copied
+  from a review without recounting, and "137 twice" when the commit message
+  that shipped it had already said three. Both in the paragraph about not
+  copying denominators — which is the argument for `grep` over any prose
+  census, this one included.)*
 
   **Two drafts of this passage got it wrong in the same way**, which is why
   the scope is stated before the number now. The first called it a two-way

@@ -69,7 +69,9 @@ struct ShotResult {
   // RATE is unknown against either, and 7/45 does not approximate it -- the
   // filter strips the low-yield and excluded shots most likely to BE lifts
   // (finalizeLifted() sets valid = running_max >= REJECT_MIN_MG, so a
-  // sub-5 g lift lands as excluded = 1). Seven is that script's prose.
+  // sub-5 g lift lands as excluded = 1). Seven is that script's prose, and
+  // nobody can recount it from here: this repo carries no shot data (the
+  // only .bin fixtures are two wire-format records for the decoder).
   // Said "seven of the first 46 logged shots" until 2026-10-27, and was
   // briefly a check-facts fact, which froze the wrong denominator into CI.
   // Shot 37 is NOT on this path — its decline never crossed LIFT_DROP_MG, so

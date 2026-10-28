@@ -9,7 +9,8 @@
 > published v1.1 layout is correct for this clone, the seven taps are
 > contiguous at positions 4–10 with 3V3 at 1 and GND at 22, 5Vin-beside-GND
 > is a solder hazard, no tap draws from 3V3, 2.54 mm pitch, 10-pitch row
-> spacing, an 11 × 22 footprint, buy 7 × 9 cm and count the holes. Those are
+> spacing, an 11 × 22 pin footprint in a ~25-row body, the board is
+> 10 × 10 FR-4 and count the holes. Those are
 > what a reader acts on; the enumeration and the retraction history below are
 > what they rest on.
 >
@@ -355,7 +356,9 @@ accounting properly — **a draft of this paragraph got it backwards**:
 | | holes | devkit pin field | free beside it | free underneath |
 |---|---|---|---|---|
 | 5 × 7 cm | 19 × 27 = 513 | 11 × 22 | **8 × 27 = 216** | 9 × 22 = 198 |
-| 7 × 9 cm | 27 × 35 = 945 | 11 × 22 | **16 × 35 = 560** | 9 × 22 = 198 |
+| 7 × 9 cm — *nominal, and not what is sold* | 27 × 35 = 945 | 11 × 22 | **16 × 35 = 560** | 9 × 22 = 198 |
+| 7 × 9 cm — **as actually sold** | 24 × 30 = 720 | 11 × 22 | **13 × 30 = 390** | 9 × 22 = 198 |
+| **10 × 10 cm FR-4 — BOUGHT 2026-10-28** | **35 × 37 = 1295** | 11 × 22 | **24 × 37 = 888** | 9 × 22 = 198 |
 
 That draft said 5 × 7 "does not fit" because "the devkit eats 22 of the 27
 rows, leaving five" — which treats the devkit's **11-column** footprint as if
@@ -364,10 +367,20 @@ it spanned the full 19-column width. It does not. And it quoted 7 × 9 as
 5 × 7 offers beside the devkit**. By its own metric the draft argued against
 its own conclusion.
 
-**7 × 9 is still the right buy**, for soldering room rather than necessity:
-560 contiguous holes against 216, with the actuation block, four J2 dividers,
-the J4 divider and two J5 resistors to place. But "5 × 7 does not fit" is not
-what the numbers say.
+**7 × 9 WAS the right buy on these numbers, and it is SUPERSEDED BY 10 × 10
+FR-4 as of 2026-10-28** — `docs/shopping-list.md` §5 is normative on the
+replacement. The reasoning here was *"soldering room rather than
+necessity: 560 contiguous holes against 216"*, and **that 560 assumed a
+nominal 27 × 35**. Commodity 7 × 9 boards are **24 × 30 = 720**, giving
+**390 beside the devkit** — a 30 % cut in the only quantity the choice
+rested on, and below the "often ~24 × 34" hedge three paragraphs down. The
+board bought is **35 × 37 = 1295, ~888 beside**, and the argument that
+settles it is `docs/phase-0-plan.md`'s requirement that pos 1 keep
+*"maximum spacing from the four direction lines"* on the board: ~61 mm
+there against ~33 mm on 7 × 9.
+
+But "5 × 7 does not fit" is still not what the numbers say, and that
+correction is the reason this table exists.
 
 **Footprint is the pin field, not the outline.** 11 × 22 holes is 25.4 ×
 53.3 mm of *pins*; the PCB overhangs at both ends (module/antenna one end,

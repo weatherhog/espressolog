@@ -16,15 +16,71 @@ at **8 × photoMOS (4 in service, 4 spare) and 3 × 2-pin header**, decided
 
 ---
 
-## 1. Already ordered — don't buy twice
+## 1. Order status — don't buy twice
+
+**THE ORDER IS CLOSED AS OF 2026-10-28. Nothing is outstanding.**
+
+**This section used to be a list headed "Already ordered" with no status
+column, and that is the defect this restructure fixes.** Asked on
+2026-10-28 what was still missing, nobody could answer it from this file:
+it recorded deliberation, carried nothing about the Mouser, Reichelt or
+AliExpress orders, and the perfboard and the board wire had both fallen out
+of the ordering entirely because the decisions behind them were settled in
+conversation and never written down. **A BOM without a status column is not
+a BOM.** Keep the three states below.
+
+### Received
 
 | Item | For |
 |---|---|
 | **Mixed JST-XH balance extension pack, 2S/3S/4S/5S/6S** (GTIWUNG, €6.99) | the T-pieces — covers J4 (2S), **J5 (3S)**, J2 (4S) |
 | JST XH connectors (`XHP-4/5/3`, `SXH-001T-P0.6`, `B*B-XH-A`) | now optional, see §2 |
-| Silicone hookup wire, 26 AWG | all harnesses |
-| 150 kΩ resistors | 0c switch dividers |
+| Silicone hookup wire, 26 AWG | harness branch wires |
+| **24 AWG solid core, 7 colours, 7 × 9 m** (Haerkn, €16.98) | **all board point-to-point — see §5** |
+| 8.2 K, 15 K, 100 K, 150 K, 220 K, 1 K resistors | every divider; complete since 2026-10-08 |
+| **Female header strips, 40-pin single-row, ×10** (CHANZON, €4.59) | devkit sockets — wanted 5, over-covered |
+| **XH board headers, SIDE-ENTRY (90°), 3/4/5-pin, ×10 each** (€6.54) | one per harness — wanted ×5 each, over-covered. **Right-angle, the `S`-series equivalent — see §5** |
+| **Round-hole DIP-16 sockets ×10** (IBUW, €2.19) | the `CD74HC221E` |
 | Multimeter | replacing the broken one |
+| Pinecil V2 + BC2/D24 tips | §6 |
+| Cable gland, cable ties | operator already had them |
+| M3 screws + standoffs | operator already had them — never costed here, and it never needed to be |
+
+### Ordered, in transit
+
+**Reichelt, €42.28, 2026-10-27.** `CD74HC221E` ×10 · BC547B ×14 · 330 Ω ×25
+· **330 K ×10 and 470 K ×10** · MKT 470 nF / 680 nF / 1 µF ×10 each ·
+470 pF NP0 ×10 · 100 nF X7R ×10 · `DIL08PZ` ×10 · `DIL16PZ` ×10 ·
+`WSL040G` male header · adhesive 3:1 heat-shrink 4.8 mm and 6.0 mm, 1 m each.
+
+**AliExpress.** AQY212EH DIP-4 ×10.
+
+**Amazon.** **Perfboard 10 × 10 cm, FR-4, 1.6 mm, 1295 holes, ×5** — ordered
+2026-10-28; supersedes 7 × 9, see §5.
+
+**The RC pair is the point of the 330 K / 470 K order**, and it is not
+obvious from the line item: against the three MKT values it gives a
+six-point sweep for the one-shot, which is the measurement this project has
+been unable to make. `t_W = 0.7·R·C`:
+
+| | 470 nF | 680 nF | 1 µF |
+|---|---|---|---|
+| **330 kΩ** | **109 ms** | 157 ms | 231 ms |
+| **470 kΩ** | 155 ms | 224 ms | 329 ms |
+
+All six are far below the ~2 s reprogram threshold. **109 ms may be too
+short** — the latching minimum is bounded only at "under ~140 ms", true
+value in [23, 137] ms — which is exactly why a sweep was bought rather than
+a pair. `t_W = 0.7·R·C` is characterised at 4.5 V and this runs at 3.3 V,
+so the widths above are predictions to check on the bench, not values to
+build to.
+
+### Outstanding
+
+**Nothing.** The only open question is not a part: whether the harness can
+be terminated in female XH housings at the board end with what is in hand
+(the `XHP`/`SXH` parts in *Received* need crimping), or whether a
+pre-crimped kit (~€10) is needed after all. See §2.
 
 **One of each, not five of each — so there is exactly one 3S.** The J5
 T-piece is a strip-a-window-and-solder job, and if it goes wrong there is
@@ -337,16 +393,62 @@ because the machine caught it:
 
 | Item | ~€ | Notes |
 |---|---|---|
-| PTFE or fibreglass sleeving, 2–4 mm, 200 °C+ | 8 | Silicone wire is good to ~200 °C on its own, so this is for abrasion and for anything routed near the boiler or group. Ordinary PVC sleeving and standard heat-shrink are not. |
+| ~~PTFE or fibreglass sleeving, 2–4 mm, 200 °C+~~ **WITHDRAWN 2026-10-28** | 0 | Silicone wire is good to ~200 °C on its own, so this was for abrasion and for anything routed near the boiler or group (ordinary PVC sleeving and standard heat-shrink are not). **Not being bought: the T-pieces are being fabricated SHORT**, which takes the wire out of the hot zone instead of insulating it there. Operator's call, and it addresses the cause rather than the symptom. **Reinstate this row if the T-pieces end up long after all** — the reason the sleeving existed has not gone away, only the exposure it covered. |
+| **Board wire: 24 AWG solid core, 7 colours** | 0 | **IN HAND, and this row did not exist until 2026-10-28** — the decision was settled in conversation a week earlier and never written down, so it fell out of the ordering. **Solid core, not the 30 AWG silicone** priced in `docs/phase-0-plan.md`: silicone is stranded and floppy, which is right for a harness that must survive vibration and wrong for perfboard point-to-point. **No bare bus wire is needed** — one of the seven colours serves as the ground bus; bare tinned wire only buys soldering anywhere along a run without stripping. **Spend four colours on the J2 direction lines**, because **2Cup is position 3 and 1Cup is position 4** and reading that list as positional swaps the shot with the clean cycle — a mistake that stays silent until a shot comes out as a flush. |
 | Heat-shrink assortment, **adhesive-lined** | 6 | Strain relief at the T-piece branches, and over the stripped window. Adhesive-lined or nothing — plain heat-shrink is not insulation on its own. |
 | Breadboard, 830-point | 6 | For the **J5 bench test before the perfboard**. **Corrected 2026-10-12:** a DevKitC-1 straddles a standard board with its headers in columns **A and I** — 1.0 in row-to-row — so **one row (J) stays free**, not none as this line said. The advice is unchanged and was followed: put only the resistor junctions on the breadboard and jumper across to the devkit's headers. Note that is exactly why the ESP was NOT seated during the bench sessions, which a later commit wrongly cited as proof of the pin pitch. |
 | **Jumper wires, male-female AND male-male** | 6 | The easily-forgotten part. M-F reaches the devkit header pins from the breadboard. |
-| **XH board headers: 3, 4 and 5 pin** | 3 | **×5 each, decided 2026-10-12.** The perfboard gets one socket per harness: **3-pin J4** (`B3B-XH-A`), **4-pin J5** (`B4B-XH-A`), **5-pin J2** (`B5B-XH-A`). **The pin counts self-key** — nothing can be cross-plugged, so do not standardise them to one size for tidiness. Side-entry `S`-series if the printed box has a side gland; decide before designing the box. **Gender:** the board takes the **male** headers and the cable end takes the **female** housing from the pre-crimped kit — XH has no cable-mount male part at all, which is why the machine end still needs balance extension leads. |
-| Perfboard **7 × 9 cm** ×2 + **FEMALE** pin headers ×5 | 6 | The dividers want to live on a board, not in mid-air. **Female** so the ESP32 sockets in and comes out — soldering the devkit down means it cannot be swapped or easily reflashed. **Size settled 2026-10-12: 7 × 9, not 5 × 7.** The devkit's footprint is 11 columns × 22 rows (pin rows 10 pitches apart, 22 pins long) and a 5 × 7 board is only ~27 rows, so the devkit alone would take 22 of them. Count the holes on what arrives; centimetre labels vary. **Buy 2 boards** — the dividers can live in the 9 free columns *under* the socketed devkit, which is tight soldering with the actuation block on the same board, and a second board is cheaper than discovering that with copper committed. **Buy 5 header strips**: 1×40 is the standard item, you cut each to 22 (losing the position you cut through), you need two, and female strips do not snap cleanly like male ones so the first one is practice. |
+| **XH board headers: 3, 4 and 5 pin** | 3 | **×5 each, decided 2026-10-12.** The perfboard gets one socket per harness: **3-pin J4** (`B3B-XH-A`), **4-pin J5** (`B4B-XH-A`), **5-pin J2** (`B5B-XH-A`). **The pin counts self-key** — nothing can be cross-plugged, so do not standardise them to one size for tidiness. **SIDE-ENTRY (90°), DECIDED BY PURCHASE 2026-10-28.** This row said *"side-entry `S`-series if the printed box has a side gland; decide before designing the box"* — that is now settled, and settled the way the row anticipated. **The harnesses leave the board SIDEWAYS, parallel to it**, so a side gland is the natural placement and the box needs side clearance for the plug body plus wire bend radius rather than headroom above the board. **It can therefore be flatter than the ~40 mm the box note assumes** — worth checking when the box is designed, since that figure predates this.
+
+**Provenance, because this repo has been caught by exactly this before:** the AliExpress listing calls these parts *"XH 2.54mm **Vertical**"*, and they are **not** — they are right-angle, confirmed from the parts in hand. This file already records a listing whose spec table said "JST EH" for a part that was plainly XH, and draws the rule from it: **verify by mating, not by reading.** A first draft of this entry took "Vertical" from the listing and wrote the opposite consequence — the harnesses leaving *upward* and a side gland being ruled *out* — which is the same error the EH/XH paragraph was written to prevent, committed four paragraphs away from it. **Gender:** the board takes the **male** headers and the cable end takes the **female** housing from the pre-crimped kit — XH has no cable-mount male part at all, which is why the machine end still needs balance extension leads. |
+| Perfboard **10 × 10 cm, FR-4** ×5 + **FEMALE** pin headers ×5 | 10 | **SIZE AND MATERIAL BOTH SUPERSEDED 2026-10-28 — see the note below this table.** Ordered: FR-4, 1.6 mm, 2.54 mm pitch, 1 mm holes, **1295 holes = 35 × 37**, five boards. **Female** headers so the ESP32 sockets in and comes out — soldering the devkit down means it cannot be swapped or easily reflashed. **Buy 5 header strips**: 1×40 is the standard item, you cut each to 22 (losing the position you cut through), you need two, and female strips do not snap cleanly like male ones so the first one is practice. |
 | Second mixed balance-lead pack | 7 | **Insurance.** The 4S is the only lead that fits J2 and there is no spare if a strip-and-solder goes wrong. The T-pieces are the most laborious part of the build and the pack is seven euro. |
 | ~~ABS project box, ~120 x 80 x 40 mm~~ **PRINTED, not bought** | 0 | ESP32 mounts **outside** the machine. ~~120 × 80~~ would not have fitted — it predates the board being 70 × 90 mm. Operator prints one: **~110 × 100 × 40 internal**, sized for the board plus connector height plus wire bend radius, and for **three** harnesses (J5, J2's five wires and four dividers, J4). **PETG or ASA, not PLA** — it lives beside an espresso machine and PLA softens around 60 °C. **SETTLED 2026-10-23 — print it LAST, build ONE board; see the note under this table.** |
 | Cable gland or grommet | 3 | Where the harness leaves the case |
 | Nylon cable ties / adhesive tie mounts | 4 | Keep the tap away from the boiler and off moving parts |
+
+### The board is 10 × 10 FR-4 — SUPERSEDES "7 × 9", 2026-10-28
+
+**Size.** `docs/board-and-perfboard.md` chose 7 × 9 over 5 × 7 explicitly
+*"for soldering room rather than necessity: 560 contiguous holes against
+216"* — and **560 assumed a nominal 27 × 35 board**. The commodity 7 × 9
+actually on offer was **24 × 30 = 720 holes**, giving **390 beside the
+devkit**: a 30 % cut in the one quantity the decision was made on, and
+below even that file's own pessimistic "often ~24 × 34" hedge.
+
+| board | holes | free beside the devkit |
+|---|---|---|
+| 5 × 7 — rejected | 19 × 27 = 513 | 216 |
+| 7 × 9 — **as assumed** | 27 × 35 = 945 | 560 |
+| 7 × 9 — **as actually sold** | 24 × 30 = 720 | 390 |
+| **10 × 10 — bought** | **35 × 37 = 1295** | **~888** |
+
+**The deciding argument is invariant-1 adjacent, not comfort.**
+`docs/phase-0-plan.md` requires pos 1 to be *"physically segregated in the
+harness **and on the board** — its own conductor run, maximum spacing from
+the four direction lines, and no shared via column"*. "Maximum spacing"
+costs holes: **~61 mm of it on 10 × 10 against ~33 mm on 7 × 9**. A cramped
+board is where that requirement gets quietly traded away.
+
+**And the objection that would normally kill a bigger board does not apply
+here** — the box is printed last and sized to the finished board, on the
+operator's own printer, €0. The note below already retired the premise that
+the box constrains the layout; this is that retirement being spent.
+
+Two numbers to keep: **the devkit body covers ~25 rows, not its 22 pin
+rows** (the PCB overhangs ~5 mm at each end), so budget against the
+outline; and **count the holes on arrival** — the centimetre label was
+wrong twice in the conversation that settled this.
+
+**Material: FR-4, not FR-2 phenolic.** A ten-pack of brown
+*Holzleimplatte 94HB* was the cheaper candidate and was rejected: phenolic
+pads are glued to the substrate with no plated barrel, so they lift under
+heat. **This board will be reworked** — the one-shot RC is unchosen and
+there is a six-point sweep to run through it — and a lifted pad under a
+photoMOS is an invariant-1 question, not a cosmetic one. FR-4 at 1.6 mm
+fixes the adhesion; plated-through would be a bonus and the listing does
+not state it. **Five boards arrived in one pack, which covers practice,
+spare and service**, so the phenolic pack was not bought at all.
 
 ### The box and the board count — SETTLED 2026-10-23
 
@@ -443,7 +545,7 @@ margin: both values clear the plotted 85 °C curve, 330 Ω at 1.85× and 390 Ω 
 1.57×, and neither clears the extrapolated criterion B. <!-- fact:led-drive-resistor 330 Ω, 1 % --> <!-- fact:photomos-guarantee-25c@2 3.0 mA at 25 °C --> |
 | **2-pin male header** | 3 | the disables. **Buy no shunts** — open is the specified state and a loose shunt in the box is a hazard. Cut from a 1×40 male strip. |
 | DIP-16 socket | 3 | wire the socket, verify, *then* insert the '221 — 16 hand-wired joints with no heat near the part. Pulling the IC is also a third disable, stronger than an open jumper. |
-| Machined **round-pin** SIP socket strip 1×40 | 2 | **DIP-4 sockets are not a stocked item.** Cut 2-way pieces, two per photoMOS, 0.3 in apart. Soldering the photoMOS directly is acceptable if you cannot get these: a socket contact going intermittent fails **open**, which is the safe direction here. |
+| ~~Machined **round-pin** SIP socket strip 1×40~~ → **`DIL08PZ`, cut in half** | 3 | **DIP-4 sockets are not a stocked item, and a SIP strip is not the only answer — SETTLED 2026-10-28.** A DIP-8 precision socket is 4+4 on **7.62 mm rows, which is exactly the AQY212EH footprint**; cut one crosswise and it yields two DIP-4 sockets. Ten were ordered, giving twenty against the **eight** needed, so a ragged cut costs nothing. Soldering the photoMOS directly is still acceptable: a socket contact going intermittent fails **open**, which is the safe direction here. |
 | Film capacitors, ~0.47 / 1 / 2.2 µF | few | one-shot RC. **Do not fix the value yet.** `t_W = 0.7 · R_x · C_x` **characterised at V_CC = 4.5 V** — and this build runs the '221 at **3.3 V**, where the coefficient is not guaranteed; Fairchild's version of the same part documents `PW = R·C` with no 0.7 at all, and part-to-part spread is ±5 %. At 150 kΩ from stock, 1 µF gives **105 ms**, not the ~120 ms a draft stated (120 ms needs 1.14 µF, or 171 kΩ at 1 µF). **Measure the pulse on the bench**, and only after the minimum latching press width is known. Minimum R_x ≈ 500 Ω. |
 
 ### The LED drive, which this list did not previously cost at all
@@ -667,22 +769,39 @@ over.
 Connectors are **bought** — the mixed balance-lead pack was €6.99 and
 should cover J5, J2 and J4, pending the seat check in section 1.
 
-Still outstanding: adhesive-lined heat-shrink, PTFE sleeving, perfboard,
-cable gland, XH board headers, sockets and the §7 actuation parts —
-**~€83 all in**, revised 2026-10-12. **The project box is NOT on this list:
-it is printed, €0.** The superseded figure was **~€40** (a draft said €42),
-and it predates the box, the second perfboard, the photoMOS **spares** taking
-the order from 4 to 8 (the in-service count was 4 before and is 4 now), the XH
-board headers, the sockets and the LED-drive parts.
+**NOTHING IS OUTSTANDING AS OF 2026-10-28 — §1 is normative on what was
+actually bought and what has arrived.** What follows is the estimate this
+section carried while the order was open, kept because the gap between it
+and the real spend is the interesting part.
 
-| | ~€ |
+**The estimate was ~€89 and the order came to roughly €75**, across
+Reichelt (€42.28), the perfboard, the wire, the headers and the AliExpress
+photoMOS. It is close, and it is close for compensating reasons rather than
+because the lines matched: the sleeving (€8), the pre-crimped kit (€10) and
+the gland and tie mounts (€7) were not bought at all, while the board grew
+from two 7 × 9 to five 10 × 10 FR-4 and the RC sweep added resistors and
+capacitors that had no line here.
+
+*(This paragraph said **"~€83 all in"** in prose while the table below
+totalled **€89**, from 2026-10-12 until 2026-10-28 — the two were written
+in the same commit. A total that disagrees with its own table is the
+cheapest possible instance of this repo's most-logged defect, and it
+survived a week.)*
+
+**The project box is NOT on this list: it is printed, €0.** An earlier
+figure of **~€40** (a draft said €42) predates the box, the extra boards,
+the photoMOS spares taking the order from 4 to 8 (the in-service count was
+4 before and is 4 now), the XH board headers, the sockets and the LED-drive
+parts.
+
+| estimated while open | ~€ |
 |---|---|
 | perfboard ×2, female strips ×5, DIP-16 and SIP sockets | 15 |
 | XH board headers (€3) + pre-crimped kit (€10) | 13 |
 | second balance-lead pack | 7 |
 | actuation: `CD74HC221E` ×3, AQY212EH ×8, BC547 ×10, 330 Ω, caps | 25 |
 | consumables: PTFE sleeving 8, adhesive heat-shrink 6, 30 AWG silicone wire 8, gland 3, tie mounts 4 | 29 |
-| **total** | **~€89** |
+| **estimated total** | **~€89** |
 
 *(A draft quoted €9 for the board group and €26 for consumables, giving €80;
 the board row had not been re-costed after it grew to two boards and five
@@ -691,23 +810,26 @@ strips, and the consumables row omitted the 30 AWG wire, which has no row in
 
 **Every resistor this project needs is now in hand (2026-10-08).** 8.2 K,
 15 K, 100 K, 150 K, 220 K and 1 K are all in stock; the E12 kit is Qty 0 and
-not needed. **The perfboard build IS now gated on parts**, which it was not
-before 2026-10-12: it needs a `CD74HC221E`, photoMOS, BC547s, 330 Ω, XH board
-headers, sockets and perfboard — none of them bought.
+not needed. **The perfboard build was gated on parts from 2026-10-12 until
+2026-10-28; it is now gated on DELIVERY.** Everything it needs — the
+`CD74HC221E`, photoMOS, BC547s, 330 Ω, XH board headers, sockets and
+perfboard — is bought, and §1 says which pieces have landed.
 
 **Note what changed:** 0d was specified as 120 K, which this list claimed was
 in stock on 2026-10-07. It was not — the bag held 100 K and 150 K. 0d now
 uses **100 K**, which is better here (see CLAUDE.md), and **150 K must not be
 substituted at J4** — it fails at −45 mV.
 
-What is left to buy is for the **perfboard stage, not the bench**: perfboard
-×2, female header strips, DIP-16 and SIP sockets, XH board headers, the
-pre-crimped kit, a second balance-lead pack, cable gland, tie mounts,
-adhesive-lined heat-shrink, PTFE sleeving, 30 AWG silicone wire and the §7
-actuation parts. **~€89**; the box is printed, not bought. The whole
-breadboard bench sequence can be done without any of it. *(Earlier versions
-of this sentence and the breakdown above listed different subsets and
-different totals; both now match the table in §Rough total.)*
+**Nothing is left to buy — closed 2026-10-28.** This paragraph listed what
+remained for the **perfboard stage, not the bench**, and the distinction it
+drew still holds: **the whole breadboard bench sequence needs none of it**,
+which is why the minimum-latching-press-width measurement can be done while
+the order is in transit. Of the list it carried, the sleeving and the
+30 AWG silicone were withdrawn (§5), the gland and tie mounts were already
+in hand, and the pre-crimped kit is the one open question in §1.
+*(Earlier versions of this sentence and the breakdown above listed
+different subsets and different totals; both now match the table in
+§Rough total.)*
 
 **0d is no longer gated on firmware.** It was, for about an hour: the
 counter landed in 0.9.0 (`PulseCounter`, `flowIsr`, `sample_t.inlet_pulses`

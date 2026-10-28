@@ -795,11 +795,20 @@ the document, not the document.
   supply run from it.
 - **Pitch is 2.54 mm and row-to-row is 10 pitches (25.4 mm)**, measured by
   seating the devkit in a breadboard: one header in column A, the other in I.
-- **Perfboard footprint is 11 columns × 22 rows**, with 9 free columns
-  underneath the devkit if it is socketed high enough — which is why
-  `docs/shopping-list.md` specifies female headers. **Buy 7 × 9 cm** for
-  soldering room, and **count the holes on the board you actually receive**:
-  commodity "7 × 9" boards are often 24 × 34 rather than 27 × 35.
+- **Perfboard footprint is 11 columns × 22 rows of PINS — but the body
+  covers ~25 rows**, the PCB overhanging ~5 mm at each end, so budget
+  against the outline. 9 free columns sit underneath the devkit if it is
+  socketed high enough, which is why `docs/shopping-list.md` specifies
+  female headers. **The board is 10 × 10 cm FR-4 (35 × 37 = 1295 holes),
+  bought 2026-10-28 — this said "buy 7 × 9 cm" until then.** 7 × 9 was
+  chosen for soldering room against a *nominal* 27 × 35; the boards
+  actually sold are **24 × 30**, which leaves 390 holes beside the devkit
+  rather than 560, below even the "often 24 × 34" hedge this bullet used to
+  carry. The deciding argument for 10 × 10 is not comfort: pos 1 must be
+  *"physically segregated… maximum spacing from the four direction lines"*
+  (`docs/phase-0-plan.md`), which is ~61 mm there against ~33 mm on 7 × 9.
+  **Count the holes on the board you actually receive** — the centimetre
+  label has been wrong twice.
 - **GPIO33–37 are octal-PSRAM internal on this N16R8 module** — present on
   the header, unusable, do not even probe them.
 

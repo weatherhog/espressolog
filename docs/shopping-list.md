@@ -72,7 +72,21 @@ leaving the inside of the machine needs. Neither substitutes for the
 other: solid core work-hardens and snaps under vibration, and stranded
 silicone will not stand up in a perfboard.
 
-**OPEN: WHAT GAUGE ARE THE BUILT T-PIECES? And it is cheap to settle,
+**CLOSED 2026-10-29 — THE TEST T-PIECES ARE 22 AWG, and they are being
+rebuilt.** Operator: the three T-pieces used for every bench session so far
+were made with 22 AWG, not the 26 AWG `docs/phase-0-status.md` records, and
+**the build T-pieces will be made fresh** from the 26 AWG silicone bought
+2026-10-28. So the as-built record was wrong by four gauges, in the safe
+direction — 22 is *thicker* than 26, so the chafe-to-ground concern below
+never applied to them — and the wire going into the machine will be the
+specified one. The 2026-10-18 series-resistance check stands for the test
+articles; it says nothing about T-pieces not yet built. *(22 AWG is the top
+of `SXH-001T-P0.6`'s AWG 28–22 range; the rebuild's 26 AWG sits inside it.)*
+
+The question as it stood for a day, kept because the reasoning is right
+even though the answer arrived from the operator and not from a caliper:
+
+**WHAT GAUGE ARE THE BUILT T-PIECES? And it is cheap to settle,
 because THEY ARE NOT IN THE MACHINE.** `docs/phase-0-status.md` describes
 the J5 tap as *"3 × 26 AWG silicone"* (its layout diagram) and the branch
 as `[J5 conductor] - [8.2K] - [26 AWG out]`. All three were built
@@ -121,7 +135,12 @@ needed — that one is deliberate, and §7 says why.
 yet confirmed — unlike the 24 AWG and 26 AWG wire, which are in hand.
 
 **Amazon.** **Perfboard 10 × 10 cm, FR-4, 1.6 mm, 1295 holes, ×5** — ordered
-2026-10-28; supersedes 7 × 9, see §5.
+2026-10-28; supersedes 7 × 9, see §5. **Listing, verbatim (operator,
+2026-10-29):** *"Material: hochwertige Glasfaser FR4 · dicke: ca. 1,6mm ·
+Lochabstand: 2,54 mm · Lochdurchmesser: 1 mm · 10x10cm / 3,94 x 3,94 Zoll ·
+Anzahl Löcher: 10 x 10 CM mit 1295 Löchern"*. **It states the count and not
+the grid**, so 35 × 37 against 36 × 36 is exactly as open as §5 says —
+and "3,94 × 3,94" is the square the 36 × 36 reading leans on.
 
 **`100 nF X7R ×10` is the one ordered line here with no row and no recorded
 purpose** — presumably supply decoupling for the '221 and the photoMOS

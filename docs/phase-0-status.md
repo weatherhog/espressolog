@@ -2075,6 +2075,15 @@ state; closing it is the deliberate act, with the RC chosen first.
    corrupt frames — which holds with or without the shunts; see
    `analysis/captures/README.md`.
 
+   **BUILT WITH 22 AWG, NOT THE 26 AWG THE DIAGRAM ABOVE SPECIFIES — operator,
+   2026-10-29.** No 26 AWG was owned until 2026-10-28 (`docs/shopping-list.md`
+   §1 has the history), so the "3 x 26 AWG" in the layout and the
+   `[26 AWG out]` branch were the specification, and this paragraph let them
+   read as the as-built. Thicker than specified, so the chafe argument is
+   unaffected. **These are test articles: the T-pieces that go into the
+   machine will be rebuilt from the 26 AWG silicone now in hand**, and the
+   verification in this paragraph belongs to the 22 AWG set, not to them.
+
    Then `display on` (persisted in NVS) and check `status`.
 
    **Firmware caught up in 0.8.0** (`display.{h,cpp}`), against the

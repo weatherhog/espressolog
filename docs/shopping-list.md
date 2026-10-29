@@ -72,16 +72,30 @@ leaving the inside of the machine needs. Neither substitutes for the
 other: solid core work-hardens and snaps under vibration, and stranded
 silicone will not stand up in a perfboard.
 
-**OPEN, AND IT IS ABOUT HARDWARE ALREADY INSIDE THE MACHINE: what are the
-BUILT T-pieces made of?** `docs/phase-0-status.md` describes the J5 tap as
-*"3 × 26 AWG silicone"* (its layout diagram) and the branch as
-`[J5 conductor] - [8.2K] - [26 AWG out]`. Those T-pieces were built
-2026-10-03 and have been in the machine since. If no 26 AWG existed until
-2026-10-28, that gauge is a **specification that was never met**, not an
-as-built record, and the wire actually in the machine is unrecorded.
-**Measure it next time the case is open** — it bears on the chafe-to-
-ground failure the series-resistor placement is designed around, and a
-thinner conductor than specified is the direction that matters.
+**OPEN: WHAT GAUGE ARE THE BUILT T-PIECES? And it is cheap to settle,
+because THEY ARE NOT IN THE MACHINE.** `docs/phase-0-status.md` describes
+the J5 tap as *"3 × 26 AWG silicone"* (its layout diagram) and the branch
+as `[J5 conductor] - [8.2K] - [26 AWG out]`. All three were built
+2026-10-03, exist, and carry their series resistors — metered 2026-10-18,
+female-to-male-end on each branch. **But if no 26 AWG existed until
+2026-10-28, that gauge is a specification that was never met, not an
+as-built record, and the wire actually in them is unrecorded.** The
+2026-10-18 check measured *resistance*, not gauge, so it does not settle
+this.
+
+**This paragraph said "hardware already INSIDE the machine" and "measure it
+next time the case is open" until 2026-10-29, and both were wrong** — the
+operator confirms no T-pieces are fitted at present. They are on the bench,
+so this is a caliper or a strip-and-look away, today, with nothing to
+disassemble and no machine to open. **The chafe-to-ground argument that
+made it sound urgent applies to where they are GOING, not where they are**:
+it is a reason to settle the gauge before they go back in, not a reason to
+open a machine. Thinner than specified is still the direction that matters.
+
+*(`docs/phase-0-status.md` does say "all three T-pieces in the machine" —
+that is inside its dated **2026-10-08 bench session** heading, a record of
+that session rather than a live-state claim, so it is not a stale fact.
+Its J4 entry already says that tap is unplugged.)*
 
 ### Ordered, in transit
 
@@ -729,9 +743,7 @@ apart on the transistor, the drive-current claim and the box.
 | **AQY212EH, DIP-4** | **8** | 4 in service, 4 spare. **DATASHEET GRADE since 2026-10-17** — see "Datasheet read" below for what was read and what it settles. DIP-4 through-hole, SPST-NO (1 Form A) **AC/DC**, 60 V peak AC/DC, 0.55 A continuous, 5,000 V AC I/O isolation, all confirmed against Panasonic's own tables — **a 2011 catalogue and a 2005 mirror; the current per-part datasheet was NOT read** (see below). **Bare `AQY212EH` is the through-hole part; `…EHA` is the surface-mount terminal version, tube-packed, `…EHAX`/`…EHAZ` are the same SMD part on tape-and-reel (picked from the 1/2-pin or 3/4-pin side)** — so buy the bare suffix, and a listing that says `EHAX` is SMD whatever its photo shows. **Most listings are SOP-4 surface-mount, including other PhotoMOS families that carry no `EHA` suffix at all** — check the photo shows four long legs *and* that the printed part number is **exactly** `AQY212EH` with nothing after it (`AQY212EHA`, `EHAX` and `EHAZ` all *start* with `AQY212EH` and are all SMD). *(The "most listings are SOP-4" sentence is **listing grade** — an observation about sellers, not something either datasheet read supports — and sits in a datasheet-grade cell only because it is a purchasing warning.)* |
 | **`CD74HC221E`, PDIP-16** | 3 | **Verified 2026-10-12** against TI and Farnell: dual monostable, PDIP-16, 2–6 V, non-retriggerable ("once triggered, the outputs are independent of further trigger inputs"), active lifecycle, 5.2 mA output drive. `SN74HC221N` is scarce — TI is retiring PDIP. **A draft also listed `MC74HC221AN`, `TC74HC221AP` and `HD74HC221P` as equivalents; none could be verified**, and the nearest real hit, `MM74HC221AN`, is obsolete. Those were recollection. The `N`/`E`/`P` suffixes are through-hole; `D`/`PW`/`NS` are SMD. |
 | **BC547 or 2N3904, TO-92** | 10 | **LED drivers, one per photoMOS.** **NOT the 2N7000**, which a draft of this row specified: its V_GS(th) is 0.8–3.0 V, so a worst-case part driven from 3.3 V logic has **0.2 V of overdrive** and R_DS(on) is only characterised at V_GS = 4.5/10 V. That is the same works-on-the-bench-fails-in-service trap as the 1 kΩ below, in the part bought to avoid it. A bipolar has no threshold lottery — 0.7 V of V_BE, cleared with enormous margin. **Base resistor 8.2 kΩ and base-emitter 100 kΩ, both in stock.** |
-| **330 Ω, 1 %** *(390 Ω only for a box that stays cool — "cool" is undefined: no ambient has been measured inside the box, so read this as "only after measuring it")* | 20 | **The one resistor value not in stock.** See the LED arithmetic below **and the 85 °C note under "Datasheet read"** — the operate guarantee is 3.0 mA at 25 °C only, so the drive is sized with
-margin: both values clear the plotted 85 °C curve, 330 Ω at 1.85× and 390 Ω at
-1.57×, and neither clears the extrapolated criterion B. <!-- fact:led-drive-resistor 330 Ω, 1 % --> <!-- fact:photomos-guarantee-25c@2 3.0 mA at 25 °C --> |
+| **330 Ω, 1 %** *(390 Ω only for a box that stays cool — "cool" is undefined: no ambient has been measured inside the box, so read this as "only after measuring it")* | 20 | **The one resistor value not in stock.** See the LED arithmetic below **and the 85 °C note under "Datasheet read"** — the operate guarantee is 3.0 mA at 25 °C only, so the drive is sized with margin: both values clear the plotted 85 °C curve, 330 Ω at 1.85× and 390 Ω at 1.57×, and neither clears the extrapolated criterion B. <!-- fact:led-drive-resistor 330 Ω, 1 % --> <!-- fact:photomos-guarantee-25c@2 3.0 mA at 25 °C --> |
 | **2-pin male header** | 3 | the disables. **Buy no shunts** — open is the specified state and a loose shunt in the box is a hazard. Cut from a 1×40 male strip. |
 | ~~DIP-16 socket~~ **ALREADY HELD, TWICE OVER — see §1** | 0 | wire the socket, verify, *then* insert the '221 — 16 hand-wired joints with no heat near the part. Pulling the IC is also a third disable, stronger than an open jumper. **Twenty are on hand or in transit against the three this needs** (round-hole ×10 received, `DIL16PZ` ×10 ordered); §1 records the duplicate. |
 | ~~Machined **round-pin** SIP socket strip 1×40~~ → **`DIL08PZ`, cut in half** | 3 | **DIP-4 sockets are not a stocked item, and a SIP strip is not the only answer — SETTLED 2026-10-28.** A DIP-8 precision socket is 4+4 on **7.62 mm rows — the same row spacing and 2.54 mm pitch as the AQY212EH, which is itself 2+2**; cut one crosswise and each half is a 2+2 DIP-4 socket. *(This row said 4+4 "is exactly the AQY212EH footprint" until 2026-10-29. It is not — 4+4 is the DIP-8's own layout, and what matches is the row spacing and pitch, which is all the cut needs. The geometry was right and the sentence named the wrong part.)* Ten were ordered, giving twenty against the **eight** needed, so a ragged cut costs nothing. Soldering the photoMOS directly is still acceptable: a socket contact going intermittent fails **open**, which is the safe direction here. |

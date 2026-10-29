@@ -825,7 +825,7 @@ keeps its need and says so in the cell. *(Two rows read 0 for a day on
 
 | Part | Qty | Why this one |
 |---|---|---|
-| **AQY212EH, DIP-4** | **8** | 4 in service, 4 spare. **DATASHEET GRADE since 2026-10-17** — see "Datasheet read" below for what was read and what it settles. DIP-4 through-hole, SPST-NO (1 Form A) **AC/DC**, 60 V peak AC/DC, 0.55 A continuous, 5,000 V AC I/O isolation, all confirmed against Panasonic's own tables — **a 2011 catalogue and a 2005 mirror; the current per-part datasheet was NOT read** (see below). **Bare `AQY212EH` is the through-hole part; `…EHA` is the surface-mount terminal version, tube-packed, `…EHAX`/`…EHAZ` are the same SMD part on tape-and-reel (picked from the 1/2-pin or 3/4-pin side)** — so buy the bare suffix, and a listing that says `EHAX` is SMD whatever its photo shows. **Most listings are SOP-4 surface-mount, including other PhotoMOS families that carry no `EHA` suffix at all** — check the photo shows four long legs *and* that the printed part number is **exactly** `AQY212EH` with nothing after it (`AQY212EHA`, `EHAX` and `EHAZ` all *start* with `AQY212EH` and are all SMD). *(The "most listings are SOP-4" sentence is **listing grade** — an observation about sellers, not something either datasheet read supports — and sits in a datasheet-grade cell only because it is a purchasing warning.)* |
+| **AQY212EH, DIP-4** | **8** | 4 in service, 4 spare. **DATASHEET GRADE since 2026-10-17** — see "Datasheet read" below for what was read and what it settles. DIP-4 through-hole, SPST-NO (1 Form A) **AC/DC**, 60 V peak AC/DC, 0.55 A continuous, 5,000 V AC I/O isolation, all confirmed against Panasonic's own tables — a 2011 catalogue and a 2005 mirror, **and since 2026-10-29 the current Panasonic catalogue (C, January 2026), which agrees on every number compared and widens the recommended LED current to 5–30 mA** (see below). *("The current per-part datasheet was NOT read" until that day.)* **Bare `AQY212EH` is the through-hole part; `…EHA` is the surface-mount terminal version, tube-packed, `…EHAX`/`…EHAZ` are the same SMD part on tape-and-reel (picked from the 1/2-pin or 3/4-pin side)** — so buy the bare suffix, and a listing that says `EHAX` is SMD whatever its photo shows. **Most listings are SOP-4 surface-mount, including other PhotoMOS families that carry no `EHA` suffix at all** — check the photo shows four long legs *and* that the printed part number is **exactly** `AQY212EH` with nothing after it (`AQY212EHA`, `EHAX` and `EHAZ` all *start* with `AQY212EH` and are all SMD). *(The "most listings are SOP-4" sentence is **listing grade** — an observation about sellers, not something either datasheet read supports — and sits in a datasheet-grade cell only because it is a purchasing warning.)* |
 | **`CD74HC221E`, PDIP-16** | **2 on the board** — 10 bought, see §1 | **DECIDED 2026-10-29: one CHANNEL per photoMOS → four channels → two dual '221s.** The per-device test the series pair exists for needs independent firing, and the plan's "three are on the order" was an estimate never ordered as three. **Verified 2026-10-12** against TI and Farnell: dual monostable, PDIP-16, 2–6 V, non-retriggerable ("once triggered, the outputs are independent of further trigger inputs"), active lifecycle, 5.2 mA output drive. `SN74HC221N` is scarce — TI is retiring PDIP. **A draft also listed `MC74HC221AN`, `TC74HC221AP` and `HD74HC221P` as equivalents; none could be verified**, and the nearest real hit, `MM74HC221AN`, is obsolete. Those were recollection. The `N`/`E`/`P` suffixes are through-hole; `D`/`PW`/`NS` are SMD. |
 | **BC547 or 2N3904, TO-92** | 10 | **LED drivers, one per photoMOS.** **NOT the 2N7000**, which a draft of this row specified: its V_GS(th) is 0.8–3.0 V, so a worst-case part driven from 3.3 V logic has **0.2 V of overdrive** and R_DS(on) is only characterised at V_GS = 4.5/10 V. That is the same works-on-the-bench-fails-in-service trap as the 1 kΩ below, in the part bought to avoid it. A bipolar has no threshold lottery — 0.7 V of V_BE, cleared with enormous margin. **Base resistor 8.2 kΩ and base-emitter 100 kΩ, both in stock.** |
 | **330 Ω, 1 %** *(390 Ω only for a box that stays cool — "cool" is undefined: no ambient has been measured inside the box, so read this as "only after measuring it")* | 20 | **ORDERED 2026-10-27 — ×25 on the Reichelt order, in transit, see §1.** *(This said "the one resistor value not in stock" until 2026-10-29. "Not in stock" was true — ordered is not held. "The one" was false: 330 K and 470 K were equally out and went on the same order. A retraction here then called that "wrong three ways" and said the line was "reflowed by the commit that ordered it" — `git blame` says otherwise: the line was split on 2026-10-20 at `9e03a30`, the ordering commit carried it as unchanged context, and a 2026-10-29 commit re-joined it. The true part survives: two commits handled this line without reading it.)* See the LED arithmetic below **and the 85 °C note under "Datasheet read"** — the operate guarantee is 3.0 mA at 25 °C only, so the drive is sized with margin: both values clear the plotted 85 °C curve, 330 Ω at 1.85× and 390 Ω at 1.57×, and neither clears the extrapolated criterion B. <!-- fact:led-drive-resistor 330 Ω, 1 % --> <!-- fact:photomos-guarantee-25c@2 3.0 mA at 25 °C --> |
@@ -876,13 +876,23 @@ Two consequences:
 |---|---|---|---|
 | A | **Panasonic Relay Catalog Part 2: PhotoMOS & Solid State Relays**, `ca_semiconductor1154_en.pdf` from `mediap.industry.panasonic.eu`, 356 pp; AQY21•EH section is printed p.146-149, document id **`ds_x615_en_aqy21eh: 010611J`** | PDF created **2011-10-04** | `8459c7ae3ad528cb` |
 | B | **"GU-E PhotoMOS (AQY21•EH)"**, 4-page datasheet, `AQY212EH-Panasonic-datasheet-109895.pdf` from `datasheet.octopart.com` — a **third-party mirror** of a Panasonic datasheet bearing the "Matsushita Electric Works" copyright. | PDF created **2005-03-07**, modified 2005-10-06 | `71c9b77a7bed8328` |
+| **C** | **"PhotoMOS GE DIP4 1 Form A" product catalogue**, `semi_eng_ge1a_aqy21_e.pdf`, 19 pp, document id **ASCTB126E 202601**, "Panasonic Industry Co., Ltd. 2026" — **the current per-part document**, downloaded by the operator and read **2026-10-29** | PDF created **2025-12-08**, cover dated 2026.1 | `d329b97293228ccd` |
 
 *(Filenames and hosts in the table are as downloaded on 2026-10-17; the files on disk carry no URL provenance, so they cannot be re-confirmed from the PDFs themselves.)*
 
 **Neither is a current Panasonic datasheet.** A is Panasonic-hosted but a
 2011 catalogue; B is a 2005 mirror. `industrial.panasonic.com` refused
 the fetch from this machine, so the current per-part datasheet was **not**
-read. A and B **agree on every electrical number compared** (ratings, electrical
+read. **It was, on 2026-10-29, as C** — the operator downloaded it. **C
+agrees with A and B on every electrical number compared** (operate 1.2 / 3.0
+mA, turn-off 0.4 mA min, V_F 1.25 / 1.5 V, R_on 0.85 / 2.5 Ω, leakage 1 µA,
+t_on 1 / 4 ms, t_off 0.05 / 1.0 ms, C_iso 0.8 pF), so 2011→2026 changed
+nothing in the table. **Two things did change: the recommended LED current is
+5–30 mA in C against 5–10 mA in A and B, and C's schematic draws the body
+diodes** that A and B omitted. Both noted at their rows below. C is also the
+source of the **pin-function table** in `docs/phase-0-plan.md` under
+*Topology, per actuated line* — 1 LED anode, 2 cathode, 3/4 output and
+interchangeable — which no earlier read had supplied. A and B **agree on every electrical number compared** (ratings, electrical
 table, symbol), which is some comfort that nothing changed 2005→2011 — it
 says nothing about 2011→now. **They do NOT agree on everything, and a first
 version said they did:** plots 8-(2), 1-(2) and 1-(3) are labelled "Current, A"
@@ -911,7 +921,7 @@ row spacing does).
 | LED operate current | **1.2 mA typ, 3.0 mA max** at I_L = max, **25 °C** |
 | LED turn-off current | **0.4 mA min, 1.1 mA typ** — "guaranteed OFF below 0.4 mA" is right |
 | LED forward drop | **1.25 V typ, 1.5 V max at I_F = 50 mA; 1.14 V typ at 5 mA** |
-| Recommended I_F | **5-10 mA** |
+| Recommended I_F | **5-10 mA** (A, B) — **5–30 mA in C, January 2026.** 330 Ω's 6.2 mA nominal sits inside both; nothing below moves |
 | On-resistance | **0.85 Ω typ, 2.5 Ω max**, at I_F = 5 mA **and I_L = max (550 mA)**, "within 1 s on time" |
 | Turn-on / turn-off | **1 ms typ / 4 ms max; 0.05 ms typ / 1.0 ms max** (I_F = 5 mA, I_L = max) |
 | Off-state leakage | **1 µA max** at I_F = 0, V_L = max |
@@ -988,8 +998,11 @@ row spacing does).
   0.35 A over 0.25 V, i.e. ~0.7-0.8 Ω, consistent with the 0.85 Ω typ.)*
 - **Turn-on up to 4 ms** is far inside the ~120 ms one-shot pulse and a
   non-issue.
-- **Body diodes: NOT specified.** The output schematic is two common-source
-  N-MOSFETs; neither document draws or characterises a body diode. See the
+- **Body diodes: DRAWN in C, characterised nowhere.** The output schematic is
+  two common-source N-MOSFETs; A and B draw no body diode, **C (2026-10-29)
+  draws one per FET, opposed, and puts no number on either** — so the plan's
+  estimate stands as an estimate. *(This read "NOT specified … neither
+  document draws" until C was read.)* See the
   re-graded **"two photoMOS in series per driven line"** bullet in
   `phase-0-plan.md` (under "The failure neither mechanism bounds"), which this
   read settles at "topology datasheet, body diode inferred" and refines.

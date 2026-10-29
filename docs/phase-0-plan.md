@@ -414,6 +414,40 @@ have held the direction line high permanently (pump running, stored timer
 reprogrammed inside 2 s) and drawn ~50 mA continuously through R45 off a 3 W
 supply. The prose was right and the drawing was not.
 
+**AQY212EH pin functions — DATASHEET grade since 2026-10-29.** Source:
+Panasonic *PhotoMOS GE DIP4 1 Form A* product catalogue, **ASCTB126E
+202601**, 19 pp, dated January 2026 — the current per-part document, which
+the 2026-10-17 read could not fetch; `docs/shopping-list.md` "Datasheet
+read" records it as document C. Until this read the repo held the part's
+electricals at datasheet grade and its pinout nowhere.
+
+| DIP-4 pin | function | in this topology |
+|---|---|---|
+| **1** | **LED anode (+)** — the wiring diagram drives I_F into this pin | the 330 Ω from the jumpered 3V3 LED supply |
+| **2** | **LED cathode (−)** | the BC547 collector |
+| **3** | output | one end of the drive chain |
+| **4** | output | the other end |
+
+Pins 1 and 2 are on the input side of the package, 3 and 4 on the output
+side: in the top view 1 sits opposite 4 and 2 opposite 3. **The outputs are
+two N-MOSFETs source-to-source and the part is rated "AC/DC dual use", so 3
+and 4 are interchangeable** — the chain is pos 1 → jumper (a) → device 1
+(3/4) → device 2 (3/4) → pos N, in either orientation. **Only the LED has a
+polarity to get wrong.** A reversed LED sees at most 3.3 V against a 5 V
+V_R absolute maximum, so it is not damaged — it simply never closes, a
+silent failure on the bench and exactly what the per-device test the series
+pair exists for is there to show.
+
+**Pin-1 mark — DRAWING grade, not text.** The outline drawing shows a
+circular dimple on the body at one corner and the wiring diagram draws a
+circle beside pin 1; no sentence in the document says the dimple is pin 1.
+Confirm on the part from the printed label, which reads `212EH` (Panasonic
+omit the `AQY`), with the pin diagram on the catalogue's first page.
+
+**And the 2026 schematic DRAWS the body diodes** — one per FET, opposed —
+which the 2011 catalogue and the 2005 mirror did not. It still characterises
+neither, so the "voltage arithmetic" paragraph below stands as an estimate.
+
 **Current budget.** With the photoMOS closed, the only path is +5 V → R45
 (100 R) → direction line → **the board's own pull-down**, so the current is
 **bounded** at ≤50 mA / 250 mW against the IRM-03-5's 3 W, and bounded by the
@@ -780,7 +814,8 @@ does not work:
     The 0.6 V anchor is itself unsourced. **So the honest statement is an
     estimate of ~0.4-0.65 V per diode, ~0.8-1.3 V for the pair, ~3.6-4.2 V at
     the line**, and **no document read gives the AQY212EH's body-diode
-    characteristic.** **The 3.6 V low end includes the drop across R45
+    characteristic** *(the January 2026 catalogue draws the diodes, which the
+    earlier two did not; it still puts no number on them — 2026-10-29)*. **The 3.6 V low end includes the drop across R45
     (100 Ω) at 1 mA, ≤0.1 V** — 5 − 1.3 alone is 3.7 V.
     **Diode drop also falls ~2 mV/K
     per junction**, so near a boiler at 60-85 °C each diode could be 70-120 mV

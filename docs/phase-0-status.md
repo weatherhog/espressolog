@@ -1452,7 +1452,8 @@ whether a tap draw shows up as inlet flow.
   shunts were 8.2 kΩ instead of 15 kΩ, *and* `ESD4`/`ESD1` were swapped, with
   the first masking the second. See the 2026-10-19 session entry above.
 - ~~**Does the onboard RGB LED light?**~~ **DONE 2026-10-15: it is GPIO48, so
-  GPIO38 is free.** Board on USB, no machine connections, **yield Bookoo
+  GPIO38 is not the LED** *(and was free until 2026-10-29, when CLAUDE.md's
+  drive table allocated it as the arm gate)*. Board on USB, no machine connections, **yield Bookoo
   bound and awake** — that last clause is load-bearing and a draft omitted it,
   which would have had anyone reproducing this see a dark LED in both rows.
   Two points, each anchored to a `status` read at the same moment:
@@ -2049,8 +2050,8 @@ state; closing it is the deliberate act, with the RC chosen first.
    +5 V common, stays behind. Building to the old sentence gets you a harness
    with three conductors too few.
 
-   More than convenience: **J2 carries no ground** (+5 V, Steam, 1Cup,
-   2Cup, Water), so 0c's dividers have to reference the ground that comes
+   More than convenience: **J2 carries no ground** (positions 1–5: +5 V common, Steam,
+   2Cup, 1Cup, Water), so 0c's dividers have to reference the ground that comes
    back on J5's `VSS`. That makes this tap's ground conductor load-bearing
    for 0c as well as 0e, and it is why one box is the right shape rather
    than three.
@@ -2275,7 +2276,7 @@ state; closing it is the deliberate act, with the RC chosen first.
    | Ref | Silkscreen | Pins | Carries |
    |---|---|---|---|
    | J5 | — | 4 | GND, `ESD1`, `ESD4`, `Disp-P4` — **JST XH, `XHP-4`** (verified) |
-   | J2 | `BOTONE` | 5 | +5 V, Steam, 1Cup, 2Cup, Water — `XHP-5` |
+   | J2 | `BOTONE` | 5 | **positional: 1 = +5 V common · 2 = Steam · 3 = 2Cup · 4 = 1Cup · 5 = Water** — `XHP-5`. *(Read "+5 V, Steam, 1Cup, 2Cup, Water" until 2026-10-29 — the non-positional order CLAUDE.md's J2 table warns swaps the shot with the clean cycle if read as positions, on the one row a builder reads with the plug in hand.)* |
    | J4 | — | 3 | flowmeter — `XHP-3`. **Measured 2026-10-04: ground (`T`), +5 V (`+`), ONE signal (`#`)** — not two nets. |
    | J3 | — | 2 | NTC thermistor |
    | J1 | — | 9 | **mains and loads — never touch** |

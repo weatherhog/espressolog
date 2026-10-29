@@ -261,7 +261,7 @@ instead of soldering to the board.
 | Perfboard **10 × 10 cm FR-4 ×5** + **female** headers ×5 + sockets | 2.54 mm confirmed by mating. **SUPERSEDES "7 × 9 ×2", 2026-10-28** — 7 × 9 was picked for soldering room against a nominal 27 × 35, and the boards actually sold are 24 × 30. See `docs/board-and-perfboard.md` for the table and `shopping-list.md` §5 for the reasoning; `shopping-list.md` is normative on parts and prices. **The boards alone are €10**; the female strips are €4.59 and the sockets €2.19, both priced separately in §1, so this row understated at €10 until 2026-10-29 | 16.78 |
 | Heat-shrink assortment | | 5 |
 | ~~Small ABS project box~~ **PRINTED** | the 120 × 80 size was chosen for a 5 × 7 board and would not have fitted the 70 × 90 one — **and 70 × 90 is no longer the board either: it is 10 × 10 since 2026-10-28.** The ~110 × 100 plan dimensions that replaced 120 × 80 are **withdrawn** for the same reason and have no successor — the box is printed last and sized to the finished board; **the 40 mm height alone is retained, as an upper bound**. `shopping-list.md` §5, "The box has no dimensions any more", is normative | 0 |
-| **`CD74HC221E`** ×3, **AQY212EH DIP-4 ×8**, **BC547/2N3904 ×10**, **330 Ω**, one-shot caps, **3 × 2-pin header** (no shunts), DIP sockets | **moved into this order 2026-10-12** — the build populates them behind open jumpers rather than leaving footprints. `shopping-list.md` is normative on part numbers and prices; **this file is normative on counts and placement** | ~25 |
+| **`CD74HC221E`** **×2** *(×3 until 2026-10-29 — one channel per photoMOS, four channels, two dual chips; see "The one-shot channels WERE the constraint" below)*, **AQY212EH DIP-4 ×8**, **BC547/2N3904 ×10**, **330 Ω**, one-shot caps, **3 × 2-pin header** (no shunts), DIP sockets | **moved into this order 2026-10-12** — the build populates them behind open jumpers rather than leaving footprints. `shopping-list.md` is normative on part numbers and prices; **this file is normative on counts and placement** | ~25 |
 
 ### Tools, if you don't have them
 
@@ -493,14 +493,17 @@ Brew-by-weight needs **1Cup and 2Cup** only — the board latches, so one pulse
 starts and a second stops. Steam and Hot Water gain nothing and double both
 the parts and the failure surface. **Sense all four, drive two.**
 
-One dual 74HC221 and **four photoMOS** — two in series per driven line,
-decided 2026-10-12; see the failure analysis above. **Phase 1 needs a separate
-drive path per photoMOS** for the per-device test. **Partly costed since
-2026-10-12**: the driver transistors and their resistors are specified (see
-below and `docs/shopping-list.md`), and the GPIO budget is **not** the
-constraint. What remains unpriced is **one-shot channels** — a dual '221 gives
-two, enough for one per *line*, not one per *device* — so a second '221 or a
-different gating scheme. Three '221s are on the order, which covers it.
+**Two dual 74HC221** and **four photoMOS** — two in series per driven line,
+decided 2026-10-12, one '221 channel per photoMOS, decided 2026-10-29; see the
+failure analysis above. **Phase 1 needs a separate drive path per photoMOS**
+for the per-device test. **Costed since 2026-10-29**: the driver transistors
+and their resistors are specified (see below and `docs/shopping-list.md`), the
+GPIO budget is **not** the constraint, and the one-shot channels are settled —
+a dual '221 gives two, one per *line*; one per *device* takes two chips, and
+ten are held. *(This read "One dual 74HC221 … what remains unpriced is
+one-shot channels … Three '221s are on the order, which covers it" until
+2026-10-29 — three was an estimate, never ordered as three; the decision is
+under "The one-shot channels WERE the constraint" below.)*
 
 #### A SECOND Phase 1 candidate: the setpoint buttons — scoped 2026-10-23, nothing built
 
@@ -578,9 +581,12 @@ The J2 pattern this entry calls "unchanged" is **two in series per driven
 contact** — that series pair is the whole answer to a photoMOS failing short.
 Two buttons therefore need **four devices, consuming all four spares** on the
 current order, plus **four more one-shot channels**, where a dual '221 gives
-two. Three '221s are on the order and cover the levers; the buttons would
-need more. That is the real cost, and it is why this is a design pass rather
-than an increment.
+two. Two '221s are on the board and cover the levers; the buttons would need
+two more chips, four more trigger GPIOs and the board space for both, none of
+which is allocated — the chips are held (ten bought), the rest is not. *(This
+said "Three '221s are on the order and cover the levers" until 2026-10-29 —
+three was an estimate, never ordered.)* That is the real cost, and it is why
+this is a design pass rather than an increment.
 
 #### The failure neither mechanism bounds
 
@@ -920,12 +926,17 @@ does not work:
 
       **Free GPIOs are not the constraint.** Against the pinout in
       `docs/board-and-perfboard.md`:
-      1, 2, 9-14, 18, 21, **38**, 39-42 and 47 (35-37 are PSRAM-internal;
+      1, 2, 9-14, 18, 21 and 47 — **38 and 39-42 were on this list until
+      2026-10-29 and are now the arm gate and the four triggers** (CLAUDE.md's
+      drive table) — (35-37 are PSRAM-internal;
       0, 3, 19, 20, 45, 46 are strapping or native USB; 43/44 are the UART0
       console, which `platformio.ini` names as the fallback flashing port, so
       treat them as spoken for).
 
-      **GPIO38 IS FREE AND GPIO48 IS SPENT — measured 2026-10-15**, closing
+      **GPIO38 IS NOT THE LED AND GPIO48 IS SPENT — measured 2026-10-15**
+      *("GPIO38 IS FREE" until 2026-10-29: free of the LED, which it still is;
+      no longer unallocated, since the drive table spent it on the arm gate)*,
+      closing
       the "38 or 48 depending on board revision" hedge this list carried from
       2026-10-12. The onboard RGB LED is on 48, by a **two-point** test with
       the board on USB, no machine connections and **the yield Bookoo bound
@@ -942,9 +953,14 @@ does not work:
       correction that hedged it was right to hedge. Neither was measurement;
       this is.
 
-      **The one-shot channels ARE the constraint**: a dual '221 gives two,
-      enough for one per *line*, not one per device. A second '221 or a
-      different gating scheme is unpriced; three are on the order.
+      **The one-shot channels WERE the constraint, and the count is DECIDED
+      2026-10-29: one channel per photoMOS — FOUR channels, TWO dual
+      '221s.** A dual '221 gives two, enough for one per *line*; the
+      per-device test this passage argues for needs one per *device*, so two
+      chips. Ten `CD74HC221E` were bought (Reichelt, 2026-10-27), so stock is
+      not a constraint either. *(This read "a second '221 or a different
+      gating scheme is unpriced; three are on the order" until 2026-10-29 —
+      three was an estimate, and three were never ordered.)*
     - **Each test path must still be one-shot bounded.** If a per-device drive
       is a bare GPIO, the ~120 ms ceiling does not exist and a stuck test pin
       holds the line past 2 s. And if the pair is fired by **two independent**
@@ -1018,6 +1034,20 @@ does not work:
   of being discovered by the machine. **Fit it first, on the bench; fit the
   drive-leg jumpers last, at the machine.**
 
+  **And between those two: solder the timing RC — DECIDED 2026-10-29.** The
+  sweep runs on 2-pin headers, on the bench, with every drive-leg jumper
+  open. The chosen `R_ext`/`C_ext` pair is then **soldered before any
+  drive-leg jumper is fitted**, and never socketed in service. The reason is
+  the failure direction, and it inverts the photoMOS-socket argument in
+  `docs/shopping-list.md`: a socketed photoMOS going intermittent fails
+  **open** (safe), whereas the pulse ends only when `C_ext` charges through
+  `R_ext`, so an intermittent `R_ext` leaves `Q` high — **a HOLD**, the one
+  thing the one-shot exists to prevent *(circuit-confirmed 2026-10-29 from
+  SCHS166F's logic diagram — see the datasheet facts under "An arm gate"
+  below; an open `C_ext` fails the OTHER way, to a pulse too short to latch,
+  so the PAIR is soldered, not the resistor alone)*. A socket on the timing resistor would put the project's
+  worst-case failure behind a spring contact.
+
   *(A draft said "remove the LED one last", which inverts this and is also
   unbuildable — the specified state is headers with no shunt fitted, so there
   is nothing to remove. The act is fitting.)*
@@ -1042,8 +1072,118 @@ does not work:
   heading: they bound everything while open and nothing once fitted. The LED
   jumper and the arm gate are the firmware-side ones.
 
-- **An arm gate.** AND the one-shot output with a second GPIO that firmware
-  must hold high, so one stuck or floating trigger pin cannot fire anything.
+- **An arm gate.** Gate the one-shot with a second GPIO that firmware must
+  hold high, so one stuck or floating trigger pin cannot fire anything. *(This
+  read "AND the one-shot output with a second GPIO" until 2026-10-29 — the
+  external-AND-on-`Q` mechanism the table below rejects, stated as the
+  bullet's own headline.)*
+
+  **MECHANISM DECIDED 2026-10-29: the '221's own `R` (reset) input, on
+  GPIO38, held high to arm — `B` tied to 3V3 on all four channels.** *(The
+  first draft of this decision, the same day, chose `B`; a pre-push review
+  read the datasheet and found `R` bounds strictly more for the same zero
+  parts — the third row below.)* Three ways to build the sentence above, and
+  they are not equivalent:
+
+  | | cost | what it bounds |
+  |---|---|---|
+  | the '221's `B` input, tied across all four channels, held high to arm — **superseded same day** | no extra part — the '221 needs `B` high to accept a falling `A` | a stuck or floating **trigger** pin, which is exactly the failure the sentence names. **Nothing more: once a channel has fired, `B` is powerless until the RC times out** |
+  | an external AND on each `Q` output (a 74HC08, a fifth IC and socket) — **declined** | one more DIP-14 | the trigger pin, **and** every `Q`-held-high state while disarmed: a '221 whose `Q` is stuck by internal failure, **and the timing-circuit failures** — `R_ext` open or intermittent, `C_ext` leaky, a bad joint on the `RxCx` pin. *(The first draft listed only the chip failure here, which undercounted what was being declined.)* |
+  | **the '221's `R` input, tied across all four channels, held high to arm — CHOSEN** | no extra part | everything `B` bounds (`R` low blocks all three trigger edges), **plus any `Q`-high state firmware can see**: `R` low ends a running pulse at once, including the `R_ext`-open HOLD, which the comparator never ends but reset overrides. The sense divider on the direction line is already the detector for "high with nothing commanded" (below) |
+
+  **`R` wins. What it does not bound: a '221 whose `Q` is stuck high by
+  internal failure** — that stays on the known-unmitigated list beside the
+  shorted photoMOS output and the watchdog's blind spot. The 74HC08 would
+  bound that one, by moving the single point onto a chip that can fail the
+  same way; a part that relocates a failure is not worth a socket, now that
+  `R` takes the timing-circuit failures off the AND's side of the ledger for
+  free.
+
+  **The datasheet facts this rests on — DATASHEET grade, TI SCHS166F
+  (CD54HC221 / CD74HC221 / CD74HCT221, Nov 1997, rev Oct 2003), read
+  2026-10-29.** Until then the trigger edges were recollection. Truth table,
+  per channel:
+
+  | `A̅` | `B` | `R̅` | `Q` |
+  |---|---|---|---|
+  | H | X | H | L — no pulse |
+  | X | L | H | L — no pulse |
+  | L | ↑ | H | **one pulse** |
+  | ↓ | H | H | **one pulse** |
+  | X | X | L | L — **reset; ends a pulse in progress** |
+  | L | H | ↑ | **one pulse** (datasheet note 1: reached only through the A-low / B-high sequence) |
+
+  **TI writes the trigger and reset pins with overbars — `A̅` and `R̅`, active
+  low — and the H/L entries above are PIN LEVELS, transcribed as the
+  datasheet prints them.** This repo writes `A` and `R` in prose for the
+  pins; where it says "`A` idles HIGH" or "`R` held high to arm" it means the
+  pin, and high is the inactive state of both. *(The table header read `A` /
+  `R` without the bars for part of 2026-10-29, which left a reader checking
+  it against the PDF unable to tell pin level from logical sense.)*
+
+  And in prose: *"Once triggered, the outputs are independent of further
+  trigger inputs on A and B. The output pulse can be terminated by a LOW
+  level on the Reset (R) pin."* Also: *"On power up, the IC is reset"*; `B`
+  has a Schmitt trigger and `A` does not; unused inputs must be terminated
+  high or low; `R_X` minimum typically 500 Ω; `t_W = 0.7 R_X C_X` at
+  V_CC = 4.5 V. **Three trigger edges, as recollected — but the `R` edge
+  needs `A` low AND `B` high**, which the recollection left out and which is
+  what makes `R` safe as the arm line under the rule below.
+
+  PDIP-16 pinout, same source (page 1, top view, and the page-2 functional
+  diagram agree): **1** 1A̅ · **2** 1B · **3** 1R̅ · **4** 1Q̄ · **5** 2Q ·
+  **6** 2C_X · **7** 2C_XR_X · **8** GND · **9** 2A̅ · **10** 2B · **11** 2R̅ ·
+  **12** 2Q̄ · **13** 1Q · **14** 1C_X · **15** 1C_XR_X · **16** V_CC. TI
+  labels the reset pin `R̅`; `CLR` is the SN74 name for the same pin.
+  **So the true output of channel 1 is pin 13 and of channel 2 is pin 5;
+  pins 4 and 12 are the complements.**
+
+  **This list had Q and Q̄ SWAPPED on both channels for part of
+  2026-10-29** — "4 1Q · 5 2Q̄ · 12 2Q · 13 1Q̄" — at datasheet grade, in the
+  table CLAUDE.md sends a builder to for exactly this. Built from it, each
+  BC547 base lands on the complement: the LED is ON while idle and ON while
+  DISARMED (`R̅` low forces Q̄ high), and goes off only for the pulse. The
+  arm gate would have turned the drive on. Caught by a pre-push review of
+  the commit that introduced it, before any wire; recorded because a
+  transcription error in a datasheet-grade table is the one kind the grade
+  does not warn you about.
+
+  **`A` MUST IDLE HIGH, and it must do so across a reset.** With `B` tied
+  high, raising `R` fires a pulse on any channel whose `A` is low at that
+  moment; with `A` high the `R` edge is inert. The ESP32-S3 cannot hold `A`
+  high by itself: per its datasheet (v2.2, §2 pin table), GPIO40/41/42 are
+  input-enabled with **no pull** at and after reset, GPIO39 has only a weak
+  pull-up (and only while `EFUSE_DIS_PAD_JTAG` is 0), and GPIO38 has none.
+  Opening the serial port resets the ESP32 without power-cycling the '221,
+  so on every flash and every monitor session the '221 sits powered with
+  those inputs floating unless something external holds them. **So,
+  passive, no firmware involved — DECIDED 2026-10-29:**
+
+  - **10 K pull-up to 3V3 on each `A` line, ×4** — idle high through every
+    reset; a GPIO pulling low sinks 0.33 mA. `A` has no Schmitt trigger,
+    which is the argument for 10 K over the 100 K also held.
+  - **10 K pull-down on the `R` arm line, ×1** — disarmed at reset, after a
+    crash, and with the devkit pulled from its headers.
+  - **`B` tied directly to 3V3, all four channels** — a Schmitt input that
+    must not float; a permanent high.
+  - 10 K: **25 held, counted by the operator 2026-10-29** *(read "count not
+    taken" for part of that day)*; `docs/shopping-list.md` §4 carries the row.
+
+  CLAUDE.md's GPIO table carries the pin, the idle-state rule and the three
+  parts.
+
+  **GPIO39–42 are the JTAG pads and are plain GPIO here — DATASHEET grade,
+  ESP32-S3 Series Datasheet v2.2, §2 pin table and §3.4 Table 3-5, read
+  2026-10-29.** 39 = MTCK, 40 = MTDO, 41 = MTDI, 42 = MTMS. With
+  `EFUSE_DIS_PAD_JTAG`, `EFUSE_DIS_USB_JTAG` and `EFUSE_STRAP_JTAG_SEL` all
+  at their default 0, the JTAG source is the USB Serial/JTAG controller and
+  **GPIO3 is ignored**; GPIO3 selects the source only once `STRAP_JTAG_SEL`
+  is burned, which nothing here does. Nothing drives these pads at boot:
+  through reset they are inputs, no pull on 40–42, a weak pull-up on 39
+  while `EFUSE_DIS_PAD_JTAG` is 0. *(CLAUDE.md carried this as a RECOLLECTION
+  caveat — "GPIO3 is the source select, so plain GPIO", "a pin that moves at
+  boot" — until the datasheet was read the same day: right pin order, right
+  conclusion, wrong lever, unsupported hedge.)*
 
 #### What this changes in the harness
 

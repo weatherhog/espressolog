@@ -37,7 +37,8 @@ the thing you do not know yet.
 | **believe a flowmeter pulse count** | `docs/flowmeter-j4.md` | counts are **~5× the datasheet and UNRESOLVED** — and the 5× itself divides by an **assumed** inlet |
 | **plan a flowmeter experiment** | `docs/flowmeter-j4.md` | **0d-i first** (weigh the split). And check whether the operator already does it every morning — three for three so far |
 | **compare flow data across sessions** | `docs/flowmeter-j4.md` | the **OPV is adjustable state and nothing records it** — invariant-5 class |
-| **pick a free GPIO, or drill the perfboard** | `docs/board-and-perfboard.md` | **GPIO48 is the LED, so GPIO38 is free**; GPIO33–37 unusable; 5Vin at position 21 beside GND at 22 is a **solder hazard** |
+| **pick a free GPIO, or drill the perfboard** | `docs/board-and-perfboard.md` | **GPIO48 is the LED, GPIO38 is the arm gate and 39–42 are the triggers — free: 1, 2, 9–14, 18, 21, 47**; GPIO33–37 unusable; 5Vin at position 21 beside GND at 22 is a **solder hazard** |
+| **lay out the perfboard — what connects to what** | `docs/phase-0-plan.md` §*Topology, per actuated line* and §*Two things that bound the firmware-side failures*; then `docs/board-and-perfboard.md` for the header | sense side is **seven shunts, nine resistors** — 4 × J2, 1 × J4, 2 × J5 each as two 8.2 K in series, nothing on `Disp-P4` — every series leg living in its T-piece *("nine shunts" until later on 2026-10-29)*; drive side is **2 × '221, 4 × AQY212EH in two series pairs, 4 × BC547, three OPEN jumper headers**, triggers on **GPIO39–42**, arm on **GPIO38** via the '221 `R` (reset) input — `B` tied to 3V3, **10 K pull-up on each `A`, 10 K pull-down on the arm line**; **timing RC on headers for the sweep, soldered for the build**; **J2 has no ground**; **keep the two jumper fields apart**; the '221 truth table and pinout are in the plan under *An arm gate* (datasheet, SCHS166F); **no pin-function table for the AQY212EH exists in this repo yet — read it before wiring the drive legs** |
 | **tee into the water circuit** | `docs/hydraulics.md` | everything is 1/8, the **gauge end cannot be teed**, there are **no spare ports**, and **whether invariant 1 covers plumbing is UNDECIDED** |
 | **work out what has actually been built and bench-tested** | `docs/phase-0-status.md` | the bench record and the resume point |
 | **buy a part** | `docs/shopping-list.md` | supersedes the parts tables in `docs/phase-0-plan.md` |
@@ -745,7 +746,9 @@ fitted and `switches on`, lever B up logged `water` and lever B down logged
 conductor, divider, GPIO, firmware name — but it is a *longer* evidential
 chain for the identification itself; see the lever table above.
 
-**GPIO budget for the whole board: seven inputs.**
+**GPIO budget — SENSE side: seven inputs.** *(This heading said "for the
+whole board" until 2026-10-29. The drive side below had never been
+allocated, and the heading hid that.)*
 
 | Signal | GPIO | Note |
 |---|---|---|
@@ -756,6 +759,53 @@ chain for the identification itself; see the lever table above.
 | 2Cup | **15** | fixed by `main.cpp` (0.9.0); polled |
 | Steam | **16** | fixed by `main.cpp` (0.9.0); polled |
 | Hot Water | **17** | fixed by `main.cpp` (0.9.0); polled |
+
+**DRIVE side — DECIDED 2026-10-29, nothing in firmware yet.** **One channel
+per photoMOS — four channels, two dual `CD74HC221E`** (ten bought). The
+pins rest on one layout fact: **positions 4–10 of the OPPOSITE header column
+are `GPIO1, 2, 42, 41, 40, 39, 38` — all free, none strapping, directly
+across from the seven sense taps.** Sense on one side of the devkit, drive on
+the other — which separates logic nets from sense nets and **says nothing
+about where pos 1 runs** *(a draft called it "the segregation the pos-1 rule
+asks for"; that rule is about the +5 V conductor, which never reaches a
+GPIO — `docs/phase-0-plan.md`, "keep pos 1 physically segregated")*.
+`main.cpp` names none of these yet; **changing one now means changing this
+table and the plan together**, as with the sense pins.
+
+| Signal | GPIO | Note |
+|---|---|---|
+| trigger — 1Cup, photoMOS 1 | **42** | one '221 channel each, on its `A` input. **`A` idles HIGH — external 10 K pull-up to 3V3**, pulse low to fire |
+| trigger — 1Cup, photoMOS 2 | **41** | |
+| trigger — 2Cup, photoMOS 1 | **40** | |
+| trigger — 2Cup, photoMOS 2 | **39** | |
+| **arm gate** | **38** | **the '221's own `R` (reset) input, tied across all four channels, held high to arm; external 10 K pull-down; `B` tied to 3V3.** No external AND. *(`B` until later on 2026-10-29.)* |
+
+**The rules a layout acts on — all DATASHEET grade since 2026-10-29
+(TI SCHS166F; ESP32-S3 Series Datasheet v2.2):**
+
+- **`A` idles HIGH through external pull-ups, never firmware ones.** The
+  '221 also fires on `R` rising with `A` low and `B` high, and the ESP32-S3
+  leaves 38, 40, 41 and 42 unpulled through every reset — and the serial
+  port resets the ESP32 without power-cycling the '221.
+- **Arm on `R`, not `B`: `R` low ends a running pulse, `B` low does not.**
+  Same zero parts. A `Q` stuck high by internal failure is bounded by
+  neither and is on the plan's known-unmitigated list.
+- **Timing RC: 2-pin headers for the bench sweep, SOLDERED for the build,
+  never a socket in service.** An intermittent `R_ext` is a **HOLD**, an
+  open `C_ext` a pulse too short to latch; the pair is soldered **before any
+  drive-leg jumper is ever fitted.**
+- **39–42 are the JTAG pads (MTCK/MTDO/MTDI/MTMS) and are plain GPIO here**
+  with the JTAG eFuses at default; nothing drives them at boot.
+- **The press the machine sees is the OVERLAP of two pulses**, shorter than
+  either; the bench sweep measures one channel, not the press.
+
+**`docs/phase-0-plan.md` is normative on all of it, under *An arm gate* and
+*Two things that bound the firmware-side failures*** — the '221 truth table
+and PDIP-16 pinout, the three-way arm-gate comparison, the reset-pad facts,
+the eFuse table behind the JTAG line, and the retractions: `CLR` rising
+stated unqualified, `B` chosen before `R`, and this block's own first draft,
+which carried sixty lines of that reasoning in a file that promises live
+conclusions only *(trimmed later on 2026-10-29)*.
 
 **All seven are now named in firmware 0.9.0, so none of them is a free
 choice any more** — this table used to mark five of them "proposed" and they
@@ -770,7 +820,9 @@ order). Neither alone would do it — the functional chain cannot tell wiring
 by *label* from wiring by *position*, and the silkscreen read cannot tell
 you the firmware agrees.
 
-**THE ONBOARD RGB LED IS ON GPIO48, SO GPIO38 IS FREE.** Espressif put it on
+**THE ONBOARD RGB LED IS ON GPIO48, SO GPIO38 IS NOT THE LED** *("so GPIO38
+is free" until 2026-10-29 — free of the LED, which it still is; the drive
+table above has since spent it on the arm gate)*. Espressif put it on
 48 on v1.0 and 38 on v1.1 and both revisions are sold, so this had to be
 measured; it was, 2026-10-15, by a two-point test against `status`. **This
 fixes the LED net only — it does not make the board "v1.0"**: every other
@@ -799,41 +851,41 @@ the document, not the document.
   covers ~25 rows**, the PCB overhanging ~5 mm at each end, so budget
   against the outline. 9 free columns sit underneath the devkit if it is
   socketed high enough, which is why `docs/shopping-list.md` specifies
-  female headers. **The board is 10 × 10 cm FR-4 (35 × 37 = 1295 holes),
-  bought 2026-10-28 — this said "buy 7 × 9 cm" until then.** 7 × 9 was
-  chosen for soldering room against a *nominal* 27 × 35; the boards
-  actually sold are **24 × 30**, which leaves 390 holes beside the devkit
-  rather than 560, below even the "often 24 × 34" hedge this bullet used to
-  carry. **BOTH GRIDS ARE LISTING FIGURES, NOT COUNTS, and 35 × 37 is not
-  even that** — the listing states **1295 holes** and 35 × 37 is the only
-  board-shaped factorisation of it (1295 = 5 × 7 × 37), so the grid is
-  *inferred* from a vendor number. **That uniqueness is an artefact, not
-  corroboration: 1295 = 36² − 1, and the board is sold SQUARE, so
-  36 × 36 = 1296 is one hole away and is the competing reading, favoured by
-  nothing and needing the vendor's count to be off by one** — on which
-  free-beside is 900 and the span is 24 pitches = 60.96 mm, i.e. the ~61 mm
-  this bullet corrects further on. **888 and 58.4 mm inherit the INFERRED
-  grade; 30.5 mm is one grade better — LISTING, since 24 × 30 is stated
-  outright — and both sides of the 1.9× ratio the decision rests on are
-  vendor figures, not counts.** This is the
-  same evidence class as the "XH 2.54mm Vertical" listing that was wrong
-  about the parts it described — a different vendor and a different order
-  (AliExpress, received) from the perfboard (Amazon, in transit); the
-  evidence class is shared, the order is not. The deciding argument for 10 × 10 is not comfort: pos 1 must be
-  *"physically segregated… maximum spacing from the four direction lines"*
-  (`docs/phase-0-plan.md`), which is **58.4 mm** there against **30.5 mm**
-  on 7 × 9 — 23 and 12 pitches of a 24- and 13-column free field. *(These
-  read ~61 and ~33 until 2026-10-29: the column count quoted as a
-  dimension, one pitch too many on each, which is the trap
-  `docs/board-and-perfboard.md` names at "Quote the pitch count, never the
-  column count". The 1.9× conclusion is unaffected.)*
-  **Count the holes on the board you actually receive.** The one hole count
-  ever read off a listing (24 × 30) disagreed with this repo's own *derived*
-  nominal (27 × 35), not with the vendor's "7 × 9", which a 24 × 30 grid
-  fits; and 18 × 24 for a 5 × 7 is a generic hedge, not a listing. Nothing
-  here has been counted.
+  female headers. **The board is 10 × 10 cm FR-4, bought 2026-10-28, NOT
+  RECEIVED as of 2026-10-29, and its grid is PHOTO-COUNTED 2026-10-29:
+  35 × 37 = 1295** — 35 along one axis, lettered A–Z then A–K (26 + 11 = 37)
+  along the other, read off the listing's product photo. That matches the
+  vendor's 1295 to the hole, so the 36 × 36 reading is dead; it is not a
+  count of the board that will be drilled. **The free field beside the devkit is
+  24 columns = 23 pitches = 58.4 mm, which is the most spacing pos 1 can be
+  given.** `docs/board-and-perfboard.md` carries the derivation, the 7 × 9
+  it supersedes and why, and the pitch-count correction — all moved out of
+  this bullet on 2026-10-29, when it had grown to thirty lines of history in
+  a file that promises live conclusions only. *(The grid read "INFERRED from
+  a vendor hole count, not confirmed until counted" until the photo count,
+  later the same day — then "COUNTED", and "in hand", for part of that day,
+  while the pack was in transit.)* The rule stands, and is still owed:
+  **count the holes on the board you actually receive.**
 - **GPIO33–37 are octal-PSRAM internal on this N16R8 module** — present on
   the header, unusable, do not even probe them.
+- **J2 CARRIES NO GROUND, so the ground bus is anchored at J5 and J4 only.**
+  J2's five positions are the +5 V common and four direction lines; its four
+  220 K shunts return to a ground that arrives **only on J5 `VSS` or J4
+  `T`**. With neither plugged, **the J2 dividers have no reference**: each
+  switch GPIO is held low through its own 220 K to our ground, and the
+  machine's 5 V common has no return to the board, so a lever press does
+  not read. One ground bus, two machine-side anchors, nothing on the J2
+  header to tie it to. *("the four switch GPIOs float" for part of
+  2026-10-29 — a pin tied to ground through 220 K is not floating, and the
+  fault presents as a line stuck low, not a drifting one. status.md's
+  wording, "no reference", was right and the copy changed it.)*
+  *(`docs/phase-0-status.md` has recorded this since 0c; it reached this
+  file on 2026-10-29.)*
+- **THE TWO JUMPER FIELDS MUST BE PHYSICALLY APART.** The two drive-leg
+  jumpers sit on machine 5 V (pos 1); the LED-supply jumper sits on our 3V3.
+  **One bridge spanning both fields puts machine 5 V onto the 3V3 rail** —
+  the same class of hazard as 5Vin-beside-GND above. `docs/phase-0-plan.md`
+  is normative on the count and placement; this is the layout consequence.
 
 **`docs/board-and-perfboard.md` is normative on all of it** — the 44-position
 enumeration in full, the per-GPIO evidence table and the two honest limits on
@@ -902,9 +954,13 @@ not retire a datasheet worst case, and the VIH figure a draft got wrong.
 **Not an optocoupler either**: its mA would drop ~1 V across the 1 K series
 network and could break the board's own threshold.
 
-The switch harness is **J2** (silkscreen `BOTONE`), 5 pins: +5 V, Steam,
-1Cup, 2Cup, Water. Gives real shot boundaries, flush events, and a true
-`first_drip_ms`.
+The switch harness is **J2** (silkscreen `BOTONE`), 5 pins — **POSITIONAL,
+as a `B5B-XH-A` is wired: 1 = +5 V common · 2 = Steam · 3 = 2Cup · 4 = 1Cup
+· 5 = Water.** *(Until 2026-10-29 this line read "+5 V, Steam, 1Cup, 2Cup,
+Water" — the non-positional order the J2 table above warns "swaps the shot
+with the clean cycle" if read as positions — re-armed 400 lines below the
+warning, on the one line a builder reads with a header in hand.)* Gives real
+shot boundaries, flush events, and a true `first_drip_ms`.
 
 ### 0d — flowmeter
 

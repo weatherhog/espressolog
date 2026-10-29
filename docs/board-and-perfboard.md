@@ -5,12 +5,13 @@
 > mechanical dimension the perfboard layout depends on.
 >
 > **CLAUDE.md carries** the live conclusions in its GPIO-budget section: the
-> board check is done, GPIO48 is the LED so GPIO38 is free, Espressif's
+> board check is done, GPIO48 is the LED so GPIO38 is not (it is the arm gate
+> since 2026-10-29), Espressif's
 > published v1.1 layout is correct for this clone, the seven taps are
 > contiguous at positions 4–10 with 3V3 at 1 and GND at 22, 5Vin-beside-GND
 > is a solder hazard, no tap draws from 3V3, 2.54 mm pitch, 10-pitch row
 > spacing, an 11 × 22 pin footprint in a ~25-row body, the board is
-> 10 × 10 FR-4 and count the holes. Those are
+> 10 × 10 FR-4, 35 × 37 PHOTO-COUNTED 2026-10-29 (board not received). Those are
 > what a reader acts on; the enumeration and the retraction history below are
 > what they rest on.
 >
@@ -137,7 +138,9 @@ this N16R8 module** — physically present on the header and unusable; do not
 even probe them.
 
 ◆ **THE ONBOARD RGB LED IS ON GPIO48 — SETTLED 2026-10-15 BY A TWO-POINT
-TEST. So GPIO38 is FREE.** Espressif put it on **GPIO48 on v1.0 and GPIO38 on
+TEST. So GPIO38 is NOT the LED** *(this said "is FREE" until 2026-10-29 — it
+was, and CLAUDE.md's drive table has since spent it on the '221 arm gate)*.
+Espressif put it on **GPIO48 on v1.0 and GPIO38 on
 v1.1** and both revisions are sold, so this had to be measured. Open since
 2026-10-12.
 
@@ -359,7 +362,7 @@ accounting properly — **a draft of this paragraph got it backwards**:
 | 5 × 7 cm — **as the hedge below expects** | 18 × 24 = 432 | 11 × 22 | **7 × 24 = 168** | 9 × 22 = 198 |
 | 7 × 9 cm — *nominal, and not what is sold* | 27 × 35 = 945 | 11 × 22 | **16 × 35 = 560** | 9 × 22 = 198 |
 | 7 × 9 cm — **as actually sold** | 24 × 30 = 720 | 11 × 22 | **13 × 30 = 390** | 9 × 22 = 198 |
-| **10 × 10 cm FR-4 — BOUGHT 2026-10-28** | **35 × 37 = 1295** *(inferred)* | 11 × 22 | **24 × 37 = 888** | 9 × 22 = 198 |
+| **10 × 10 cm FR-4 — BOUGHT 2026-10-28** | **35 × 37 = 1295** *(PHOTO-COUNTED 2026-10-29)* | 11 × 22 | **24 × 37 = 888** | 9 × 22 = 198 |
 
 That draft said 5 × 7 "does not fit" because "the devkit eats 22 of the 27
 rows, leaving five" — which treats the devkit's **11-column** footprint as if
@@ -418,15 +421,46 @@ between the axes. If the grid is 36 × 36 then free-beside is **25 × 36 = 900**
 ~61 mm corrected above. Nothing here distinguishes them, so **counting the
 delivered board settles two questions, not one.**
 
+**PHOTO-COUNTED 2026-10-29: 35 × 37.** The operator counted 35 along one
+axis and the letters A–Z then A–K — 26 + 11 = 37 — along the other, **on the
+listing's product photo; the pack had not arrived.** That is a grade of its
+own: stronger than the vendor's bare number, because the photo and the
+number now agree to the hole and 36 × 36 would need both wrong; weaker than
+a board in hand, because a listing photo can be a stock image shared across
+sizes. On that evidence 36 × 36 is retired, 888 and 58.4 mm stand, and the
+~61 mm stays corrected — and "counting the delivered board settles two
+questions" above is still owed. *(This paragraph said "COUNTED" without the
+"photo" for part of that day.)*
+
 But "5 × 7 does not fit" is still not what the numbers say, and that
 correction is the reason this table exists.
+
+**Grades, moved here from CLAUDE.md on 2026-10-29, which keeps only the
+conclusion.** 888 and 58.4 mm are **PHOTO-COUNTED** grade since the 35 × 37
+count above *(INFERRED for the hours between the move and the count, and
+"COUNTED" for the hours after it until the photo was named as the source)*;
+30.5 mm is
+**LISTING**, since 24 × 30 is stated outright and no 7 × 9 was ever
+received — so the 1.9× ratio is a count against a vendor figure. The listing
+side is the same evidence class as the "XH 2.54mm Vertical" listing that was
+wrong about the parts it described: different vendor and order, shared
+class. And the one hole count ever read off a
+listing (24 × 30) disagreed with this repo's own *derived* nominal (27 × 35),
+not with the vendor's "7 × 9", which a 24 × 30 grid fits; 18 × 24 for a
+5 × 7 is a generic hedge, not a listing. *(The block that first carried this
+restated the 36² − 1 reading, the 58.4 / 30.5 figures and the ~61 / ~33
+retraction a second time in this file, 70 lines under the first; collapsed
+the same day to the three sentences the file did not already have.)*
 
 **Footprint is the pin field, not the outline.** 11 × 22 holes is 25.4 ×
 53.3 mm of *pins*; the PCB overhangs at both ends (module/antenna one end,
 USB and buttons the other) by roughly 5 mm each, so the body covers ~25 rows.
 Budget rows against the outline.
 
-**Count the holes on the board you actually receive.** Commodity "7 × 9"
+**Count the holes on the board you actually receive — still owed for the
+10 × 10, which on 2026-10-29 went from inferred to photo-counted, not to
+counted.** *(This said "done … inferred to counted" for part of that day.)*
+Commodity "7 × 9"
 protoboards are often ~24 × 34 rather than 27 × 35, and "5 × 7" ones 18 × 24 —
 and the hedge should be applied to both, not just to the one being rejected.
 **It was not, until 2026-10-29** — every table above carried 7 × 9 both

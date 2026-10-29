@@ -9,7 +9,8 @@
 > published v1.1 layout is correct for this clone, the seven taps are
 > contiguous at positions 4–10 with 3V3 at 1 and GND at 22, 5Vin-beside-GND
 > is a solder hazard, no tap draws from 3V3, 2.54 mm pitch, 10-pitch row
-> spacing, an 11 × 22 footprint, buy 7 × 9 cm and count the holes. Those are
+> spacing, an 11 × 22 pin footprint in a ~25-row body, the board is
+> 10 × 10 FR-4 and count the holes. Those are
 > what a reader acts on; the enumeration and the retraction history below are
 > what they rest on.
 >
@@ -354,8 +355,11 @@ accounting properly — **a draft of this paragraph got it backwards**:
 
 | | holes | devkit pin field | free beside it | free underneath |
 |---|---|---|---|---|
-| 5 × 7 cm | 19 × 27 = 513 | 11 × 22 | **8 × 27 = 216** | 9 × 22 = 198 |
-| 7 × 9 cm | 27 × 35 = 945 | 11 × 22 | **16 × 35 = 560** | 9 × 22 = 198 |
+| 5 × 7 cm — *nominal* | 19 × 27 = 513 | 11 × 22 | **8 × 27 = 216** | 9 × 22 = 198 |
+| 5 × 7 cm — **as the hedge below expects** | 18 × 24 = 432 | 11 × 22 | **7 × 24 = 168** | 9 × 22 = 198 |
+| 7 × 9 cm — *nominal, and not what is sold* | 27 × 35 = 945 | 11 × 22 | **16 × 35 = 560** | 9 × 22 = 198 |
+| 7 × 9 cm — **as actually sold** | 24 × 30 = 720 | 11 × 22 | **13 × 30 = 390** | 9 × 22 = 198 |
+| **10 × 10 cm FR-4 — BOUGHT 2026-10-28** | **35 × 37 = 1295** *(inferred)* | 11 × 22 | **24 × 37 = 888** | 9 × 22 = 198 |
 
 That draft said 5 × 7 "does not fit" because "the devkit eats 22 of the 27
 rows, leaving five" — which treats the devkit's **11-column** footprint as if
@@ -364,10 +368,58 @@ it spanned the full 19-column width. It does not. And it quoted 7 × 9 as
 5 × 7 offers beside the devkit**. By its own metric the draft argued against
 its own conclusion.
 
-**7 × 9 is still the right buy**, for soldering room rather than necessity:
-560 contiguous holes against 216, with the actuation block, four J2 dividers,
-the J4 divider and two J5 resistors to place. But "5 × 7 does not fit" is not
-what the numbers say.
+**7 × 9 WAS the right buy on these numbers, and it is SUPERSEDED BY 10 × 10
+FR-4 as of 2026-10-28** — `docs/shopping-list.md` §5 is normative on the
+replacement. The reasoning here was *"soldering room rather than
+necessity: 560 contiguous holes against 216"*, and **that 560 assumed a
+nominal 27 × 35**. Commodity 7 × 9 boards are **24 × 30 = 720**, giving
+**390 beside the devkit** — a 30 % cut in the only quantity the choice
+rested on, and below the "often ~24 × 34" hedge under *"Count the holes on
+the board you actually receive"*. The
+board bought is **35 × 37 = 1295, 888 beside** (24 × 37 exactly — the
+uncertainty is in the grid, not the multiplication), and the argument that
+settles it is `docs/phase-0-plan.md`'s requirement that pos 1 keep
+*"maximum spacing from the four direction lines"* on the board:
+**58.4 mm there against 30.5 mm on 7 × 9**.
+
+**Those two figures were ~61 mm and ~33 mm until 2026-10-29, and they broke
+the rule stated just above the hole-count table they come from** — *"Quote
+the pitch count, never the column count"*. The free field
+beside the devkit is **24 columns** on 10 × 10 and **13** on 7 × 9, and a
+24-column field spans **23** pitches, not 24: 23 × 2.54 = 58.42 mm, and
+12 × 2.54 = 30.48 mm. Both were overstated by exactly one pitch — the
+column count quoted as a dimension, which *"Quote the pitch count, never
+the column count"* exists to prevent. The *"Footprint is the pin field, not
+the outline"* paragraph below gets the same conversion right for the devkit
+(11 × 22 pins → 25.4 × 53.3 mm), so the convention was not unknown here,
+merely not applied.
+
+**All three pointers in this section were positional — "three paragraphs
+down", "nine lines above", "four below" — and all three were wrong on
+2026-10-29: the first was correct when written and was broken by the
+paragraphs inserted above it; the other two were wrong from the moment they
+were written. Replaced by quoting the lead-in phrases they point at.** `CLAUDE.md` already records that a line number in a document
+is wrong by the time the document is saved; the same is true of a paragraph
+count, and this file managed to prove it within one commit.
+
+**The conclusion is unchanged**, which is why this is a correction and not
+a retraction: 58.4 / 30.5 is 1.9×, against 1.85× for the wrong pair. 10 × 10
+still buys roughly twice the separation. **And both numbers are spans of a
+hole field, not a designed placement** — no layout has been drawn, so they
+bound what the requirement *could* be given, not what it will get.
+
+**AND 1295 = 36² − 1, WHICH IS WHY THE FACTORISATION IS UNIQUE — it is not
+corroboration.** The board is sold as **square** 10 × 10, and **36 × 36 =
+1296** is one hole away on a board sold square — the competing reading,
+favoured by nothing here, and it needs the vendor's count to be off by one;
+a 35 × 37 field on a square board implies edge margins differing by ~2.5 mm
+between the axes. If the grid is 36 × 36 then free-beside is **25 × 36 = 900**, not
+888, and the span is **24 pitches = 60.96 mm** — which would put back the
+~61 mm corrected above. Nothing here distinguishes them, so **counting the
+delivered board settles two questions, not one.**
+
+But "5 × 7 does not fit" is still not what the numbers say, and that
+correction is the reason this table exists.
 
 **Footprint is the pin field, not the outline.** 11 × 22 holes is 25.4 ×
 53.3 mm of *pins*; the PCB overhangs at both ends (module/antenna one end,
@@ -377,6 +429,14 @@ Budget rows against the outline.
 **Count the holes on the board you actually receive.** Commodity "7 × 9"
 protoboards are often ~24 × 34 rather than 27 × 35, and "5 × 7" ones 18 × 24 —
 and the hedge should be applied to both, not just to the one being rejected.
+**It was not, until 2026-10-29** — every table above carried 7 × 9 both
+nominal and as-sold while leaving 5 × 7 nominal, and **216 is the baseline
+the whole argument compares against** (*"560 contiguous holes against 216"*,
+*"fewer than the 216 a 5 × 7 offers"*). Both rows now appear. The conclusion
+is unchanged and strengthened: against 168 the rejected board is worse still
+— and 168 flatters it, because a 24-row board is shorter than the devkit's
+~25-row BODY, so on the as-sold 5 × 7 the devkit overhangs the board and
+"budget against the outline" has nothing left to budget.
 
 **Pitch is 2.54 mm (0.1 in) — and the proof is that the board has been in a
 BREADBOARD since 0a.** A caliper reading of **1.9 mm** was taken 2026-10-12

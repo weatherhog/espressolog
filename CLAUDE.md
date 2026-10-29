@@ -795,11 +795,43 @@ the document, not the document.
   supply run from it.
 - **Pitch is 2.54 mm and row-to-row is 10 pitches (25.4 mm)**, measured by
   seating the devkit in a breadboard: one header in column A, the other in I.
-- **Perfboard footprint is 11 columns × 22 rows**, with 9 free columns
-  underneath the devkit if it is socketed high enough — which is why
-  `docs/shopping-list.md` specifies female headers. **Buy 7 × 9 cm** for
-  soldering room, and **count the holes on the board you actually receive**:
-  commodity "7 × 9" boards are often 24 × 34 rather than 27 × 35.
+- **Perfboard footprint is 11 columns × 22 rows of PINS — but the body
+  covers ~25 rows**, the PCB overhanging ~5 mm at each end, so budget
+  against the outline. 9 free columns sit underneath the devkit if it is
+  socketed high enough, which is why `docs/shopping-list.md` specifies
+  female headers. **The board is 10 × 10 cm FR-4 (35 × 37 = 1295 holes),
+  bought 2026-10-28 — this said "buy 7 × 9 cm" until then.** 7 × 9 was
+  chosen for soldering room against a *nominal* 27 × 35; the boards
+  actually sold are **24 × 30**, which leaves 390 holes beside the devkit
+  rather than 560, below even the "often 24 × 34" hedge this bullet used to
+  carry. **BOTH GRIDS ARE LISTING FIGURES, NOT COUNTS, and 35 × 37 is not
+  even that** — the listing states **1295 holes** and 35 × 37 is the only
+  board-shaped factorisation of it (1295 = 5 × 7 × 37), so the grid is
+  *inferred* from a vendor number. **That uniqueness is an artefact, not
+  corroboration: 1295 = 36² − 1, and the board is sold SQUARE, so
+  36 × 36 = 1296 is one hole away and is the competing reading, favoured by
+  nothing and needing the vendor's count to be off by one** — on which
+  free-beside is 900 and the span is 24 pitches = 60.96 mm, i.e. the ~61 mm
+  this bullet corrects further on. **888 and 58.4 mm inherit the INFERRED
+  grade; 30.5 mm is one grade better — LISTING, since 24 × 30 is stated
+  outright — and both sides of the 1.9× ratio the decision rests on are
+  vendor figures, not counts.** This is the
+  same evidence class as the "XH 2.54mm Vertical" listing that was wrong
+  about the parts it described — a different vendor and a different order
+  (AliExpress, received) from the perfboard (Amazon, in transit); the
+  evidence class is shared, the order is not. The deciding argument for 10 × 10 is not comfort: pos 1 must be
+  *"physically segregated… maximum spacing from the four direction lines"*
+  (`docs/phase-0-plan.md`), which is **58.4 mm** there against **30.5 mm**
+  on 7 × 9 — 23 and 12 pitches of a 24- and 13-column free field. *(These
+  read ~61 and ~33 until 2026-10-29: the column count quoted as a
+  dimension, one pitch too many on each, which is the trap
+  `docs/board-and-perfboard.md` names at "Quote the pitch count, never the
+  column count". The 1.9× conclusion is unaffected.)*
+  **Count the holes on the board you actually receive.** The one hole count
+  ever read off a listing (24 × 30) disagreed with this repo's own *derived*
+  nominal (27 × 35), not with the vendor's "7 × 9", which a 24 × 30 grid
+  fits; and 18 × 24 for a 5 × 7 is a generic hedge, not a listing. Nothing
+  here has been counted.
 - **GPIO33–37 are octal-PSRAM internal on this N16R8 module** — present on
   the header, unusable, do not even probe them.
 
@@ -896,8 +928,7 @@ That also closes the worn-label mystery: the marking first read as
 
 | | |
 |---|---|
-| **K-factor** | **2382 pulses/L**, 0.41 g/pulse |
-<!-- fact:digmesa-k-factor 2382 pulses/L -->
+| **K-factor** | **2382 pulses/L**, 0.41 g/pulse <!-- fact:digmesa-k-factor 2382 pulses/L --> |
 | Flow range | **0.033 – 0.40 L/min** (0.55 – 6.67 ml/s) |
 | Pressure | **−1 to +0.3 bar** — a suction-side device |
 | Supply | **+3.8 to +20 VDC**, <8 mA |

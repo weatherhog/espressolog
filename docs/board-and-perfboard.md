@@ -376,8 +376,24 @@ nominal 27 × 35**. Commodity 7 × 9 boards are **24 × 30 = 720**, giving
 rested on, and below the "often ~24 × 34" hedge three paragraphs down. The
 board bought is **35 × 37 = 1295, ~888 beside**, and the argument that
 settles it is `docs/phase-0-plan.md`'s requirement that pos 1 keep
-*"maximum spacing from the four direction lines"* on the board: ~61 mm
-there against ~33 mm on 7 × 9.
+*"maximum spacing from the four direction lines"* on the board:
+**58.4 mm there against 30.5 mm on 7 × 9**.
+
+**Those two figures were ~61 mm and ~33 mm until 2026-10-29, and they broke
+the rule stated nine lines above the table they come from.** The free field
+beside the devkit is **24 columns** on 10 × 10 and **13** on 7 × 9, and a
+24-column field spans **23** pitches, not 24: 23 × 2.54 = 58.42 mm, and
+12 × 2.54 = 30.48 mm. Both were overstated by exactly one pitch — the
+column count quoted as a dimension, which *"Quote the pitch count, never
+the column count"* exists to prevent. The paragraph four below it gets the
+same conversion right for the devkit (11 × 22 pins → 25.4 × 53.3 mm), so
+the convention was not unknown here, merely not applied.
+
+**The conclusion is unchanged**, which is why this is a correction and not
+a retraction: 58.4 / 30.5 is 1.9×, against 1.85× for the wrong pair. 10 × 10
+still buys roughly twice the separation. **And both numbers are spans of a
+hole field, not a designed placement** — no layout has been drawn, so they
+bound what the requirement *could* be given, not what it will get.
 
 But "5 × 7 does not fit" is still not what the numbers say, and that
 correction is the reason this table exists.

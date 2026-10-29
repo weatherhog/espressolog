@@ -804,9 +804,20 @@ the document, not the document.
   chosen for soldering room against a *nominal* 27 × 35; the boards
   actually sold are **24 × 30**, which leaves 390 holes beside the devkit
   rather than 560, below even the "often 24 × 34" hedge this bullet used to
-  carry. The deciding argument for 10 × 10 is not comfort: pos 1 must be
+  carry. **BOTH GRIDS ARE LISTING FIGURES, NOT COUNTS, and 35 × 37 is not
+  even that** — the listing states **1295 holes** and 35 × 37 is the only
+  board-shaped factorisation of it (1295 = 5 × 7 × 37), so the grid is
+  *inferred* from a vendor number. **888 and 58.4 mm inherit that grade**,
+  and they are the two figures the board decision rests on. This is the
+  same evidence class as the "XH 2.54mm Vertical" listing that was wrong
+  about the parts in the same order. The deciding argument for 10 × 10 is not comfort: pos 1 must be
   *"physically segregated… maximum spacing from the four direction lines"*
-  (`docs/phase-0-plan.md`), which is ~61 mm there against ~33 mm on 7 × 9.
+  (`docs/phase-0-plan.md`), which is **58.4 mm** there against **30.5 mm**
+  on 7 × 9 — 23 and 12 pitches of a 24- and 13-column free field. *(These
+  read ~61 and ~33 until 2026-10-29: the column count quoted as a
+  dimension, one pitch too many on each, which is the trap
+  `docs/board-and-perfboard.md` names at "Quote the pitch count, never the
+  column count". The 1.9× conclusion is unaffected.)*
   **Count the holes on the board you actually receive** — the centimetre
   label has been wrong twice.
 - **GPIO33–37 are octal-PSRAM internal on this N16R8 module** — present on

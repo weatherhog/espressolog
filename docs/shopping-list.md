@@ -152,7 +152,7 @@ build to.
 carries it as insurance and the reason has not gone away: **the 4S is the
 only lead that fits J2 and there is no spare**, the T-pieces are the most
 laborious part of the build, and strip-and-solder is the step with no
-undo. **The crimp set does not cover this** — see immediately below.
+undo. **The crimp set does not cover this** — see "What the crimp set does and does not settle".
 
 **This section said "Nothing" on 2026-10-28 and was wrong twice over.** It
 missed the balance-lead pack, which was a priced §5 row the whole time;
@@ -462,7 +462,7 @@ tighter than they need to be for the sake of a few euro.
 | 150 kΩ | 10 | 0c switch divider, series leg (**×4** — all four J2 lines). **In stock 2026-10-07.** |
 | 220 kΩ | 10 | Ground leg: **×4 at J2** (1Cup, 2Cup, Steam, Water) **+ ×1 at J4** = **5**. **In stock.** |
 | 10 nF ceramic | — | **CANDIDATE, do not buy yet.** ×1 across the J4 220 K shunt, 218 Hz. Nothing has been fitted and there is no before/after; it may raise the glitch count by slowing the falling edge to ~1.1 ms through the noise band. Decide after the re-measurement in `phase-0-status.md`. |
-| 470 pF ceramic | — | **CANDIDATE, weaker case than J4's.** ×2 across the J5 shunts — **now 16.4 kΩ, not the 15 kΩ this row used to name**, so the sizing below needs redoing — **and it was bought anyway**: 470 pF NP0 ×10 is on the 2026-10-27 Reichelt order (§1). Having the part does not retire the resizing; the row's precondition is simply now unmet rather than pending. *(This said "before it is bought" until 2026-10-29.)* **Never 10 nF** (69 µs against 36 µs clock highs stops the bus decoding). But the J5 drops are **not coupling, and their cause is unidentified** — `docs/taps-and-dividers.md` is normative and retracted "serial polling" on 2026-10-19. `phase-0-status.md` already carried this value as a contingent remedy after raising the shunt to 16.4 K — **that raise is no longer contingent; the capacitor still is.** |
+| 470 pF ceramic | 2 *(×10 ordered)* | **CANDIDATE, weaker case than J4's.** ×2 across the J5 shunts — **now 16.4 kΩ, not the 15 kΩ this row used to name**, so the sizing in `docs/taps-and-dividers.md` needs redoing — **and it was bought anyway**: 470 pF NP0 ×10 is on the 2026-10-27 Reichelt order (§1). Having the part does not retire the resizing; the row's precondition is simply now unmet rather than pending. *(This said "before it is bought" until 2026-10-29.)* **Never 10 nF** (69 µs against 36 µs clock highs stops the bus decoding). But the J5 drops are **not coupling, and their cause is unidentified** — `docs/taps-and-dividers.md` is normative and retracted "serial polling" on 2026-10-19. `phase-0-status.md` already carried this value as a contingent remedy after raising the shunt to 16.4 K — **that raise is no longer contingent; the capacitor still is.** |
 | 1 kΩ | 10 | 0d flowmeter, **at PA8/PA9 only** — the board side, after its own conditioning. **Never at J4.** **In stock.** |
 | 8.2 kΩ (J4) | — | **J4 ANALYSER tap only: 8.2 kΩ, one channel, `#` only, no shunt.** The ESP32 tap at J4 is **100 K + 220 K** — see the 0d entry in `docs/phase-0-status.md`. Covered by the 8.2 kΩ bag above. |
 | **330 Ω, 1 %** *(390 Ω only for a box that stays cool — "cool" is undefined: no ambient has been measured inside the box, so read this as "only after measuring it"; see the 85 °C note under "Datasheet read")* | 20 | **PhotoMOS LED drive, ×4 — ORDERED 2026-10-27 (Reichelt, ×25); §1 is normative.** *(Read "NOT IN STOCK, added 2026-10-12" until 2026-10-29.)* AQY212EH is guaranteed to operate at 3.0 mA **at 25 °C** (see the 85 °C note under "Datasheet read") and wants 5–10 mA; 330 Ω from 3.3 V gives ~6 mA. **Do not substitute the in-stock 1 kΩ** — it gives ~2 mA, above typical and below guaranteed, which is the one range that works on the bench and fails in service. 680 Ω if driving from 5 V instead. <!-- fact:led-drive-resistor 330 Ω, 1 % --> <!-- fact:photomos-guarantee-25c 3.0 mA at 25 °C --> |
@@ -524,10 +524,10 @@ because the machine caught it:
 | Heat-shrink assortment, **adhesive-lined** | 6 | Strain relief at the T-piece branches, and over the stripped window. Adhesive-lined or nothing — plain heat-shrink is not insulation on its own. |
 | Breadboard, 830-point | 6 | For the **J5 bench test before the perfboard**. **Corrected 2026-10-12:** a DevKitC-1 straddles a standard board with its headers in columns **A and I** — 1.0 in row-to-row — so **one row (J) stays free**, not none as this line said. The advice is unchanged and was followed: put only the resistor junctions on the breadboard and jumper across to the devkit's headers. Note that is exactly why the ESP was NOT seated during the bench sessions, which a later commit wrongly cited as proof of the pin pitch. |
 | **Jumper wires, male-female AND male-male** | 6 | The easily-forgotten part. M-F reaches the devkit header pins from the breadboard. |
-| **XH board headers: 3, 4 and 5 pin** | 3 | **×5 each, decided 2026-10-12.** The perfboard gets one socket per harness: **3-pin J4** (`B3B-XH-A`), **4-pin J5** (`B4B-XH-A`), **5-pin J2** (`B5B-XH-A`). **The pin counts self-key** — nothing can be cross-plugged, so do not standardise them to one size for tidiness. **SIDE-ENTRY (90°), DECIDED BY PURCHASE 2026-10-28.** This row said *"side-entry `S`-series if the printed box has a side gland; decide before designing the box"* — that is now settled, and settled the way the row anticipated. **The harnesses leave the board SIDEWAYS, parallel to it**, so a side gland is the natural placement and the box needs side clearance for the plug body plus wire bend radius rather than headroom above the board. **It can therefore be flatter than the 40 mm height the box note carries** *(the plan dimensions beside it are withdrawn; the 40 is retained as a bound — see below)* — and it must be **WIDER in plan** to pay for it, which is the half of that consequence the box row carries. **Provenance, and gender: see under this table.** |
-| Perfboard **10 × 10 cm, FR-4** ×5 + **FEMALE** pin headers ×5 | 10 + 4.59 | **SIZE AND MATERIAL BOTH SUPERSEDED 2026-10-28 — see the note below this table.** Ordered: FR-4, 1.6 mm, 2.54 mm pitch, 1 mm holes, **1295 holes = 35 × 37**, five boards. **Female** headers so the ESP32 sockets in and comes out — soldering the devkit down means it cannot be swapped or easily reflashed. **Buy 5 header strips**: 1×40 is the standard item, you cut each to 22 (losing the position you cut through), you need two, and female strips do not snap cleanly like male ones so the first one is practice. **The €10 is the five boards alone** — §1 prices the female strips separately at €4.59 (CHANZON ×10). *(This row priced both at €10 until 2026-10-29, as did `docs/phase-0-plan.md`, which also folded in the DIP-16 sockets at a further €2.19.)* |
+| **XH board headers: 3, 4 and 5 pin** | 3 | **×5 each, decided 2026-10-12.** The perfboard gets one socket per harness: **3-pin J4** (`B3B-XH-A`), **4-pin J5** (`B4B-XH-A`), **5-pin J2** (`B5B-XH-A`). **The pin counts self-key** — nothing can be cross-plugged, so do not standardise them to one size for tidiness. **SIDE-ENTRY (90°), DECIDED BY PURCHASE 2026-10-28.** This row said *"side-entry `S`-series if the printed box has a side gland; decide before designing the box"* — that is now settled, and settled the way the row anticipated. **The harnesses leave the board SIDEWAYS, parallel to it**, so a side gland is the natural placement and the box needs side clearance for the plug body plus wire bend radius rather than headroom above the board. **It can therefore be flatter than the 40 mm height the box note carries** *(the plan dimensions beside it are withdrawn; the 40 is retained as a bound — see "The box has no dimensions any more")* — and it must be **WIDER in plan** to pay for it, which is the half of that consequence the box row carries. **Provenance, and gender: see under this table.** |
+| Perfboard **10 × 10 cm, FR-4** ×5 + **FEMALE** pin headers ×5 | 10 + 4.59 | **SIZE AND MATERIAL BOTH SUPERSEDED 2026-10-28 — see the note below this table.** Ordered: FR-4, 1.6 mm, 2.54 mm pitch, 1 mm holes, **1295 holes, read as 35 × 37**, five boards. **Female** headers so the ESP32 sockets in and comes out — soldering the devkit down means it cannot be swapped or easily reflashed. **Buy 5 header strips**: 1×40 is the standard item, you cut each to 22 (losing the position you cut through), you need two, and female strips do not snap cleanly like male ones so the first one is practice. **The €10 is the five boards alone** — §1 prices the female strips separately at €4.59 (CHANZON ×10). *(This row priced both at €10 until 2026-10-29, as did `docs/phase-0-plan.md`, which also folded in the DIP-16 sockets at a further €2.19.)* |
 | Second mixed balance-lead pack | 7 | **Insurance.** The 4S is the only lead that fits J2 and there is no spare if a strip-and-solder goes wrong. The T-pieces are the most laborious part of the build and the pack is seven euro. |
-| ~~ABS project box, ~120 x 80 x 40 mm~~ **PRINTED, not bought** | 0 | ESP32 mounts **outside** the machine. **The internal dimensions are WITHDRAWN, not restated — see "The box has no dimensions any more" below.** Both earlier figures were sized to boards this project no longer builds: ~120 × 80 to a 5 × 7, then ~110 × 100 × 40 to a 70 × 90. **PETG or ASA, not PLA** — it lives beside an espresso machine and PLA softens around 60 °C. **SETTLED 2026-10-23 — print it LAST, build ONE board.** It still has to clear **three** harnesses (J5, J2's five wires and four dividers, J4), now leaving **sideways**. |
+| ~~ABS project box, ~120 x 80 x 40 mm~~ **PRINTED, not bought** | 0 | ESP32 mounts **outside** the machine. **The plan dimensions are WITHDRAWN and only the 40 mm height is retained, as a bound — see "The box has no dimensions any more".** Both earlier figures were sized to boards this project no longer builds: ~120 × 80 to a 5 × 7, then ~110 × 100 × 40 to a 70 × 90. **PETG or ASA, not PLA** — it lives beside an espresso machine and PLA softens around 60 °C. **SETTLED 2026-10-23 — print it LAST, build ONE board.** It still has to clear **three** harnesses (J5, J2's five wires and four dividers, J4), now leaving **sideways**. |
 | Cable gland or grommet | 3 | Where the harness leaves the case |
 | Nylon cable ties / adhesive tie mounts | 4 | Keep the tap away from the boiler and off moving parts |
 
@@ -547,7 +547,7 @@ below even that file's own pessimistic "often ~24 × 34" hedge.
 | board | holes | free beside the devkit |
 |---|---|---|
 | 5 × 7 — rejected, *nominal* | 19 × 27 = 513 | 216 |
-| 5 × 7 — rejected, **as the hedge expects** | 18 × 24 = 432 | 168 |
+| 5 × 7 — rejected, **as the hedge expects** *(24 rows: shorter than the devkit's ~25-row body)* | 18 × 24 = 432 | 168 |
 | 7 × 9 — **as assumed** | 27 × 35 = 945 | 560 |
 | 7 × 9 — **as actually sold** | 24 × 30 = 720 | 390 |
 | **10 × 10 — bought** | **35 × 37 = 1295** *(grid inferred)* | **888** |
@@ -572,8 +572,9 @@ the box constrains the layout; this is that retirement being spent.
 
 Two numbers to keep: **the devkit body covers ~25 rows, not its 22 pin
 rows** (the PCB overhangs ~5 mm at each end), so budget against the
-outline; and **count the holes on arrival** — two listings have
-disagreed with their own centimetre label, neither disagreement measured.
+outline; and **count the holes on arrival** — the one hole count ever read off a
+listing (24 × 30) disagreed with this repo's derived nominal (27 × 35),
+not with the vendor's label, and nothing has been counted.
 
 **Material: FR-4, not FR-2 phenolic.** A ten-pack of brown
 *Holzleimplatte 94HB* was the cheaper candidate and was rejected: phenolic
@@ -592,9 +593,14 @@ normative on status**, so in transit it is; the Received table does not
 list the perfboard either, which makes it two statements against one.
 Nothing downstream turns on the difference except the one thing that does:
 **an arrived board can be counted, and the 35 × 37 grid above is inferred
-from the listing's 1295 rather than counted.** Count it when the pack
-lands, and if that contradicts 35 × 37, this section and `CLAUDE.md` both
-move.
+from the listing's 1295 rather than counted — and 1295 = 36² − 1, so the
+competing reading is 36 × 36 = 1296, one hole off the vendor's number on a
+board sold square.** On 36 × 36 free-beside is 900 not 888, the hole field
+is 88.9 × 88.9 mm not 86.4 × 91.4, and the pos-1 span is 24 pitches =
+60.96 mm. Neither reading is favoured here; 36 × 36 needs the listing's
+count to be wrong by one. Count it when the pack lands, and if that
+contradicts 35 × 37, this section, `CLAUDE.md` and
+`docs/board-and-perfboard.md` all move.
 
 ### The box and the board count — SETTLED 2026-10-23
 
@@ -629,12 +635,12 @@ parts, 5 sockets and 3 XH connectors:
 | 27 × 35 — 7 × 9 *nominal* | 560 holes | 198 |
 | 24 × 34 — 7 × 9, the generic hedge | 442 | 198 |
 | 24 × 30 — 7 × 9 **as actually sold** | 390 | 198 |
-| **35 × 37 — 10 × 10, bought** *(grid inferred — see below)* | **888** | 198 |
+| **35 × 37 — 10 × 10, bought** *(grid inferred — see the "five boards ARRIVED" retraction)* | **888** | 198 |
 
 **This table carried only the first two rows until 2026-10-29**, so the
 section arguing space was never binding was still arguing it about a board
 that is not being built on — and its "commodity" column was **24 × 34**
-while the table 60 lines above it had already settled on **24 × 30** as the
+while the table under "The board is 10 × 10 FR-4" had already settled on **24 × 30** as the
 board actually on offer. Both are kept: 24 × 34 is the generic hedge from
 `docs/board-and-perfboard.md`, 24 × 30 is this specific listing. The
 conclusion survives all four rows, which is the point of showing them.
@@ -676,22 +682,26 @@ specifications when the only thing either one really recorded was the board
 of the week. `docs/phase-0-plan.md`'s box row said *"the 70 × 90 one"* as
 though that were still the board, and is corrected in the same commit.
 
-**No replacement figure is given here, deliberately.** The box is printed
+**No replacement plan figure is given here, deliberately — the 40 mm height
+alone is retained, as a bound, stated at the end of this section.** The box is printed
 last, on the operator's own printer, sized to the finished board — that is
 the whole point of the 2026-10-23 decision above, and putting a number back
 in would re-create the defect a third time. What follows are the
 *constraints*, which are what a printed box actually needs:
 
 - **In plan: the finished board plus the harness side.** The hole field is
-  **86.4 × 91.4 mm** centre to centre (34 and 36 pitches at 2.54 mm), and
+  **86.4 × 91.4 mm** centre to centre (34 and 36 pitches at 2.54 mm — on the
+  35 × 37 reading; 88.9 × 88.9 on 36 × 36), and
   the outline is bigger by whatever the edge margins turn out to be.
-  **MEASURE THE BOARD** — "10 × 10" is a label, not a measurement, and **two
-  listings have already disagreed with their own label** (7 × 9 sold as
-  24 × 30 against a nominal 27 × 35; "5 × 7" ones at 18 × 24). *(Both of
-  those are listing-grade. This said "the centimetre label has been wrong
-  twice" until 2026-10-29, which reads as bench experience inside an
-  imperative to measure — and no board in this project has ever been
-  counted.)*
+  **MEASURE THE BOARD** — "10 × 10" is a label, not a measurement. *(This
+  said "the centimetre label has been wrong twice" until 2026-10-29, then
+  "two listings have disagreed with their own label" for a day, and neither
+  is right. The one hole count ever read off a listing, 24 × 30, disagreed
+  with THIS REPO'S derived nominal 27 × 35 — not with the vendor's "7 × 9",
+  which a 24 × 30 grid fits — and "5 × 7 ones at 18 × 24" is a generic hedge
+  from `docs/board-and-perfboard.md`, not a listing. No board in this
+  project has ever been counted. Two drafts of one sentence promoted an
+  ungraded claim instead of grading it.)*
 - **On the harness side, add plug body plus wire bend radius** — the
   headers are **side-entry**, so this is in-plane clearance, not headroom.
   **Do not use the 5.7 mm from the XH/EH section for it**: that is the
@@ -701,13 +711,14 @@ in would re-create the defect a third time. What follows are the
 - **In height it can be under 40 mm**, which is the side-entry headers'
   one gift: socketed devkit plus board, no connector standing proud.
 
-**The 40 mm is the one component of the withdrawn figure that SURVIVES, and
-saying "no replacement figure" without saying so was sloppy.** It is not a
-specification — it is an upper bound two live arguments already reason
-from: the side-entry row above ("flatter than 40 mm") and the two-board
-objection below ("two boards stacked over a socketed devkit do not fit
-40 mm"). Withdrawing it silently would have pulled the floor out from under
-both. So: **the plan dimensions are withdrawn, the 40 mm height is retained
+**The 40 mm is the one component of the withdrawn figure that SURVIVES.** It
+is not a specification — it is an upper bound two live arguments already
+reason from: the side-entry row in the §5 table ("flatter than 40 mm") and
+the two-board objection under "The box and the board count — SETTLED
+2026-10-23" ("two boards stacked over a socketed devkit do not fit 40 mm").
+Withdrawing it silently would have pulled the floor out from under both,
+and for a day this file did exactly that: "no replacement figure" above,
+"has no successor" in `docs/phase-0-plan.md`, and "retained" here. So: **the plan dimensions are withdrawn, the 40 mm height is retained
 as a bound and nothing else is.**
 
 **The two go in opposite directions and only one of them was written
@@ -759,16 +770,20 @@ apart on the transistor, the drive-current claim and the box.
 
 ### What to order — part numbers confirmed 2026-10-12
 
+**Qty is what the build needs.** 0 means already held; a part in transit
+keeps its need and says so in the cell. *(Two rows read 0 for a day on
+2026-10-29 while their parts were in transit.)*
+
 | Part | Qty | Why this one |
 |---|---|---|
 | **AQY212EH, DIP-4** | **8** | 4 in service, 4 spare. **DATASHEET GRADE since 2026-10-17** — see "Datasheet read" below for what was read and what it settles. DIP-4 through-hole, SPST-NO (1 Form A) **AC/DC**, 60 V peak AC/DC, 0.55 A continuous, 5,000 V AC I/O isolation, all confirmed against Panasonic's own tables — **a 2011 catalogue and a 2005 mirror; the current per-part datasheet was NOT read** (see below). **Bare `AQY212EH` is the through-hole part; `…EHA` is the surface-mount terminal version, tube-packed, `…EHAX`/`…EHAZ` are the same SMD part on tape-and-reel (picked from the 1/2-pin or 3/4-pin side)** — so buy the bare suffix, and a listing that says `EHAX` is SMD whatever its photo shows. **Most listings are SOP-4 surface-mount, including other PhotoMOS families that carry no `EHA` suffix at all** — check the photo shows four long legs *and* that the printed part number is **exactly** `AQY212EH` with nothing after it (`AQY212EHA`, `EHAX` and `EHAZ` all *start* with `AQY212EH` and are all SMD). *(The "most listings are SOP-4" sentence is **listing grade** — an observation about sellers, not something either datasheet read supports — and sits in a datasheet-grade cell only because it is a purchasing warning.)* |
 | **`CD74HC221E`, PDIP-16** | 3 | **Verified 2026-10-12** against TI and Farnell: dual monostable, PDIP-16, 2–6 V, non-retriggerable ("once triggered, the outputs are independent of further trigger inputs"), active lifecycle, 5.2 mA output drive. `SN74HC221N` is scarce — TI is retiring PDIP. **A draft also listed `MC74HC221AN`, `TC74HC221AP` and `HD74HC221P` as equivalents; none could be verified**, and the nearest real hit, `MM74HC221AN`, is obsolete. Those were recollection. The `N`/`E`/`P` suffixes are through-hole; `D`/`PW`/`NS` are SMD. |
 | **BC547 or 2N3904, TO-92** | 10 | **LED drivers, one per photoMOS.** **NOT the 2N7000**, which a draft of this row specified: its V_GS(th) is 0.8–3.0 V, so a worst-case part driven from 3.3 V logic has **0.2 V of overdrive** and R_DS(on) is only characterised at V_GS = 4.5/10 V. That is the same works-on-the-bench-fails-in-service trap as the 1 kΩ below, in the part bought to avoid it. A bipolar has no threshold lottery — 0.7 V of V_BE, cleared with enormous margin. **Base resistor 8.2 kΩ and base-emitter 100 kΩ, both in stock.** |
-| **330 Ω, 1 %** *(390 Ω only for a box that stays cool — "cool" is undefined: no ambient has been measured inside the box, so read this as "only after measuring it")* | 20 | **BOUGHT 2026-10-27 — ×25 on the Reichelt order, see §1.** *(This said "the one resistor value not in stock" until 2026-10-29, which was wrong three ways: it was ordered two days before the sentence was last edited, and 330 K and 470 K were equally not in stock and went on the same order. The line was reflowed by the commit that ordered it and re-joined by a later one, and neither looked at what it said.)* See the LED arithmetic below **and the 85 °C note under "Datasheet read"** — the operate guarantee is 3.0 mA at 25 °C only, so the drive is sized with margin: both values clear the plotted 85 °C curve, 330 Ω at 1.85× and 390 Ω at 1.57×, and neither clears the extrapolated criterion B. <!-- fact:led-drive-resistor 330 Ω, 1 % --> <!-- fact:photomos-guarantee-25c@2 3.0 mA at 25 °C --> |
+| **330 Ω, 1 %** *(390 Ω only for a box that stays cool — "cool" is undefined: no ambient has been measured inside the box, so read this as "only after measuring it")* | 20 | **ORDERED 2026-10-27 — ×25 on the Reichelt order, in transit, see §1.** *(This said "the one resistor value not in stock" until 2026-10-29. "Not in stock" was true — ordered is not held. "The one" was false: 330 K and 470 K were equally out and went on the same order. A retraction here then called that "wrong three ways" and said the line was "reflowed by the commit that ordered it" — `git blame` says otherwise: the line was split on 2026-10-20 at `9e03a30`, the ordering commit carried it as unchanged context, and a 2026-10-29 commit re-joined it. The true part survives: two commits handled this line without reading it.)* See the LED arithmetic below **and the 85 °C note under "Datasheet read"** — the operate guarantee is 3.0 mA at 25 °C only, so the drive is sized with margin: both values clear the plotted 85 °C curve, 330 Ω at 1.85× and 390 Ω at 1.57×, and neither clears the extrapolated criterion B. <!-- fact:led-drive-resistor 330 Ω, 1 % --> <!-- fact:photomos-guarantee-25c@2 3.0 mA at 25 °C --> |
 | **2-pin male header** | 3 | the disables. **Buy no shunts** — open is the specified state and a loose shunt in the box is a hazard. Cut from a 1×40 male strip. |
 | ~~DIP-16 socket~~ **ALREADY HELD, TWICE OVER — see §1** | 0 | wire the socket, verify, *then* insert the '221 — 16 hand-wired joints with no heat near the part. Pulling the IC is also a third disable, stronger than an open jumper. **Twenty are on hand or in transit against the three this needs** (round-hole ×10 received, `DIL16PZ` ×10 ordered); §1 records the duplicate. |
-| ~~Machined **round-pin** SIP socket strip 1×40~~ → **`DIL08PZ`, cut in half — ORDERED ×10, see §1** | 0 | **DIP-4 sockets are not a stocked item, and a SIP strip is not the only answer — SETTLED 2026-10-28.** A DIP-8 precision socket is 4+4 on **7.62 mm rows — the same row spacing and 2.54 mm pitch as the AQY212EH, which is itself 2+2**; cut one crosswise and each half is a 2+2 DIP-4 socket. *(This row said 4+4 "is exactly the AQY212EH footprint" until 2026-10-29. It is not — 4+4 is the DIP-8's own layout, and what matches is the row spacing and pitch, which is all the cut needs. The geometry was right and the sentence named the wrong part.)* Ten were ordered, giving twenty against the **eight** needed, so a ragged cut costs nothing. *(The Qty cell read **3** until 2026-10-29 — agreeing neither with the ten ordered nor with the **four** DIP-8s that eight DIP-4 sockets actually require. Three would have been short.)* Soldering the photoMOS directly is still acceptable: a socket contact going intermittent fails **open**, which is the safe direction here. |
-| ~~Film capacitors, ~0.47 / 1 / 2.2 µF~~ **BOUGHT 2026-10-27 as a deliberate sweep — see §1** | 0 | one-shot RC. **MKT 470 nF / 680 nF / 1 µF ×10 each, with 330 K and 470 K ×10**, which is the six-point 109–329 ms sweep §1 sets out; **2.2 µF was never ordered and 150 kΩ is no longer the resistor for this job.** **Do not fix the value yet** — the sweep exists to be run, and nothing has been measured. The caveats below are unchanged and are why it is a sweep rather than a calculation. `t_W = 0.7 · R_x · C_x` **characterised at V_CC = 4.5 V** — and this build runs the '221 at **3.3 V**, where the coefficient is not guaranteed; Fairchild's version of the same part documents `PW = R·C` with no 0.7 at all, and part-to-part spread is ±5 %. *(Kept as a retraction: at the 150 kΩ this row used to assume, 1 µF gives **105 ms**, not the ~120 ms a draft stated — 120 ms needs 1.14 µF, or 171 kΩ at 1 µF. The ordered pair starts at 330 K, so neither number is live.)* **Measure the pulse on the bench**, and only after the minimum latching press width is known. Minimum R_x ≈ 500 Ω. |
+| ~~Machined **round-pin** SIP socket strip 1×40~~ → **`DIL08PZ`, cut in half — ORDERED ×10, see §1** | 4 | **DIP-4 sockets are not a stocked item, and a SIP strip is not the only answer — SETTLED 2026-10-28.** A DIP-8 precision socket is 4+4 on **7.62 mm rows — the same row spacing and 2.54 mm pitch as the AQY212EH, which is itself 2+2**; cut one crosswise and each half is a 2+2 DIP-4 socket. *(This row said 4+4 "is exactly the AQY212EH footprint" until 2026-10-29. It is not — 4+4 is the DIP-8's own layout, and what matches is the row spacing and pitch, which is all the cut needs. The geometry was right and the sentence named the wrong part.)* Ten were ordered, giving twenty against the **eight** needed, so a ragged cut costs nothing. *(The Qty cell read **3** until 2026-10-29, then **0** for a day — neither the ten ordered nor the **four** DIP-8s that eight DIP-4 sockets require. Three would have been short; 0 is the already-held convention and this part is in transit.)* Soldering the photoMOS directly is still acceptable: a socket contact going intermittent fails **open**, which is the safe direction here. |
+| ~~Film capacitors, ~0.47 / 1 / 2.2 µF~~ **ORDERED 2026-10-27 as a deliberate sweep, in transit — see §1** | few | one-shot RC. **MKT 470 nF / 680 nF / 1 µF ×10 each, with 330 K and 470 K ×10**, which is the six-point 109–329 ms sweep §1 sets out; **2.2 µF was never ordered and 150 kΩ is no longer the resistor for this job.** **Do not fix the value yet** — the sweep exists to be run, and nothing has been measured. The caveats below are unchanged and are why it is a sweep rather than a calculation. `t_W = 0.7 · R_x · C_x` **characterised at V_CC = 4.5 V** — and this build runs the '221 at **3.3 V**, where the coefficient is not guaranteed; Fairchild's version of the same part documents `PW = R·C` with no 0.7 at all, and part-to-part spread is ±5 %. *(Kept as a retraction: at the 150 kΩ this row used to assume, 1 µF gives **105 ms**, not the ~120 ms a draft stated — 120 ms needs 1.14 µF, or 171 kΩ at 1 µF. The ordered pair starts at 330 K, so neither number is live.)* **Measure the pulse on the bench**, and only after the minimum latching press width is known. Minimum R_x ≈ 500 Ω. |
 
 ### The LED drive, which this list did not previously cost at all
 
@@ -996,9 +1011,9 @@ normative on what was bought, what has arrived and what has not.**
 
 **This line read "NOTHING IS OUTSTANDING AS OF 2026-10-28" until
 2026-10-29, pointing at a §1 that said the opposite**, and the commit
-whose whole subject was correcting that claim rewrote §1's header, added
-§1's retraction and added the closing paragraph 58 lines below this one
-— and did not touch this sentence. It is the branch's own signature
+that corrected that claim in three other places rewrote §1's header, added
+§1's retraction and added this section's closing paragraph ("One item is
+left to buy") — and did not touch this sentence. It is the branch's own signature
 defect, committed inside the correction for it. A pre-push review found
 it. What follows is the estimate this
 section carried while the order was open, kept because the gap between it
@@ -1007,9 +1022,11 @@ and the real spend is the interesting part.
 **STALE AS OF LATER THE SAME DAY: the figure below predates the 26 AWG
 silicone and the crimp set (§1), neither of which is priced here, and it
 does not survive its own arithmetic. **§1's six priced lines total €79.57**
-(42.28 + 16.98 + 6.99 + 6.54 + 4.59 + 2.19), with the perfboard, the
-photoMOS, the crimp set and the 26 AWG still unpriced, so the real spend is
-nearer €90 than €75. *(This said "the items the next sentence names come to
+(42.28 + 16.98 + 6.99 + 6.54 + 4.59 + 2.19); **the perfboard is priced in
+§5 at €10, making €89.57**; the photoMOS, the crimp set and the 26 AWG are
+priced nowhere in this file. **So €89.57 is a floor**, and the real spend
+is past it — "nearer €90 than €75", which this said for a day, was itself a
+point estimate with nothing under it. *(This said "the items the next sentence names come to
 €72.58" until 2026-10-29. That figure reproduces from no stated basis — it
 needs the DIP-16 sockets added, which the next sentence does not name, and
 the €6.99 balance pack excluded, which the line above it prices. Wrong in
@@ -1050,7 +1067,7 @@ the board row had not been re-costed after it grew to two boards and five
 strips, and the consumables row omitted the 30 AWG wire — which has no row in
 §5 at all. **It is priced in BOTH files, not only in
 `docs/phase-0-plan.md` as this sentence claimed until 2026-10-29**: the
-consumables row immediately above carries it at €8. The false half was
+consumables row in the table above carries it at €8. The false half was
 then copied into `docs/phase-0-plan.md`'s own supersession note before a
 review caught it.)*
 
@@ -1058,8 +1075,10 @@ review caught it.)*
 150 K, 220 K and 1 K are all in stock; the E12 kit is Qty 0 and not needed.
 **The actuation values are NOT** — 330 Ω, 330 K and 470 K went on the
 2026-10-27 Reichelt order and are in transit. *(This read "every resistor
-this project needs is now in hand" until 2026-10-29, contradicted by the
-sentence immediately below it, which the same commit wrote.)* **The perfboard build was gated on parts from 2026-10-12 until
+this project needs is now in hand" from 2026-10-08 (`bd7fd1f`) until
+2026-10-29, and from 2026-10-28 it was contradicted by "it is now gated on
+DELIVERY" in this same paragraph, written by `1885247` — twenty days apart,
+not "the same commit" as a retraction here claimed for a day.)* **The perfboard build was gated on parts from 2026-10-12 until
 2026-10-28; it is now gated on DELIVERY.** Everything it needs — the
 `CD74HC221E`, photoMOS, BC547s, 330 Ω, XH board headers, sockets and
 perfboard — is bought, and §1 says which pieces have landed.

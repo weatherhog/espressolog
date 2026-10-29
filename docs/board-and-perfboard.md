@@ -395,9 +395,10 @@ the outline"* paragraph below gets the same conversion right for the devkit
 merely not applied.
 
 **All three pointers in this section were positional — "three paragraphs
-down", "nine lines above", "four below" — and the commit that wrote them
-broke its own by inserting these paragraphs. Corrected to quoted headings
-2026-10-29.** `CLAUDE.md` already records that a line number in a document
+down", "nine lines above", "four below" — and all three were wrong on
+2026-10-29: the first was correct when written and was broken by the
+paragraphs inserted above it; the other two were wrong from the moment they
+were written. Replaced by quoting the lead-in phrases they point at.** `CLAUDE.md` already records that a line number in a document
 is wrong by the time the document is saved; the same is true of a paragraph
 count, and this file managed to prove it within one commit.
 
@@ -409,9 +410,10 @@ bound what the requirement *could* be given, not what it will get.
 
 **AND 1295 = 36² − 1, WHICH IS WHY THE FACTORISATION IS UNIQUE — it is not
 corroboration.** The board is sold as **square** 10 × 10, and **36 × 36 =
-1296** is one hole away and the natural grid for a square board; a 35 × 37
-field on a square board implies edge margins differing by ~2.5 mm between
-the axes. If the grid is 36 × 36 then free-beside is **25 × 36 = 900**, not
+1296** is one hole away on a board sold square — the competing reading,
+favoured by nothing here, and it needs the vendor's count to be off by one;
+a 35 × 37 field on a square board implies edge margins differing by ~2.5 mm
+between the axes. If the grid is 36 × 36 then free-beside is **25 × 36 = 900**, not
 888, and the span is **24 pitches = 60.96 mm** — which would put back the
 ~61 mm corrected above. Nothing here distinguishes them, so **counting the
 delivered board settles two questions, not one.**
@@ -431,7 +433,10 @@ and the hedge should be applied to both, not just to the one being rejected.
 nominal and as-sold while leaving 5 × 7 nominal, and **216 is the baseline
 the whole argument compares against** (*"560 contiguous holes against 216"*,
 *"fewer than the 216 a 5 × 7 offers"*). Both rows now appear. The conclusion
-is unchanged and strengthened: against 168 the rejected board is worse still.
+is unchanged and strengthened: against 168 the rejected board is worse still
+— and 168 flatters it, because a 24-row board is shorter than the devkit's
+~25-row BODY, so on the as-sold 5 × 7 the devkit overhangs the board and
+"budget against the outline" has nothing left to budget.
 
 **Pitch is 2.54 mm (0.1 in) — and the proof is that the board has been in a
 BREADBOARD since 0a.** A caliper reading of **1.9 mm** was taken 2026-10-12

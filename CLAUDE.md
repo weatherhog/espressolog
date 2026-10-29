@@ -809,11 +809,13 @@ the document, not the document.
   board-shaped factorisation of it (1295 = 5 × 7 × 37), so the grid is
   *inferred* from a vendor number. **That uniqueness is an artefact, not
   corroboration: 1295 = 36² − 1, and the board is sold SQUARE, so
-  36 × 36 = 1296 is one hole away and is the competing reading** — on which
+  36 × 36 = 1296 is one hole away and is the competing reading, favoured by
+  nothing and needing the vendor's count to be off by one** — on which
   free-beside is 900 and the span is 24 pitches = 60.96 mm, i.e. the ~61 mm
-  just corrected. **888, 58.4 mm AND 30.5 mm all inherit that grade** — the
-  30.5 comes off the 24 × 30 listing, so both sides of the 1.9× ratio the
-  decision rests on are vendor figures, not counts. This is the
+  this bullet corrects further on. **888 and 58.4 mm inherit the INFERRED
+  grade; 30.5 mm is one grade better — LISTING, since 24 × 30 is stated
+  outright — and both sides of the 1.9× ratio the decision rests on are
+  vendor figures, not counts.** This is the
   same evidence class as the "XH 2.54mm Vertical" listing that was wrong
   about the parts it described — a different vendor and a different order
   (AliExpress, received) from the perfboard (Amazon, in transit); the
@@ -825,9 +827,11 @@ the document, not the document.
   dimension, one pitch too many on each, which is the trap
   `docs/board-and-perfboard.md` names at "Quote the pitch count, never the
   column count". The 1.9× conclusion is unaffected.)*
-  **Count the holes on the board you actually receive** — two listings have
-  disagreed with their own centimetre label, and both of those are
-  themselves listing-grade. Nothing here has been counted.
+  **Count the holes on the board you actually receive.** The one hole count
+  ever read off a listing (24 × 30) disagreed with this repo's own *derived*
+  nominal (27 × 35), not with the vendor's "7 × 9", which a 24 × 30 grid
+  fits; and 18 × 24 for a 5 × 7 is a generic hedge, not a listing. Nothing
+  here has been counted.
 - **GPIO33–37 are octal-PSRAM internal on this N16R8 module** — present on
   the header, unusable, do not even probe them.
 

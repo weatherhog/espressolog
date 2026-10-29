@@ -18,7 +18,15 @@ at **8 × photoMOS (4 in service, 4 spare) and 3 × 2-pin header**, decided
 
 ## 1. Order status — don't buy twice
 
-**THE ORDER IS CLOSED AS OF 2026-10-28. Nothing is outstanding.**
+**THE ORDER IS ESSENTIALLY CLOSED AS OF 2026-10-28 — one item outstanding
+(the second balance-lead pack), and several still in transit.**
+
+**This line said "CLOSED… Nothing is outstanding" when the restructure
+landed, and that was the restructure's own first defect.** A status column
+is only as good as the audit behind it, and this one was written by
+sorting the old list rather than by checking it: it inherited a wire
+nobody owned (below), it dropped a priced §5 row, and it declared an order
+closed that gained two more items the same day.
 
 **This section used to be a list headed "Already ordered" with no status
 column, and that is the defect this restructure fixes.** Asked on
@@ -35,7 +43,7 @@ a BOM.** Keep the three states below.
 |---|---|
 | **Mixed JST-XH balance extension pack, 2S/3S/4S/5S/6S** (GTIWUNG, €6.99) | the T-pieces — covers J4 (2S), **J5 (3S)**, J2 (4S) |
 | JST XH connectors (`XHP-4/5/3`, `SXH-001T-P0.6`, `B*B-XH-A`) | now optional, see §2 |
-| Silicone hookup wire, 26 AWG | harness branch wires |
+| **26 AWG silicone, 0.13 mm², 6 colours, 6 m each** | the three T-piece branch wires. **Bought 2026-10-28 — and this row claimed it was already owned from `0ac006c` onward. It was not. See below.** |
 | **24 AWG solid core, 7 colours, 7 × 9 m** (Haerkn, €16.98) | **all board point-to-point — see §5** |
 | 8.2 K, 15 K, 100 K, 150 K, 220 K, 1 K resistors | every divider; complete since 2026-10-08 |
 | **Female header strips, 40-pin single-row, ×10** (CHANZON, €4.59) | devkit sockets — wanted 5, over-covered |
@@ -46,6 +54,35 @@ a BOM.** Keep the three states below.
 | Cable gland, cable ties | operator already had them |
 | M3 screws + standoffs | operator already had them — never costed here, and it never needed to be |
 
+**THE 26 AWG ROW WAS FALSE FOR THE WHOLE LIFE OF THIS FILE, AND THE STATUS
+RESTRUCTURE ENTRENCHED IT RATHER THAN CATCHING IT.** *"Silicone hookup
+wire, 26 AWG | all harnesses"* entered at `0ac006c`, the commit that
+created this document, under the heading **"Already ordered — don't buy
+twice"**. No 26 AWG was ever owned. On 2026-10-28 the restructure carried
+it into an explicit **Received** state and narrowed its purpose to
+"harness branch wires" — promoting an unchecked claim to a stronger one,
+which is the opposite of what adding a status column was for. Confirmed
+with the operator 2026-10-28; the wire named above was bought that day.
+
+**This is now two wires with two jobs, and they are not interchangeable.**
+**24 AWG solid core** for board point-to-point (§5) — solid, so it holds a
+dressed route and seats in a perfboard hole. **26 AWG silicone, stranded**
+for the T-piece branches — flexible and 200 °C, which is what a wire
+leaving the inside of the machine needs. Neither substitutes for the
+other: solid core work-hardens and snaps under vibration, and stranded
+silicone will not stand up in a perfboard.
+
+**OPEN, AND IT IS ABOUT HARDWARE ALREADY INSIDE THE MACHINE: what are the
+BUILT T-pieces made of?** `docs/phase-0-status.md` describes the J5 tap as
+*"3 × 26 AWG silicone"* (its layout diagram) and the branch as
+`[J5 conductor] - [8.2K] - [26 AWG out]`. Those T-pieces were built
+2026-10-03 and have been in the machine since. If no 26 AWG existed until
+2026-10-28, that gauge is a **specification that was never met**, not an
+as-built record, and the wire actually in the machine is unrecorded.
+**Measure it next time the case is open** — it bears on the chafe-to-
+ground failure the series-resistor placement is designed around, and a
+thinner conductor than specified is the direction that matters.
+
 ### Ordered, in transit
 
 **Reichelt, €42.28, 2026-10-27.** `CD74HC221E` ×10 · BC547B ×14 · 330 Ω ×25
@@ -54,6 +91,10 @@ a BOM.** Keep the three states below.
 `WSL040G` male header · adhesive 3:1 heat-shrink 4.8 mm and 6.0 mm, 1 m each.
 
 **AliExpress.** AQY212EH DIP-4 ×10.
+
+**Crimp set, ordered 2026-10-28.** Ratcheting crimp tool, **0.08–1 mm²
+(AWG 28–18)**, with **550 JST-XH housings and 800 XH pins**. Arrival not
+yet confirmed — unlike the 24 AWG and 26 AWG wire, which are in hand.
 
 **Amazon.** **Perfboard 10 × 10 cm, FR-4, 1.6 mm, 1295 holes, ×5** — ordered
 2026-10-28; supersedes 7 × 9, see §5.
@@ -77,10 +118,44 @@ build to.
 
 ### Outstanding
 
-**Nothing.** The only open question is not a part: whether the harness can
-be terminated in female XH housings at the board end with what is in hand
-(the `XHP`/`SXH` parts in *Received* need crimping), or whether a
-pre-crimped kit (~€10) is needed after all. See §2.
+**The second mixed balance-lead pack (~€7), and nothing else.** §5 still
+carries it as insurance and the reason has not gone away: **the 4S is the
+only lead that fits J2 and there is no spare**, the T-pieces are the most
+laborious part of the build, and strip-and-solder is the step with no
+undo. **The crimp set does not cover this** — see immediately below.
+
+**This section said "Nothing" on 2026-10-28 and was wrong twice over.** It
+missed the balance-lead pack, which was a priced §5 row the whole time;
+and it named the pre-crimped kit as "the only open question" in the same
+breath as the crimp set being ordered, which closes that question from the
+other direction.
+
+### What the crimp set does and does not settle
+
+**Settled: the crimp problem.** §2 was written around *avoiding* it — the
+`SXH-001T-P0.6` is an open-barrel contact that pliers cannot seat, so the
+plan was balance leads end to end and a pre-crimped kit only if the tap
+ends had to be detachable. A ratcheting tool plus 550 housings and 800
+pins retires that whole branch: **the `XHP`/`SXH` parts already in
+*Received* become usable, and the pre-crimped kit is off the list for
+good** rather than "optional". Detachable tap ends — §2's one reason to
+want the kit — are now the cheap option, not the expensive one.
+
+**Range checks out, and the contact is the limit, not the tool.** The tool
+spans 0.08–1 mm² (AWG 28–18); `SXH-001T-P0.6` spans **AWG 28–22
+(0.08–0.33 mm²)**. The 26 AWG silicone at **0.13 mm²** sits inside both.
+The tool's AWG 18 end is unusable with XH contacts, so do not size wire
+from the tool's label.
+
+**NOT settled: the male cable end, so the balance leads stay.** This is
+the inference to not make. **XH is a wire-to-board series — there is no
+cable-mount male housing at all** (§2, "The male end of the T"), and no
+crimp tool creates one. 550 XH housings are the **female** side; if the
+kit also ships `B*B-XH-A` board headers they duplicate the side-entry set
+already in *Received* and still give no male cable end. **Verify what
+actually arrives by mating it, not by reading the listing** — this file
+has now been caught by a listing twice (the "JST EH" spec row, and the
+"XH 2.54mm Vertical" headers in §5).
 
 **One of each, not five of each — so there is exactly one 3S.** The J5
 T-piece is a strip-a-window-and-solder job, and if it goes wrong there is
@@ -160,6 +235,19 @@ A crimper (Engineer PA-09, IWISS SN-01BM; €25–40) is then optional, and
 only worth it if you expect to keep making harnesses. SN-28B is the cheap
 one and is mediocre on XH.
 
+**SUPERSEDED 2026-10-28: a ratcheting crimp set was bought** — 0.08–1 mm²
+(AWG 28–18), 550 XH housings, 800 pins. So the pre-crimped kit above is
+**not** being bought, and the reasoning in this section inverts: crimping
+is no longer the thing to design around, it is available. The
+`SXH-001T-P0.6` contacts already in *Received* are usable.
+
+**Three things that survive the change.** The contact range still binds
+before the tool's does — AWG 28–22, so **do not size wire from the tool's
+AWG 18 label**. The *"XH 2,54 mm is the usual misnomer"* warning still
+applies to the 550 housings, and they are unverified until mated. And
+**"the kit is the female side only" is still true of this set too** —
+read the next section before assuming the balance leads can be dropped.
+
 ### The male end of the T: balance extension leads
 
 **XH is a wire-to-board series only.** The catalogue has `B*B-XH-A` (top
@@ -206,6 +294,14 @@ one part of the build that is inside the machine and not reworkable.
 housing or a contact. Buy the kit only to make the tap ends themselves
 detachable, or as spares — otherwise a balance extension, solder and
 heat-shrink is the entire T-piece.
+
+**2026-10-28: the kit is not being bought, and detachable tap ends got
+cheap instead.** The crimp set above supplies housings, pins and a tool,
+so the "only to make the tap ends detachable" case is now the default
+option rather than a €10 decision. **What it does not change is this
+section's conclusion**: the male cable end still does not exist as a JST
+part, so **every T-piece still starts life as a balance extension lead**,
+and the second pack in §5 is still the insurance against ruining one.
 
 **Verify continuity pin-by-pin before it touches the board.** Some balance
 extensions are deliberately wired **mirrored** for particular adapters, and
@@ -284,7 +380,7 @@ leave the machine unable to run.
 | Item | Qty | ~€ |
 |---|---|---|
 | **3S** balance extension lead (**4**-pin, male↔female) | 1 | — |
-| — optional — pre-crimped XH kit, for detachable tap ends | 1 | 10 |
+| ~~— optional — pre-crimped XH kit, for detachable tap ends~~ **NOT BOUGHT 2026-10-28 — crimp set instead, see §2** | — | 0 |
 | — fallback — `B4B-XH-A` header + perfboard | 5 | 3 |
 | — fallback — Ascaso display harness `I.4312` (spare) | 1 | 10–20 |
 
@@ -394,7 +490,7 @@ because the machine caught it:
 | Item | ~€ | Notes |
 |---|---|---|
 | ~~PTFE or fibreglass sleeving, 2–4 mm, 200 °C+~~ **WITHDRAWN 2026-10-28** | 0 | Silicone wire is good to ~200 °C on its own, so this was for abrasion and for anything routed near the boiler or group (ordinary PVC sleeving and standard heat-shrink are not). **Not being bought: the T-pieces are being fabricated SHORT**, which takes the wire out of the hot zone instead of insulating it there. Operator's call, and it addresses the cause rather than the symptom. **Reinstate this row if the T-pieces end up long after all** — the reason the sleeving existed has not gone away, only the exposure it covered. |
-| **Board wire: 24 AWG solid core, 7 colours** | 0 | **IN HAND, and this row did not exist until 2026-10-28** — the decision was settled in conversation a week earlier and never written down, so it fell out of the ordering. **Solid core, not the 30 AWG silicone** priced in `docs/phase-0-plan.md`: silicone is stranded and floppy, which is right for a harness that must survive vibration and wrong for perfboard point-to-point. **No bare bus wire is needed** — one of the seven colours serves as the ground bus; bare tinned wire only buys soldering anywhere along a run without stripping. **Spend four colours on the J2 direction lines**, because **2Cup is position 3 and 1Cup is position 4** and reading that list as positional swaps the shot with the clean cycle — a mistake that stays silent until a shot comes out as a flush. |
+| **Board wire: 24 AWG solid core, 7 colours** | 0 | **IN HAND, and this row did not exist until 2026-10-28** — the decision was settled in conversation a week earlier and never written down, so it fell out of the ordering. **Solid core, not the 30 AWG silicone** that `docs/phase-0-plan.md` used to price: silicone is stranded and floppy, which is right for a harness that must survive vibration and wrong for perfboard point-to-point. **The harness half of that job went to 26 AWG silicone, bought the same day (§1)** — so 30 AWG was replaced by two wires, not dropped; the plan's row is struck. **No bare bus wire is needed** — one of the seven colours serves as the ground bus; bare tinned wire only buys soldering anywhere along a run without stripping. **Spend four colours on the J2 direction lines**, because **2Cup is position 3 and 1Cup is position 4** and reading that list as positional swaps the shot with the clean cycle — a mistake that stays silent until a shot comes out as a flush. |
 | Heat-shrink assortment, **adhesive-lined** | 6 | Strain relief at the T-piece branches, and over the stripped window. Adhesive-lined or nothing — plain heat-shrink is not insulation on its own. |
 | Breadboard, 830-point | 6 | For the **J5 bench test before the perfboard**. **Corrected 2026-10-12:** a DevKitC-1 straddles a standard board with its headers in columns **A and I** — 1.0 in row-to-row — so **one row (J) stays free**, not none as this line said. The advice is unchanged and was followed: put only the resistor junctions on the breadboard and jumper across to the devkit's headers. Note that is exactly why the ESP was NOT seated during the bench sessions, which a later commit wrongly cited as proof of the pin pitch. |
 | **Jumper wires, male-female AND male-male** | 6 | The easily-forgotten part. M-F reaches the devkit header pins from the breadboard. |
@@ -774,6 +870,13 @@ actually bought and what has arrived.** What follows is the estimate this
 section carried while the order was open, kept because the gap between it
 and the real spend is the interesting part.
 
+**STALE AS OF LATER THE SAME DAY: the figure below predates the 26 AWG
+silicone and the crimp set (§1), neither of which is priced here, and it
+does not survive its own arithmetic — the items the next sentence names
+come to €72.58 in §1 *before* the perfboard and the photoMOS, so the real
+spend is nearer €90 than €75. Do not quote it; re-add it from §1 when the
+invoices are in.**
+
 **The estimate was ~€89 and the order came to roughly €75**, across
 Reichelt (€42.28), the perfboard, the wire, the headers and the AliExpress
 photoMOS. It is close, and it is close for compensating reasons rather than
@@ -820,13 +923,18 @@ in stock on 2026-10-07. It was not — the bag held 100 K and 150 K. 0d now
 uses **100 K**, which is better here (see CLAUDE.md), and **150 K must not be
 substituted at J4** — it fails at −45 mV.
 
-**Nothing is left to buy — closed 2026-10-28.** This paragraph listed what
-remained for the **perfboard stage, not the bench**, and the distinction it
-drew still holds: **the whole breadboard bench sequence needs none of it**,
-which is why the minimum-latching-press-width measurement can be done while
-the order is in transit. Of the list it carried, the sleeving and the
-30 AWG silicone were withdrawn (§5), the gland and tie mounts were already
-in hand, and the pre-crimped kit is the one open question in §1.
+**One item is left to buy — the second balance-lead pack (~€7); §1 is
+normative.** This paragraph listed what remained for the **perfboard
+stage, not the bench**, and the distinction it drew still holds: **the
+whole breadboard bench sequence needs none of it**, which is why the
+minimum-latching-press-width measurement can be done while the order is in
+transit. Of the list it carried, the sleeving was withdrawn (§5), the
+30 AWG silicone was superseded by two wires that *were* bought — 24 AWG
+solid core and 26 AWG silicone, §1 — the gland and tie mounts were already
+in hand, and the pre-crimped kit is **not being bought at all**, a crimp
+set having been bought instead (§2). *(This said "Nothing is left to buy"
+and called the pre-crimped kit "the one open question" on 2026-10-28, in
+the same commit whose §1 made both claims and in which neither was true.)*
 *(Earlier versions of this sentence and the breakdown above listed
 different subsets and different totals; both now match the table in
 §Rough total.)*
@@ -841,6 +949,7 @@ and the calibration weigh-off.
 
 Add calipers (~€15) if you want the connector
 question settled by measurement rather than re-derived from photographs.
-The pre-crimped kit (~€10, **counted in the total above as a firm line
-item** — an earlier closing line offered it as contingent) and the Ascaso `I.4312` harness (~€15) only if
-a balance lead disappoints.
+~~The pre-crimped kit (~€10, **counted in the total above as a firm line
+item** — an earlier closing line offered it as contingent)~~ **— not
+bought; a crimp set was bought instead, §2.** The Ascaso `I.4312` harness
+(~€15) remains contingent, only if a balance lead disappoints.

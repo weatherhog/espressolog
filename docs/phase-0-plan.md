@@ -256,7 +256,7 @@ instead of soldering to the board.
 | Item | Notes | ~€ |
 |---|---|---|
 | ~~Resistor kit, E12 1/4 W~~ | **Not required** — see `shopping-list.md`: it covers no named value, and cheap kits are 5 % where every divider here wants 1 %. All of them are in stock. | — |
-| 30 AWG silicone hookup wire, 4 colours | flexible, survives vibration | 8 |
+| ~~30 AWG silicone hookup wire, 4 colours~~ | **SUPERSEDED 2026-10-28 — two wires were bought instead, neither of them this one.** `shopping-list.md` §1 is normative: **24 AWG solid core** for board point-to-point and **26 AWG silicone** for the T-piece branches. The rationale here — "flexible, survives vibration" — was right about the harness and is carried by the 26 AWG; 30 AWG was simply too fine for either job. **This was the only file that priced it** | 0 |
 | JST pigtails, assorted pitch | **after** identifying connectors | 8 |
 | Perfboard **10 × 10 cm FR-4 ×5** + **female** headers ×5 + sockets | 2.54 mm confirmed by mating. **SUPERSEDES "7 × 9 ×2", 2026-10-28** — 7 × 9 was picked for soldering room against a nominal 27 × 35, and the boards actually sold are 24 × 30. See `docs/board-and-perfboard.md` for the table and `shopping-list.md` §5 for the reasoning; `shopping-list.md` is normative on parts and prices | 10 |
 | Heat-shrink assortment | | 5 |

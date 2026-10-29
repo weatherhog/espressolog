@@ -807,10 +807,17 @@ the document, not the document.
   carry. **BOTH GRIDS ARE LISTING FIGURES, NOT COUNTS, and 35 × 37 is not
   even that** — the listing states **1295 holes** and 35 × 37 is the only
   board-shaped factorisation of it (1295 = 5 × 7 × 37), so the grid is
-  *inferred* from a vendor number. **888 and 58.4 mm inherit that grade**,
-  and they are the two figures the board decision rests on. This is the
+  *inferred* from a vendor number. **That uniqueness is an artefact, not
+  corroboration: 1295 = 36² − 1, and the board is sold SQUARE, so
+  36 × 36 = 1296 is one hole away and is the competing reading** — on which
+  free-beside is 900 and the span is 24 pitches = 60.96 mm, i.e. the ~61 mm
+  just corrected. **888, 58.4 mm AND 30.5 mm all inherit that grade** — the
+  30.5 comes off the 24 × 30 listing, so both sides of the 1.9× ratio the
+  decision rests on are vendor figures, not counts. This is the
   same evidence class as the "XH 2.54mm Vertical" listing that was wrong
-  about the parts in the same order. The deciding argument for 10 × 10 is not comfort: pos 1 must be
+  about the parts it described — a different vendor and a different order
+  (AliExpress, received) from the perfboard (Amazon, in transit); the
+  evidence class is shared, the order is not. The deciding argument for 10 × 10 is not comfort: pos 1 must be
   *"physically segregated… maximum spacing from the four direction lines"*
   (`docs/phase-0-plan.md`), which is **58.4 mm** there against **30.5 mm**
   on 7 × 9 — 23 and 12 pitches of a 24- and 13-column free field. *(These
@@ -818,8 +825,9 @@ the document, not the document.
   dimension, one pitch too many on each, which is the trap
   `docs/board-and-perfboard.md` names at "Quote the pitch count, never the
   column count". The 1.9× conclusion is unaffected.)*
-  **Count the holes on the board you actually receive** — the centimetre
-  label has been wrong twice.
+  **Count the holes on the board you actually receive** — two listings have
+  disagreed with their own centimetre label, and both of those are
+  themselves listing-grade. Nothing here has been counted.
 - **GPIO33–37 are octal-PSRAM internal on this N16R8 module** — present on
   the header, unusable, do not even probe them.
 
@@ -916,8 +924,7 @@ That also closes the worn-label mystery: the marking first read as
 
 | | |
 |---|---|
-| **K-factor** | **2382 pulses/L**, 0.41 g/pulse |
-<!-- fact:digmesa-k-factor 2382 pulses/L -->
+| **K-factor** | **2382 pulses/L**, 0.41 g/pulse <!-- fact:digmesa-k-factor 2382 pulses/L --> |
 | Flow range | **0.033 – 0.40 L/min** (0.55 – 6.67 ml/s) |
 | Pressure | **−1 to +0.3 bar** — a suction-side device |
 | Supply | **+3.8 to +20 VDC**, <8 mA |

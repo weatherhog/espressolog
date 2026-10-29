@@ -355,10 +355,11 @@ accounting properly — **a draft of this paragraph got it backwards**:
 
 | | holes | devkit pin field | free beside it | free underneath |
 |---|---|---|---|---|
-| 5 × 7 cm | 19 × 27 = 513 | 11 × 22 | **8 × 27 = 216** | 9 × 22 = 198 |
+| 5 × 7 cm — *nominal* | 19 × 27 = 513 | 11 × 22 | **8 × 27 = 216** | 9 × 22 = 198 |
+| 5 × 7 cm — **as the hedge below expects** | 18 × 24 = 432 | 11 × 22 | **7 × 24 = 168** | 9 × 22 = 198 |
 | 7 × 9 cm — *nominal, and not what is sold* | 27 × 35 = 945 | 11 × 22 | **16 × 35 = 560** | 9 × 22 = 198 |
 | 7 × 9 cm — **as actually sold** | 24 × 30 = 720 | 11 × 22 | **13 × 30 = 390** | 9 × 22 = 198 |
-| **10 × 10 cm FR-4 — BOUGHT 2026-10-28** | **35 × 37 = 1295** | 11 × 22 | **24 × 37 = 888** | 9 × 22 = 198 |
+| **10 × 10 cm FR-4 — BOUGHT 2026-10-28** | **35 × 37 = 1295** *(inferred)* | 11 × 22 | **24 × 37 = 888** | 9 × 22 = 198 |
 
 That draft said 5 × 7 "does not fit" because "the devkit eats 22 of the 27
 rows, leaving five" — which treats the devkit's **11-column** footprint as if
@@ -373,27 +374,47 @@ replacement. The reasoning here was *"soldering room rather than
 necessity: 560 contiguous holes against 216"*, and **that 560 assumed a
 nominal 27 × 35**. Commodity 7 × 9 boards are **24 × 30 = 720**, giving
 **390 beside the devkit** — a 30 % cut in the only quantity the choice
-rested on, and below the "often ~24 × 34" hedge three paragraphs down. The
-board bought is **35 × 37 = 1295, ~888 beside**, and the argument that
+rested on, and below the "often ~24 × 34" hedge under *"Count the holes on
+the board you actually receive"*. The
+board bought is **35 × 37 = 1295, 888 beside** (24 × 37 exactly — the
+uncertainty is in the grid, not the multiplication), and the argument that
 settles it is `docs/phase-0-plan.md`'s requirement that pos 1 keep
 *"maximum spacing from the four direction lines"* on the board:
 **58.4 mm there against 30.5 mm on 7 × 9**.
 
 **Those two figures were ~61 mm and ~33 mm until 2026-10-29, and they broke
-the rule stated nine lines above the table they come from.** The free field
+the rule stated just above the hole-count table they come from** — *"Quote
+the pitch count, never the column count"*. The free field
 beside the devkit is **24 columns** on 10 × 10 and **13** on 7 × 9, and a
 24-column field spans **23** pitches, not 24: 23 × 2.54 = 58.42 mm, and
 12 × 2.54 = 30.48 mm. Both were overstated by exactly one pitch — the
 column count quoted as a dimension, which *"Quote the pitch count, never
-the column count"* exists to prevent. The paragraph four below it gets the
-same conversion right for the devkit (11 × 22 pins → 25.4 × 53.3 mm), so
-the convention was not unknown here, merely not applied.
+the column count"* exists to prevent. The *"Footprint is the pin field, not
+the outline"* paragraph below gets the same conversion right for the devkit
+(11 × 22 pins → 25.4 × 53.3 mm), so the convention was not unknown here,
+merely not applied.
+
+**All three pointers in this section were positional — "three paragraphs
+down", "nine lines above", "four below" — and the commit that wrote them
+broke its own by inserting these paragraphs. Corrected to quoted headings
+2026-10-29.** `CLAUDE.md` already records that a line number in a document
+is wrong by the time the document is saved; the same is true of a paragraph
+count, and this file managed to prove it within one commit.
 
 **The conclusion is unchanged**, which is why this is a correction and not
 a retraction: 58.4 / 30.5 is 1.9×, against 1.85× for the wrong pair. 10 × 10
 still buys roughly twice the separation. **And both numbers are spans of a
 hole field, not a designed placement** — no layout has been drawn, so they
 bound what the requirement *could* be given, not what it will get.
+
+**AND 1295 = 36² − 1, WHICH IS WHY THE FACTORISATION IS UNIQUE — it is not
+corroboration.** The board is sold as **square** 10 × 10, and **36 × 36 =
+1296** is one hole away and the natural grid for a square board; a 35 × 37
+field on a square board implies edge margins differing by ~2.5 mm between
+the axes. If the grid is 36 × 36 then free-beside is **25 × 36 = 900**, not
+888, and the span is **24 pitches = 60.96 mm** — which would put back the
+~61 mm corrected above. Nothing here distinguishes them, so **counting the
+delivered board settles two questions, not one.**
 
 But "5 × 7 does not fit" is still not what the numbers say, and that
 correction is the reason this table exists.
@@ -406,6 +427,11 @@ Budget rows against the outline.
 **Count the holes on the board you actually receive.** Commodity "7 × 9"
 protoboards are often ~24 × 34 rather than 27 × 35, and "5 × 7" ones 18 × 24 —
 and the hedge should be applied to both, not just to the one being rejected.
+**It was not, until 2026-10-29** — every table above carried 7 × 9 both
+nominal and as-sold while leaving 5 × 7 nominal, and **216 is the baseline
+the whole argument compares against** (*"560 contiguous holes against 216"*,
+*"fewer than the 216 a 5 × 7 offers"*). Both rows now appear. The conclusion
+is unchanged and strengthened: against 168 the rejected board is worse still.
 
 **Pitch is 2.54 mm (0.1 in) — and the proof is that the board has been in a
 BREADBOARD since 0a.** A caliper reading of **1.9 mm** was taken 2026-10-12

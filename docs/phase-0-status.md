@@ -2461,8 +2461,7 @@ state; closing it is the deliberate act, with the RC chosen first.
    | Output | **NPN open collector**, 0 VDC active, saturation <0.7 V | Daitron + Digmesa product pages, corroborated |
    | Signal load | max 20 mA | as above |
    | Supply | **+3.8 to +20 VDC**, <8 mA | **the datasheet, retrieved 2026-10-09.** The "+2.8 V" that contradicted it was the 9NB nano brass — a different Digmesa product |
-   <!-- fact:digmesa-k-factor 2382 pulses/L -->
-   | K-factor | **2382 pulses/L** for `#932-9525-B` Ø1.00 mm 0° | **the datasheet itself, retrieved 2026-10-09** |
+   | K-factor | **2382 pulses/L** for `#932-9525-B` Ø1.00 mm 0° <!-- fact:digmesa-k-factor 2382 pulses/L --> | **the datasheet itself, retrieved 2026-10-09** |
    | Accuracy | ± 2.0 % | product pages |
 
    **The datasheet (2026-10-09) says 2382 and the in-circuit measurement said

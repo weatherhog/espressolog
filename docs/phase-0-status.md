@@ -1692,10 +1692,12 @@ the display is back in temperature mode, so edges lost there cost nothing.
 
 ## WHAT PHASE 0 STILL OWES — 2026-10-23
 
-**Every decision the BUILD waits on is closed as of today** *(2026-10-23;
-on 2026-10-30 the drive side gained a PROPOSED arm-window gate whose
-footprint is reserved and whose design is open — see the Measurements
-table)*. **What is left is
+**Every decision the BUILD waited on was closed on 2026-10-23. Since
+2026-10-30 one is open again: whether to keep the PROPOSED arm-window
+gate**, which changes the drive wiring at the `R̅` net — the layout
+reserves both the gate's footprint and an unfitted link for the no-gate
+build, so it does not block the layout; see the Measurements table.
+**What is left is
 measurement and assembly, and no amount of discussion shortens either.**
 Recorded as a split because "finalise Phase 0" is ambiguous and the two
 halves have very different costs.

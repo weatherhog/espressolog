@@ -1043,8 +1043,8 @@ maximum of the same 550 mA test.
 
 **Nothing is.** The per-device test needs each photoMOS on its **own**
 one-shot-bounded drive, a dual '221 gives two channels, so it is **two dual
-'221s, four channels, ten bought** — plus a third for the arm-window gate
-since 2026-10-30, which is not a per-device channel — §7's row and `docs/phase-0-plan.md`
+'221s, four channels, ten bought** — plus a third for the PROPOSED arm-window gate
+since 2026-10-30 (footprint reserved), which is not a per-device channel — §7's row and `docs/phase-0-plan.md`
 ("Costed since 2026-10-29") carry it. *(Until later on 2026-10-29 this
 section read: "A second '221 or a different gating scheme is unpriced; the
 GPIO budget is not the constraint. Buying three '221s covers it either way."

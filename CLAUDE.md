@@ -38,7 +38,7 @@ the thing you do not know yet.
 | **plan a flowmeter experiment** | `docs/flowmeter-j4.md` | **0d-i first** (weigh the split). And check whether the operator already does it every morning — three for three so far |
 | **compare flow data across sessions** | `docs/flowmeter-j4.md` | the **OPV is adjustable state and nothing records it** — invariant-5 class |
 | **pick a free GPIO, or drill the perfboard** | `docs/board-and-perfboard.md` | **GPIO48 is the LED, GPIO38 is the (proposed) gate enable, 39–42 are the triggers, 1 and 2 are `Q` readbacks — free: 9–14, 18, 21, 47, four of them owed to three more readbacks and the gate trigger**; GPIO33–37 unusable; 5Vin at position 21 beside GND at 22 is a **solder hazard** |
-| **lay out the perfboard — what connects to what** | `docs/phase-0-plan.md` §*Topology, per actuated line* and §*Two things that bound the firmware-side failures*; then `docs/board-and-perfboard.md` for the header | sense: **seven shunts, nine resistors**, series legs in the T-pieces; drive: **3 × '221 (two drive, one arm-window gate), 4 × AQY212EH (two series pairs), 4 × BC547, three OPEN jumpers** — pins, pulls and the arm gate are in the DRIVE table below; **J2 has no ground**; **keep the two jumper fields apart**; **AQY pin 1 = LED anode**, the only polarity to get wrong |
+| **lay out the perfboard — what connects to what** | `docs/phase-0-plan.md` §*Topology, per actuated line* and §*Two things that bound the firmware-side failures*; then `docs/board-and-perfboard.md` for the header | sense: **seven shunts, nine resistors**, series legs in the T-pieces; drive: **2 × '221, plus a third for the PROPOSED arm-window gate (footprint reserved), 4 × AQY212EH (two series pairs), 4 × BC547, three OPEN jumpers** — pins, pulls and the arm gate are in the DRIVE table below; **J2 has no ground**; **keep the two jumper fields apart**; **AQY pin 1 = LED anode**, the only polarity to get wrong |
 | **tee into the water circuit** | `docs/hydraulics.md` | everything is 1/8, the **gauge end cannot be teed**, there are **no spare ports**, and **whether invariant 1 covers plumbing is UNDECIDED** |
 | **work out what has actually been built and bench-tested** | `docs/phase-0-status.md` | the bench record and the resume point |
 | **buy a part** | `docs/shopping-list.md` | supersedes the parts tables in `docs/phase-0-plan.md` |
@@ -796,7 +796,7 @@ table and the plan together**, as with the sense pins.
 | trigger — 2Cup, photoMOS 2 | **39** | |
 | **gate enable** *(PROPOSED)* | **38** | the **gate** '221 channel's `R̅`; external 10 K pull-down. The gate's `Q` drives the four drive channels' tied `R̅` (reset) net, which keeps its own 10 K pull-down; `B` tied to 3V3 on all five. No external AND. *(GPIO38 drove the tied `R̅` net directly until 2026-10-30; `B` until later on 2026-10-29.)* |
 | **gate trigger** *(PROPOSED)* | one of 9–14, 21, 47 | the gate's `A̅`; **10 K pull-up**, pulse low to fire. Chosen at layout; 18 avoided as a precaution. *(Added 2026-10-30.)* |
-| **`Q` readback ×5** | **1, 2** + three of 9–14, 18, 21, 47 | each drive channel's `Q` and the gate's, through **1 K** into an input. The pins and the 1 K are the layout part; the checks on them — the `Q` window and `drivetest` — are **PROPOSED, with known defects** (`docs/phase-0-plan.md`, "OPEN — the gate, readback and `drivetest`"). Chosen at layout. *(Added 2026-10-30.)* |
+| **`Q` readback ×5** | **1, 2** + three of 9–14, 18, 21, 47 | each drive channel's `Q` and the gate's, through a series resistor into an input — **1 K proposed, value OPEN** (with its '221 pulled, 1 K lets a mis-set readback pin drive the `Q` node). The pins are the layout part; the checks on them — the `Q` window and `drivetest` — are **PROPOSED, with known defects** (`docs/phase-0-plan.md`, "OPEN — the gate, readback and `drivetest`"). Chosen at layout. *(Added 2026-10-30.)* |
 
 **The rules a layout acts on — DATASHEET grade since 2026-10-29
 (TI SCHS166F; ESP32-S3 Series Datasheet v2.2) unless a bullet says
@@ -812,11 +812,15 @@ otherwise:**
   neither and is on the plan's known-unmitigated list.
 - *PROPOSED 2026-10-30, not decided.* **A third '221 channel, the gate,
   bounds each arm window in hardware at ≤ 500 ms**; reserve its DIP-16, <!-- fact:arm-window-cap@1 500 ms -->
-  RC, pulls and two pins on the layout. It bounds each window, **not the
-  gap between windows**, and its timing, the `Q` checks and `drivetest`
-  are **OPEN** pending the bench sweep (`docs/phase-0-plan.md`, "OPEN —
-  the gate, readback and `drivetest`"). **Never subscribe `loopTask` to
-  the task watchdog permanently**: uploads and `selftest` block `loop()`
+  RC, pulls and two pins on the layout, **and an unfitted link position
+  from GPIO38 to the tied `R̅` net** so the gate can be dropped without
+  rework. It bounds each window, **not the gap between windows**, and a
+  stuck-high gate `Q` would arm all four channels with no disarm — the
+  main cost against keeping it. Its timing, the `Q` checks and
+  `drivetest` are **OPEN** pending the bench sweep (`docs/phase-0-plan.md`,
+  "OPEN — the gate, readback and `drivetest`"). **Never subscribe
+  `loopTask` to the task watchdog** — neither permanently nor per arm
+  window; both drafts were rejected: uploads and `selftest` block `loop()`
   for seconds.
 - **Timing RC: 2-pin headers for the bench sweep, SOLDERED for the build,
   never a socket in service.** An intermittent `R_ext` is a **HOLD**, an

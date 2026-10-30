@@ -537,7 +537,8 @@ decided 2026-10-12, one '221 channel per photoMOS, decided 2026-10-29; see the
 failure analysis above. **Phase 1 needs a separate drive path per photoMOS**
 for the per-device test. **Costed since 2026-10-29**: the driver transistors
 and their resistors are specified (see below and `docs/shopping-list.md`), the
-GPIO budget is **not** the constraint, and the one-shot channels are settled —
+GPIO budget is **not** the constraint for the levers (the setpoint buttons
+are another matter, below), and the one-shot channels are settled —
 a dual '221 gives two, one per *line*; one per *device* takes two chips, and
 ten are held. *(This read "One dual 74HC221 … what remains unpriced is
 one-shot channels … Three '221s are on the order, which covers it" until
@@ -625,7 +626,9 @@ proposed arm-window gate, whose spare channel is not a drive channel; the
 buttons would need
 two more chips, four more trigger GPIOs — **eight pins if each channel gets
 a `Q` readback like the levers', against five free after the proposed gate
-and readbacks, so the GPIO budget would then bind** — and the board space
+and readbacks — and two of those five are GPIO9/10, the last ADC1 pins J3's
+NTC would want, and one is GPIO18, avoided for triggers — so the GPIO budget
+would then bind** — and the board space
 for both, none of
 which is allocated — the chips are held (ten bought), the rest is not. *(This
 said "Three '221s are on the order and cover the levers" until 2026-10-29 —
@@ -1240,7 +1243,7 @@ does not work:
     which is the argument for 10 K over the 100 K also held.
   - **10 K pull-down on the `R` arm line, ×2** *(×1 until the gate,
     2026-10-30)* — one on GPIO38, the gate's `R̅`; one on the four drive
-    channels' tied `R̅` net, now driven by the gate's `Q`, so it is low with
+    channels' tied `R̅` net, which the proposed gate's `Q` would drive, so it is low with
     the gate chip pulled. Disarmed at power-on, after a system reset, and
     with the devkit pulled from its headers. **Not necessarily after a
     panic**: a panic restart is a CPU reset that may leave GPIO38 driven
@@ -1281,8 +1284,8 @@ does not work:
     firmware still does" below for what survived.)*
 
     Only `R̅` low ends an `R_ext`-open HOLD, so whatever drives the four
-    channels' tied `R̅` net decides how long a HOLD can last. **That net is
-    now driven by the `Q` of a gate channel, not by a GPIO:**
+    channels' tied `R̅` net decides how long a HOLD can last. **The
+    proposal drives that net from the `Q` of a gate channel, not a GPIO:**
 
     - **The gate is channel 1 of a THIRD `CD74HC221E`** (ten are held).
       Its `A̅` is a new GPIO, the **gate trigger** — 10 K pull-up to 3V3,
@@ -1367,18 +1370,21 @@ does not work:
       watchdog times out at 5 s, panics and reboots, and watches only
       CPU0's idle task; `loopTask` is not subscribed; the interrupt
       watchdog is 300 ms; every panic writes a core dump to a 64 KB flash
-      partition; a panic restart is a CPU reset, `RTC_SW_CPU_RST`. Do not
-      subscribe `loopTask` to the task watchdog permanently: `net.tick()` uploads synchronously
+      partition; a panic restart is a CPU reset, `RTC_SW_CPU_RST`. Never
+      subscribe `loopTask` to the task watchdog, permanently or per arm
+      window: `net.tick()` uploads synchronously
       with a 3 s connect and 5 s read timeout, and `selftest` blocks for up
       to 30 s.)*
     The watchdog relay above stays an option, as a layer that does not
     depend on the ESP32 at all.
   - **Every `Q` is read back — the four drive channels and the gate —
-    PROPOSED 2026-10-30.** The 1 K and the five input pins are the layout
-    part; the check below is a proposal. The series pair hides a single open `R_ext`: the
+    PROPOSED 2026-10-30.** The five input pins are the layout part; the
+    series value — **1 K proposed, value OPEN** (see the pulled-'221
+    caveat in OPEN) — and the check below are a proposal. The series pair hides a single open `R_ext`: the
     machine sees only the overlap of both pulses, so one channel holding for
     the whole arm window looks like a normal press until a second fault
-    turns it into a real hold. So each `Q` goes through **1 K** into a GPIO
+    turns it into a real hold. So each `Q` goes through a series resistor
+    (1 K proposed) into a GPIO
     input — GPIO1, GPIO2 and three of 9-14, 18, 21, 47, chosen at layout.
     **The gate trigger is not GPIO18**: GPIO15–18 emit a ~60 µs low pulse at
     power-up, and a falling `A̅` fires the gate. Harmless while GPIO38's
@@ -1531,8 +1537,13 @@ does not work:
       four channels armed, and dropping GPIO38, the pull-downs, a failed
       `Q` check and `drivetest`'s abort all do nothing. Before the gate, a
       stuck `Q` cost one channel. This weighs on whether to keep the gate
-      at all or return GPIO38 to the net directly — the footprint is
-      reserved so that either can be built.
+      at all or return GPIO38 to the net directly. **So the layout
+      reserves an unfitted link position from GPIO38 to the tied `R̅` net**
+      beside the gate's DIP-16: dropping the gate means leaving its chip
+      out and fitting the link, not rework. **Never both** — a fitted link
+      with the gate in its socket ties GPIO38 to the gate's push-pull `Q`.
+      *(This said "the footprint is reserved so that either can be built"
+      before any such link existed, review 2026-10-30.)*
     - **The GPIO18 exclusion's rationale is weak**: the power-up glitch
       occurs while the '221 is itself in power-on reset, so it cannot meet
       "a CPU reset leaving GPIO38 high". And the "safe" set 9–14, 21, 47

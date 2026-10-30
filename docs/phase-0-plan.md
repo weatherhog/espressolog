@@ -261,7 +261,7 @@ instead of soldering to the board.
 | Perfboard **10 × 10 cm FR-4 ×5** + **female** headers ×5 + sockets | 2.54 mm confirmed by mating. **SUPERSEDES "7 × 9 ×2", 2026-10-28** — 7 × 9 was picked for soldering room against a nominal 27 × 35, and the boards actually sold are 24 × 30. See `docs/board-and-perfboard.md` for the table and `shopping-list.md` §5 for the reasoning; `shopping-list.md` is normative on parts and prices. **The boards alone are €10**; the female strips are €4.59 and the sockets €2.19, both priced separately in §1, so this row understated at €10 until 2026-10-29 | 16.78 |
 | Heat-shrink assortment | | 5 |
 | ~~Small ABS project box~~ **PRINTED** | the 120 × 80 size was chosen for a 5 × 7 board and would not have fitted the 70 × 90 one — **and 70 × 90 is no longer the board either: it is 10 × 10 since 2026-10-28.** The ~110 × 100 plan dimensions that replaced 120 × 80 are **withdrawn** for the same reason and have no successor — the box is printed last and sized to the finished board; **the 40 mm height alone is retained, as an upper bound**. `shopping-list.md` §5, "The box has no dimensions any more", is normative | 0 |
-| **`CD74HC221E`** **×2** *(×3 until 2026-10-29 — one channel per photoMOS, four channels, two dual chips; see "The one-shot channels WERE the constraint" below)*, **AQY212EH DIP-4 ×8**, **BC547/2N3904 ×10**, **330 Ω**, one-shot caps, **3 × 2-pin header** (no shunts), DIP sockets | **moved into this order 2026-10-12** — the build populates them behind open jumpers rather than leaving footprints. `shopping-list.md` is normative on part numbers and prices; **this file is normative on counts and placement** | ~25 |
+| **`CD74HC221E`** **×2** *(×3 until 2026-10-29 — one channel per photoMOS, four channels, two dual chips; see "The one-shot channels WERE the constraint" below)*, **AQY212EH DIP-4 ×8** (4 on the board, 4 spare), **BC547/2N3904 ×10**, **330 Ω**, one-shot caps, **3 × 2-pin header** (no shunts), DIP sockets | **moved into this order 2026-10-12** — the build populates them behind open jumpers rather than leaving footprints. `shopping-list.md` is normative on part numbers and prices; **this file is normative on counts and placement** | ~25 |
 
 ### Tools, if you don't have them
 
@@ -958,7 +958,8 @@ does not work:
       drive margin.** The '221 can source ~4.5 mA into this LED at 3.3 V —
       over the 3.0 mA guarantee at 25 °C, but **below the 5 mA floor of
       Panasonic's recommended range** (5–30 mA in C, 2026; 5–10 in the
-      2011/2005 documents) and only ~1.45× the plotted 85 °C curve; the BC547
+      2011/2005 documents) and only ~1.45× the plotted 85 °C curve, dividing
+      its 25 °C current by the 85 °C operate current; the BC547
       puts it at ~6 mA nominal, inside the range, and ≈ 4.3 mA at the 25 °C
       worst-case corner, which is not. `docs/shopping-list.md` ("Datasheet
       read") carries both BC547 figures and criterion B's 85 °C worst case.
@@ -974,9 +975,10 @@ does not work:
 
       **Free GPIOs are not the constraint.** Against the pinout in
       `docs/board-and-perfboard.md`:
-      1, 2, 9-14, 18, 21 and 47 — **38 and 39-42 were on this list until
-      2026-10-29 and are now the arm gate and the four triggers** (CLAUDE.md's
-      drive table) — (35-37 are PSRAM-internal;
+      9-14, 18, 21 and 47, two of which go to the last two `Q` readbacks —
+      **38 and 39-42 were on this list until 2026-10-29 and are now the arm
+      gate and the four triggers, and 1 and 2 are the first two `Q`
+      readbacks** (CLAUDE.md's drive table) — (35-37 are PSRAM-internal;
       0, 3, 19, 20, 45, 46 are strapping or native USB; 43/44 are the UART0
       console, which `platformio.ini` names as the fallback flashing port, so
       treat them as spoken for).
@@ -1230,6 +1232,40 @@ does not work:
     2026-10-29: `__pinMode` → `gpio_config()` only, `__digitalWrite` →
     `gpio_set_level()`; the output latch's reset value of 0 is assumed, not
     checked against the ESP32-S3 TRM.)*
+  - **Arm window: capped at 500 ms, and a hang ends it by reset — DECIDED
+    2026-10-30.** Only firmware dropping `R̅` ends an `R_ext`-open HOLD, and
+    the 10 K pull-down cannot win against GPIO38 while it is driven high, so
+    a firmware hang in the arm window would hold the lever line past the
+    ~2 s reprogram threshold. Two rules close it. **No code holds GPIO38
+    high for more than 500 ms**, one named constant, a choice rather than a
+    measurement. **The loop task is subscribed to the task watchdog, with a
+    1 s timeout and panic on**: a hang then panics and reboots, the reboot
+    leaves GPIO38 an input with no pull, and the 10 K pull-down takes `R̅`
+    low, which is the reset path this section already relies on. Worst case
+    is about the 1 s timeout plus the panic print, under the 2 s threshold.
+    The core's defaults do not do this: on framework-arduinoespressif32
+    3.20017.241212 (`qio_opi` sdkconfig, read 2026-10-30) the task watchdog
+    panics and reboots but times out at **5 s** and watches only CPU0's
+    idle task, and `loopTask` is **not** subscribed (`loopTaskWDTEnabled =
+    false`). So firmware calls `enableLoopWDT()` and re-initialises the
+    watchdog to 1 s. The interrupt watchdog is already 300 ms. *(That a
+    panic reboot returns GPIO38 to its reset state is inferred from it
+    being a system reset, not checked against the ESP32-S3 TRM.)* The
+    watchdog relay above stays an option, as a layer that does not depend
+    on the ESP32 resetting.
+  - **Each channel's `Q` is read back — DECIDED 2026-10-30.** The series
+    pair hides a single open `R_ext`: the machine sees only the overlap of
+    both pulses, so one channel holding for the whole arm window looks like
+    a normal press until a second fault turns it into a real hold. So each
+    `Q` goes through **1 K** into a GPIO input (GPIO1, GPIO2 and two of
+    9-14, 18, 21, 47, chosen at layout). Firmware times every pulse: a `Q`
+    still high past the expected width means drop `R̅`, flag the channel and
+    refuse to arm again. **At boot each channel is fired alone and timed**,
+    which one channel cannot turn into a press while its series partner is
+    healthy; that catches an open `R_ext` and an open or leaky `C_ext`
+    before the first real press. If the partner is shorted, the lone fire
+    is a press, which is the per-device test's accepted alarm. `Q` is our
+    3.3 V logic, not a machine net, so invariant 1 is not touched.
 
   CLAUDE.md's GPIO table carries the pin, the idle-state rule and the three
   parts.

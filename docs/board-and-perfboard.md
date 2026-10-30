@@ -113,8 +113,8 @@ use nothing else"; see the retraction below.
 | 1 | **3V3** | | **GND** |
 | 2 | 3V3 | | GPIO43 / TX |
 | 3 | RST | | GPIO44 / RX |
-| **4** | **GPIO4** — `ESD4` clock | | GPIO1 |
-| **5** | **GPIO5** — `ESD1` data | | GPIO2 |
+| **4** | **GPIO4** — `ESD4` clock | | **GPIO1** — `Q` readback |
+| **5** | **GPIO5** — `ESD1` data | | **GPIO2** — `Q` readback |
 | **6** | **GPIO6** — flow `#` | | **GPIO42** — trigger, 1Cup photoMOS 1 |
 | **7** | **GPIO7** — 1Cup | | **GPIO41** — trigger, 1Cup photoMOS 2 |
 | **8** | **GPIO15** — 2Cup | | **GPIO40** — trigger, 2Cup photoMOS 1 |
@@ -137,8 +137,10 @@ use nothing else"; see the retraction below.
 this N16R8 module** — physically present on the header and unusable; do not
 even probe them.
 
-38–42 are the drive allocation, decided 2026-10-29 (CLAUDE.md's DRIVE
-table; `docs/phase-0-plan.md`, "An arm gate"), not yet named in `main.cpp`.
+38–42 are the drive allocation, decided 2026-10-29, and 1–2 the first two
+`Q` readbacks, decided 2026-10-30; the last two readbacks are chosen at
+layout (CLAUDE.md's DRIVE table; `docs/phase-0-plan.md`, "An arm gate").
+None is named in `main.cpp` yet.
 
 ◆ **THE ONBOARD RGB LED IS ON GPIO48 — SETTLED 2026-10-15 BY A TWO-POINT
 TEST. So GPIO38 is NOT the LED** *(this said "is FREE" until 2026-10-29 — it

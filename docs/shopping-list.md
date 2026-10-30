@@ -496,7 +496,7 @@ tighter than they need to be for the sake of a few euro.
 | 220 kΩ | 10 | Ground leg: **×4 at J2** (1Cup, 2Cup, Steam, Water) **+ ×1 at J4** = **5**. **In stock.** |
 | 10 nF ceramic | — | **CANDIDATE, do not buy yet.** ×1 across the J4 220 K shunt, 218 Hz. Nothing has been fitted and there is no before/after; it may raise the glitch count by slowing the falling edge to ~1.1 ms through the noise band. Decide after the re-measurement in `phase-0-status.md`. |
 | 470 pF ceramic | 2 *(×10 ordered)* | **CANDIDATE, weaker case than J4's.** ×2 across the J5 shunts — **now 16.4 kΩ, not the 15 kΩ this row used to name**, so the sizing in `docs/taps-and-dividers.md` needs redoing — **and it was bought anyway**: 470 pF NP0 ×10 is on the 2026-10-27 Reichelt order (§1). Having the part does not retire the resizing; the row's precondition is simply now unmet rather than pending. *(This said "before it is bought" until 2026-10-29.)* **Never 10 nF** (69 µs against 36 µs clock highs stops the bus decoding). But the J5 drops are **not coupling, and their cause is unidentified** — `docs/taps-and-dividers.md` is normative and retracted "serial polling" on 2026-10-19. `phase-0-status.md` already carried this value as a contingent remedy after raising the shunt to 16.4 K — **that raise is no longer contingent; the capacitor still is.** |
-| 1 kΩ | 10 | 0d flowmeter, **at PA8/PA9 only** — the board side, after its own conditioning. **Never at J4.** **In stock.** |
+| 1 kΩ | 10 | 0d flowmeter, **at PA8/PA9 only** — the board side, after its own conditioning. **Never at J4.** Also the **four `Q` readback series resistors** (2026-10-30). **In stock.** |
 | 8.2 kΩ (J4) | — | **J4 ANALYSER tap only: 8.2 kΩ, one channel, `#` only, no shunt.** The ESP32 tap at J4 is **100 K + 220 K** — see the 0d entry in `docs/phase-0-status.md`. Covered by the 8.2 kΩ bag above. |
 | **330 Ω, 1 %** *(390 Ω only for a box that stays cool — "cool" is undefined: no ambient has been measured inside the box, so read this as "only after measuring it"; see the 85 °C note under "Datasheet read")* | 20 | **PhotoMOS LED drive, ×4 — ORDERED 2026-10-27 (Reichelt, ×25); §1 is normative.** *(Read "NOT IN STOCK, added 2026-10-12" until 2026-10-29.)* AQY212EH is guaranteed to operate at 3.0 mA **at 25 °C** (see the 85 °C note under "Datasheet read") and wants 5–30 mA (C, 2026; 5–10 in A and B); 330 Ω from 3.3 V gives ~6 mA nominal. **Do not substitute the in-stock 1 kΩ** — it gives ~2 mA, above typical and below guaranteed, which is the one range that works on the bench and fails in service. 680 Ω if driving from 5 V instead. <!-- fact:led-drive-resistor 330 Ω, 1 % --> <!-- fact:photomos-guarantee-25c 3.0 mA at 25 °C --> |
 | **100 kΩ** | 10 | **0d J4 divider, series leg (×1)** — the chosen value since 2026-10-08. Also the **base-emitter resistors (×4)** for the LED drivers, added 2026-10-12: with the '221 pulled from its socket — a deliberate third disable — four bases would otherwise float with the rail up. **In stock.** |
@@ -672,8 +672,8 @@ quantity and the price are both superseded by what was actually bought —
 rather than changed: five is practice, service and spare. §1 is normative
 on what was ordered.)*
 
-**Space is tight but was never the binding constraint**, against **~38
-discrete parts (~30 resistors, 4 BC547, 4 timing caps), 6 sockets (two
+**Space is tight but was never the binding constraint**, against **~42
+discrete parts (~34 resistors, 4 BC547, 4 timing caps), 6 sockets (two
 DIP-16, four DIP-4)** and 3 XH connectors *(said "~29 discrete parts, 5
 sockets" until 2026-10-29 — the single-'221 count)*:
 <!-- fact:dip4-sockets four DIP-4 -->
@@ -701,10 +701,11 @@ to put the dividers there.
 **Resistor count, corrected.** A draft of this note said "only 9 resistors are
 on the board", which counts the **sense** side alone — 4 × J2 shunt, 1 × J4
 shunt, and 4 × 8.2 K making the two J5 shunts, every series leg living in its
-T-piece. **The actuation block adds ~21 more**: 330 Ω, 8.2 K and 100 K per
+T-piece. **The actuation block adds ~25 more**: 330 Ω, 8.2 K and 100 K per
 photoMOS × 4, **four '221 timing resistors — one `R_X` per channel, and
 2026-10-29 made it one channel per photoMOS** — and **five 10 K pulls on
-the '221 inputs (2026-10-29)**. **~30 in total** *(~23 until the pulls were
+the '221 inputs (2026-10-29)** and **four 1 K `Q` readback resistors
+(2026-10-30)**. **~34 in total** *(~23 until the pulls were
 added; ~28 for part of 2026-10-29, still counting the two timing resistors
 of the single-chip design in the commit that moved to four channels)*, and
 the "space was never binding" conclusion rests on the right number, not the
@@ -990,7 +991,9 @@ row spacing does).
     the box's ambient is measured — not a free substitute.
   - **The "'221 can drive it directly at ~4.5 mA, half again over the 3.0 mA
     guarantee" argument is 25 °C reasoning.** Against curve 5 at 85 °C it is
-    ~1.45× (4.5 / 3.1), not 1.5×, and under criterion B it fails.
+    ~1.45× (4.5 / 3.1, the 25 °C current over the 85 °C operate current; no
+    85 °C corner was computed for the '221 path), not 1.5×, and under
+    criterion B it fails.
   - **The 1 kΩ / ~2 mA trap fails even a typical unit at 85 °C** (~2.1 mA
     against 3.1), not only some units at 25 °C.
   - **"Guaranteed OFF below 0.4 mA" is also a 25 °C figure** — plot 6 shows

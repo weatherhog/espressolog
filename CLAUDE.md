@@ -37,8 +37,8 @@ the thing you do not know yet.
 | **believe a flowmeter pulse count** | `docs/flowmeter-j4.md` | counts are **~5× the datasheet and UNRESOLVED** — and the 5× itself divides by an **assumed** inlet |
 | **plan a flowmeter experiment** | `docs/flowmeter-j4.md` | **0d-i first** (weigh the split). And check whether the operator already does it every morning — three for three so far |
 | **compare flow data across sessions** | `docs/flowmeter-j4.md` | the **OPV is adjustable state and nothing records it** — invariant-5 class |
-| **pick a free GPIO, or drill the perfboard** | `docs/board-and-perfboard.md` | **GPIO48 is the LED, GPIO38 is the arm gate, 39–42 are the triggers, 1 and 2 are `Q` readbacks — free: 9–14, 18, 21, 47, two of them owed to the last two readbacks**; GPIO33–37 unusable; 5Vin at position 21 beside GND at 22 is a **solder hazard** |
-| **lay out the perfboard — what connects to what** | `docs/phase-0-plan.md` §*Topology, per actuated line* and §*Two things that bound the firmware-side failures*; then `docs/board-and-perfboard.md` for the header | sense: **seven shunts, nine resistors**, series legs in the T-pieces; drive: **2 × '221, 4 × AQY212EH (two series pairs), 4 × BC547, three OPEN jumpers** — pins, pulls and the arm gate are in the DRIVE table below; **J2 has no ground**; **keep the two jumper fields apart**; **AQY pin 1 = LED anode**, the only polarity to get wrong |
+| **pick a free GPIO, or drill the perfboard** | `docs/board-and-perfboard.md` | **GPIO48 is the LED, GPIO38 is the gate enable, 39–42 are the triggers, 1 and 2 are `Q` readbacks — free: 9–14, 18, 21, 47, four of them owed to three more readbacks and the gate trigger**; GPIO33–37 unusable; 5Vin at position 21 beside GND at 22 is a **solder hazard** |
+| **lay out the perfboard — what connects to what** | `docs/phase-0-plan.md` §*Topology, per actuated line* and §*Two things that bound the firmware-side failures*; then `docs/board-and-perfboard.md` for the header | sense: **seven shunts, nine resistors**, series legs in the T-pieces; drive: **3 × '221 (two drive, one arm-window gate), 4 × AQY212EH (two series pairs), 4 × BC547, three OPEN jumpers** — pins, pulls and the arm gate are in the DRIVE table below; **J2 has no ground**; **keep the two jumper fields apart**; **AQY pin 1 = LED anode**, the only polarity to get wrong |
 | **tee into the water circuit** | `docs/hydraulics.md` | everything is 1/8, the **gauge end cannot be teed**, there are **no spare ports**, and **whether invariant 1 covers plumbing is UNDECIDED** |
 | **work out what has actually been built and bench-tested** | `docs/phase-0-status.md` | the bench record and the resume point |
 | **buy a part** | `docs/shopping-list.md` | supersedes the parts tables in `docs/phase-0-plan.md` |
@@ -774,7 +774,8 @@ by *label* from wiring by *position*, and the silkscreen read cannot tell
 you the firmware agrees.
 
 **DRIVE side — DECIDED 2026-10-29, nothing in firmware yet.** **One channel
-per photoMOS — four channels, two dual `CD74HC221E`** (ten bought). The
+per photoMOS — four channels, two dual `CD74HC221E`, plus a third for the
+arm-window gate** (ten bought). The
 pins rest on one layout fact: **positions 4–10 of the OPPOSITE header column
 are `GPIO1, 2, 42, 41, 40, 39, 38` — all free and none strapping when the
 drive side was decided, directly across from the seven sense taps.** 38–42
@@ -793,8 +794,9 @@ table and the plan together**, as with the sense pins.
 | trigger — 1Cup, photoMOS 2 | **41** | |
 | trigger — 2Cup, photoMOS 1 | **40** | |
 | trigger — 2Cup, photoMOS 2 | **39** | |
-| **arm gate** | **38** | **the '221's own `R` (reset) input, tied across all four channels, held high to arm; external 10 K pull-down; `B` tied to 3V3.** No external AND. *(`B` until later on 2026-10-29.)* |
-| **`Q` readback ×4** | **1, 2** + two of 9–14, 18, 21, 47 | each channel's `Q` through **1 K** series into an input; firmware times every pulse **by edge interrupt, never by polling** (`loop()`'s 42–57 ms gaps cannot see an open-`C_ext` pulse), and **`drivetest`** — a CLI command, machine idle, **never automatic at boot** — fires each channel alone; nothing arms until all four have passed. The last two pins are chosen at layout. *(Added 2026-10-30.)* |
+| **gate enable** | **38** | the **gate** '221 channel's `R̅`; external 10 K pull-down. The gate's `Q` drives the four drive channels' tied `R̅` (reset) net, which keeps its own 10 K pull-down; `B` tied to 3V3 on all five. No external AND. *(GPIO38 drove the tied `R̅` net directly until 2026-10-30; `B` until later on 2026-10-29.)* |
+| **gate trigger** | one of 9–14, 18, 21, 47 | the gate's `A̅`; **10 K pull-up**, pulse low to fire. Chosen at layout. *(Added 2026-10-30.)* |
+| **`Q` readback ×5** | **1, 2** + three of 9–14, 18, 21, 47 | each drive channel's `Q` and the gate's, through **1 K** into an input; checked as a **window** — high at `t_min`, low at `t_max` — never by polling. **`drivetest`** fires each channel alone, gate included, on the **first actuation request after every boot** with the machine idle — never automatically at boot; the pass is **RAM only**. The last three pins are chosen at layout. *(Added 2026-10-30.)* |
 
 **The rules a layout acts on — DATASHEET grade since 2026-10-29
 (TI SCHS166F; ESP32-S3 Series Datasheet v2.2) unless a bullet says
@@ -808,19 +810,15 @@ otherwise:**
 - **Arm on `R`, not `B`: `R` low ends a running pulse, `B` low does not.**
   Same zero parts. A `Q` stuck high by internal failure is bounded by
   neither and is on the plan's known-unmitigated list.
-- *DECIDED 2026-10-30, not datasheet grade.* **The arm window is capped at
-  500 ms by a hardware-timer ISR that drops GPIO38 itself**, so the cap <!-- fact:arm-window-cap@1 500 ms -->
-  holds while `loop()` is hung. The loop task
-  joins the task watchdog **for the arm window only**, as a backstop; the
-  global timeout stays at the core's 5 s. **Never subscribe `loopTask`
-  permanently** — uploads and `selftest` block `loop()` for seconds, and a
-  draft that did this turned a slow server into a reboot loop
-  (2026-10-30). A panic restart is a **CPU** reset, not established to
-  release GPIO38, and every panic writes a **core dump to flash** first, so
-  a wrapped panic handler drops GPIO38 by direct register write **before**
-  the dump — intended, not yet bench-confirmed. **GPIO38 is released in the
-  first statement of `setup()`**, and a shutdown handler drops it on every
-  `esp_restart()`.
+- *DECIDED 2026-10-30, not datasheet grade.* **The arm window is bounded
+  in HARDWARE: the gate's own RC ends it at ≤ 500 ms**, whatever the ESP32 <!-- fact:arm-window-cap@1 500 ms -->
+  does — hang, panic, core dump or reset. The gate is non-retriggerable,
+  and `R̅` fires only with `A̅` low, so a stuck GPIO38 arms nothing. Its own
+  `R_ext` failing is the one gap, and needs a second, firmware fault to
+  matter. Firmware backstops: an **IRAM** timer ISR drops GPIO38 at the
+  cap, **no flash write while armed**, and `setup()` writes GPIO38 LOW
+  before making it an input. **No task-watchdog layer** — never subscribe
+  `loopTask`: uploads and `selftest` block `loop()` for seconds.
 - **Timing RC: 2-pin headers for the bench sweep, SOLDERED for the build,
   never a socket in service.** An intermittent `R_ext` is a **HOLD**, an
   open `C_ext` a pulse too short to latch; the pair is soldered **before any
@@ -943,7 +941,7 @@ Two things worth knowing about the chosen pins:
   in that set. Fine as digital inputs. Both ADC1-capable pins in the budget
   (6, 7) are allocated, and GPIO8 — also ADC1 — is now claimed by `selftest`.
   **GPIO9 and 10 are ADC1 and unallocated** unless the layout spends them on
-  the last two `Q` readbacks *(GPIO1 and 2 were on this list until
+  the gate trigger or the last three `Q` readbacks *(GPIO1 and 2 were on this list until
   2026-10-30, when they became `Q` readbacks)*, so an analog read is still
   possible; an earlier version of this line said "there is no ADC1 pin left",
   which was wrong even before GPIO8 was claimed. It matters only if J3's NTC

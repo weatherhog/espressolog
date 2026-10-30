@@ -256,12 +256,12 @@ instead of soldering to the board.
 | Item | Notes | ~€ |
 |---|---|---|
 | ~~Resistor kit, E12 1/4 W~~ | **Not required** — see `shopping-list.md`: it covers no named value, and cheap kits are 5 % where every divider here wants 1 %. All of them are in stock. | — |
-| ~~30 AWG silicone hookup wire, 4 colours~~ | **SUPERSEDED 2026-10-28 — two wires were bought instead, neither of them this one.** `shopping-list.md` §1 is normative: **24 AWG solid core** for board point-to-point and **26 AWG silicone** for the T-piece branches. The rationale here — "flexible, survives vibration" — was right about the harness and is carried by the 26 AWG; 30 AWG was simply too fine for either job. *(A draft of this cell said "this was the only file that priced it" — false: `shopping-list.md`'s historical consumables row prices it at €8. That claim was copied from a sentence in `shopping-list.md` that was already wrong the same way, and both are corrected 2026-10-29.)* | 0 |
+| ~~30 AWG silicone hookup wire, 4 colours~~ | **SUPERSEDED 2026-10-28 — two wires were bought instead, neither of them this one.** `shopping-list.md` §1 is normative: **24 AWG solid core** for board point-to-point and **26 AWG silicone** for the T-piece branches. The rationale here — "flexible, survives vibration" — was right about the harness and is carried by the 26 AWG; 30 AWG was simply too fine for either job. *(A draft of this cell said "this was the only file that priced it" — false: `shopping-list.md`'s historical consumables row priced it at €8 — a row deleted 2026-10-30 with the rest of that file's price estimate. That claim was copied from a sentence in `shopping-list.md` that was already wrong the same way, and both are corrected 2026-10-29.)* | 0 |
 | JST pigtails, assorted pitch | **after** identifying connectors | 8 |
 | Perfboard **10 × 10 cm FR-4 ×5** + **female** headers ×5 + sockets | 2.54 mm confirmed by mating. **SUPERSEDES "7 × 9 ×2", 2026-10-28** — 7 × 9 was picked for soldering room against a nominal 27 × 35, and the boards actually sold are 24 × 30. See `docs/board-and-perfboard.md` for the table and `shopping-list.md` §5 for the reasoning; `shopping-list.md` is normative on parts and prices. **The boards alone are €10**; the female strips are €4.59 and the sockets €2.19, both priced separately in §1, so this row understated at €10 until 2026-10-29 | 16.78 |
 | Heat-shrink assortment | | 5 |
 | ~~Small ABS project box~~ **PRINTED** | the 120 × 80 size was chosen for a 5 × 7 board and would not have fitted the 70 × 90 one — **and 70 × 90 is no longer the board either: it is 10 × 10 since 2026-10-28.** The ~110 × 100 plan dimensions that replaced 120 × 80 are **withdrawn** for the same reason and have no successor — the box is printed last and sized to the finished board; **the 40 mm height alone is retained, as an upper bound**. `shopping-list.md` §5, "The box has no dimensions any more", is normative | 0 |
-| **`CD74HC221E`** **×2** *(×3 until 2026-10-29 — one channel per photoMOS, four channels, two dual chips; see "The one-shot channels WERE the constraint" below)*, **AQY212EH DIP-4 ×8** (4 on the board, 4 spare), **BC547/2N3904 ×10**, **330 Ω**, one-shot caps, **3 × 2-pin header** (no shunts), DIP sockets | **moved into this order 2026-10-12** — the build populates them behind open jumpers rather than leaving footprints. `shopping-list.md` is normative on part numbers and prices; **this file is normative on counts and placement** | ~25 |
+| **`CD74HC221E`** **×3** *(×3 until 2026-10-29, then ×2 — one channel per photoMOS, four channels, two dual chips; see "The one-shot channels WERE the constraint" below — and ×3 again from 2026-10-30 for the arm-window gate, a different third chip from the one first estimated)*, **AQY212EH DIP-4 ×8** (4 on the board, 4 spare), **BC547/2N3904 ×10**, **330 Ω**, one-shot caps, **3 × 2-pin header** (no shunts), DIP sockets | **moved into this order 2026-10-12** — the build populates them behind open jumpers rather than leaving footprints. `shopping-list.md` is normative on part numbers and prices; **this file is normative on counts and placement** | ~25 |
 
 ### Tools, if you don't have them
 
@@ -975,10 +975,10 @@ does not work:
 
       **Free GPIOs are not the constraint.** Against the pinout in
       `docs/board-and-perfboard.md`:
-      9-14, 18, 21 and 47, two of which go to the last two `Q` readbacks —
-      **38 and 39-42 were on this list until 2026-10-29 and are now the arm
-      gate and the four triggers, and 1 and 2 are the first two `Q`
-      readbacks** (CLAUDE.md's drive table) — (33-37 are octal-PSRAM
+      9-14, 18, 21 and 47, four of which go to the gate trigger and the last
+      three `Q` readbacks — **38 and 39-42 were on this list until
+      2026-10-29 and are now the gate enable and the four triggers, and 1
+      and 2 are the first two `Q` readbacks** (CLAUDE.md's drive table) — (33-37 are octal-PSRAM
       internal on this N16R8 module, *"35-37" until 2026-10-30*;
       0, 3, 19, 20, 45, 46 are strapping or native USB; 43/44 are the UART0
       console, which `platformio.ini` names as the fallback flashing port, so
@@ -1009,7 +1009,9 @@ does not work:
       '221s.** A dual '221 gives two, enough for one per *line*; the
       per-device test this passage argues for needs one per *device*, so two
       chips. Ten `CD74HC221E` were bought (Reichelt, 2026-10-27), so stock is
-      not a constraint either. *(This read "a second '221 or a different
+      not a constraint either. **A third chip carries the arm-window gate
+      (2026-10-30)** — one channel, the other spare; see "Arm window".
+      *(This read "a second '221 or a different
       gating scheme is unpriced; three are on the order" until 2026-10-29 —
       three was an estimate, and three were never ordered.)*
     - **Each test path must still be one-shot bounded.** If a per-device drive
@@ -1150,6 +1152,14 @@ does not work:
   `R` takes the timing-circuit failures off the AND's side of the ledger for
   free.
 
+  **AMENDED 2026-10-30: `R` is still the arm line, but a GPIO no longer
+  drives it.** The tied `R̅` net is driven by the `Q` of a third '221
+  channel, the **gate**, and GPIO38 enables the gate. The row above says
+  the HOLD is bounded to the arm window "provided firmware disarms
+  unconditionally"; the gate removes that proviso — its own RC ends the
+  window whatever firmware does. See "Arm window" under the pull rules
+  below.
+
   **The datasheet facts this rests on — DATASHEET grade, TI SCHS166F
   (CD54HC221 / CD74HC221 / CD74HCT221, Nov 1997, rev Oct 2003), read
   2026-10-29.** Until then the trigger edges were recollection. Truth table,
@@ -1212,12 +1222,16 @@ does not work:
   those inputs floating unless something external holds them. **So,
   passive, no firmware involved — DECIDED 2026-10-29:**
 
-  - **10 K pull-up to 3V3 on each `A` line, ×4** — idle high through every
+  - **10 K pull-up to 3V3 on each `A` line, ×5** *(×4 until the gate,
+    2026-10-30 — the gate's `A̅` is the fifth)* — idle high through every
     reset; a GPIO pulling low sinks 0.33 mA. `A` has no Schmitt trigger,
     which is the argument for 10 K over the 100 K also held.
-  - **10 K pull-down on the `R` arm line, ×1** — disarmed at reset, after a
-    crash, and with the devkit pulled from its headers.
-  - **`B` tied directly to 3V3, all four channels** — a Schmitt input that
+  - **10 K pull-down on the `R` arm line, ×2** *(×1 until the gate,
+    2026-10-30)* — one on GPIO38, the gate's `R̅`; one on the four drive
+    channels' tied `R̅` net, now driven by the gate's `Q`, so it is low with
+    the gate chip pulled. Disarmed at reset, after a crash, and with the
+    devkit pulled from its headers.
+  - **`B` tied directly to 3V3, all four channels and the gate** — a Schmitt input that
     must not float; a permanent high.
   - 10 K: **25 held, counted by the operator 2026-10-29** *(read "count not
     taken" for part of that day)*; `docs/shopping-list.md` §4 carries the row.
@@ -1228,108 +1242,138 @@ does not work:
     which per SCHS166F fires an armed channel or primes a disarmed one for
     the next `R̅` rise. The external 10 K pull-ups do not cover this: a GPIO
     actively driving low overrides them. **Never raise `R̅` without first
-    reading all four `A̅` lines high.** *(Core behaviour read from
+    reading all five `A̅` lines high** *(four until the gate, 2026-10-30)*. *(Core behaviour read from
     `esp32-hal-gpio.c`, framework-arduinoespressif32 3.20017.241212,
     2026-10-29: `__pinMode` → `gpio_config()` only, `__digitalWrite` →
     `gpio_set_level()`; the output latch's reset value of 0 is assumed, not
     checked against the ESP32-S3 TRM.)*
-  - **Arm window: capped at 500 ms by a timer ISR, which a hang cannot
-    stop — DECIDED 2026-10-30.** *("a hang ends it by reset" until review
-    the same day.)* Only firmware dropping `R̅` ends an `R_ext`-open HOLD, and
-    the 10 K pull-down cannot win against GPIO38 while it is driven high, so
-    a firmware hang in the arm window would hold the lever line past the
-    ~2 s reprogram threshold. Three rules close it. **No code holds GPIO38
-    high for more than 500 ms**, one named constant, a choice rather than a
-    measurement. <!-- fact:arm-window-cap@1 500 ms -->
-    **Arming starts a one-shot hardware timer whose interrupt drops GPIO38
-    itself** at that cap: the bound is an ISR, not `loop()`,
-    so it holds while `loop()` is hung and does not depend on a panic or a
-    reset. **The loop task is subscribed to the task watchdog for the arm
-    window only** — `esp_task_wdt_add()` when GPIO38 goes high,
-    `esp_task_wdt_delete()` when it drops — as the backstop for a hang the
-    timer cannot see past, such as interrupts disabled (which the 300 ms
-    interrupt watchdog then catches). The global task-watchdog timeout is
-    **left at the core's 5 s**. **The panic path drops GPIO38 before
-    anything else runs**: link with `-Wl,--wrap=esp_panic_handler` and
-    define an `IRAM_ATTR __wrap_esp_panic_handler()` that writes
-    `GPIO_OUT1_W1TC_REG` bit 6 (GPIO38) directly, then calls
-    `__real_esp_panic_handler()`. A register write, not `gpio_set_level()`,
-    because a panic can land with the flash cache disabled. This matters
-    because the core **writes a core dump to flash on every panic**
-    (`CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=1`, and `partitions.csv` carries a
-    64 KB `coredump` partition): erasing and writing it takes hundreds of
-    ms and can take seconds, all with GPIO38 still driven. The dump is
-    kept — it is the evidence for every other crash. *(The wrap is the
-    intended mechanism, not yet built: that `esp_panic_handler` is called
-    across an object boundary in the prebuilt `libesp_system.a`, which
-    `--wrap` needs, is assumed for framework 3.20017.241212 and must be
-    confirmed by a forced panic on the bench with a meter on GPIO38.)*
+  - **Arm window: bounded in HARDWARE by a third '221 channel, the GATE —
+    DECIDED 2026-10-30.** *(Two drafts the same day bounded it in firmware
+    instead — first a permanent 1 s loop watchdog, then a timer ISR plus a
+    per-window watchdog, a panic-handler wrap and a shutdown handler. Two
+    fresh reviews found the firmware layers either rebooted the board on
+    ordinary work or could not give the bound: a non-IRAM timer ISR is held
+    off by every flash write, a 5 s watchdog cannot enforce a ~2 s limit,
+    and an esptool or monitor reset runs none of the hooks. See "What the
+    firmware still does" below for what survived.)*
 
-    **Not the always-on loop watchdog.** A draft of this rule (2026-10-30)
-    subscribed `loopTask` permanently, via `enableLoopWDT()`, with the
-    global timeout cut to 1 s. Review the same day showed that reboots the
-    board on ordinary work: `net.tick()` uploads synchronously from
-    `loop()` with a 3 s connect and 5 s read timeout, so a slow server
-    became a reboot loop; `selftest` blocks `loop()` for up to 30 s by
-    design; and `setup()`, which runs in the same task and starts with
-    `delay(2000)`, would never finish if the watchdog came up early. The
-    1 s global timeout would also have tightened the CPU0 idle-task watch
-    from 5 s to 1 s. For reference, the core's defaults on
-    framework-arduinoespressif32 3.20017.241212 (`qio_opi` sdkconfig, read
-    2026-10-30): the task watchdog panics and reboots, times out at
-    **5 s**, watches only CPU0's idle task, and `loopTask` is **not**
-    subscribed (`loopTaskWDTEnabled = false`); the interrupt watchdog is
-    300 ms. The watchdog relay above stays an option, as a layer that does
-    not depend on the ESP32 at all.
+    Only `R̅` low ends an `R_ext`-open HOLD, so whatever drives the four
+    channels' tied `R̅` net decides how long a HOLD can last. **That net is
+    now driven by the `Q` of a gate channel, not by a GPIO:**
 
-    **A reset is not assumed to release GPIO38 — two rules cover every
-    restart.** A panic restart goes through `esp_restart_noos()` and
-    reports `RTC_SW_CPU_RST`: a **CPU** reset, which is not established to
-    clear the GPIO output state, so GPIO38 could stay driven through the
-    bootloader and into `setup()`. *(A draft of this section called it a
-    "system reset" and inferred the release from that — the wrong reset
-    class, 2026-10-30.)* The panic wrap above already leaves the latch at
-    LOW, which is the disarmed state even if the drive survives. The
-    remaining paths:
-    - **GPIO38 is released in the very first statement of `setup()`** —
-      `pinMode(38, INPUT)`, so the 10 K pull-down takes `R̅` low — before
-      `Serial.begin()` and the `delay(2000)` that follows it.
-    - **An `esp_register_shutdown_handler()` callback drops GPIO38**, which
-      covers every deliberate `esp_restart()`: a CLI reboot, an OTA.
-    A brown-out is a genuine system reset, and there the pull-down does the
-    job unaided.
-  - **Each channel's `Q` is read back — DECIDED 2026-10-30.** The series
-    pair hides a single open `R_ext`: the machine sees only the overlap of
-    both pulses, so one channel holding for the whole arm window looks like
-    a normal press until a second fault turns it into a real hold. So each
-    `Q` goes through **1 K** into a GPIO input (GPIO1, GPIO2 and two of
-    9-14, 18, 21, 47, chosen at layout). Firmware times every pulse **by
-    edge interrupt, never by polling**: a `CHANGE` interrupt on each
-    readback pin stamps both edges with `esp_timer_get_time()` (µs), the
-    same pattern as the flowmeter's GPIO6 interrupt. `loop()`'s 42–57 ms
-    poll gaps would misread a ~120 ms pulse by up to ±57 ms and never see
-    the tens-of-ns pulse of an open `C_ext`. **No rising edge, or a width
-    below the minimum, is a fail**; a `Q` still high past the expected
-    width means drop `R̅`, flag the channel and refuse to arm again. *(That
-    the S3's GPIO edge latch catches a tens-of-ns pulse is assumed;
-    `drivetest` with `C_ext` pulled is the bench check.)* **Each channel is fired alone and timed by a
-    deliberate CLI command, `drivetest`, never automatically at boot.** A
-    lone fire cannot become a press while its series partner is healthy,
-    and it catches an open `R_ext` and an open or leaky `C_ext` before the
-    first real press. If the partner is shorted, the lone fire **is** a
-    press — acceptable only with the operator at the machine:
-    - **`drivetest` refuses unless the machine is idle**: the display not in
-      timer mode and every lever line low, the same entry check `selftest`
-      makes.
-    - **Firmware refuses to arm until every channel has passed.** The pass
-      is stored in NVS with the firmware version; a new version, or any
-      runtime `Q` fault, clears it. Ordinary reboots do not.
-    *(A draft of this bullet, 2026-10-30, fired every channel at every
+    - **The gate is channel 1 of a THIRD `CD74HC221E`** (ten are held).
+      Its `A̅` is a new GPIO, the **gate trigger** — 10 K pull-up to 3V3,
+      pulse low to fire, the same idle-high rule as the four drive `A̅`
+      lines. Its `B` is tied to 3V3. Its `R̅` is **GPIO38**, now the **gate
+      enable**, with the 10 K pull-down that used to sit on the arm line.
+      Its `Q` drives the four drive channels' tied `R̅` net, which **keeps
+      its own 10 K pull-down**, so the net is low with the gate chip pulled
+      from its socket.
+    - **Channel 2 of that chip is spare, terminated**: `A̅` high, `B` low,
+      `R̅` low, as SCHS166F requires of unused inputs.
+    - **Arming is**: read all five `A̅` lines high → raise GPIO38 (inert:
+      the gate's `A̅` is high) → pulse the gate trigger low → the gate's `Q`
+      goes high and arms the four channels → fire the drive triggers →
+      drop GPIO38, which ends the gate pulse early.
+    - **If firmware never drops GPIO38 — a hang, a panic, a core dump to
+      flash, any reset at all — the gate's own RC ends the window.** The
+      '221 is non-retriggerable, so holding or toggling the gate trigger
+      during the pulse does not extend it, and a stuck GPIO38 alone arms
+      nothing: raising `R̅` fires only with `A̅` low. A firmware that
+      re-fires the gate after it times out passes `Q` low between pulses,
+      which resets every drive channel, so **no HOLD outlives one gate
+      pulse whatever the ESP32 does.**
+    - <!-- fact:arm-window-cap@1 500 ms -->
+      **The gate's pulse is at most 500 ms at its worst tolerance corner**,
+      and at least the drive channels' fire window plus margin. Like the
+      drive channels' RC it is chosen at the bench sweep and **soldered**,
+      never socketed in service.
+
+    **What the gate does not bound: its own timing failure.** An open or
+    intermittent `R_ext` on the GATE holds the `R̅` net high until GPIO38
+    drops — back to a firmware bound. That needs two independent faults
+    (a gate RC fault and a firmware fault in the same window), the gate's
+    `Q` is read back like the others, and `drivetest` times the gate
+    before the first press of every boot (below). A `Q` stuck high by
+    internal failure in any '221 is still unbounded and stays on the
+    known-unmitigated list.
+
+    **What the firmware still does — backstops, not the bound:**
+    - **A timer ISR drops GPIO38 at the 500 ms cap**, so a gate RC fault
+      alone is still bounded. It must be attached with
+      `timerAttachInterruptFlag(…, ESP_INTR_FLAG_IRAM)` — plain
+      `timerAttachInterrupt()` passes flags `0` (`esp32-hal-timer.c`,
+      framework 3.20017.241212, read 2026-10-30) and is held off while the
+      flash cache is disabled — and its `IRAM_ATTR` handler clears GPIO38
+      by writing `GPIO_OUT1_W1TC_REG` bit 6 directly.
+    - **No flash write while armed** — the arm-window form of invariant 2,
+      and the reason the ISR flag matters less than it would otherwise.
+    - **`setup()` begins `digitalWrite(38, LOW); pinMode(38, INPUT);`** —
+      the latch is written LOW first, so a later `pinMode(38, OUTPUT)`
+      cannot drive HIGH from a latch a CPU reset left at 1. That makes the
+      "output latch's reset value of 0 is assumed" note above moot.
+    - **No task watchdog subscription, no panic-handler wrap, no shutdown
+      handler.** They were the firmware bound in the drafts; the gate
+      replaces them. *(For reference, the core's defaults on framework
+      3.20017.241212, `qio_opi` sdkconfig, read 2026-10-30: the task
+      watchdog times out at 5 s, panics and reboots, and watches only
+      CPU0's idle task; `loopTask` is not subscribed; the interrupt
+      watchdog is 300 ms; every panic writes a core dump to a 64 KB flash
+      partition; a panic restart is a CPU reset, `RTC_SW_CPU_RST`. Do not
+      subscribe `loopTask` permanently: `net.tick()` uploads synchronously
+      with a 3 s connect and 5 s read timeout, and `selftest` blocks for up
+      to 30 s.)*
+    The watchdog relay above stays an option, as a layer that does not
+    depend on the ESP32 at all.
+  - **Every `Q` is read back — the four drive channels and the gate —
+    DECIDED 2026-10-30.** The series pair hides a single open `R_ext`: the
+    machine sees only the overlap of both pulses, so one channel holding for
+    the whole arm window looks like a normal press until a second fault
+    turns it into a real hold. So each `Q` goes through **1 K** into a GPIO
+    input — GPIO1, GPIO2 and three of 9-14, 18, 21, 47, chosen at layout.
+    **A pulse is checked as a WINDOW, not timed by its edges**: the IRAM
+    timer samples each `Q` level at **`t_min`** after its trigger, where it
+    must be high, and at **`t_max`**, where it must be low. Low at `t_min`
+    catches an open `C_ext` (a pulse of tens of ns) and a short `R_ext`;
+    high at `t_max` catches an open or high `R_ext`. *(A draft said "a
+    `CHANGE` interrupt stamps both edges, the same pattern as the
+    flowmeter's GPIO6 interrupt" — `flowIsr` is FALLING-only and stamps
+    with `micros()`, and one `CHANGE` handler cannot tell the edges apart
+    on a pulse shorter than its own latency, which is exactly the
+    open-`C_ext` fault. The window check needs no edge at all.)* A failed
+    check drops GPIO38, latches the fault **in RAM** and refuses to arm
+    until reboot; the fault reaches flash only when the machine is quiet,
+    with the next upload, never mid-shot.
+  - **`drivetest` fires each channel alone, the gate included, and checks
+    each window — on the FIRST actuation request after every boot, and on
+    command. Never automatically at boot.** A lone drive fire cannot become
+    a press while its series partner is healthy; a lone gate fire, with all
+    four drive `A̅` lines high, fires nothing. Running it on the first
+    request means someone has just asked for a press, so it is attended by
+    construction. If a partner is shorted, the lone fire **is** a press, so
+    **the request that triggers `drivetest` is not itself carried out** —
+    the UI says so and the operator asks again; otherwise the test's press
+    and the requested one would toggle the cycle on and off.
+    - **The pass lives in RAM only.** Every power cycle re-tests, so
+      soldering the RC, swapping a '221 or a photoMOS cannot leave a stale
+      pass behind, and nothing is written to NVS — at a press or ever.
+    - **`drivetest` refuses unless the machine is idle**: the detector IDLE
+      (the check `selftest` makes, alongside `flow on`) **and**
+      `machineBusy()` false, **and** it refuses outright with the display
+      or switch taps off, because `machineBusy()` then sees nothing. A
+      latched lever-B draw reads idle on the lever lines and does not run
+      the display timer, which is why the brew guard is the check and the
+      lever lines are not — and the brew guard's own known gap, a press
+      too fast to confirm (CLAUDE.md, "LEVER B LATCHES"), applies here too.
+    *(Drafts of this bullet, 2026-10-30: one fired every channel at every
     boot and called the shorted-partner press "the per-device test's
-    accepted alarm". That acceptance belonged to an attended bench test; at
-    boot it was an unattended press on every reboot — mid-shot, it stops
-    the shot, and in a reboot loop it presses on every pass.)* `Q` is our
-    3.3 V logic, not a machine net, so invariant 1 is not touched.
+    accepted alarm" — an unattended press on every reboot. The next stored
+    the pass in NVS keyed on firmware version, so a runtime fault cleared
+    it with a flash write mid-shot and a reworked board kept its old pass;
+    and its idle check, "display not in timer mode and every lever line
+    low", was described as `selftest`'s when `selftest` checks neither,
+    and could not see a latched hot-water draw.)* `Q` and the gate are our
+    3.3 V logic, not machine nets, so invariant 1 is not touched.
 
   CLAUDE.md's GPIO table carries the pin, the idle-state rule and the three
   parts.

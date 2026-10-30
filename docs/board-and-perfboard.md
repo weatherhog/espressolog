@@ -119,7 +119,7 @@ use nothing else"; see the retraction below.
 | **7** | **GPIO7** — 1Cup | | **GPIO41** — trigger, 1Cup photoMOS 2 |
 | **8** | **GPIO15** — 2Cup | | **GPIO40** — trigger, 2Cup photoMOS 1 |
 | **9** | **GPIO16** — Steam | | **GPIO39** — trigger, 2Cup photoMOS 2 |
-| **10** | **GPIO17** — Hot Water | | **GPIO38** — '221 `R̅` arm gate |
+| **10** | **GPIO17** — Hot Water | | **GPIO38** — gate enable (gate '221 `R̅`) |
 | 11 | GPIO18 | | GPIO37 ‡ |
 | **12** | **GPIO8** — selftest | | GPIO36 ‡ |
 | 13 | GPIO3 † | | GPIO35 ‡ |
@@ -138,9 +138,10 @@ this N16R8 module** — physically present on the header and unusable; do not
 even probe them. GPIO33 and 34 are internal too and simply not broken out,
 so the full unusable set is **33–37**, as CLAUDE.md states.
 
-38–42 are the drive allocation, decided 2026-10-29, and 1–2 the first two
-`Q` readbacks, decided 2026-10-30; the last two readbacks are chosen at
-layout (CLAUDE.md's DRIVE table; `docs/phase-0-plan.md`, "An arm gate").
+38–42 are the drive allocation, decided 2026-10-29 — 38 became the
+**gate enable** on 2026-10-30 — and 1–2 the first two `Q` readbacks,
+decided 2026-10-30; the gate trigger and the last three readbacks are
+chosen at layout (CLAUDE.md's DRIVE table; `docs/phase-0-plan.md`, "An arm gate").
 None is named in `main.cpp` yet.
 
 ◆ **THE ONBOARD RGB LED IS ON GPIO48 — SETTLED 2026-10-15 BY A TWO-POINT

@@ -1084,7 +1084,7 @@ over.
 
 ---
 
-## Rough total
+## What is outstanding
 
 Connectors are **bought** — the mixed balance-lead pack was €6.99 and
 should cover J5, J2 and J4, pending the seat check in section 1.
@@ -1098,64 +1098,12 @@ that corrected that claim in three other places rewrote §1's header, added
 §1's retraction and added this section's closing paragraph ("One item is
 left to buy") — and did not touch this sentence. It is the branch's own signature
 defect, committed inside the correction for it. A pre-push review found
-it. What follows is the estimate this
-section carried while the order was open, kept because the gap between it
-and the real spend is the interesting part.
+it.
 
-**STALE AS OF LATER THE SAME DAY: the figure below predates the 26 AWG
-silicone and the crimp set (§1), neither of which is priced here, and it
-does not survive its own arithmetic. **§1's six priced lines total €79.57**
-(42.28 + 16.98 + 6.99 + 6.54 + 4.59 + 2.19); **the perfboard is priced in
-§5 at €10, making €89.57**; the photoMOS, the crimp set and the 26 AWG are
-priced nowhere in this file. **So €89.57 is a floor**, and the real spend
-is past it — "nearer €90 than €75", which this said for a day, was itself a
-point estimate with nothing under it. *(This said "the items the next sentence names come to
-€72.58" until 2026-10-29. That figure reproduces from no stated basis — it
-needs the DIP-16 sockets added, which the next sentence does not name, and
-the €6.99 balance pack excluded, which the line above it prices. Wrong in
-the paragraph about a total not surviving its own arithmetic.)* Do not quote it; re-add it from §1 when the
-invoices are in.**
-
-**The estimate was ~€89 and the order came to roughly €75**, across
-Reichelt (€42.28), the perfboard, the wire, the headers and the AliExpress
-photoMOS. It is close, and it is close for compensating reasons rather than
-because the lines matched: the sleeving (€8), the pre-crimped kit (€10) and
-the gland and tie mounts (€7) were not bought at all, while the board grew
-from two 7 × 9 to five 10 × 10 FR-4 and the RC sweep added resistors and
-capacitors that had no line here.
-
-*(This paragraph said **"~€83 all in"** in prose while the table below
-totalled **€89**, from 2026-10-12 until 2026-10-28 — the two were written
-in the same commit. A total that disagrees with its own table is the
-cheapest possible instance of this repo's most-logged defect, and it
-survived a week.)*
-
-**The project box is NOT on this list: it is printed, €0.** An earlier
-figure of **~€40** (a draft said €42) predates the box, the extra boards,
-the photoMOS spares taking the order from 4 to 8 (the in-service count was
-4 before and is 4 now), the XH board headers, the sockets and the LED-drive
-parts.
-
-| estimated while open | ~€ |
-|---|---|
-| perfboard ×2, female strips ×5, DIP-16 and SIP sockets | 15 |
-| XH board headers (€3) + pre-crimped kit (€10) | 13 |
-| second balance-lead pack | 7 |
-| actuation: `CD74HC221E` ×3, AQY212EH ×8, BC547 ×10, 330 Ω, caps | 25 |
-| consumables: PTFE sleeving 8, adhesive heat-shrink 6, 30 AWG silicone wire 8, gland 3, tie mounts 4 | 29 |
-| **estimated total** | **~€89** |
-
-Kept as estimated; §1 is normative on what was ordered (10 × `CD74HC221E`,
-5 × 10 × 10 perfboard) and §7 on what the board needs (2).
-
-*(A draft quoted €9 for the board group and €26 for consumables, giving €80;
-the board row had not been re-costed after it grew to two boards and five
-strips, and the consumables row omitted the 30 AWG wire — which has no row in
-§5 at all. **It is priced in BOTH files, not only in
-`docs/phase-0-plan.md` as this sentence claimed until 2026-10-29**: the
-consumables row in the table above carries it at €8. The false half was
-then copied into `docs/phase-0-plan.md`'s own supersession note before a
-review caught it.)*
+*(Removed 2026-10-30: the price estimate this section carried while the
+order was open — its table, its ~€89 total and the paragraphs reconciling
+it against the real spend. Pricing is not tracked; §1 records what was
+ordered.)*
 
 **Every SENSE resistor is in hand (2026-10-08).** 8.2 K, 15 K, 100 K,
 150 K, 220 K and 1 K are all in stock; the E12 kit is Qty 0 and not needed.
@@ -1186,9 +1134,8 @@ in hand, and the pre-crimped kit is **not being bought at all**, a crimp
 set having been bought instead (§2). *(This said "Nothing is left to buy"
 and called the pre-crimped kit "the one open question" on 2026-10-28, in
 the same commit whose §1 made both claims and in which neither was true.)*
-*(Earlier versions of this sentence and the breakdown above listed
-different subsets and different totals; both now match the table in
-§Rough total.)*
+*(Earlier versions of this sentence listed different subsets of what
+remained.)*
 
 **0d is no longer gated on firmware.** It was, for about an hour: the
 counter landed in 0.9.0 (`PulseCounter`, `flowIsr`, `sample_t.inlet_pulses`

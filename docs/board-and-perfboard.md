@@ -135,7 +135,8 @@ use nothing else"; see the retraction below.
 
 † strapping or native-USB, avoid. ‡ **GPIO35-37 are octal-PSRAM internal on
 this N16R8 module** — physically present on the header and unusable; do not
-even probe them.
+even probe them. GPIO33 and 34 are internal too and simply not broken out,
+so the full unusable set is **33–37**, as CLAUDE.md states.
 
 38–42 are the drive allocation, decided 2026-10-29, and 1–2 the first two
 `Q` readbacks, decided 2026-10-30; the last two readbacks are chosen at

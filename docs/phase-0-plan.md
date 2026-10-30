@@ -978,7 +978,8 @@ does not work:
       9-14, 18, 21 and 47, two of which go to the last two `Q` readbacks —
       **38 and 39-42 were on this list until 2026-10-29 and are now the arm
       gate and the four triggers, and 1 and 2 are the first two `Q`
-      readbacks** (CLAUDE.md's drive table) — (35-37 are PSRAM-internal;
+      readbacks** (CLAUDE.md's drive table) — (33-37 are octal-PSRAM
+      internal on this N16R8 module, *"35-37" until 2026-10-30*;
       0, 3, 19, 20, 45, 46 are strapping or native USB; 43/44 are the UART0
       console, which `platformio.ini` names as the fallback flashing port, so
       treat them as spoken for).
@@ -1232,39 +1233,102 @@ does not work:
     2026-10-29: `__pinMode` → `gpio_config()` only, `__digitalWrite` →
     `gpio_set_level()`; the output latch's reset value of 0 is assumed, not
     checked against the ESP32-S3 TRM.)*
-  - **Arm window: capped at 500 ms, and a hang ends it by reset — DECIDED
-    2026-10-30.** Only firmware dropping `R̅` ends an `R_ext`-open HOLD, and
+  - **Arm window: capped at 500 ms by a timer ISR, which a hang cannot
+    stop — DECIDED 2026-10-30.** *("a hang ends it by reset" until review
+    the same day.)* Only firmware dropping `R̅` ends an `R_ext`-open HOLD, and
     the 10 K pull-down cannot win against GPIO38 while it is driven high, so
     a firmware hang in the arm window would hold the lever line past the
-    ~2 s reprogram threshold. Two rules close it. **No code holds GPIO38
+    ~2 s reprogram threshold. Three rules close it. **No code holds GPIO38
     high for more than 500 ms**, one named constant, a choice rather than a
-    measurement. **The loop task is subscribed to the task watchdog, with a
-    1 s timeout and panic on**: a hang then panics and reboots, the reboot
-    leaves GPIO38 an input with no pull, and the 10 K pull-down takes `R̅`
-    low, which is the reset path this section already relies on. Worst case
-    is about the 1 s timeout plus the panic print, under the 2 s threshold.
-    The core's defaults do not do this: on framework-arduinoespressif32
-    3.20017.241212 (`qio_opi` sdkconfig, read 2026-10-30) the task watchdog
-    panics and reboots but times out at **5 s** and watches only CPU0's
-    idle task, and `loopTask` is **not** subscribed (`loopTaskWDTEnabled =
-    false`). So firmware calls `enableLoopWDT()` and re-initialises the
-    watchdog to 1 s. The interrupt watchdog is already 300 ms. *(That a
-    panic reboot returns GPIO38 to its reset state is inferred from it
-    being a system reset, not checked against the ESP32-S3 TRM.)* The
-    watchdog relay above stays an option, as a layer that does not depend
-    on the ESP32 resetting.
+    measurement. <!-- fact:arm-window-cap@1 500 ms -->
+    **Arming starts a one-shot hardware timer whose interrupt drops GPIO38
+    itself** at that cap: the bound is an ISR, not `loop()`,
+    so it holds while `loop()` is hung and does not depend on a panic or a
+    reset. **The loop task is subscribed to the task watchdog for the arm
+    window only** — `esp_task_wdt_add()` when GPIO38 goes high,
+    `esp_task_wdt_delete()` when it drops — as the backstop for a hang the
+    timer cannot see past, such as interrupts disabled (which the 300 ms
+    interrupt watchdog then catches). The global task-watchdog timeout is
+    **left at the core's 5 s**. **The panic path drops GPIO38 before
+    anything else runs**: link with `-Wl,--wrap=esp_panic_handler` and
+    define an `IRAM_ATTR __wrap_esp_panic_handler()` that writes
+    `GPIO_OUT1_W1TC_REG` bit 6 (GPIO38) directly, then calls
+    `__real_esp_panic_handler()`. A register write, not `gpio_set_level()`,
+    because a panic can land with the flash cache disabled. This matters
+    because the core **writes a core dump to flash on every panic**
+    (`CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=1`, and `partitions.csv` carries a
+    64 KB `coredump` partition): erasing and writing it takes hundreds of
+    ms and can take seconds, all with GPIO38 still driven. The dump is
+    kept — it is the evidence for every other crash. *(The wrap is the
+    intended mechanism, not yet built: that `esp_panic_handler` is called
+    across an object boundary in the prebuilt `libesp_system.a`, which
+    `--wrap` needs, is assumed for framework 3.20017.241212 and must be
+    confirmed by a forced panic on the bench with a meter on GPIO38.)*
+
+    **Not the always-on loop watchdog.** A draft of this rule (2026-10-30)
+    subscribed `loopTask` permanently, via `enableLoopWDT()`, with the
+    global timeout cut to 1 s. Review the same day showed that reboots the
+    board on ordinary work: `net.tick()` uploads synchronously from
+    `loop()` with a 3 s connect and 5 s read timeout, so a slow server
+    became a reboot loop; `selftest` blocks `loop()` for up to 30 s by
+    design; and `setup()`, which runs in the same task and starts with
+    `delay(2000)`, would never finish if the watchdog came up early. The
+    1 s global timeout would also have tightened the CPU0 idle-task watch
+    from 5 s to 1 s. For reference, the core's defaults on
+    framework-arduinoespressif32 3.20017.241212 (`qio_opi` sdkconfig, read
+    2026-10-30): the task watchdog panics and reboots, times out at
+    **5 s**, watches only CPU0's idle task, and `loopTask` is **not**
+    subscribed (`loopTaskWDTEnabled = false`); the interrupt watchdog is
+    300 ms. The watchdog relay above stays an option, as a layer that does
+    not depend on the ESP32 at all.
+
+    **A reset is not assumed to release GPIO38 — two rules cover every
+    restart.** A panic restart goes through `esp_restart_noos()` and
+    reports `RTC_SW_CPU_RST`: a **CPU** reset, which is not established to
+    clear the GPIO output state, so GPIO38 could stay driven through the
+    bootloader and into `setup()`. *(A draft of this section called it a
+    "system reset" and inferred the release from that — the wrong reset
+    class, 2026-10-30.)* The panic wrap above already leaves the latch at
+    LOW, which is the disarmed state even if the drive survives. The
+    remaining paths:
+    - **GPIO38 is released in the very first statement of `setup()`** —
+      `pinMode(38, INPUT)`, so the 10 K pull-down takes `R̅` low — before
+      `Serial.begin()` and the `delay(2000)` that follows it.
+    - **An `esp_register_shutdown_handler()` callback drops GPIO38**, which
+      covers every deliberate `esp_restart()`: a CLI reboot, an OTA.
+    A brown-out is a genuine system reset, and there the pull-down does the
+    job unaided.
   - **Each channel's `Q` is read back — DECIDED 2026-10-30.** The series
     pair hides a single open `R_ext`: the machine sees only the overlap of
     both pulses, so one channel holding for the whole arm window looks like
     a normal press until a second fault turns it into a real hold. So each
     `Q` goes through **1 K** into a GPIO input (GPIO1, GPIO2 and two of
-    9-14, 18, 21, 47, chosen at layout). Firmware times every pulse: a `Q`
-    still high past the expected width means drop `R̅`, flag the channel and
-    refuse to arm again. **At boot each channel is fired alone and timed**,
-    which one channel cannot turn into a press while its series partner is
-    healthy; that catches an open `R_ext` and an open or leaky `C_ext`
-    before the first real press. If the partner is shorted, the lone fire
-    is a press, which is the per-device test's accepted alarm. `Q` is our
+    9-14, 18, 21, 47, chosen at layout). Firmware times every pulse **by
+    edge interrupt, never by polling**: a `CHANGE` interrupt on each
+    readback pin stamps both edges with `esp_timer_get_time()` (µs), the
+    same pattern as the flowmeter's GPIO6 interrupt. `loop()`'s 42–57 ms
+    poll gaps would misread a ~120 ms pulse by up to ±57 ms and never see
+    the tens-of-ns pulse of an open `C_ext`. **No rising edge, or a width
+    below the minimum, is a fail**; a `Q` still high past the expected
+    width means drop `R̅`, flag the channel and refuse to arm again. *(That
+    the S3's GPIO edge latch catches a tens-of-ns pulse is assumed;
+    `drivetest` with `C_ext` pulled is the bench check.)* **Each channel is fired alone and timed by a
+    deliberate CLI command, `drivetest`, never automatically at boot.** A
+    lone fire cannot become a press while its series partner is healthy,
+    and it catches an open `R_ext` and an open or leaky `C_ext` before the
+    first real press. If the partner is shorted, the lone fire **is** a
+    press — acceptable only with the operator at the machine:
+    - **`drivetest` refuses unless the machine is idle**: the display not in
+      timer mode and every lever line low, the same entry check `selftest`
+      makes.
+    - **Firmware refuses to arm until every channel has passed.** The pass
+      is stored in NVS with the firmware version; a new version, or any
+      runtime `Q` fault, clears it. Ordinary reboots do not.
+    *(A draft of this bullet, 2026-10-30, fired every channel at every
+    boot and called the shorted-partner press "the per-device test's
+    accepted alarm". That acceptance belonged to an attended bench test; at
+    boot it was an unattended press on every reboot — mid-shot, it stops
+    the shot, and in a reboot loop it presses on every pass.)* `Q` is our
     3.3 V logic, not a machine net, so invariant 1 is not touched.
 
   CLAUDE.md's GPIO table carries the pin, the idle-state rule and the three

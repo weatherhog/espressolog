@@ -776,8 +776,10 @@ you the firmware agrees.
 **DRIVE side — DECIDED 2026-10-29, nothing in firmware yet.** **One channel
 per photoMOS — four channels, two dual `CD74HC221E`** (ten bought). The
 pins rest on one layout fact: **positions 4–10 of the OPPOSITE header column
-are `GPIO1, 2, 42, 41, 40, 39, 38` — all free, none strapping, directly
-across from the seven sense taps.** Sense on one side of the devkit, drive on
+are `GPIO1, 2, 42, 41, 40, 39, 38` — all free and none strapping when the
+drive side was decided, directly across from the seven sense taps.** 38–42
+are now drive and 1–2 the first two `Q` readbacks *("all free" until
+2026-10-30)*. Sense on one side of the devkit, drive on
 the other — which separates logic nets from sense nets and **says nothing
 about where pos 1 runs** *(a draft called it "the segregation the pos-1 rule
 asks for"; that rule is about the +5 V conductor, which never reaches a
@@ -792,10 +794,11 @@ table and the plan together**, as with the sense pins.
 | trigger — 2Cup, photoMOS 1 | **40** | |
 | trigger — 2Cup, photoMOS 2 | **39** | |
 | **arm gate** | **38** | **the '221's own `R` (reset) input, tied across all four channels, held high to arm; external 10 K pull-down; `B` tied to 3V3.** No external AND. *(`B` until later on 2026-10-29.)* |
-| **`Q` readback ×4** | **1, 2** + two of 9–14, 18, 21, 47 | each channel's `Q` through **1 K** series into an input; firmware times every pulse and a boot self-test fires each channel alone. The last two pins are chosen at layout. *(Added 2026-10-30.)* |
+| **`Q` readback ×4** | **1, 2** + two of 9–14, 18, 21, 47 | each channel's `Q` through **1 K** series into an input; firmware times every pulse **by edge interrupt, never by polling** (`loop()`'s 42–57 ms gaps cannot see an open-`C_ext` pulse), and **`drivetest`** — a CLI command, machine idle, **never automatic at boot** — fires each channel alone; nothing arms until all four have passed. The last two pins are chosen at layout. *(Added 2026-10-30.)* |
 
-**The rules a layout acts on — all DATASHEET grade since 2026-10-29
-(TI SCHS166F; ESP32-S3 Series Datasheet v2.2):**
+**The rules a layout acts on — DATASHEET grade since 2026-10-29
+(TI SCHS166F; ESP32-S3 Series Datasheet v2.2) unless a bullet says
+otherwise:**
 
 - **`A` idles HIGH through external pull-ups, never firmware ones.** The
   '221 also fires on `R` rising with `A` low and `B` high, and the ESP32-S3
@@ -805,9 +808,19 @@ table and the plan together**, as with the sense pins.
 - **Arm on `R`, not `B`: `R` low ends a running pulse, `B` low does not.**
   Same zero parts. A `Q` stuck high by internal failure is bounded by
   neither and is on the plan's known-unmitigated list.
-- **The arm window is capped at 500 ms, and a hang ends it by reset.** The
-  loop task is subscribed to the task watchdog at 1 s, panic on; the core
-  defaults (5 s, loop task unwatched) do not do this.
+- *DECIDED 2026-10-30, not datasheet grade.* **The arm window is capped at
+  500 ms by a hardware-timer ISR that drops GPIO38 itself**, so the cap <!-- fact:arm-window-cap@1 500 ms -->
+  holds while `loop()` is hung. The loop task
+  joins the task watchdog **for the arm window only**, as a backstop; the
+  global timeout stays at the core's 5 s. **Never subscribe `loopTask`
+  permanently** — uploads and `selftest` block `loop()` for seconds, and a
+  draft that did this turned a slow server into a reboot loop
+  (2026-10-30). A panic restart is a **CPU** reset, not established to
+  release GPIO38, and every panic writes a **core dump to flash** first, so
+  a wrapped panic handler drops GPIO38 by direct register write **before**
+  the dump — intended, not yet bench-confirmed. **GPIO38 is released in the
+  first statement of `setup()`**, and a shutdown handler drops it on every
+  `esp_restart()`.
 - **Timing RC: 2-pin headers for the bench sweep, SOLDERED for the build,
   never a socket in service.** An intermittent `R_ext` is a **HOLD**, an
   open `C_ext` a pulse too short to latch; the pair is soldered **before any

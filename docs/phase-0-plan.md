@@ -530,7 +530,9 @@ Brew-by-weight needs **1Cup and 2Cup** only — the board latches, so one pulse
 starts and a second stops. Steam and Hot Water gain nothing and double both
 the parts and the failure surface. **Sense all four, drive two.**
 
-**Two dual 74HC221** and **four photoMOS** — two in series per driven line,
+**Two dual 74HC221** for the drive channels, **plus a third for the
+arm-window gate** (proposed 2026-10-30, footprint reserved), and **four
+photoMOS** — two in series per driven line,
 decided 2026-10-12, one '221 channel per photoMOS, decided 2026-10-29; see the
 failure analysis above. **Phase 1 needs a separate drive path per photoMOS**
 for the per-device test. **Costed since 2026-10-29**: the driver transistors
@@ -618,7 +620,9 @@ The J2 pattern this entry calls "unchanged" is **two in series per driven
 contact** — that series pair is the whole answer to a photoMOS failing short.
 Two buttons therefore need **four devices, consuming all four spares** on the
 current order, plus **four more one-shot channels**, where a dual '221 gives
-two. Two '221s are on the board and cover the levers; the buttons would need
+two. Two '221s are on the board and cover the levers — plus a third for the
+proposed arm-window gate, whose spare channel is not a drive channel; the
+buttons would need
 two more chips, four more trigger GPIOs and the board space for both, none of
 which is allocated — the chips are held (ten bought), the rest is not. *(This
 said "Three '221s are on the order and cover the levers" until 2026-10-29 —
@@ -1253,7 +1257,12 @@ does not work:
     `gpio_set_level()`; the output latch's reset value of 0 is assumed, not
     checked against the ESP32-S3 TRM.)*
   - **Arm window: bounded in HARDWARE by a third '221 channel, the GATE —
-    DECIDED 2026-10-30.** *(Two drafts the same day bounded it in firmware
+    PROPOSED 2026-10-30, NOT DECIDED.** Three fresh reviews in one day each
+    found design errors in this and the two bullets below; the open ones
+    are listed under "OPEN — the gate, readback and `drivetest`". **What
+    the layout acts on is only the footprint**: a third DIP-16 for the gate,
+    its RC, its pulls and its two pins. The behaviour is a proposal until
+    the bench sweep supplies the numbers it depends on. *(Two drafts the same day bounded it in firmware
     instead — first a permanent 1 s loop watchdog, then a timer ISR plus a
     per-window watchdog, a panic-handler wrap and a shutdown handler. Two
     fresh reviews found the firmware layers either rebooted the board on
@@ -1355,7 +1364,8 @@ does not work:
     The watchdog relay above stays an option, as a layer that does not
     depend on the ESP32 at all.
   - **Every `Q` is read back — the four drive channels and the gate —
-    DECIDED 2026-10-30.** The series pair hides a single open `R_ext`: the
+    PROPOSED 2026-10-30.** The 1 K and the five input pins are the layout
+    part; the check below is a proposal. The series pair hides a single open `R_ext`: the
     machine sees only the overlap of both pulses, so one channel holding for
     the whole arm window looks like a normal press until a second fault
     turns it into a real hold. So each `Q` goes through **1 K** into a GPIO
@@ -1377,24 +1387,32 @@ does not work:
     check drops GPIO38, latches the fault **in RAM** and refuses to arm
     until reboot; the fault reaches flash only when the machine is quiet,
     with the next upload, never mid-shot.
-  - **`drivetest` fires each channel alone, the gate included — on the
-    FIRST actuation request after every boot, and on command. Never
-    automatically at boot.** Running it on the first request means someone
-    has just asked for a press, so it is attended by construction. It
-    checks two things on every lone fire:
+  - **`drivetest` — PROPOSED 2026-10-30, with known defects listed under
+    OPEN below.** It fires each channel alone, the gate included — on the
+    first actuation request after every boot, and on command, never
+    automatically at boot. *(This said the first request made it "attended
+    by construction"; a Phase 1 request can come from a Home Assistant
+    automation with nobody at the machine, so it is not.)* It checks two
+    things on every lone fire:
     - **the `Q` window**, as above — the '221 and its RC;
     - **the direction's J2 sense line stays LOW for the whole fire** — the
       per-device test this exists for ("energise device 1's LED alone — the
       line must stay low", under *two photoMOS in series per driven line* above). The `Q` window
       cannot see a shorted photoMOS; only the sense line can. It is sampled
       **raw** (GPIO7 for 1Cup, GPIO15 for 2Cup) by the same IRAM timer,
-      not through `SwitchBank`'s two-poll debounce, which needs ~100 ms of
-      agreement and would miss a ~120 ms pulse.
+      not through `SwitchBank`, whose confirmation needs two consecutive
+      polls to agree (`DEBOUNCE_MS` = 20 ms, `machine_io.h`) at a loop that
+      runs every 42–57 ms, and still lost 2 of 6 80–90 ms presses on
+      2026-10-19. *(This gave "~100 ms of agreement" until review the same
+      day; the conclusion stood, the number did not.)*
 
     **On the first sense-line HIGH, `drivetest` aborts**: drops GPIO38,
     latches the fault in RAM, fires nothing more, and tells the operator
-    that the shorted partner's lone fire **was** a press, which direction,
-    and to stop the cycle at the lever. So a shorted partner costs at most
+    that the lone fire **was** a press, which direction, and to stop the
+    cycle at the lever — and that the suspect is the **partner** of the
+    channel just fired, which is the healthy one. *(This said "the shorted
+    partner's lone fire" until review, which reads as blaming the device
+    that was fired.)* So a shorted partner costs at most
     one unwanted press, made while someone is standing there. **If every
     lone fire passes, no press happened, and the request that triggered
     the test is then carried out.** *(A draft the same day did not carry
@@ -1429,10 +1447,11 @@ does not work:
     low", was described as `selftest`'s when `selftest` checks neither,
     and could not see a latched hot-water draw.)* `Q` and the gate are our
     3.3 V logic, not machine nets, so invariant 1 is not touched.
-  - **OPEN — the gate's timing, for the bench sweep (recorded 2026-10-30,
-    not settled on paper).** Three drafts of this design went wrong in one
-    day by deciding timing before anything was measured; these wait for the
-    drive channels' RC to be chosen:
+  - **OPEN — the gate, readback and `drivetest`, for the bench sweep
+    (recorded 2026-10-30, not settled on paper).** Four drafts of this
+    design went wrong in one day, mostly by deciding behaviour before
+    anything was measured. The gate's timing waits for the drive channels'
+    RC to be chosen:
     - **A minimum gap between gate pulses.** Each window is bounded; the
       gap between windows is not, so runaway firmware can chain them into
       one press past ~2 s. Candidates: a second '221 stage or an RC
@@ -1441,19 +1460,58 @@ does not work:
     - **The margin ordering**: drive `t_max` sample < gate minimum width;
       gate maximum width ≤ 500 ms < gate `t_max` sample < firmware ISR cap
       < ~2 s. Every value in it is unchosen.
-    - **The gate RC values.** No ordered pair is known to reach a gate
-      longer than the drive pulse: the drive sweep's 330 K / 470 K against
-      470 nF–1 µF tops out near 329 ms at `0.7 R C` (and that formula is
-      the 4.5 V one). If the sweep picks a long drive pulse, the gate needs
-      parts not yet bought.
+    - **The gate RC values.** The drive sweep's ordered 330 K / 470 K
+      against 470 nF–1 µF spans roughly 109–329 ms at `0.7 R C` (the 4.5 V
+      formula). A drive choice below the top of that range leaves an ordered
+      pair long enough for the gate; **only if the sweep picks a drive pulse
+      near the top does the gate need parts not yet bought.** *(This said
+      "no ordered pair is known to reach a gate longer than the drive
+      pulse" until review the same day — false as written.)*
     - **A gate `R_ext` that fails in service stays hidden until the next
       boot**, because every normal arm ends the gate early and `drivetest`
       runs once per boot. The board runs for weeks, so the first of the
       "two independent faults" can sit latent. Options: re-time the gate,
       alone and unloaded, on a schedule while the machine is idle.
+    - **`t_min` is not tied to the latching press width.** The window only
+      requires `Q` high at `t_min`; a `C_ext` drifting the pulse below the
+      machine's latch threshold (unmeasured, under ~140 ms) still passes —
+      the silent too-short failure CLAUDE.md warns about. `t_min` has to
+      sit above the measured threshold, which the bench has not measured.
 
-  CLAUDE.md's GPIO table carries the pin, the idle-state rule and the three
-  parts.
+    `drivetest`'s sense check, from the third review (2026-10-30) — each a
+    defect in the proposal above, not yet designed out:
+    - **A half-failed photoMOS can press while the sense line reads LOW.**
+      This file's own half-failure analysis (*two photoMOS in series per
+      driven line*) puts the machine line at ~3.6–4.2 V, which the machine
+      reads as a press, and the divided ESP32 pin at ~2.14–2.50 V against a
+      2.475 V V_IH — graded INDETERMINATE there. A digital read cannot
+      settle it; an ADC read or a lower threshold might.
+    - **No positive control.** A dead sense path reads LOW, the same as a
+      pass — J2 has no ground of its own, so with J5 and J4 unplugged the
+      line is stuck low, and an open series leg does the same. The test has
+      to prove the line can read HIGH before trusting a LOW.
+    - **Discrete samples cannot show "LOW for the whole fire".** A press
+      rising after the photoMOS turn-on delay and falling before the next
+      sample is missed. It needs continuous sampling across the pulse, or a
+      latched edge on the sense GPIO.
+    - **It refuses in the normal first-request states.** The detector is
+      ARMED whenever a cup is on the scale, and a brew-by-weight stop
+      arrives mid-shot with `machineBusy()` true — so the first actuation
+      after any reboot fails, and a stop press lets the shot run to the
+      stored timer.
+    - **Once per boot is not "periodic"**, which the per-device test above
+      asks for, and a RAM-only fault latch forgets a failed part on any
+      reset — opening the serial monitor is one.
+    - **The GPIO18 exclusion's rationale is weak**: the power-up glitch
+      occurs while the '221 is itself in power-on reset, so it cannot meet
+      "a CPU reset leaving GPIO38 high". And the "safe" set 9–14, 21, 47
+      was not checked against the ESP32-S3 power-up glitch table. Kept as a
+      cheap precaution, not as a derived rule.
+
+  CLAUDE.md's GPIO table carries the pins — the four triggers, the gate
+  enable and trigger, the five readbacks — and the idle-state rule; this
+  section carries the parts. *(Said "the pin, the idle-state rule and the
+  three parts" until 2026-10-30, a count from before the gate.)*
 
   **GPIO39–42 are the JTAG pads and are plain GPIO here — DATASHEET grade,
   ESP32-S3 Series Datasheet v2.2, §2 pin table and §3.4 Table 3-5, read

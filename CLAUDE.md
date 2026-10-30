@@ -37,7 +37,7 @@ the thing you do not know yet.
 | **believe a flowmeter pulse count** | `docs/flowmeter-j4.md` | counts are **~5× the datasheet and UNRESOLVED** — and the 5× itself divides by an **assumed** inlet |
 | **plan a flowmeter experiment** | `docs/flowmeter-j4.md` | **0d-i first** (weigh the split). And check whether the operator already does it every morning — three for three so far |
 | **compare flow data across sessions** | `docs/flowmeter-j4.md` | the **OPV is adjustable state and nothing records it** — invariant-5 class |
-| **pick a free GPIO, or drill the perfboard** | `docs/board-and-perfboard.md` | **GPIO48 is the LED, GPIO38 is the gate enable, 39–42 are the triggers, 1 and 2 are `Q` readbacks — free: 9–14, 18, 21, 47, four of them owed to three more readbacks and the gate trigger**; GPIO33–37 unusable; 5Vin at position 21 beside GND at 22 is a **solder hazard** |
+| **pick a free GPIO, or drill the perfboard** | `docs/board-and-perfboard.md` | **GPIO48 is the LED, GPIO38 is the (proposed) gate enable, 39–42 are the triggers, 1 and 2 are `Q` readbacks — free: 9–14, 18, 21, 47, four of them owed to three more readbacks and the gate trigger**; GPIO33–37 unusable; 5Vin at position 21 beside GND at 22 is a **solder hazard** |
 | **lay out the perfboard — what connects to what** | `docs/phase-0-plan.md` §*Topology, per actuated line* and §*Two things that bound the firmware-side failures*; then `docs/board-and-perfboard.md` for the header | sense: **seven shunts, nine resistors**, series legs in the T-pieces; drive: **3 × '221 (two drive, one arm-window gate), 4 × AQY212EH (two series pairs), 4 × BC547, three OPEN jumpers** — pins, pulls and the arm gate are in the DRIVE table below; **J2 has no ground**; **keep the two jumper fields apart**; **AQY pin 1 = LED anode**, the only polarity to get wrong |
 | **tee into the water circuit** | `docs/hydraulics.md` | everything is 1/8, the **gauge end cannot be teed**, there are **no spare ports**, and **whether invariant 1 covers plumbing is UNDECIDED** |
 | **work out what has actually been built and bench-tested** | `docs/phase-0-status.md` | the bench record and the resume point |
@@ -775,7 +775,7 @@ you the firmware agrees.
 
 **DRIVE side — DECIDED 2026-10-29, nothing in firmware yet.** **One channel
 per photoMOS — four channels, two dual `CD74HC221E`, plus a third for the
-arm-window gate** (ten bought). The
+arm-window gate, PROPOSED — footprint reserved** (ten bought). The
 pins rest on one layout fact: **positions 4–10 of the OPPOSITE header column
 are `GPIO1, 2, 42, 41, 40, 39, 38` — all free and none strapping when the
 drive side was decided, directly across from the seven sense taps.** 38–42
@@ -816,7 +816,8 @@ otherwise:**
   gap between windows**, and its timing, the `Q` checks and `drivetest`
   are **OPEN** pending the bench sweep (`docs/phase-0-plan.md`, "OPEN —
   the gate, readback and `drivetest`"). **Never subscribe `loopTask` to
-  the task watchdog**: uploads and `selftest` block `loop()` for seconds.
+  the task watchdog permanently**: uploads and `selftest` block `loop()`
+  for seconds.
 - **Timing RC: 2-pin headers for the bench sweep, SOLDERED for the build,
   never a socket in service.** An intermittent `R_ext` is a **HOLD**, an
   open `C_ext` a pulse too short to latch; the pair is soldered **before any
@@ -836,7 +837,7 @@ conclusions only *(trimmed later on 2026-10-29)*.
 
 **THE ONBOARD RGB LED IS ON GPIO48, SO GPIO38 IS NOT THE LED** *("so GPIO38
 is free" until 2026-10-29 — free of the LED, which it still is; the drive
-table above has since spent it on the arm gate — since 2026-10-30 the gate
+table above has since spent it on the arm gate — since 2026-10-30 the proposed gate
 *enable*, the gate '221's `R̅`, not the drive channels' reset)*. Espressif put it on
 48 on v1.0 and 38 on v1.1 and both revisions are sold, so this had to be
 measured; it was, 2026-10-15, by a two-point test against `status`. **This

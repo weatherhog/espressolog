@@ -6,7 +6,7 @@
 >
 > **CLAUDE.md carries** the live conclusions in its GPIO-budget section: the
 > board check is done, GPIO48 is the LED so GPIO38 is not (it is the arm gate
-> since 2026-10-29 — the gate *enable*, the gate '221's `R̅`, since 2026-10-30), Espressif's
+> since 2026-10-29 — the proposed gate *enable*, the gate '221's `R̅`, since 2026-10-30), Espressif's
 > published v1.1 layout is correct for this clone, the seven taps are
 > contiguous at positions 4–10 with 3V3 at 1 and GND at 22, 5Vin-beside-GND
 > is a solder hazard, no tap draws from 3V3, 2.54 mm pitch, 10-pitch row
@@ -119,7 +119,7 @@ use nothing else"; see the retraction below.
 | **7** | **GPIO7** — 1Cup | | **GPIO41** — trigger, 1Cup photoMOS 2 |
 | **8** | **GPIO15** — 2Cup | | **GPIO40** — trigger, 2Cup photoMOS 1 |
 | **9** | **GPIO16** — Steam | | **GPIO39** — trigger, 2Cup photoMOS 2 |
-| **10** | **GPIO17** — Hot Water | | **GPIO38** — gate enable (gate '221 `R̅`) |
+| **10** | **GPIO17** — Hot Water | | **GPIO38** — gate enable, proposed (gate '221 `R̅`) |
 | 11 | GPIO18 | | GPIO37 ‡ |
 | **12** | **GPIO8** — selftest | | GPIO36 ‡ |
 | 13 | GPIO3 † | | GPIO35 ‡ |
@@ -139,7 +139,7 @@ even probe them. GPIO33 and 34 are internal too and simply not broken out,
 so the full unusable set is **33–37**, as CLAUDE.md states.
 
 38–42 are the drive allocation, decided 2026-10-29 — 38 became the
-**gate enable** on 2026-10-30 — and 1–2 the first two `Q` readbacks,
+**gate enable** on 2026-10-30, proposed, footprint reserved — and 1–2 the first two `Q` readbacks,
 decided 2026-10-30; the gate trigger and the last three readbacks are
 chosen at layout (CLAUDE.md's DRIVE table; `docs/phase-0-plan.md`, "An arm gate").
 None is named in `main.cpp` yet.
@@ -147,7 +147,7 @@ None is named in `main.cpp` yet.
 ◆ **THE ONBOARD RGB LED IS ON GPIO48 — SETTLED 2026-10-15 BY A TWO-POINT
 TEST. So GPIO38 is NOT the LED** *(this said "is FREE" until 2026-10-29 — it
 was, and CLAUDE.md's drive table has since spent it on the '221 arm gate —
-the gate *enable* since 2026-10-30, not the drive channels' reset)*.
+the proposed gate *enable* since 2026-10-30, not the drive channels' reset)*.
 Espressif put it on **GPIO48 on v1.0 and GPIO38 on
 v1.1** and both revisions are sold, so this had to be measured. Open since
 2026-10-12.

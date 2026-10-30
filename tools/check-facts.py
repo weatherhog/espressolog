@@ -179,7 +179,8 @@ REQUIRED = {
     "j4-plus-readonly":    {"min_files": 2, "claude_md": True},
     # The arm-window cap. Tagged 2026-10-30 on a safety design still marked
     # PROPOSED; the number is what keeps a hold under the ~2 s reprogram
-    # threshold, so losing one copy's tag must fail the build.
+    # threshold, so losing one copy's tag must fail the build. If the bench
+    # sweep drops the gate, remove this entry with the tags.
     "arm-window-cap":      {"min_files": 2, "claude_md": True},
     # The photoMOS LED-drive resistor. Tagged 2026-10-19 after two review
     # rounds each found a surviving "330 or 390" / unqualified "guaranteed

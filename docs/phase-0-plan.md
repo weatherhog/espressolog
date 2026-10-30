@@ -623,7 +623,10 @@ current order, plus **four more one-shot channels**, where a dual '221 gives
 two. Two '221s are on the board and cover the levers — plus a third for the
 proposed arm-window gate, whose spare channel is not a drive channel; the
 buttons would need
-two more chips, four more trigger GPIOs and the board space for both, none of
+two more chips, four more trigger GPIOs — **eight pins if each channel gets
+a `Q` readback like the levers', against five free after the proposed gate
+and readbacks, so the GPIO budget would then bind** — and the board space
+for both, none of
 which is allocated — the chips are held (ten bought), the rest is not. *(This
 said "Three '221s are on the order and cover the levers" until 2026-10-29 —
 three was an estimate, never ordered.)* That is the real cost, and it is why
@@ -991,7 +994,7 @@ does not work:
       **GPIO38 IS NOT THE LED AND GPIO48 IS SPENT — measured 2026-10-15**
       *("GPIO38 IS FREE" until 2026-10-29: free of the LED, which it still is;
       no longer unallocated, since the drive table spent it on the arm gate
-      — and since 2026-10-30 it is the gate *enable*, the gate '221's `R̅`,
+      — and since 2026-10-30 it is the proposed gate *enable*, the gate '221's `R̅`,
       not the drive channels' reset)*,
       closing
       the "38 or 48 depending on board revision" hedge this list carried from
@@ -1015,7 +1018,7 @@ does not work:
       '221s.** A dual '221 gives two, enough for one per *line*; the
       per-device test this passage argues for needs one per *device*, so two
       chips. Ten `CD74HC221E` were bought (Reichelt, 2026-10-27), so stock is
-      not a constraint either. **A third chip carries the arm-window gate
+      not a constraint either. **A third chip carries the proposed arm-window gate
       (2026-10-30)** — one channel, the other spare; see "Arm window".
       *(This read "a second '221 or a different
       gating scheme is unpriced; three are on the order" until 2026-10-29 —
@@ -1158,13 +1161,16 @@ does not work:
   `R` takes the timing-circuit failures off the AND's side of the ledger for
   free.
 
-  **AMENDED 2026-10-30: `R` is still the arm line, but a GPIO no longer
-  drives it.** The tied `R̅` net is driven by the `Q` of a third '221
-  channel, the **gate**, and GPIO38 enables the gate. The row above says
-  the HOLD is bounded to the arm window "provided firmware disarms
-  unconditionally"; the gate removes that proviso — its own RC ends the
-  window whatever firmware does. See "Arm window" under the pull rules
-  below.
+  **PROPOSED 2026-10-30, not decided: drive the tied `R̅` net from the
+  `Q` of a third '221 channel, the gate, with GPIO38 enabling the gate.**
+  The row above says the HOLD is bounded to the arm window "provided
+  firmware disarms unconditionally"; the gate would bound **each window**
+  without that proviso, but not the gap between windows, and an open gate
+  `R_ext` falls back to firmware. It also costs something the GPIO-driven
+  net did not: a gate `Q` stuck high arms all four channels with no
+  firmware disarm. See "Arm window" and its OPEN block below. *(Headed
+  "AMENDED" and said the gate's RC "ends the window whatever firmware
+  does" until review the same day.)*
 
   **The datasheet facts this rests on — DATASHEET grade, TI SCHS166F
   (CD54HC221 / CD74HC221 / CD74HCT221, Nov 1997, rev Oct 2003), read
@@ -1238,7 +1244,7 @@ does not work:
     the gate chip pulled. Disarmed at power-on, after a system reset, and
     with the devkit pulled from its headers. **Not necessarily after a
     panic**: a panic restart is a CPU reset that may leave GPIO38 driven
-    high, which no pull-down overrides — there it is the gate's own RC that
+    high, which no pull-down overrides — there it would be the proposed gate's own RC that
     disarms.
   - **`B` tied directly to 3V3, all four channels and the gate** — a Schmitt input that
     must not float; a permanent high.
@@ -1250,8 +1256,11 @@ does not work:
     not the level, so the reverse order can drive `A̅` low for an instant —
     which per SCHS166F fires an armed channel or primes a disarmed one for
     the next `R̅` rise. The external 10 K pull-ups do not cover this: a GPIO
-    actively driving low overrides them. **Never raise `R̅` without first
-    reading all five `A̅` lines high** *(four until the gate, 2026-10-30)*. *(Core behaviour read from
+    actively driving low overrides them. **Never let `R̅` rise without first
+    reading every `A̅` it gates high** — with the proposed gate, the drive
+    `R̅` rises when the gate fires, so the four drive `A̅` lines are read
+    immediately before the gate trigger, and the gate's own `A̅` before
+    raising GPIO38. *(Core behaviour read from
     `esp32-hal-gpio.c`, framework-arduinoespressif32 3.20017.241212,
     2026-10-29: `__pinMode` → `gpio_config()` only, `__digitalWrite` →
     `gpio_set_level()`; the output latch's reset value of 0 is assumed, not
@@ -1279,14 +1288,15 @@ does not work:
       Its `A̅` is a new GPIO, the **gate trigger** — 10 K pull-up to 3V3,
       pulse low to fire, the same idle-high rule as the four drive `A̅`
       lines. Its `B` is tied to 3V3. Its `R̅` is **GPIO38**, now the **gate
-      enable**, with the 10 K pull-down that used to sit on the arm line.
-      Its `Q` drives the four drive channels' tied `R̅` net, which **keeps
-      its own 10 K pull-down**, so the net is low with the gate chip pulled
-      from its socket.
+      enable**, with **a new 10 K pull-down of its own**. Its `Q` drives
+      the four drive channels' tied `R̅` net, which **keeps the existing
+      10 K pull-down** — two pull-downs, nothing moved — so the net is low
+      with the gate chip pulled from its socket (but see the readback
+      caveat in OPEN).
     - **Channel 2 of that chip is spare, terminated**: `A̅` high, `B` low,
       `R̅` low, as SCHS166F requires of unused inputs.
-    - **Arming is**: read all five `A̅` lines high → raise GPIO38 (inert:
-      the gate's `A̅` is high) → pulse the gate trigger low → the gate's `Q`
+    - **Arming is**: read the gate's `A̅` high → raise GPIO38 (inert) →
+      read the four drive `A̅` lines high → pulse the gate trigger low → the gate's `Q`
       goes high and arms the four channels → fire the drive triggers →
       **wait until every drive channel's `t_max` sample has been taken,
       plus margin** → drop GPIO38, which ends the gate pulse early.
@@ -1358,7 +1368,7 @@ does not work:
       CPU0's idle task; `loopTask` is not subscribed; the interrupt
       watchdog is 300 ms; every panic writes a core dump to a 64 KB flash
       partition; a panic restart is a CPU reset, `RTC_SW_CPU_RST`. Do not
-      subscribe `loopTask` permanently: `net.tick()` uploads synchronously
+      subscribe `loopTask` to the task watchdog permanently: `net.tick()` uploads synchronously
       with a 3 s connect and 5 s read timeout, and `selftest` blocks for up
       to 30 s.)*
     The watchdog relay above stays an option, as a layer that does not
@@ -1502,6 +1512,27 @@ does not work:
     - **Once per boot is not "periodic"**, which the per-device test above
       asks for, and a RAM-only fault latch forgets a failed part on any
       reset — opening the serial monitor is one.
+    - **The 1 K readback can drive a `Q` node with its '221 pulled.**
+      Pulling a '221 from its socket is a deliberate third disable, and it
+      leaves each `Q` node driven only by its readback pin through 1 K. A
+      readback pin made an output and driven HIGH (a `pinMode` slip, a
+      firmware fault) then feeds a drive channel's BC547 base through its
+      8.2 K — a bare-GPIO drive with no one-shot bound — or pulls the gate's
+      tied `R̅` net to ~3.0 V against its 10 K pull-down, arming all four.
+      With the chip fitted the push-pull `Q` wins, and the open output
+      jumpers still block conduction in Phase 0. The series value and the
+      tap point are layout decisions: a series resistor well above the base
+      and pull-down impedances would close it, if the readback's input
+      timing allows. *(Inferred from circuit reasoning, review 2026-10-30;
+      the drive-channel half predates the gate.)*
+    - **A stuck-high gate `Q` removes the disarm path for every channel.**
+      With GPIO38 on the tied `R̅` net, firmware could always disarm. With
+      the gate in between, one internal fault in the gate chip holds all
+      four channels armed, and dropping GPIO38, the pull-downs, a failed
+      `Q` check and `drivetest`'s abort all do nothing. Before the gate, a
+      stuck `Q` cost one channel. This weighs on whether to keep the gate
+      at all or return GPIO38 to the net directly — the footprint is
+      reserved so that either can be built.
     - **The GPIO18 exclusion's rationale is weak**: the power-up glitch
       occurs while the '221 is itself in power-on reset, so it cannot meet
       "a CPU reset leaving GPIO38 high". And the "safe" set 9–14, 21, 47

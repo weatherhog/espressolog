@@ -6,7 +6,7 @@
 >
 > **CLAUDE.md carries** the live conclusions in its GPIO-budget section: the
 > board check is done, GPIO48 is the LED so GPIO38 is not (it is the arm gate
-> since 2026-10-29), Espressif's
+> since 2026-10-29 — the gate *enable*, the gate '221's `R̅`, since 2026-10-30), Espressif's
 > published v1.1 layout is correct for this clone, the seven taps are
 > contiguous at positions 4–10 with 3V3 at 1 and GND at 22, 5Vin-beside-GND
 > is a solder hazard, no tap draws from 3V3, 2.54 mm pitch, 10-pitch row
@@ -146,7 +146,8 @@ None is named in `main.cpp` yet.
 
 ◆ **THE ONBOARD RGB LED IS ON GPIO48 — SETTLED 2026-10-15 BY A TWO-POINT
 TEST. So GPIO38 is NOT the LED** *(this said "is FREE" until 2026-10-29 — it
-was, and CLAUDE.md's drive table has since spent it on the '221 arm gate)*.
+was, and CLAUDE.md's drive table has since spent it on the '221 arm gate —
+the gate *enable* since 2026-10-30, not the drive channels' reset)*.
 Espressif put it on **GPIO48 on v1.0 and GPIO38 on
 v1.1** and both revisions are sold, so this had to be measured. Open since
 2026-10-12.

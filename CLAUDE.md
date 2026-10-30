@@ -795,8 +795,8 @@ table and the plan together**, as with the sense pins.
 | trigger — 2Cup, photoMOS 1 | **40** | |
 | trigger — 2Cup, photoMOS 2 | **39** | |
 | **gate enable** | **38** | the **gate** '221 channel's `R̅`; external 10 K pull-down. The gate's `Q` drives the four drive channels' tied `R̅` (reset) net, which keeps its own 10 K pull-down; `B` tied to 3V3 on all five. No external AND. *(GPIO38 drove the tied `R̅` net directly until 2026-10-30; `B` until later on 2026-10-29.)* |
-| **gate trigger** | one of 9–14, 18, 21, 47 | the gate's `A̅`; **10 K pull-up**, pulse low to fire. Chosen at layout. *(Added 2026-10-30.)* |
-| **`Q` readback ×5** | **1, 2** + three of 9–14, 18, 21, 47 | each drive channel's `Q` and the gate's, through **1 K** into an input; checked as a **window** — high at `t_min`, low at `t_max` — never by polling. **`drivetest`** fires each channel alone, gate included, on the **first actuation request after every boot** with the machine idle — never automatically at boot; the pass is **RAM only**. The last three pins are chosen at layout. *(Added 2026-10-30.)* |
+| **gate trigger** | one of 9–14, 21, 47 — **not 18** | the gate's `A̅`; **10 K pull-up**, pulse low to fire. Not 18: GPIO15–18 pulse low at power-up, and a falling `A̅` fires the gate. Chosen at layout. *(Added 2026-10-30.)* |
+| **`Q` readback ×5** | **1, 2** + three of 9–14, 18, 21, 47 | each drive channel's `Q` and the gate's, through **1 K** into an input; checked as a **window** — high at `t_min`, low at `t_max` — never by polling. **`drivetest`** fires each channel alone, gate included, on the **first actuation request after every boot** with the machine idle — never automatically at boot; each lone fire must also leave the **J2 sense line LOW** (the only check that sees a shorted partner), and the first HIGH aborts; the pass is **RAM only**. The last three pins are chosen at layout. *(Added 2026-10-30.)* |
 
 **The rules a layout acts on — DATASHEET grade since 2026-10-29
 (TI SCHS166F; ESP32-S3 Series Datasheet v2.2) unless a bullet says
@@ -811,14 +811,18 @@ otherwise:**
   Same zero parts. A `Q` stuck high by internal failure is bounded by
   neither and is on the plan's known-unmitigated list.
 - *DECIDED 2026-10-30, not datasheet grade.* **The arm window is bounded
-  in HARDWARE: the gate's own RC ends it at ≤ 500 ms**, whatever the ESP32 <!-- fact:arm-window-cap@1 500 ms -->
-  does — hang, panic, core dump or reset. The gate is non-retriggerable,
-  and `R̅` fires only with `A̅` low, so a stuck GPIO38 arms nothing. Its own
-  `R_ext` failing is the one gap, and needs a second, firmware fault to
-  matter. Firmware backstops: an **IRAM** timer ISR drops GPIO38 at the
-  cap, **no flash write while armed**, and `setup()` writes GPIO38 LOW
-  before making it an input. **No task-watchdog layer** — never subscribe
-  `loopTask`: uploads and `selftest` block `loop()` for seconds.
+  in HARDWARE: the gate's own RC ends each window at ≤ 500 ms**, whatever <!-- fact:arm-window-cap@1 500 ms -->
+  the ESP32 does — hang, panic, core dump or reset. The gate is
+  non-retriggerable, and `R̅` fires only with `A̅` low, so a stuck GPIO38
+  arms nothing. **It bounds each window, NOT the gap between windows**:
+  runaway firmware re-firing the gate at once can chain windows into one
+  press past ~2 s, and nothing enforces a minimum gap yet. That, the gate's
+  own `R_ext` failing, and every timing value are **OPEN** for the bench
+  sweep (`docs/phase-0-plan.md`, "OPEN — the gate's timing"). Firmware
+  backstops: an **IRAM** timer ISR drops GPIO38 at a cap after the gate's
+  `t_max` sample, **no flash write while armed**, and `setup()` writes
+  GPIO38 LOW before making it an input. **No task-watchdog layer** — never
+  subscribe `loopTask`: uploads and `selftest` block `loop()` for seconds.
 - **Timing RC: 2-pin headers for the bench sweep, SOLDERED for the build,
   never a socket in service.** An intermittent `R_ext` is a **HOLD**, an
   open `C_ext` a pulse too short to latch; the pair is soldered **before any
@@ -838,7 +842,8 @@ conclusions only *(trimmed later on 2026-10-29)*.
 
 **THE ONBOARD RGB LED IS ON GPIO48, SO GPIO38 IS NOT THE LED** *("so GPIO38
 is free" until 2026-10-29 — free of the LED, which it still is; the drive
-table above has since spent it on the arm gate)*. Espressif put it on
+table above has since spent it on the arm gate — since 2026-10-30 the gate
+*enable*, the gate '221's `R̅`, not the drive channels' reset)*. Espressif put it on
 48 on v1.0 and 38 on v1.1 and both revisions are sold, so this had to be
 measured; it was, 2026-10-15, by a two-point test against `status`. **This
 fixes the LED net only — it does not make the board "v1.0"**: every other

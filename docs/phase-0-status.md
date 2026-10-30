@@ -1453,7 +1453,8 @@ whether a tap draw shows up as inlet flow.
   the first masking the second. See the 2026-10-19 session entry above.
 - ~~**Does the onboard RGB LED light?**~~ **DONE 2026-10-15: it is GPIO48, so
   GPIO38 is not the LED** *(and was free until 2026-10-29, when CLAUDE.md's
-  drive table allocated it as the arm gate)*. Board on USB, no machine connections, **yield Bookoo
+  drive table allocated it as the arm gate — the gate *enable*, the gate
+  '221's `R̅`, since 2026-10-30)*. Board on USB, no machine connections, **yield Bookoo
   bound and awake** — that last clause is load-bearing and a draft omitted it,
   which would have had anyone reproducing this see a dark LED in both rows.
   Two points, each anchored to a `status` read at the same moment:

@@ -122,25 +122,38 @@ Its J4 entry already says that tap is unplugged.)*
 
 **`DIL16PZ` ×10 DUPLICATES the round-hole DIP-16 sockets ×10 already
 received.** Both are precision 16-pin DIP sockets and the build needs
-**three**, for the `CD74HC221E`. That is twenty sockets against three — no
+**two**, for the `CD74HC221E` *(three until 2026-10-29, when the channel count
+was decided — see §7)*. That is twenty sockets against two — no
 harm done and nothing to return at this price, but it is exactly the
 "don't buy twice" failure this section's status column was added to
 prevent, and it got through on the same day the column was added. **§7's
-"DIP-16 socket | 3" row is satisfied twice over: treat it as €0.** By the
-same token `DIL08PZ` ×10 yields twenty DIP-4 halves against the **eight**
-needed — that one is deliberate, and §7 says why.
+DIP-16 socket row is satisfied twice over: treat it as €0.** By the
+same token `DIL08PZ` ×10 yields twenty DIP-4 halves against
+the **four** DIP-4 sockets needed — that one is deliberate, and §7 says
+why. *("the **eight** needed" until 2026-10-30; see §7's socket row.)*
+<!-- fact:dip4-sockets four DIP-4 -->
 
 **Crimp set, ordered 2026-10-28.** Ratcheting crimp tool, **0.08–1 mm²
 (AWG 28–18)**, with **550 JST-XH housings and 800 XH pins**. Arrival not
 yet confirmed — unlike the 24 AWG and 26 AWG wire, which are in hand.
 
 **Amazon.** **Perfboard 10 × 10 cm, FR-4, 1.6 mm, 1295 holes, ×5** — ordered
-2026-10-28; supersedes 7 × 9, see §5. **Listing, verbatim (operator,
+2026-10-28, **NOT RECEIVED as of 2026-10-29** — the Received table at the
+top of this section does not list it and should not; supersedes 7 × 9, see
+§5. *("the Received table below" for part of that day; it is above.)* *(This line said
+"in hand by 2026-10-29, when the grid was counted" for part of that day. The
+grid was counted on the listing's product photo, not on a board.)* **Listing, verbatim (operator,
 2026-10-29):** *"Material: hochwertige Glasfaser FR4 · dicke: ca. 1,6mm ·
 Lochabstand: 2,54 mm · Lochdurchmesser: 1 mm · 10x10cm / 3,94 x 3,94 Zoll ·
 Anzahl Löcher: 10 x 10 CM mit 1295 Löchern"*. **It states the count and not
-the grid**, so 35 × 37 against 36 × 36 is exactly as open as §5 says —
-and "3,94 × 3,94" is the square the 36 × 36 reading leans on.
+the grid**; the grid was **counted off the product photo, 2026-10-29:
+35 × 37**, which is the vendor's 1295 to the hole, so the 36 × 36 reading
+that "3,94 × 3,94" leaned on is dead — it would need the stated count and
+the photographed grid both wrong. **PHOTO-COUNTED, not counted in hand**: a
+listing photo can be a stock image shared across sizes, and the agreement
+with 1295 is what makes this one credible for this size. Count the delivered
+board anyway. *(Read "exactly as open as §5 says" until the photo count, the
+same day.)*
 
 **`100 nF X7R ×10` is the one ordered line here with no row and no recorded
 purpose** — presumably supply decoupling for the '221 and the photoMOS
@@ -478,13 +491,14 @@ tighter than they need to be for the sake of a few euro.
 |---|---|---|
 | 8.2 kΩ | 10 | 0e T-piece, series leg (**×3** — `ESD1`, `ESD4`, `Disp-P4`); **0e shunt legs, ×4 — two in series per leg to make 16.4 kΩ, on `ESD1` and `ESD4` only** (new 2026-10-19, replaces the 15 kΩ); 0b analyser tap (×3). **Bought: 25**, so the extra 4 are covered. |
 | 15 kΩ | 10 | **SUPERSEDED for 0e — do not fit.** Was the 0e divider ground leg; it fails its tolerance corner at −70 to −87 mV (2026-10-19). **Use 2 × 8.2 kΩ in series = 16.4 kΩ** per leg (**×2** — `Disp-P4` stays unterminated). Both in stock, no new parts. |
+| **10 kΩ** | **25** | **'221 input pulls, ×5 — four `A` pull-ups to 3V3 and the `R` arm-line pull-down (`docs/phase-0-plan.md`, "An arm gate", 2026-10-29).** **25 held, COUNTED by the operator 2026-10-29**, which is the grade `docs/taps-and-dividers.md` asks for ("in stock should mean counted"). Five needed, twenty spare. *(This cell read "in stock per the operator — count not taken" for part of that day, and a draft before it claimed five of the 15 kΩ bag instead; 10 K is held and is the conventional value, so the 15 K stay with their 0e supersession note.)* |
 | 150 kΩ | 10 | 0c switch divider, series leg (**×4** — all four J2 lines). **In stock 2026-10-07.** |
 | 220 kΩ | 10 | Ground leg: **×4 at J2** (1Cup, 2Cup, Steam, Water) **+ ×1 at J4** = **5**. **In stock.** |
 | 10 nF ceramic | — | **CANDIDATE, do not buy yet.** ×1 across the J4 220 K shunt, 218 Hz. Nothing has been fitted and there is no before/after; it may raise the glitch count by slowing the falling edge to ~1.1 ms through the noise band. Decide after the re-measurement in `phase-0-status.md`. |
 | 470 pF ceramic | 2 *(×10 ordered)* | **CANDIDATE, weaker case than J4's.** ×2 across the J5 shunts — **now 16.4 kΩ, not the 15 kΩ this row used to name**, so the sizing in `docs/taps-and-dividers.md` needs redoing — **and it was bought anyway**: 470 pF NP0 ×10 is on the 2026-10-27 Reichelt order (§1). Having the part does not retire the resizing; the row's precondition is simply now unmet rather than pending. *(This said "before it is bought" until 2026-10-29.)* **Never 10 nF** (69 µs against 36 µs clock highs stops the bus decoding). But the J5 drops are **not coupling, and their cause is unidentified** — `docs/taps-and-dividers.md` is normative and retracted "serial polling" on 2026-10-19. `phase-0-status.md` already carried this value as a contingent remedy after raising the shunt to 16.4 K — **that raise is no longer contingent; the capacitor still is.** |
 | 1 kΩ | 10 | 0d flowmeter, **at PA8/PA9 only** — the board side, after its own conditioning. **Never at J4.** **In stock.** |
 | 8.2 kΩ (J4) | — | **J4 ANALYSER tap only: 8.2 kΩ, one channel, `#` only, no shunt.** The ESP32 tap at J4 is **100 K + 220 K** — see the 0d entry in `docs/phase-0-status.md`. Covered by the 8.2 kΩ bag above. |
-| **330 Ω, 1 %** *(390 Ω only for a box that stays cool — "cool" is undefined: no ambient has been measured inside the box, so read this as "only after measuring it"; see the 85 °C note under "Datasheet read")* | 20 | **PhotoMOS LED drive, ×4 — ORDERED 2026-10-27 (Reichelt, ×25); §1 is normative.** *(Read "NOT IN STOCK, added 2026-10-12" until 2026-10-29.)* AQY212EH is guaranteed to operate at 3.0 mA **at 25 °C** (see the 85 °C note under "Datasheet read") and wants 5–10 mA; 330 Ω from 3.3 V gives ~6 mA. **Do not substitute the in-stock 1 kΩ** — it gives ~2 mA, above typical and below guaranteed, which is the one range that works on the bench and fails in service. 680 Ω if driving from 5 V instead. <!-- fact:led-drive-resistor 330 Ω, 1 % --> <!-- fact:photomos-guarantee-25c 3.0 mA at 25 °C --> |
+| **330 Ω, 1 %** *(390 Ω only for a box that stays cool — "cool" is undefined: no ambient has been measured inside the box, so read this as "only after measuring it"; see the 85 °C note under "Datasheet read")* | 20 | **PhotoMOS LED drive, ×4 — ORDERED 2026-10-27 (Reichelt, ×25); §1 is normative.** *(Read "NOT IN STOCK, added 2026-10-12" until 2026-10-29.)* AQY212EH is guaranteed to operate at 3.0 mA **at 25 °C** (see the 85 °C note under "Datasheet read") and wants 5–30 mA (C, 2026; 5–10 in A and B); 330 Ω from 3.3 V gives ~6 mA nominal. **Do not substitute the in-stock 1 kΩ** — it gives ~2 mA, above typical and below guaranteed, which is the one range that works on the bench and fails in service. 680 Ω if driving from 5 V instead. <!-- fact:led-drive-resistor 330 Ω, 1 % --> <!-- fact:photomos-guarantee-25c 3.0 mA at 25 °C --> |
 | **100 kΩ** | 10 | **0d J4 divider, series leg (×1)** — the chosen value since 2026-10-08. Also the **base-emitter resistors (×4)** for the LED drivers, added 2026-10-12: with the '221 pulled from its socket — a deliberate third disable — four bases would otherwise float with the rail up. **In stock.** |
 | 120 kΩ | 0 | **NOT in stock.** Recorded as in stock on 2026-10-07 from a verbal report; the bag held 100 K and 150 K. Superseded by 100 kΩ, which has ~double the margin — not needed. |
 | E12 assortment kit, 1/4 W | 0 | **Not required.** It covers no named requirement, and cheap kits are 5 % where the rows above are 1 %. Both dividers survive 5 % (J4 +271 mV, 0c +110 mV — the J4 figure was +96 mV while 120 K was specified), and 100 kΩ is already in stock. |
@@ -569,7 +583,7 @@ below even that file's own pessimistic "often ~24 × 34" hedge.
 | 5 × 7 — rejected, **as the hedge expects** *(24 rows: shorter than the devkit's ~25-row body)* | 18 × 24 = 432 | 168 |
 | 7 × 9 — **as assumed** | 27 × 35 = 945 | 560 |
 | 7 × 9 — **as actually sold** | 24 × 30 = 720 | 390 |
-| **10 × 10 — bought** | **35 × 37 = 1295** *(grid inferred)* | **888** |
+| **10 × 10 — bought** | **35 × 37 = 1295** *(grid PHOTO-COUNTED 2026-10-29; board not received)* | **888** |
 
 **The deciding argument is invariant-1 adjacent, not comfort.**
 `docs/phase-0-plan.md` requires pos 1 to be *"physically segregated in the
@@ -591,9 +605,13 @@ the box constrains the layout; this is that retirement being spent.
 
 Two numbers to keep: **the devkit body covers ~25 rows, not its 22 pin
 rows** (the PCB overhangs ~5 mm at each end), so budget against the
-outline; and **count the holes on arrival** — the one hole count ever read off a
-listing (24 × 30) disagreed with this repo's derived nominal (27 × 35),
-not with the vendor's label, and nothing has been counted.
+outline; and **count the holes on arrival — still to do.** The grid was
+counted on the listing's photo on 2026-10-29 (35 × 37, the vendor's 1295
+to the hole), which retires 36 × 36 but is not a count of the board that
+will be drilled. *(This said "done 2026-10-29" for part of that day.)*
+Before the photo count, the one hole count ever read off a listing
+(24 × 30) had disagreed with this repo's derived nominal (27 × 35), not
+with the vendor's label, and nothing had been counted at all.
 
 **Material: FR-4, not FR-2 phenolic.** A ten-pack of brown
 *Holzleimplatte 94HB* was the cheaper candidate and was rejected: phenolic
@@ -611,15 +629,23 @@ listing, where "5 pcs" is a pack quantity, not a delivery. **§1 is
 normative on status**, so in transit it is; the Received table does not
 list the perfboard either, which makes it two statements against one.
 Nothing downstream turns on the difference except the one thing that does:
-**an arrived board can be counted, and the 35 × 37 grid above is inferred
-from the listing's 1295 rather than counted — and 1295 = 36² − 1, so the
-competing reading is 36 × 36 = 1296, one hole off the vendor's number on a
-board sold square.** On 36 × 36 free-beside is 900 not 888, the hole field
-is 88.9 × 88.9 mm not 86.4 × 91.4, and the pos-1 span is 24 pitches =
+**an arrived board can be counted — still owed.** **[SUPERSEDED 2026-10-29
+by the photo count below: "the 35 × 37 grid above is inferred from the
+listing's 1295 rather than counted — and 1295 = 36² − 1, so the competing
+reading is 36 × 36 = 1296, one hole off the vendor's number on a board sold
+square. On 36 × 36 free-beside is 900 not 888, the hole field is
+88.9 × 88.9 mm not 86.4 × 91.4, and the pos-1 span is 24 pitches =
 60.96 mm. Neither reading is favoured here; 36 × 36 needs the listing's
-count to be wrong by one. Count it when the pack lands, and if that
+count to be wrong by one."]** Count it when the pack lands, and if that
 contradicts 35 × 37, this section, `CLAUDE.md` and
-`docs/board-and-perfboard.md` all move.
+`docs/board-and-perfboard.md` all move. **PHOTO-COUNTED 2026-10-29:
+35 × 37** — 35 along one axis, A–Z then A–K along the other, read off the
+listing's product photo while the pack is still in transit. Nothing moves;
+the 36 × 36 reading is retired, because it would now need the vendor's
+number and the vendor's photo both wrong. **The delivered board is still
+uncounted**, and the sentence above this one still applies to it. *(This
+said "COUNTED 2026-10-29" without the "photo" for part of that day, in a
+paragraph that had just explained the boards were in transit.)*
 
 ### The box and the board count — SETTLED 2026-10-23
 
@@ -646,15 +672,18 @@ quantity and the price are both superseded by what was actually bought —
 rather than changed: five is practice, service and spare. §1 is normative
 on what was ordered.)*
 
-**Space is tight but was never the binding constraint**, against ~29 discrete
-parts, 5 sockets and 3 XH connectors:
+**Space is tight but was never the binding constraint**, against **~38
+discrete parts (~30 resistors, 4 BC547, 4 timing caps), 6 sockets (two
+DIP-16, four DIP-4)** and 3 XH connectors *(said "~29 discrete parts, 5
+sockets" until 2026-10-29 — the single-'221 count)*:
+<!-- fact:dip4-sockets four DIP-4 -->
 
 | board grid | free beside the devkit | free underneath it |
 |---|---|---|
 | 27 × 35 — 7 × 9 *nominal* | 560 holes | 198 |
 | 24 × 34 — 7 × 9, the generic hedge | 442 | 198 |
 | 24 × 30 — 7 × 9 **as actually sold** | 390 | 198 |
-| **35 × 37 — 10 × 10, bought** *(grid inferred — see the "five boards ARRIVED" retraction)* | **888** | 198 |
+| **35 × 37 — 10 × 10, bought** *(grid PHOTO-COUNTED 2026-10-29)* | **888** | 198 |
 
 **This table carried only the first two rows until 2026-10-29**, so the
 section arguing space was never binding was still arguing it about a board
@@ -672,9 +701,13 @@ to put the dividers there.
 **Resistor count, corrected.** A draft of this note said "only 9 resistors are
 on the board", which counts the **sense** side alone — 4 × J2 shunt, 1 × J4
 shunt, and 4 × 8.2 K making the two J5 shunts, every series leg living in its
-T-piece. **The actuation block adds ~14 more**: 330 Ω, 8.2 K and 100 K per
-photoMOS × 4, plus the '221 timing resistors. **~23 in total**, and the
-"space was never binding" conclusion rests on the right number, not the
+T-piece. **The actuation block adds ~21 more**: 330 Ω, 8.2 K and 100 K per
+photoMOS × 4, **four '221 timing resistors — one `R_X` per channel, and
+2026-10-29 made it one channel per photoMOS** — and **five 10 K pulls on
+the '221 inputs (2026-10-29)**. **~30 in total** *(~23 until the pulls were
+added; ~28 for part of 2026-10-29, still counting the two timing resistors
+of the single-chip design in the commit that moved to four channels)*, and
+the "space was never binding" conclusion rests on the right number, not the
 flattering one.
 
 *(A draft also argued "two boards did not fit the box anyway" — 140 × 90 or
@@ -709,8 +742,9 @@ in would re-create the defect a third time. What follows are the
 *constraints*, which are what a printed box actually needs:
 
 - **In plan: the finished board plus the harness side.** The hole field is
-  **86.4 × 91.4 mm** centre to centre (34 and 36 pitches at 2.54 mm — on the
-  35 × 37 reading; 88.9 × 88.9 on 36 × 36), and
+  **86.4 × 91.4 mm** centre to centre (34 and 36 pitches at 2.54 mm — 35 × 37,
+  **counted on the product photo 2026-10-29**, board not yet received; the
+  88.9 × 88.9 of the 36 × 36 reading is retired), and
   the outline is bigger by whatever the edge margins turn out to be.
   **MEASURE THE BOARD** — "10 × 10" is a label, not a measurement. *(This
   said "the centimetre label has been wrong twice" until 2026-10-29, then
@@ -719,8 +753,10 @@ in would re-create the defect a third time. What follows are the
   with THIS REPO'S derived nominal 27 × 35 — not with the vendor's "7 × 9",
   which a 24 × 30 grid fits — and "5 × 7 ones at 18 × 24" is a generic hedge
   from `docs/board-and-perfboard.md`, not a listing. No board in this
-  project has ever been counted. Two drafts of one sentence promoted an
-  ungraded claim instead of grading it.)*
+  project has been counted in hand; the 10 × 10 was counted on its
+  listing photo on 2026-10-29. Two drafts of one sentence promoted an
+  ungraded claim instead of grading it, and a third said "counted" of a
+  board in transit.)*
 - **On the harness side, add plug body plus wire bend radius** — the
   headers are **side-entry**, so this is in-plane clearance, not headroom.
   **Do not use the 5.7 mm from the XH/EH section for it**: that is the
@@ -795,19 +831,19 @@ keeps its need and says so in the cell. *(Two rows read 0 for a day on
 
 | Part | Qty | Why this one |
 |---|---|---|
-| **AQY212EH, DIP-4** | **8** | 4 in service, 4 spare. **DATASHEET GRADE since 2026-10-17** — see "Datasheet read" below for what was read and what it settles. DIP-4 through-hole, SPST-NO (1 Form A) **AC/DC**, 60 V peak AC/DC, 0.55 A continuous, 5,000 V AC I/O isolation, all confirmed against Panasonic's own tables — **a 2011 catalogue and a 2005 mirror; the current per-part datasheet was NOT read** (see below). **Bare `AQY212EH` is the through-hole part; `…EHA` is the surface-mount terminal version, tube-packed, `…EHAX`/`…EHAZ` are the same SMD part on tape-and-reel (picked from the 1/2-pin or 3/4-pin side)** — so buy the bare suffix, and a listing that says `EHAX` is SMD whatever its photo shows. **Most listings are SOP-4 surface-mount, including other PhotoMOS families that carry no `EHA` suffix at all** — check the photo shows four long legs *and* that the printed part number is **exactly** `AQY212EH` with nothing after it (`AQY212EHA`, `EHAX` and `EHAZ` all *start* with `AQY212EH` and are all SMD). *(The "most listings are SOP-4" sentence is **listing grade** — an observation about sellers, not something either datasheet read supports — and sits in a datasheet-grade cell only because it is a purchasing warning.)* |
-| **`CD74HC221E`, PDIP-16** | 3 | **Verified 2026-10-12** against TI and Farnell: dual monostable, PDIP-16, 2–6 V, non-retriggerable ("once triggered, the outputs are independent of further trigger inputs"), active lifecycle, 5.2 mA output drive. `SN74HC221N` is scarce — TI is retiring PDIP. **A draft also listed `MC74HC221AN`, `TC74HC221AP` and `HD74HC221P` as equivalents; none could be verified**, and the nearest real hit, `MM74HC221AN`, is obsolete. Those were recollection. The `N`/`E`/`P` suffixes are through-hole; `D`/`PW`/`NS` are SMD. |
+| **AQY212EH, DIP-4** | **8** | 4 in service, 4 spare. **DATASHEET GRADE since 2026-10-17** — see "Datasheet read" below for what was read and what it settles. DIP-4 through-hole, SPST-NO (1 Form A) **AC/DC**, 60 V peak AC/DC, 0.55 A continuous, 5,000 V AC I/O isolation, all confirmed against Panasonic's own tables — a 2011 catalogue and a 2005 mirror, **and since 2026-10-29 the current Panasonic catalogue (C, January 2026), which agrees on every number compared and widens the recommended LED current to 5–30 mA** (see below). *("The current per-part datasheet was NOT read" until that day.)* **Bare `AQY212EH` is the through-hole part; `…EHA` is the surface-mount terminal version, tube-packed, `…EHAX`/`…EHAZ` are the same SMD part on tape-and-reel (picked from the 1/2-pin or 3/4-pin side)** — so buy the bare suffix, and a listing that says `EHAX` is SMD whatever its photo shows. **Most listings are SOP-4 surface-mount, including other PhotoMOS families that carry no `EHA` suffix at all** — check the photo shows four long legs *and* that the printed part number is **exactly** `AQY212EH` with nothing after it (`AQY212EHA`, `EHAX` and `EHAZ` all *start* with `AQY212EH` and are all SMD). *(The "most listings are SOP-4" sentence is **listing grade** — an observation about sellers, not something any of the three datasheets read supports — and sits in a datasheet-grade cell only because it is a purchasing warning.)* |
+| **`CD74HC221E`, PDIP-16** | **2 on the board** — 10 bought, see §1 | **DECIDED 2026-10-29: one CHANNEL per photoMOS → four channels → two dual '221s.** The per-device test the series pair exists for needs independent firing, and the plan's "three are on the order" was an estimate never ordered as three. **Verified 2026-10-12** against TI and Farnell: dual monostable, PDIP-16, 2–6 V, non-retriggerable ("once triggered, the outputs are independent of further trigger inputs"), active lifecycle, 5.2 mA output drive. `SN74HC221N` is scarce — TI is retiring PDIP. **A draft also listed `MC74HC221AN`, `TC74HC221AP` and `HD74HC221P` as equivalents; none could be verified**, and the nearest real hit, `MM74HC221AN`, is obsolete. Those were recollection. The `N`/`E`/`P` suffixes are through-hole; `D`/`PW`/`NS` are SMD. |
 | **BC547 or 2N3904, TO-92** | 10 | **LED drivers, one per photoMOS.** **NOT the 2N7000**, which a draft of this row specified: its V_GS(th) is 0.8–3.0 V, so a worst-case part driven from 3.3 V logic has **0.2 V of overdrive** and R_DS(on) is only characterised at V_GS = 4.5/10 V. That is the same works-on-the-bench-fails-in-service trap as the 1 kΩ below, in the part bought to avoid it. A bipolar has no threshold lottery — 0.7 V of V_BE, cleared with enormous margin. **Base resistor 8.2 kΩ and base-emitter 100 kΩ, both in stock.** |
 | **330 Ω, 1 %** *(390 Ω only for a box that stays cool — "cool" is undefined: no ambient has been measured inside the box, so read this as "only after measuring it")* | 20 | **ORDERED 2026-10-27 — ×25 on the Reichelt order, in transit, see §1.** *(This said "the one resistor value not in stock" until 2026-10-29. "Not in stock" was true — ordered is not held. "The one" was false: 330 K and 470 K were equally out and went on the same order. A retraction here then called that "wrong three ways" and said the line was "reflowed by the commit that ordered it" — `git blame` says otherwise: the line was split on 2026-10-20 at `9e03a30`, the ordering commit carried it as unchanged context, and a 2026-10-29 commit re-joined it. The true part survives: two commits handled this line without reading it.)* See the LED arithmetic below **and the 85 °C note under "Datasheet read"** — the operate guarantee is 3.0 mA at 25 °C only, so the drive is sized with margin: both values clear the plotted 85 °C curve, 330 Ω at 1.85× and 390 Ω at 1.57×, and neither clears the extrapolated criterion B. <!-- fact:led-drive-resistor 330 Ω, 1 % --> <!-- fact:photomos-guarantee-25c@2 3.0 mA at 25 °C --> |
 | **2-pin male header** | 3 | the disables. **Buy no shunts** — open is the specified state and a loose shunt in the box is a hazard. Cut from a 1×40 male strip. |
-| ~~DIP-16 socket~~ **ALREADY HELD, TWICE OVER — see §1** | 0 | wire the socket, verify, *then* insert the '221 — 16 hand-wired joints with no heat near the part. Pulling the IC is also a third disable, stronger than an open jumper. **Twenty are on hand or in transit against the three this needs** (round-hole ×10 received, `DIL16PZ` ×10 ordered); §1 records the duplicate. |
-| ~~Machined **round-pin** SIP socket strip 1×40~~ → **`DIL08PZ`, cut in half — ORDERED ×10, see §1** | 4 | **DIP-4 sockets are not a stocked item, and a SIP strip is not the only answer — SETTLED 2026-10-28.** A DIP-8 precision socket is 4+4 on **7.62 mm rows — the same row spacing and 2.54 mm pitch as the AQY212EH, which is itself 2+2**; cut one crosswise and each half is a 2+2 DIP-4 socket. *(This row said 4+4 "is exactly the AQY212EH footprint" until 2026-10-29. It is not — 4+4 is the DIP-8's own layout, and what matches is the row spacing and pitch, which is all the cut needs. The geometry was right and the sentence named the wrong part.)* Ten were ordered, giving twenty against the **eight** needed, so a ragged cut costs nothing. *(The Qty cell read **3** until 2026-10-29, then **0** for a day — neither the ten ordered nor the **four** DIP-8s that eight DIP-4 sockets require. Three would have been short; 0 is the already-held convention and this part is in transit.)* Soldering the photoMOS directly is still acceptable: a socket contact going intermittent fails **open**, which is the safe direction here. |
-| ~~Film capacitors, ~0.47 / 1 / 2.2 µF~~ **ORDERED 2026-10-27 as a deliberate sweep, in transit — see §1** | few | one-shot RC. **MKT 470 nF / 680 nF / 1 µF ×10 each, with 330 K and 470 K ×10**, which is the six-point 109–329 ms sweep §1 sets out; **2.2 µF was never ordered and 150 kΩ is no longer the resistor for this job.** **Do not fix the value yet** — the sweep exists to be run, and nothing has been measured. The caveats below are unchanged and are why it is a sweep rather than a calculation. `t_W = 0.7 · R_x · C_x` **characterised at V_CC = 4.5 V** — and this build runs the '221 at **3.3 V**, where the coefficient is not guaranteed; Fairchild's version of the same part documents `PW = R·C` with no 0.7 at all, and part-to-part spread is ±5 %. *(Kept as a retraction: at the 150 kΩ this row used to assume, 1 µF gives **105 ms**, not the ~120 ms a draft stated — 120 ms needs 1.14 µF, or 171 kΩ at 1 µF. The ordered pair starts at 330 K, so neither number is live.)* **Measure the pulse on the bench**, and only after the minimum latching press width is known. Minimum R_x ≈ 500 Ω. |
+| ~~DIP-16 socket~~ **ALREADY HELD, TWICE OVER — see §1** | 0 | wire the socket, verify, *then* insert the '221 — 16 hand-wired joints with no heat near the part. Pulling the IC is also a third disable, stronger than an open jumper. **Twenty are on hand or in transit against the two this needs** *(three until 2026-10-29 — see the '221 row above)* (round-hole ×10 received, `DIL16PZ` ×10 ordered); §1 records the duplicate. |
+| ~~Machined **round-pin** SIP socket strip 1×40~~ → **`DIL08PZ`, cut in half — ORDERED ×10, see §1** | 2 | **DIP-4 sockets are not a stocked item, and a SIP strip is not the only answer — SETTLED 2026-10-28.** A DIP-8 precision socket is 4+4 on **7.62 mm rows — the same row spacing and 2.54 mm pitch as the AQY212EH, which is itself 2+2**; cut one crosswise and each half is a 2+2 DIP-4 socket. *(This row said 4+4 "is exactly the AQY212EH footprint" until 2026-10-29. It is not — 4+4 is the DIP-8's own layout, and what matches is the row spacing and pitch, which is all the cut needs. The geometry was right and the sentence named the wrong part.)* Ten were ordered, giving twenty against the **four** DIP-4 sockets needed, so a ragged cut costs nothing. <!-- fact:dip4-sockets four DIP-4 --> *(The Qty cell read **3** until 2026-10-29, then **0** for a day, then **4** until 2026-10-30. **[SUPERSEDED 2026-10-30: "neither the ten ordered nor the four DIP-8s that eight DIP-4 sockets require. Three would have been short"]** — the board has four photoMOS in service, so it needs four DIP-4 sockets, which is two DIP-8s, and three was over rather than short. Where the eight came from is **INFERRED, not recorded**: the SIP row it replaced (`1885247`) cut "two per photoMOS", and two SIP pieces per photoMOS looks to have been carried over as two sockets.)* Soldering the photoMOS directly is still acceptable: a socket contact going intermittent fails **open**, which is the safe direction here. |
+| ~~Film capacitors, ~0.47 / 1 / 2.2 µF~~ **ORDERED 2026-10-27 as a deliberate sweep, in transit — see §1** | few | one-shot RC. **MKT 470 nF / 680 nF / 1 µF ×10 each, with 330 K and 470 K ×10**, which is the six-point 109–329 ms sweep §1 sets out; **2.2 µF was never ordered and 150 kΩ is no longer the resistor for this job.** **Do not fix the value yet** — the sweep exists to be run, and nothing has been measured. **MOUNTING DECIDED 2026-10-29: 2-pin headers for the bench sweep, then SOLDERED for the build, never a socket in service** — an intermittent `R_ext` fails toward a HOLD, the opposite direction to the photoMOS socket this list accepts; `docs/phase-0-plan.md` has the reasoning under "Two things that bound the firmware-side failures". The caveats below are unchanged and are why it is a sweep rather than a calculation. `t_W = 0.7 · R_x · C_x` **characterised at V_CC = 4.5 V** — and this build runs the '221 at **3.3 V**, where the coefficient is not guaranteed; Fairchild's version of the same part documents `PW = R·C` with no 0.7 at all, and part-to-part spread is ±5 %. *(Kept as a retraction: at the 150 kΩ this row used to assume, 1 µF gives **105 ms**, not the ~120 ms a draft stated — 120 ms needs 1.14 µF, or 171 kΩ at 1 µF. The ordered pair starts at 330 K, so neither number is live.)* **Measure the pulse on the bench**, and only after the minimum latching press width is known. Minimum R_x ≈ 500 Ω. |
 
 ### The LED drive, which this list did not previously cost at all
 
-**AQY212EH needs 5–10 mA recommended, and is only guaranteed to operate at
-3.0 mA at 25 °C** (typical 1.2 mA is not a design figure; guaranteed off
+**AQY212EH needs 5–30 mA recommended (C, 2026; 5–10 in A and B), and is only
+guaranteed to operate at 3.0 mA at 25 °C** (typical 1.2 mA is not a design figure; guaranteed off
 below 0.4 mA; see the 85 °C note under "Datasheet read" for what the
 temperature caveat does to every figure in this section).
 <!-- fact:photomos-guarantee-25c 3.0 mA at 25 °C -->
@@ -816,21 +852,26 @@ Two consequences:
 - **1 kΩ is in stock and is the wrong value.** From 3.3 V it gives
   `(3.3 − 1.14 V_F − 0.1 V_ds) / 1 kΩ ≈ 2 mA` *(V_F 1.2 V until 2026-10-17; the datasheet says 1.14 V typ at 5 mA — conclusion unchanged)* — **above typical, below
   guaranteed**, the worst place to sit: it works on the bench and fails on
-  some units. **330 Ω gives ~6 mA**; 680 Ω if you drive the LEDs from 5 V.
+  some units. **330 Ω gives ~6 mA nominal**; 680 Ω if you drive the LEDs from 5 V.
 - **The '221's supply decides its input threshold.** A 74**HC** input needs
   VIH = 0.7 × VCC, so at 5 V that is 3.5 V against an ESP32's ~3.2 V output —
   it does not reliably meet it. Run the '221 at **3.3 V** (VIH 2.31 V) or buy
   **74HCT221** (VIH fixed at 2.0 V). You cannot do both: HCT is only specified
   at 4.5–5.5 V.
-- **A transistor per LED, and the honest reason is the test, not the
-  current.** A draft said "a 74HC221 at 3.3 V cannot source 3.0 mA, so the
+- **A transistor per LED, and the reason is the margin.** A draft said "a 74HC221 at 3.3 V cannot source 3.0 mA, so the
   transistor was needed for the drive current regardless of the test". **That
   is an over-claim** — HC guarantees ±4 mA at 4.5 V and `CD74HC221E` lists
   5.2 mA; at 3.3 V, sourcing 6 mA through ~100 Ω of output impedance costs
   ~0.6 V and still leaves ~4.5 mA, half again over the 3.0 mA guarantee *(at 25 °C — see the 85 °C note under "Datasheet read")*. The
   '221 *can* drive this LED directly; it just cannot do it with the margin the
-  5–10 mA recommendation wants. **The sufficient reason is the per-device
-  test**, which needs each LED on its own path.
+  5–30 mA recommendation wants (5–10 in the 2011/2005 documents) — **~4.5 mA
+  is below the 5 mA floor, and that margin is the transistor's reason.** It
+  is a **nominal** margin: at the 25 °C worst-case corner (LED V_F bullet
+  under "Datasheet read") the BC547 path is ≈ 4.3 mA, below the floor too.
+  *(This said "the sufficient reason is the per-device test, which needs each
+  LED on its own path" until 2026-10-29 — true while one '221 channel drove
+  both LEDs of a pair; with one channel per photoMOS each LED already has its
+  own path.)*
 - **Base-emitter resistor, 100 kΩ, in stock.** A draft justified the
   equivalent part with "the board unpowered… a bare gate can drift and turn
   the LED on" — **vacuous**: with the board unpowered there is no 3.3 V on the
@@ -846,13 +887,23 @@ Two consequences:
 |---|---|---|---|
 | A | **Panasonic Relay Catalog Part 2: PhotoMOS & Solid State Relays**, `ca_semiconductor1154_en.pdf` from `mediap.industry.panasonic.eu`, 356 pp; AQY21•EH section is printed p.146-149, document id **`ds_x615_en_aqy21eh: 010611J`** | PDF created **2011-10-04** | `8459c7ae3ad528cb` |
 | B | **"GU-E PhotoMOS (AQY21•EH)"**, 4-page datasheet, `AQY212EH-Panasonic-datasheet-109895.pdf` from `datasheet.octopart.com` — a **third-party mirror** of a Panasonic datasheet bearing the "Matsushita Electric Works" copyright. | PDF created **2005-03-07**, modified 2005-10-06 | `71c9b77a7bed8328` |
+| **C** | **"PhotoMOS GE DIP4 1 Form A" product catalogue**, `semi_eng_ge1a_aqy21_e.pdf`, 19 PDF pages — **pp.1–7 ASCTB126E 202601** (©2026, the per-part catalogue; catalogue page = PDF page − 1), pp.8–19 ASCTB65E 202509 (©2025, general PhotoMOS cautions, bundled); every citation in this repo is to the ASCTB126E pages — **the current per-part document**, downloaded by the operator and read **2026-10-29** | PDF created **2025-12-08**, cover dated 2026.1 | `d329b97293228ccd` |
 
 *(Filenames and hosts in the table are as downloaded on 2026-10-17; the files on disk carry no URL provenance, so they cannot be re-confirmed from the PDFs themselves.)*
 
 **Neither is a current Panasonic datasheet.** A is Panasonic-hosted but a
 2011 catalogue; B is a 2005 mirror. `industrial.panasonic.com` refused
 the fetch from this machine, so the current per-part datasheet was **not**
-read. A and B **agree on every electrical number compared** (ratings, electrical
+read. **It was, on 2026-10-29, as C** — the operator downloaded it. **C
+agrees with A and B on every electrical number compared** (operate 1.2 / 3.0
+mA, turn-off 0.4 mA min, V_F 1.25 / 1.5 V, R_on 0.85 / 2.5 Ω, leakage 1 µA,
+t_on 1 / 4 ms, t_off 0.05 / 1.0 ms, C_iso 0.8 pF), so 2011→2026 changed
+nothing in the table. **Two things did change: the recommended LED current is
+5–30 mA in C against 5–10 mA in A and B, and C's schematic draws the body
+diodes** that A and B omitted. Both noted at their rows below. C is also the
+source of the **pin-function table** in `docs/phase-0-plan.md` under
+*Topology, per actuated line* — 1 LED anode, 2 cathode, 3/4 output and
+interchangeable — which no earlier read had supplied. A and B **agree on every electrical number compared** (ratings, electrical
 table, symbol), which is some comfort that nothing changed 2005→2011 — it
 says nothing about 2011→now. **They do NOT agree on everything, and a first
 version said they did:** plots 8-(2), 1-(2) and 1-(3) are labelled "Current, A"
@@ -877,11 +928,11 @@ row spacing does).
 |---|---|
 | Package / type | DIP 4-pin, 1 Form A, **AC/DC dual use** (A: "AC/DC dual use", "Peak AC, DC"); 6.4 × 4.78 × 3.2 mm |
 | Load | **60 V peak AC/DC, 0.55 A continuous, 1.5 A peak (100 ms, DC)** |
-| Isolation | **5,000 V AC** I/O; I/O resistance ≥ 1,000 MΩ at 500 V DC; C_iso 0.8 pF typ. *(**Reinforced insulation is Panasonic's own claim, not something this repo can certify.** What the PDFs print: **the type table** lists "Reinforced 5,000 V" (a cell in the "I/O isolation voltage" column) for all five AQY21•EH parts, AQY212EH included; **the feature text** — written for the family, so not specific to this part — says "Reinforced insulation 5,000 V type" (2005 mirror) / "Reinforced insulation of 5,000 V" (2011 catalogue), "more than 0.4 mm internal insulation distance between inputs and outputs", and "conforms to EN41003, EN60950 (reinforced insulation)". What was **not** read is the certification itself: creepage and clearance figures, or any approval report. A 2026-10-17 correction (`2da0742`, same author) said "nothing read supports it" and that the documents say nothing about class; **that was wrong** and overlooked the family sheet's own header. Grade: manufacturer's claim, certification unread. Not load-bearing here: both sides of this barrier are SELV, so it is a 5 V-to-3.3 V separation and not a mains barrier.)* |
+| Isolation | **5,000 V AC** I/O; I/O resistance ≥ 1,000 MΩ at 500 V DC; C_iso 0.8 pF typ. *(**Reinforced insulation is Panasonic's own claim, not something this repo can certify.** C (2026, PDF p.7 safety-standards table) cites UL E191218 (UL1577) and BSI CNF802387 (EN62368-1, reinforced insulation, 0.55 A / 60 V) for this part, and its types table (PDF p.2) calls the type "High insulation" rather than "Reinforced"; the certificates themselves remain unread. What the PDFs print: **the type table** lists "Reinforced 5,000 V" (a cell in the "I/O isolation voltage" column) for all five AQY21•EH parts, AQY212EH included; **the feature text** — written for the family, so not specific to this part — says "Reinforced insulation 5,000 V type" (2005 mirror) / "Reinforced insulation of 5,000 V" (2011 catalogue), "more than 0.4 mm internal insulation distance between inputs and outputs", and "conforms to EN41003, EN60950 (reinforced insulation)". What was **not** read is the certification itself: creepage and clearance figures, or any approval report. A 2026-10-17 correction (`2da0742`, same author) said "nothing read supports it" and that the documents say nothing about class; **that was wrong** and overlooked the family sheet's own header. Grade: manufacturer's claim, certification unread. Not load-bearing here: both sides of this barrier are SELV, so it is a 5 V-to-3.3 V separation and not a mains barrier.)* |
 | LED operate current | **1.2 mA typ, 3.0 mA max** at I_L = max, **25 °C** |
 | LED turn-off current | **0.4 mA min, 1.1 mA typ** — "guaranteed OFF below 0.4 mA" is right |
 | LED forward drop | **1.25 V typ, 1.5 V max at I_F = 50 mA; 1.14 V typ at 5 mA** |
-| Recommended I_F | **5-10 mA** |
+| Recommended I_F | **5-10 mA** (A, B) — **5–30 mA in C, January 2026.** 330 Ω's 6.2 mA nominal sits inside both; nothing below moves except the 220 Ω remark under criterion B |
 | On-resistance | **0.85 Ω typ, 2.5 Ω max**, at I_F = 5 mA **and I_L = max (550 mA)**, "within 1 s on time" |
 | Turn-on / turn-off | **1 ms typ / 4 ms max; 0.05 ms typ / 1.0 ms max** (I_F = 5 mA, I_L = max) |
 | Off-state leakage | **1 µA max** at I_F = 0, V_L = max |
@@ -919,7 +970,7 @@ row spacing does).
 
   **Criterion B is an extrapolation of mine, not a datasheet figure, and two
   things in the datasheet lean against holding the design to it**: Panasonic's
-  own **recommended I_F is 5-10 mA with no temperature qualifier**, and 330 Ω
+  own **recommended I_F is 5–30 mA (C, 2026; 5–10 in A and B) with no temperature qualifier**, and 330 Ω
   puts nominal drive at 6.2 mA inside that range; and the **3.0 mA operate
   spec is measured at I_L = max (550 mA)** whereas this circuit passes
   ~0.1-1 mA, a condition the datasheet gives no operate-current figure for.
@@ -929,8 +980,10 @@ row spacing does).
   enough, and neither is 270 Ω**: it gives 7.0 mA at the 85 °C corner against
   the ~7.8 mA B needs (a first version offered it as an alternative, which it
   is not). Only 220 Ω clears B, at 8.6 mA at the 85 °C corner — and at 25 °C
-  nominal it is ~9.4 mA, close to the top of the 5-10 mA range. That would be
-  a judgment call for the operator, not a datasheet requirement. **The BOM
+  nominal it is ~9.4 mA — inside C's 5–30 mA recommended range, so the range
+  is no argument against it *(said "close to the top of the 5-10 mA range …
+  a judgment call" until 2026-10-29 — true against documents A and B)*; the
+  remaining cost is LED stress and supply current, not the range. **The BOM
   row and every drive figure below inherit this
   caveat:**
   - **390 Ω is a fallback only for a box that stays cool** — undefined until
@@ -958,11 +1011,15 @@ row spacing does).
   0.35 A over 0.25 V, i.e. ~0.7-0.8 Ω, consistent with the 0.85 Ω typ.)*
 - **Turn-on up to 4 ms** is far inside the ~120 ms one-shot pulse and a
   non-issue.
-- **Body diodes: NOT specified.** The output schematic is two common-source
-  N-MOSFETs; neither document draws or characterises a body diode. See the
+- **Body diodes: DRAWN in C, characterised nowhere.** The output schematic is
+  two common-source N-MOSFETs; A and B draw no body diode, **C (2026-10-29)
+  draws one per FET, opposed, and puts no number on either** — so the plan's
+  estimate stands as an estimate. *(This read "NOT specified … neither
+  document draws" until C was read.)* See the
   re-graded **"two photoMOS in series per driven line"** bullet in
   `phase-0-plan.md` (under "The failure neither mechanism bounds"), which this
-  read settles at "topology datasheet, body diode inferred" and refines.
+  read settles at "topology datasheet, body diodes drawn (C), uncharacterised"
+  and refines.
 - **Not settled here:** TLP222A (the plan's alternate) was not read.
 
 **Correction of record:** this row used to say the figures were "Distributor-
@@ -977,13 +1034,17 @@ read — so that attribution is snippet grade. The numbers themselves match the
 datasheet's 0.85 Ω typ / 2.5 Ω max, so the likely explanation is typical vs
 maximum of the same 550 mA test.
 
-### Still not costed
+### Still not costed — CLOSED 2026-10-29
 
-The per-device test needs each photoMOS on its **own** one-shot-bounded drive.
-A dual '221 gives two channels — enough for one per *line*, not one per
-*device*. A second '221 or a different gating scheme is unpriced; the GPIO
-budget is not the constraint (see `docs/board-and-perfboard.md`). Buying three
-'221s covers it either way.
+**Nothing is.** The per-device test needs each photoMOS on its **own**
+one-shot-bounded drive, a dual '221 gives two channels, so it is **two dual
+'221s, four channels, ten bought** — §7's row and `docs/phase-0-plan.md`
+("Costed since 2026-10-29") carry it. *(Until later on 2026-10-29 this
+section read: "A second '221 or a different gating scheme is unpriced; the
+GPIO budget is not the constraint. Buying three '221s covers it either way."
+The commit that settled the count at two retracted "three" at three sites
+and left this fourth, under a live heading, in the file CLAUDE.md names as
+the one to open before buying anything.)*
 
 These are the parts that let the firmware *trigger* the machine while being
 physically incapable of *holding* the line — which matters because holding
@@ -1080,6 +1141,9 @@ parts.
 | actuation: `CD74HC221E` ×3, AQY212EH ×8, BC547 ×10, 330 Ω, caps | 25 |
 | consumables: PTFE sleeving 8, adhesive heat-shrink 6, 30 AWG silicone wire 8, gland 3, tie mounts 4 | 29 |
 | **estimated total** | **~€89** |
+
+Kept as estimated; §1 is normative on what was ordered (10 × `CD74HC221E`,
+5 × 10 × 10 perfboard) and §7 on what the board needs (2).
 
 *(A draft quoted €9 for the board group and €26 for consumables, giving €80;
 the board row had not been re-costed after it grew to two boards and five

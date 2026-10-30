@@ -261,7 +261,7 @@ instead of soldering to the board.
 | Perfboard **10 × 10 cm FR-4 ×5** + **female** headers ×5 + sockets | 2.54 mm confirmed by mating. **SUPERSEDES "7 × 9 ×2", 2026-10-28** — 7 × 9 was picked for soldering room against a nominal 27 × 35, and the boards actually sold are 24 × 30. See `docs/board-and-perfboard.md` for the table and `shopping-list.md` §5 for the reasoning; `shopping-list.md` is normative on parts and prices. **The boards alone are €10**; the female strips are €4.59 and the sockets €2.19, both priced separately in §1, so this row understated at €10 until 2026-10-29 | 16.78 |
 | Heat-shrink assortment | | 5 |
 | ~~Small ABS project box~~ **PRINTED** | the 120 × 80 size was chosen for a 5 × 7 board and would not have fitted the 70 × 90 one — **and 70 × 90 is no longer the board either: it is 10 × 10 since 2026-10-28.** The ~110 × 100 plan dimensions that replaced 120 × 80 are **withdrawn** for the same reason and have no successor — the box is printed last and sized to the finished board; **the 40 mm height alone is retained, as an upper bound**. `shopping-list.md` §5, "The box has no dimensions any more", is normative | 0 |
-| **`CD74HC221E`** ×3, **AQY212EH DIP-4 ×8**, **BC547/2N3904 ×10**, **330 Ω**, one-shot caps, **3 × 2-pin header** (no shunts), DIP sockets | **moved into this order 2026-10-12** — the build populates them behind open jumpers rather than leaving footprints. `shopping-list.md` is normative on part numbers and prices; **this file is normative on counts and placement** | ~25 |
+| **`CD74HC221E`** **×2** *(×3 until 2026-10-29 — one channel per photoMOS, four channels, two dual chips; see "The one-shot channels WERE the constraint" below)*, **AQY212EH DIP-4 ×8**, **BC547/2N3904 ×10**, **330 Ω**, one-shot caps, **3 × 2-pin header** (no shunts), DIP sockets | **moved into this order 2026-10-12** — the build populates them behind open jumpers rather than leaving footprints. `shopping-list.md` is normative on part numbers and prices; **this file is normative on counts and placement** | ~25 |
 
 ### Tools, if you don't have them
 
@@ -414,6 +414,43 @@ have held the direction line high permanently (pump running, stored timer
 reprogrammed inside 2 s) and drawn ~50 mA continuously through R45 off a 3 W
 supply. The prose was right and the drawing was not.
 
+**AQY212EH pin functions — DATASHEET grade since 2026-10-29.** Source:
+Panasonic *PhotoMOS GE DIP4 1 Form A* product catalogue,
+`semi_eng_ge1a_aqy21_e.pdf`, 19 PDF pages — **pp.1–7 are ASCTB126E
+202601** (©2026, the per-part catalogue; catalogue page = PDF page − 1),
+**pp.8–19 are ASCTB65E 202509** (©2025, general PhotoMOS cautions,
+bundled). Every citation in this repo is to the ASCTB126E pages. It is the
+current per-part document, which the 2026-10-17 read could not fetch; `docs/shopping-list.md` "Datasheet
+read" records it as document C. Until this read the repo held the part's
+electricals at datasheet grade and its pinout nowhere.
+
+| DIP-4 pin | function | in this topology |
+|---|---|---|
+| **1** | **LED anode (+)** — the wiring diagram drives I_F into this pin | the 330 Ω from the jumpered 3V3 LED supply |
+| **2** | **LED cathode (−)** | the BC547 collector |
+| **3** | output | one end of the drive chain |
+| **4** | output | the other end |
+
+Pins 1 and 2 are on the input side of the package, 3 and 4 on the output
+side: in the top view 1 sits opposite 4 and 2 opposite 3. **The outputs are
+two N-MOSFETs source-to-source and the part is rated "AC/DC dual use", so 3
+and 4 are interchangeable** — the chain is pos 1 → jumper (a) → device 1
+(3/4) → device 2 (3/4) → pos N, in either orientation. **Only the LED has a
+polarity to get wrong.** A reversed LED sees at most 3.3 V against a 5 V
+V_R absolute maximum, so it is not damaged — it simply never closes, a
+silent failure on the bench and exactly what the per-device test the series
+pair exists for is there to show.
+
+**Pin-1 mark — DRAWING grade, not text.** The outline drawing shows a
+circular dimple on the body at one corner and the wiring diagram draws a
+circle beside pin 1; no sentence in the document says the dimple is pin 1.
+Confirm on the part from the printed label, which reads `212EH` (Panasonic
+omit the `AQY`), with the pin diagram on the catalogue's first page.
+
+**And the 2026 schematic DRAWS the body diodes** — one per FET, opposed —
+which the 2011 catalogue and the 2005 mirror did not. It still characterises
+neither, so the "voltage arithmetic" paragraph below stands as an estimate.
+
 **Current budget.** With the photoMOS closed, the only path is +5 V → R45
 (100 R) → direction line → **the board's own pull-down**, so the current is
 **bounded** at ≤50 mA / 250 mW against the IRM-03-5's 3 W, and bounded by the
@@ -493,14 +530,17 @@ Brew-by-weight needs **1Cup and 2Cup** only — the board latches, so one pulse
 starts and a second stops. Steam and Hot Water gain nothing and double both
 the parts and the failure surface. **Sense all four, drive two.**
 
-One dual 74HC221 and **four photoMOS** — two in series per driven line,
-decided 2026-10-12; see the failure analysis above. **Phase 1 needs a separate
-drive path per photoMOS** for the per-device test. **Partly costed since
-2026-10-12**: the driver transistors and their resistors are specified (see
-below and `docs/shopping-list.md`), and the GPIO budget is **not** the
-constraint. What remains unpriced is **one-shot channels** — a dual '221 gives
-two, enough for one per *line*, not one per *device* — so a second '221 or a
-different gating scheme. Three '221s are on the order, which covers it.
+**Two dual 74HC221** and **four photoMOS** — two in series per driven line,
+decided 2026-10-12, one '221 channel per photoMOS, decided 2026-10-29; see the
+failure analysis above. **Phase 1 needs a separate drive path per photoMOS**
+for the per-device test. **Costed since 2026-10-29**: the driver transistors
+and their resistors are specified (see below and `docs/shopping-list.md`), the
+GPIO budget is **not** the constraint, and the one-shot channels are settled —
+a dual '221 gives two, one per *line*; one per *device* takes two chips, and
+ten are held. *(This read "One dual 74HC221 … what remains unpriced is
+one-shot channels … Three '221s are on the order, which covers it" until
+2026-10-29 — three was an estimate, never ordered as three; the decision is
+under "The one-shot channels WERE the constraint" below.)*
 
 #### A SECOND Phase 1 candidate: the setpoint buttons — scoped 2026-10-23, nothing built
 
@@ -578,9 +618,12 @@ The J2 pattern this entry calls "unchanged" is **two in series per driven
 contact** — that series pair is the whole answer to a photoMOS failing short.
 Two buttons therefore need **four devices, consuming all four spares** on the
 current order, plus **four more one-shot channels**, where a dual '221 gives
-two. Three '221s are on the order and cover the levers; the buttons would
-need more. That is the real cost, and it is why this is a design pass rather
-than an increment.
+two. Two '221s are on the board and cover the levers; the buttons would need
+two more chips, four more trigger GPIOs and the board space for both, none of
+which is allocated — the chips are held (ten bought), the rest is not. *(This
+said "Three '221s are on the order and cover the levers" until 2026-10-29 —
+three was an estimate, never ordered.)* That is the real cost, and it is why
+this is a design pass rather than an increment.
 
 #### The failure neither mechanism bounds
 
@@ -713,18 +756,20 @@ does not work:
     squaring a full-short probability.**
     **Checked against Panasonic's datasheet 2026-10-17 — topology
     CONFIRMED, one refinement.** The internal schematic for the AQY21•EH
-    family (same drawing in both documents read — see `shopping-list.md` for
-    filenames, dates and hashes) shows **two N-channel MOSFETs, sources joined
+    family (same drawing in both documents read that day — see
+    `shopping-list.md` for filenames, dates and hashes) shows **two N-channel MOSFETs, sources joined
     to a common node, gates joined to one gate node, drains to pins 3 and 4**,
     driven by one LED. So "two MOSFETs, sources common" is **datasheet grade**.
-    What the datasheet does **not** do is draw or specify the body diodes: the
-    symbol carries the usual source-to-body arrow, which *implies* each FET's
-    intrinsic diode (anode at source, cathode at drain, hence opposed), and
-    nothing in either document gives an off-state forward characteristic. So
-    **"body diodes opposed" is inferred from the MOSFET symbol, not read from
-    a table**, and the diode-drop figures above remain a silicon-junction
-    estimate, not a Panasonic number. (`TLP222A` was not checked; the sentence
-    above names it only by analogy.)
+    What the 2026-10-17 read did **not** do is draw or specify the body
+    diodes; **document C (ASCTB126E, January 2026) draws them** — one per
+    FET, anodes at the common source node, so opposed — and characterises
+    neither. So **"body diodes opposed" is drawing grade since 2026-10-29**,
+    and the diode-drop figures above remain a silicon-junction estimate, not
+    a Panasonic number. *(Read "inferred from the MOSFET symbol, not read
+    from a table" until 2026-10-29 — true of the 2011 and 2005 documents
+    (A and B in `docs/shopping-list.md`), whose symbol carries only the
+    source-to-body arrow.)* (`TLP222A` was not checked; the sentence above
+    names it only by analogy.)
 
     **The refinement: the half-failure is polarity-dependent.** *(A first
     version said the draft "missed" this. The section's own lead bullet — "each
@@ -774,7 +819,8 @@ does not work:
     The 0.6 V anchor is itself unsourced. **So the honest statement is an
     estimate of ~0.4-0.65 V per diode, ~0.8-1.3 V for the pair, ~3.6-4.2 V at
     the line**, and **no document read gives the AQY212EH's body-diode
-    characteristic.** **The 3.6 V low end includes the drop across R45
+    characteristic** *(the January 2026 catalogue draws the diodes, which the
+    earlier two did not; it still puts no number on them — 2026-10-29)*. **The 3.6 V low end includes the drop across R45
     (100 Ω) at 1 mA, ≤0.1 V** — 5 − 1.3 alone is 3.7 V.
     **Diode drop also falls ~2 mV/K
     per junction**, so near a boiler at 60-85 °C each diode could be 70-120 mV
@@ -909,23 +955,36 @@ does not work:
       temperature caveat does to these figures).
       <!-- fact:led-drive-resistor 330 Ω, 1 % -->
       <!-- fact:photomos-guarantee-25c 3.0 mA at 25 °C --> **The transistor's reason is
-      this test, not the drive current** — a draft claimed "a 74HC221 at 3.3 V
-      cannot source that reliably, so the transistor was needed regardless",
-      which over-claims: `CD74HC221E` lists 5.2 mA drive, and at 3.3 V the
-      part still delivers ~4.5 mA into this LED, half again over the 3.0 mA
-      guarantee *(at 25 °C; ~1.45× the plotted 85 °C curve, and short of an
-      extrapolated worst case — see the shopping list)*. It can drive it; it cannot do so with the margin the
-      5–10 mA recommendation wants. **And not a 2N7000** — V_GS(th) 0.8–3.0 V
+      drive margin.** The '221 can source ~4.5 mA into this LED at 3.3 V —
+      over the 3.0 mA guarantee at 25 °C, but **below the 5 mA floor of
+      Panasonic's recommended range** (5–30 mA in C, 2026; 5–10 in the
+      2011/2005 documents) and only ~1.45× the plotted 85 °C curve; the BC547
+      puts it at ~6 mA nominal, inside the range, and ≈ 4.3 mA at the 25 °C
+      worst-case corner, which is not. `docs/shopping-list.md` ("Datasheet
+      read") carries both BC547 figures and criterion B's 85 °C worst case.
+      *(This said "the transistor's reason is this test, not the drive
+      current" until 2026-10-29 — true while one '221 channel drove both LEDs
+      of a pair; with one channel per photoMOS each LED has its own path
+      without a transistor. The older retraction stands: a draft's "a 74HC221
+      at 3.3 V cannot source that reliably, so the transistor was needed
+      regardless" over-claimed — `CD74HC221E` lists 5.2 mA drive and does
+      deliver ~4.5 mA here.)*
+      **And not a 2N7000** — V_GS(th) 0.8–3.0 V
       leaves a worst-case part 0.2 V of overdrive from 3.3 V logic. 
 
       **Free GPIOs are not the constraint.** Against the pinout in
       `docs/board-and-perfboard.md`:
-      1, 2, 9-14, 18, 21, **38**, 39-42 and 47 (35-37 are PSRAM-internal;
+      1, 2, 9-14, 18, 21 and 47 — **38 and 39-42 were on this list until
+      2026-10-29 and are now the arm gate and the four triggers** (CLAUDE.md's
+      drive table) — (35-37 are PSRAM-internal;
       0, 3, 19, 20, 45, 46 are strapping or native USB; 43/44 are the UART0
       console, which `platformio.ini` names as the fallback flashing port, so
       treat them as spoken for).
 
-      **GPIO38 IS FREE AND GPIO48 IS SPENT — measured 2026-10-15**, closing
+      **GPIO38 IS NOT THE LED AND GPIO48 IS SPENT — measured 2026-10-15**
+      *("GPIO38 IS FREE" until 2026-10-29: free of the LED, which it still is;
+      no longer unallocated, since the drive table spent it on the arm gate)*,
+      closing
       the "38 or 48 depending on board revision" hedge this list carried from
       2026-10-12. The onboard RGB LED is on 48, by a **two-point** test with
       the board on USB, no machine connections and **the yield Bookoo bound
@@ -942,9 +1001,14 @@ does not work:
       correction that hedged it was right to hedge. Neither was measurement;
       this is.
 
-      **The one-shot channels ARE the constraint**: a dual '221 gives two,
-      enough for one per *line*, not one per device. A second '221 or a
-      different gating scheme is unpriced; three are on the order.
+      **The one-shot channels WERE the constraint, and the count is DECIDED
+      2026-10-29: one channel per photoMOS — FOUR channels, TWO dual
+      '221s.** A dual '221 gives two, enough for one per *line*; the
+      per-device test this passage argues for needs one per *device*, so two
+      chips. Ten `CD74HC221E` were bought (Reichelt, 2026-10-27), so stock is
+      not a constraint either. *(This read "a second '221 or a different
+      gating scheme is unpriced; three are on the order" until 2026-10-29 —
+      three was an estimate, and three were never ordered.)*
     - **Each test path must still be one-shot bounded.** If a per-device drive
       is a bare GPIO, the ~120 ms ceiling does not exist and a stuck test pin
       holds the line past 2 s. And if the pair is fired by **two independent**
@@ -1018,6 +1082,20 @@ does not work:
   of being discovered by the machine. **Fit it first, on the bench; fit the
   drive-leg jumpers last, at the machine.**
 
+  **And between those two: solder the timing RC — DECIDED 2026-10-29.** The
+  sweep runs on 2-pin headers, on the bench, with every drive-leg jumper
+  open. The chosen `R_ext`/`C_ext` pair is then **soldered before any
+  drive-leg jumper is fitted**, and never socketed in service. The reason is
+  the failure direction, and it inverts the photoMOS-socket argument in
+  `docs/shopping-list.md`: a socketed photoMOS going intermittent fails
+  **open** (safe), whereas the pulse ends only when `C_ext` charges through
+  `R_ext`, so an intermittent `R_ext` leaves `Q` high — **a HOLD**, the one
+  thing the one-shot exists to prevent *(circuit-confirmed 2026-10-29 from
+  SCHS166F's logic diagram — see the datasheet facts under "An arm gate"
+  below; an open `C_ext` fails the OTHER way, to a pulse too short to latch,
+  so the PAIR is soldered, not the resistor alone)*. A socket on the timing resistor would put the project's
+  worst-case failure behind a spring contact.
+
   *(A draft said "remove the LED one last", which inverts this and is also
   unbuildable — the specified state is headers with no shunt fitted, so there
   is nothing to remove. The act is fitting.)*
@@ -1042,8 +1120,133 @@ does not work:
   heading: they bound everything while open and nothing once fitted. The LED
   jumper and the arm gate are the firmware-side ones.
 
-- **An arm gate.** AND the one-shot output with a second GPIO that firmware
-  must hold high, so one stuck or floating trigger pin cannot fire anything.
+- **An arm gate.** Gate the one-shot with a second GPIO that firmware must
+  hold high, so one stuck or floating trigger pin cannot fire anything. *(This
+  read "AND the one-shot output with a second GPIO" until 2026-10-29 — the
+  external-AND-on-`Q` mechanism the table below rejects, stated as the
+  bullet's own headline.)*
+
+  **MECHANISM DECIDED 2026-10-29: the '221's own `R` (reset) input, on
+  GPIO38, held high to arm — `B` tied to 3V3 on all four channels.** *(The
+  first draft of this decision, the same day, chose `B`; a pre-push review
+  read the datasheet and found `R` bounds strictly more for the same zero
+  parts — the third row below.)* Three ways to build the sentence above, and
+  they are not equivalent:
+
+  | | cost | what it bounds |
+  |---|---|---|
+  | the '221's `B` input, tied across all four channels, held high to arm — **superseded same day** | no extra part — the '221 needs `B` high to accept a falling `A` | a stuck or floating **trigger** pin, which is exactly the failure the sentence names. **Nothing more: once a channel has fired, `B` is powerless until the RC times out** |
+  | an external AND on each `Q` output (**a 74HC08 — a seventh package and socket**) — **declined** *(said "a fifth IC" until 2026-10-29, the single-'221 count)* | one more DIP-14 | the trigger pin, **and** every `Q`-held-high state while disarmed: a '221 whose `Q` is stuck by internal failure, **and the timing-circuit failures** — `R_ext` open or intermittent, `C_ext` leaky, a bad joint on the `RxCx` pin. *(The first draft listed only the chip failure here, which undercounted what was being declined.)* |
+  | **the '221's `R` input, tied across all four channels, held high to arm — CHOSEN** | no extra part | everything `B` bounds (`R` low blocks all three trigger edges), **plus every `Q`-high state the timing circuit produces** (`R_ext` open or intermittent, `C_ext` leaky, a bad joint on the `RxCx` pin), **provided firmware disarms unconditionally** — arm → trigger → wait the fire window plus margin → drop `R̅`, every time. `R` low ends a running pulse at once, including the `R_ext`-open HOLD, which the comparator never ends but reset overrides — so the HOLD is bounded to the arm window **with no detector at all**. *(This row cited the J2 sense divider as the detector for "high with nothing commanded" until 2026-10-29; that detector was withdrawn 2026-10-12 — see "the readback that already exists" under "The failure neither mechanism bounds", and the struck bullet under "What this changes in the harness".)* |
+
+  **`R` wins. What it does not bound: a '221 whose `Q` is stuck high by
+  internal failure** — that stays on the known-unmitigated list beside the
+  shorted photoMOS output and the watchdog's blind spot. The 74HC08 would
+  bound that one, by moving the single point onto a chip that can fail the
+  same way; a part that relocates a failure is not worth a socket, now that
+  `R` takes the timing-circuit failures off the AND's side of the ledger for
+  free.
+
+  **The datasheet facts this rests on — DATASHEET grade, TI SCHS166F
+  (CD54HC221 / CD74HC221 / CD74HCT221, Nov 1997, rev Oct 2003), read
+  2026-10-29.** Until then the trigger edges were recollection. Truth table,
+  per channel:
+
+  | `A̅` | `B` | `R̅` | `Q` |
+  |---|---|---|---|
+  | H | X | H | L — no pulse |
+  | X | L | H | L — no pulse |
+  | L | ↑ | H | **one pulse** |
+  | ↓ | H | H | **one pulse** |
+  | X | X | L | L — **reset; ends a pulse in progress** |
+  | L | H | ↑ | **one pulse** (datasheet note 1 — the cells print "Note 3", but the only note on the page is numbered 1: reached only through the A-low / B-high sequence) |
+
+  **TI writes the trigger and reset pins with overbars — `A̅` and `R̅`, active
+  low — and the H/L entries above are PIN LEVELS, transcribed as the
+  datasheet prints them.** This repo writes `A` and `R` in prose for the
+  pins; where it says "`A` idles HIGH" or "`R` held high to arm" it means the
+  pin, and high is the inactive state of both. *(The table header read `A` /
+  `R` without the bars for part of 2026-10-29, which left a reader checking
+  it against the PDF unable to tell pin level from logical sense.)*
+
+  And in prose: *"Once triggered, the outputs are independent of further
+  trigger inputs on A̅ and B. The output pulse can be terminated by a LOW
+  level on the Reset (R̅) pin."* Also: *"On power up, the IC is reset"*; `B`
+  has a Schmitt trigger and `A` does not; unused inputs must be terminated
+  high or low; `R_X` minimum typically 500 Ω; `t_W = 0.7 R_X C_X` at
+  V_CC = 4.5 V. **Three trigger edges, as recollected — but the `R` edge
+  needs `A` low AND `B` high**, which the recollection left out and which is
+  what makes `R` safe as the arm line under the rule below.
+
+  PDIP-16 pinout, same source (page 1, top view, and the page-2 functional
+  diagram agree): **1** 1A̅ · **2** 1B · **3** 1R̅ · **4** 1Q̄ · **5** 2Q ·
+  **6** 2C_X · **7** 2C_XR_X · **8** GND · **9** 2A̅ · **10** 2B · **11** 2R̅ ·
+  **12** 2Q̄ · **13** 1Q · **14** 1C_X · **15** 1C_XR_X · **16** V_CC. TI
+  labels the reset pin `R̅`; `CLR` is the SN74 name for the same pin.
+  **So the true output of channel 1 is pin 13 and of channel 2 is pin 5;
+  pins 4 and 12 are the complements.**
+
+  **This list had Q and Q̄ SWAPPED on both channels for part of
+  2026-10-29** — "4 1Q · 5 2Q̄ · 12 2Q · 13 1Q̄" — at datasheet grade, in the
+  table CLAUDE.md sends a builder to for exactly this. Built from it, each
+  BC547 base lands on the complement: the LED is ON while idle and ON while
+  DISARMED (`R̅` low forces Q̄ high), and goes off only for the pulse. The
+  arm gate would have turned the drive on. Caught by a pre-push review of
+  the commit that introduced it, before any wire; recorded because a
+  transcription error in a datasheet-grade table is the one kind the grade
+  does not warn you about.
+
+  **`A` MUST IDLE HIGH, and it must do so across a reset.** With `B` tied
+  high, raising `R` fires a pulse on any channel whose `A` is low at that
+  moment; with `A` high the `R` edge is inert. The ESP32-S3 cannot hold `A`
+  high by itself: per its datasheet (v2.2, §2 pin table), GPIO38–42 have
+  **no pull and no input-enable during reset** (Table 2-1, "At Reset" blank);
+  after reset they are inputs, no pull on 38/40/41/42 and a weak pull-up on
+  39 only while `EFUSE_DIS_PAD_JTAG` is 0 *(said "input-enabled with no pull
+  at and after reset" until 2026-10-29)*.
+  Opening the serial port resets the ESP32 without power-cycling the '221,
+  so on every flash and every monitor session the '221 sits powered with
+  those inputs floating unless something external holds them. **So,
+  passive, no firmware involved — DECIDED 2026-10-29:**
+
+  - **10 K pull-up to 3V3 on each `A` line, ×4** — idle high through every
+    reset; a GPIO pulling low sinks 0.33 mA. `A` has no Schmitt trigger,
+    which is the argument for 10 K over the 100 K also held.
+  - **10 K pull-down on the `R` arm line, ×1** — disarmed at reset, after a
+    crash, and with the devkit pulled from its headers.
+  - **`B` tied directly to 3V3, all four channels** — a Schmitt input that
+    must not float; a permanent high.
+  - 10 K: **25 held, counted by the operator 2026-10-29** *(read "count not
+    taken" for part of that day)*; `docs/shopping-list.md` §4 carries the row.
+  - **Firmware ordering, for when drive code exists.** Write each trigger
+    HIGH **before** making it an output (`digitalWrite(pin, HIGH)` then
+    `pinMode(pin, OUTPUT)`): on arduino-esp32 2.0.17 `pinMode` sets the mode,
+    not the level, so the reverse order can drive `A̅` low for an instant —
+    which per SCHS166F fires an armed channel or primes a disarmed one for
+    the next `R̅` rise. The external 10 K pull-ups do not cover this: a GPIO
+    actively driving low overrides them. **Never raise `R̅` without first
+    reading all four `A̅` lines high.** *(Core behaviour read from
+    `esp32-hal-gpio.c`, framework-arduinoespressif32 3.20017.241212,
+    2026-10-29: `__pinMode` → `gpio_config()` only, `__digitalWrite` →
+    `gpio_set_level()`; the output latch's reset value of 0 is assumed, not
+    checked against the ESP32-S3 TRM.)*
+
+  CLAUDE.md's GPIO table carries the pin, the idle-state rule and the three
+  parts.
+
+  **GPIO39–42 are the JTAG pads and are plain GPIO here — DATASHEET grade,
+  ESP32-S3 Series Datasheet v2.2, §2 pin table and §3.4 Table 3-5, read
+  2026-10-29.** 39 = MTCK, 40 = MTDO, 41 = MTDI, 42 = MTMS. With
+  `EFUSE_DIS_PAD_JTAG`, `EFUSE_DIS_USB_JTAG` and `EFUSE_STRAP_JTAG_SEL` all
+  at their default 0, the JTAG source is the USB Serial/JTAG controller and
+  **GPIO3 is ignored**; GPIO3 selects the source only once `STRAP_JTAG_SEL`
+  is burned, which nothing here does. Nothing drives these pads at boot:
+  during reset they are high-impedance with no pull; after reset, inputs,
+  with a weak pull-up on 39 only while `EFUSE_DIS_PAD_JTAG` is 0 *(said
+  "through reset they are inputs" until 2026-10-29)*. *(CLAUDE.md carried this as a RECOLLECTION
+  caveat — "GPIO3 is the source select, so plain GPIO", "a pin that moves at
+  boot" — until the datasheet was read the same day: right pin order, right
+  conclusion, wrong lever, unsupported hedge.)*
 
 #### What this changes in the harness
 

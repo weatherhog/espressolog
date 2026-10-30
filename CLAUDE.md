@@ -38,7 +38,7 @@ the thing you do not know yet.
 | **plan a flowmeter experiment** | `docs/flowmeter-j4.md` | **0d-i first** (weigh the split). And check whether the operator already does it every morning — three for three so far |
 | **compare flow data across sessions** | `docs/flowmeter-j4.md` | the **OPV is adjustable state and nothing records it** — invariant-5 class |
 | **pick a free GPIO, or drill the perfboard** | `docs/board-and-perfboard.md` | **GPIO48 is the LED, GPIO38 is the arm gate and 39–42 are the triggers — free: 1, 2, 9–14, 18, 21, 47**; GPIO33–37 unusable; 5Vin at position 21 beside GND at 22 is a **solder hazard** |
-| **lay out the perfboard — what connects to what** | `docs/phase-0-plan.md` §*Topology, per actuated line* and §*Two things that bound the firmware-side failures*; then `docs/board-and-perfboard.md` for the header | sense side is **seven shunts, nine resistors** — 4 × J2, 1 × J4, 2 × J5 each as two 8.2 K in series, nothing on `Disp-P4` — every series leg living in its T-piece *("nine shunts" until later on 2026-10-29)*; drive side is **2 × '221, 4 × AQY212EH in two series pairs, 4 × BC547, three OPEN jumper headers**, triggers on **GPIO39–42**, arm on **GPIO38** via the '221 `R` (reset) input — `B` tied to 3V3, **10 K pull-up on each `A`, 10 K pull-down on the arm line**; **timing RC on headers for the sweep, soldered for the build**; **J2 has no ground**; **keep the two jumper fields apart**; the '221 truth table and pinout are in the plan under *An arm gate* (datasheet, SCHS166F); **AQY212EH pins are in the plan under *Topology, per actuated line*: 1 LED anode, 2 cathode, 3/4 output and interchangeable** (datasheet, ASCTB126E 202601) — only the LED has a polarity to get wrong *("no pin-function table for the AQY212EH exists in this repo yet" until later on 2026-10-29)* |
+| **lay out the perfboard — what connects to what** | `docs/phase-0-plan.md` §*Topology, per actuated line* and §*Two things that bound the firmware-side failures*; then `docs/board-and-perfboard.md` for the header | sense: **seven shunts, nine resistors**, series legs in the T-pieces; drive: **2 × '221, 4 × AQY212EH (two series pairs), 4 × BC547, three OPEN jumpers** — pins, pulls and the arm gate are in the DRIVE table below; **J2 has no ground**; **keep the two jumper fields apart**; **AQY pin 1 = LED anode**, the only polarity to get wrong |
 | **tee into the water circuit** | `docs/hydraulics.md` | everything is 1/8, the **gauge end cannot be teed**, there are **no spare ports**, and **whether invariant 1 covers plumbing is UNDECIDED** |
 | **work out what has actually been built and bench-tested** | `docs/phase-0-status.md` | the bench record and the resume point |
 | **buy a part** | `docs/shopping-list.md` | supersedes the parts tables in `docs/phase-0-plan.md` |
@@ -760,6 +760,19 @@ allocated, and the heading hid that.)*
 | Steam | **16** | fixed by `main.cpp` (0.9.0); polled |
 | Hot Water | **17** | fixed by `main.cpp` (0.9.0); polled |
 
+**All seven are now named in firmware 0.9.0, so none of them is a free
+choice any more** — this table used to mark five of them "proposed" and they
+were still unclaimed. Changing one now means changing `main.cpp`, not just
+this row.
+
+**THE BOARD CHECK IS DONE — 2026-10-12.** All seven GPIOs are confirmed
+against the clone DevKitC-1 both ways round: **functionally** (the bus
+decoded on 4/5, `selftest` counted 500/500 on 6, each lever logged its own
+name on 7/15/16/17) **and visually** (the operator read the silkscreen
+order). Neither alone would do it — the functional chain cannot tell wiring
+by *label* from wiring by *position*, and the silkscreen read cannot tell
+you the firmware agrees.
+
 **DRIVE side — DECIDED 2026-10-29, nothing in firmware yet.** **One channel
 per photoMOS — four channels, two dual `CD74HC221E`** (ten bought). The
 pins rest on one layout fact: **positions 4–10 of the OPPOSITE header column
@@ -785,8 +798,9 @@ table and the plan together**, as with the sense pins.
 
 - **`A` idles HIGH through external pull-ups, never firmware ones.** The
   '221 also fires on `R` rising with `A` low and `B` high, and the ESP32-S3
-  leaves 38, 40, 41 and 42 unpulled through every reset — and the serial
-  port resets the ESP32 without power-cycling the '221.
+  holds none of 38–42 during reset (no pull, not even input-enabled; GPIO39
+  gains a weak pull-up only after reset) — and the serial port resets the
+  ESP32 without power-cycling the '221.
 - **Arm on `R`, not `B`: `R` low ends a running pulse, `B` low does not.**
   Same zero parts. A `Q` stuck high by internal failure is bounded by
   neither and is on the plan's known-unmitigated list.
@@ -806,19 +820,6 @@ the eFuse table behind the JTAG line, and the retractions: `CLR` rising
 stated unqualified, `B` chosen before `R`, and this block's own first draft,
 which carried sixty lines of that reasoning in a file that promises live
 conclusions only *(trimmed later on 2026-10-29)*.
-
-**All seven are now named in firmware 0.9.0, so none of them is a free
-choice any more** — this table used to mark five of them "proposed" and they
-were still unclaimed. Changing one now means changing `main.cpp`, not just
-this row.
-
-**THE BOARD CHECK IS DONE — 2026-10-12.** All seven GPIOs are confirmed
-against the clone DevKitC-1 both ways round: **functionally** (the bus
-decoded on 4/5, `selftest` counted 500/500 on 6, each lever logged its own
-name on 7/15/16/17) **and visually** (the operator read the silkscreen
-order). Neither alone would do it — the functional chain cannot tell wiring
-by *label* from wiring by *position*, and the silkscreen read cannot tell
-you the firmware agrees.
 
 **THE ONBOARD RGB LED IS ON GPIO48, SO GPIO38 IS NOT THE LED** *("so GPIO38
 is free" until 2026-10-29 — free of the LED, which it still is; the drive

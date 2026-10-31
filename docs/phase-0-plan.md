@@ -1541,7 +1541,16 @@ does not work:
       at all or return GPIO38 to the net directly. **Dropping the gate is
       a small, deliberate rework**: leave its chip out and run one wire
       from GPIO38 to the tied `R̅` net, then change the firmware, whose
-      arming sequence and `drivetest` assume the gate. *(A draft on
+      arming sequence and `drivetest` assume the gate. **The same rework
+      removes or repurposes the gate's own `Q` readback**: with the chip
+      out, that readback taps the tied `R̅` net directly through its series
+      resistor, so a readback pin mis-set as an output HIGH arms all four
+      channels whenever GPIO38 is not actively holding the net low (before
+      `setup()` configures it, or left an input), and fights GPIO38 when it
+      is. **Re-fitting a
+      gate chip afterwards means removing the GPIO38 wire first**: with
+      both in place, GPIO38 fights the gate's push-pull `Q` on that net.
+      *(A draft on
       2026-10-30 reserved an unfitted link position for this beside the
       gate's DIP-16. Review found it a new bridge hazard — fitted, or
       bridged by solder, with the gate socketed, it ties GPIO38 to the

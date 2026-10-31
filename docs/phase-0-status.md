@@ -1841,8 +1841,10 @@ state; closing it is the deliberate act, with the RC chosen first.
    Three things that cost time and should not cost it twice: the pad with
    thermal-relief spokes into the copper pour is ground *regardless* of
    wire colour and regardless of which pad is square; sigrok's `i2c`
-   decoder will produce confident garbage (endless writes to address 0x00)
-   on what is actually plain synchronous serial; and J5 carries **no +5 V**
+   decoder output — endless writes to address 0x00 — **is correct, and this
+   entry called it "confident garbage on what is actually plain synchronous
+   serial" until 2026-10-31** (the bus is I²C to an AS1115 at 0x00;
+   `docs/machine-display-bus.md` is normative); and J5 carries **no +5 V**
    — it is ground plus three signals, so the constant-high channel is an
    idle signal, not a supply (pinout now in CLAUDE.md, from the traced
    schematic in `techdregs/Ascaso_Dream_PID_Electronics`).
@@ -2552,7 +2554,10 @@ state; closing it is the deliberate act, with the RC chosen first.
 
    Note the manual renders it **`E01`, with no decimal point**, so the dot
    in the operator's "E.01" is probably punctuation rather than a lit
-   segment. CLAUDE.md's open decimal-point question stands unanswered.
+   segment — but the decimal point IS in the frame format (D7 of each
+   digit byte, settled 2026-10-31), so a lit point on the leading digit is
+   possible and no capture has caught an `E01`. *(This said "CLAUDE.md's
+   open decimal-point question stands unanswered" until then.)*
 
    A note on how that was argued before: an earlier draft paired a dealer
    customer review with our own tap-on/tap-off test and called the two

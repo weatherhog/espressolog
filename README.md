@@ -25,11 +25,12 @@ A visual tour is in [docs/overview.md](docs/overview.md).
 ## Two results worth reading even if you don't own this machine
 
 **The front display bus is decoded.** The Ascaso's mainboard talks to its
-display over a plain synchronous serial link — *not* I²C, whatever sigrok's
-decoder claims when you point it at the same pins. ~9.9 kHz clock, data sampled
-on the rising edge, and a **67-bit frame followed by a 66-bit frame** every
-~41 ms — the 67 carries the button state, the 66 the digits, at known bit
-offsets. (The two usually arrive glued together; a "133-bit frame" is that
+display over **I²C — an AS1115 LED driver with keyscan at address 0x00**
+(this README said "not I²C, whatever sigrok's decoder claims" until
+2026-10-31; sigrok's decoder was right). ~9.9 kHz SCL, and a **67-bit frame
+followed by a 66-bit frame** every ~41 ms — the 67 is a read of the keyscan
+registers and carries the button state, the 66 a write of the three digit
+registers, at known bit offsets. (The two usually arrive glued together; a "133-bit frame" is that
 merge artefact, not a frame, and a parser keyed on 133 bits throws away digit
 readings exactly when the machine is working hardest.) Idle it carries boiler
 temperature; during a brew it carries the

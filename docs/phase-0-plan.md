@@ -60,7 +60,8 @@ probe, and it doesn't matter that we haven't identified the peripheral.
 Two candidate lines, each with a 100 R series resistor and a 4.7 K
 pull-up to +5 V, routed through the ESDA6V1SC6 array (U26) as nets
 `ESD1` / `ESD4`. Either hardware I²C on PB8/PB9 or a bit-banged
-two-wire link on PB7/PB8.
+two-wire link on PB7/PB8. *(It is I²C — settled 2026-10-31,
+`docs/machine-display-bus.md`; which MCU pins carry it is still open.)*
 
 Capture while the machine heats up and while pulling a shot. You're
 looking for a byte that tracks the displayed temperature.

@@ -458,11 +458,10 @@ from this repo is needed:
 
 `display.cpp` keys on frame length and reads segment bits by offset. It has
 never needed to know what the protocol was called, and the fit above is the
-reason not to touch it. **The comment headers in `firmware/src/display.h`,
-`tools/decode-display-bus.py` and `firmware/test/host/display_test.cpp`
-still say "NOT I²C"** and are owed a comment-only correction; left alone on
-2026-10-31 because the task that found this scoped code changes to decode
-defects, and there is none.
+reason not to touch it. The comment headers in `firmware/src/display.h` and
+`tools/decode-display-bus.py` said "NOT I²C" until later on 2026-10-31 and
+now say what this section says; no code changed. The host test's "timer
+flag" wording stands — functionally the bit is one.
 
 ---
 

@@ -626,8 +626,8 @@ proposed arm-window gate, whose spare channel is not a drive channel; the
 buttons would need
 two more chips, four more trigger GPIOs — **eight pins if each channel gets
 a `Q` readback like the levers', against five free after the proposed gate
-and readbacks — and two of those five are GPIO9/10, the last ADC1 pins J3's
-NTC would want, and one is GPIO18, avoided for triggers — so the GPIO budget
+and readbacks — fewer still if J3's NTC ever wants an ADC1 pin from
+GPIO9/10, depending on which pins the layout spends — so the GPIO budget
 would then bind** — and the board space
 for both, none of
 which is allocated — the chips are held (ten bought), the rest is not. *(This
@@ -1371,10 +1371,11 @@ does not work:
       CPU0's idle task; `loopTask` is not subscribed; the interrupt
       watchdog is 300 ms; every panic writes a core dump to a 64 KB flash
       partition; a panic restart is a CPU reset, `RTC_SW_CPU_RST`. Never
-      subscribe `loopTask` to the task watchdog, permanently or per arm
-      window: `net.tick()` uploads synchronously
-      with a 3 s connect and 5 s read timeout, and `selftest` blocks for up
-      to 30 s.)*
+      subscribe `loopTask` to the task watchdog. Not permanently:
+      `net.tick()` uploads synchronously with a 3 s connect and 5 s read
+      timeout, and `selftest` blocks for up to 30 s. Not per arm window
+      either: a 5 s timeout cannot enforce a ~2 s limit, and the ISR that
+      ends the window cannot make the unsubscribe call.)*
     The watchdog relay above stays an option, as a layer that does not
     depend on the ESP32 at all.
   - **Every `Q` is read back — the four drive channels and the gate —
@@ -1537,13 +1538,16 @@ does not work:
       four channels armed, and dropping GPIO38, the pull-downs, a failed
       `Q` check and `drivetest`'s abort all do nothing. Before the gate, a
       stuck `Q` cost one channel. This weighs on whether to keep the gate
-      at all or return GPIO38 to the net directly. **So the layout
-      reserves an unfitted link position from GPIO38 to the tied `R̅` net**
-      beside the gate's DIP-16: dropping the gate means leaving its chip
-      out and fitting the link, not rework. **Never both** — a fitted link
-      with the gate in its socket ties GPIO38 to the gate's push-pull `Q`.
-      *(This said "the footprint is reserved so that either can be built"
-      before any such link existed, review 2026-10-30.)*
+      at all or return GPIO38 to the net directly. **Dropping the gate is
+      a small, deliberate rework**: leave its chip out and run one wire
+      from GPIO38 to the tied `R̅` net, then change the firmware, whose
+      arming sequence and `drivetest` assume the gate. *(A draft on
+      2026-10-30 reserved an unfitted link position for this beside the
+      gate's DIP-16. Review found it a new bridge hazard — fitted, or
+      bridged by solder, with the gate socketed, it ties GPIO38 to the
+      gate's push-pull `Q` — and "not rework" untrue for the firmware.
+      Withdrawn the same day. Before that, this said "the footprint is
+      reserved so that either can be built" with nothing reserved.)*
     - **The GPIO18 exclusion's rationale is weak**: the power-up glitch
       occurs while the '221 is itself in power-on reset, so it cannot meet
       "a CPU reset leaving GPIO38 high". And the "safe" set 9–14, 21, 47

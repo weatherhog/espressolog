@@ -812,16 +812,18 @@ otherwise:**
   neither and is on the plan's known-unmitigated list.
 - *PROPOSED 2026-10-30, not decided.* **A third '221 channel, the gate,
   bounds each arm window in hardware at ≤ 500 ms**; reserve its DIP-16, <!-- fact:arm-window-cap@1 500 ms -->
-  RC, pulls and two pins on the layout, **and an unfitted link position
-  from GPIO38 to the tied `R̅` net** so the gate can be dropped without
-  rework. It bounds each window, **not the gap between windows**, and a
+  RC, pulls and two pins on the layout. Dropping it later is a small,
+  deliberate rework — one wire from GPIO38 to the tied `R̅` net — and no
+  link position is reserved for it, because an unfitted link beside a
+  socketed gate is a bridge hazard. It bounds each window, **not the gap between windows**, and a
   stuck-high gate `Q` would arm all four channels with no disarm — the
   main cost against keeping it. Its timing, the `Q` checks and
   `drivetest` are **OPEN** pending the bench sweep (`docs/phase-0-plan.md`,
   "OPEN — the gate, readback and `drivetest`"). **Never subscribe
-  `loopTask` to the task watchdog** — neither permanently nor per arm
-  window; both drafts were rejected: uploads and `selftest` block `loop()`
-  for seconds.
+  `loopTask` to the task watchdog**: permanently, uploads and `selftest`
+  block `loop()` for seconds and it reboots the board; per arm window, a
+  5 s timeout cannot enforce a ~2 s limit and the unsubscribe cannot be
+  made from the ISR that ends the window. Both drafts were rejected.
 - **Timing RC: 2-pin headers for the bench sweep, SOLDERED for the build,
   never a socket in service.** An intermittent `R_ext` is a **HOLD**, an
   open `C_ext` a pulse too short to latch; the pair is soldered **before any

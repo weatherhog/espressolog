@@ -1453,7 +1453,8 @@ whether a tap draw shows up as inlet flow.
   the first masking the second. See the 2026-10-19 session entry above.
 - ~~**Does the onboard RGB LED light?**~~ **DONE 2026-10-15: it is GPIO48, so
   GPIO38 is not the LED** *(and was free until 2026-10-29, when CLAUDE.md's
-  drive table allocated it as the arm gate)*. Board on USB, no machine connections, **yield Bookoo
+  drive table allocated it as the arm gate — the proposed gate *enable*, the gate
+  '221's `R̅`, since 2026-10-30)*. Board on USB, no machine connections, **yield Bookoo
   bound and awake** — that last clause is load-bearing and a draft omitted it,
   which would have had anyone reproducing this see a dark LED in both rows.
   Two points, each anchored to a `status` read at the same moment:
@@ -1691,7 +1692,13 @@ the display is back in temperature mode, so edges lost there cost nothing.
 
 ## WHAT PHASE 0 STILL OWES — 2026-10-23
 
-**Every decision the BUILD waits on is closed as of today. What is left is
+**Every decision the BUILD waited on was closed on 2026-10-23. Since
+2026-10-30 two drive-side ones are open again: whether to keep the
+PROPOSED arm-window gate**, which changes the wiring at the `R̅` net, **and
+the `Q` readback series value** (1 K proposed). The layout reserves the
+gate's footprint; dropping it later is one wire and a firmware change.
+See the Measurements table.
+**What is left is
 measurement and assembly, and no amount of discussion shortens either.**
 Recorded as a split because "finalise Phase 0" is ambiguous and the two
 halves have very different costs.
@@ -1719,6 +1726,7 @@ unidentified, both marked "do not buy yet".)*
 |---|---|---|
 | **Minimum latching press width** | analyser on a J2 junction, machine on | **the one-shot RC.** Current bound is "under ~140 ms" from poller-quantised readings — [23, 137] ms true. Not enough to choose R and C |
 | **The '221's pulse at 3.3 V** | the parts, a breadboard | the RC again. `t_W = 0.7·R·C` is characterised at **4.5 V**; this runs at 3.3 V where the coefficient is not guaranteed |
+| **The proposed arm-window gate** *(added 2026-10-30)* | the same sweep, after the drive RC | whether the gate is kept at all, and if so its RC, the minimum gap between gate pulses, the margin ordering, and `t_min` against the latching width. `docs/phase-0-plan.md`, "OPEN — the gate, readback and `drivetest`", is the list; the layout reserves the gate's footprint, and dropping it later is one wire from GPIO38 to the `R̅` net plus a firmware change. The readback series value is open too |
 | **0d-i — weigh the split** | portafilter, scale, drip tray | **every "~5×" in this repo.** The figure divides by an *assumed* inlet |
 | **`boiler_temp_start_c`'s meaning** | a capture with the boiler pulled off setpoint | 0e's open half |
 | **0f re-run** | 30 shots carrying `machine_timer_s` | the Phase 3 deadband |

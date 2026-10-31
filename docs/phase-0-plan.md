@@ -519,7 +519,7 @@ hardware, not by firmware intent.
 faster than ~8 Hz restarts the pulse before it ends and holds the output high
 indefinitely — a boot loop or a floating pin is enough. The '221 is
 non-retriggerable: one bounded pulse per trigger, whatever the input does
-next. ~120 ms via its RC.
+next. ~250 ms via its RC *(~120 ms until 2026-10-31)*.
 
 The NE555's mirror-image trap (a trigger held low holds the output high)
 needs an RC+diode differentiator to avoid. The '221 does not.
@@ -678,8 +678,9 @@ does not work:
   **At ~0.1-1 mA nothing in the fuse or PPTC catalogue responds**, which kills
   the mitigation harder than the original argument did. Even granting the
   wrong current, no current-threshold device separates a press from a short;
-  it would have to discriminate on **time**, and 120 ms to 2 s is a **16:1
-  window** — wide, not narrow as first written. Small PPTCs at several times
+  it would have to discriminate on **time**, and 250 ms to 2 s is an **8:1
+  window** — wide, not narrow as first written *(120 ms and 16:1 until the
+  pulse target moved, 2026-10-31)*. Small PPTCs at several times
   hold current do trip in 0.1–0.5 s. What actually defeats a thermal device
   here is that its trip point is a steep function of ambient, and this board
   lives next to a boiler.
@@ -711,7 +712,7 @@ does not work:
   It was cited three times as a mitigation and is worth close to nothing.
 
   What *would* work is a readback **qualified by the one-shot**: a high
-  outside the ~120 ms window following a commanded trigger, and not
+  outside the ~250 ms window following a commanded trigger, and not
   coincident with a logged lever event. That is real but it is firmware work,
   not a free property of the existing divider.
 - **two photoMOS in series per driven line — DECIDED 2026-10-12, four parts.**
@@ -1027,7 +1028,7 @@ does not work:
       gating scheme is unpriced; three are on the order" until 2026-10-29 —
       three was an estimate, and three were never ordered.)*
     - **Each test path must still be one-shot bounded.** If a per-device drive
-      is a bare GPIO, the ~120 ms ceiling does not exist and a stuck test pin
+      is a bare GPIO, the ~250 ms ceiling does not exist and a stuck test pin
       holds the line past 2 s. And if the pair is fired by **two independent**
       RC one-shots in normal operation, the real press is their **overlap** —
       materially shorter than either, against a minimum latching width nobody
@@ -1036,18 +1037,17 @@ does not work:
       is not established.** If device 1 has already failed short, energising
       device 2 alone *is* a press.
 
-      **Whether a ~120 ms press starts a cycle is still unknown, but the
-      reason has changed and this passage stated the old one until
+      **Whether a ~120 ms press starts a cycle was unknown, which is why the
+      target moved to ~250 ms on 2026-10-31 — and the reason had changed and this passage stated the old one until
       2026-10-19.** It read *"the shortest press this board latches has never
       been measured, and every press ever recorded was 345-480 ms"*. Both
       halves are now false: 2026-10-19 logged presses **observed to latch** at
       a poller-measured 80-90 ms, so the threshold is **below ~140 ms** once
       the poller's 42-57 ms quantisation is carried through.
 
-      **That does NOT clear ~120 ms.** The upper end of the quantised band is
-      137 ms, which is longer than 120, so the margin may be negative — see
-      CLAUDE.md. The question is open on a **tighter** bound than before, not
-      on no bound at all.
+      **That did NOT clear ~120 ms**, the target until 2026-10-31: the upper
+      end of the quantised band is 137 ms. **The target is now ~250 ms**,
+      which does — see CLAUDE.md.
       So either it runs a cycle (the spurious cycle is the alarm,
       at the price of an unwanted flush) or it does not (and the detection
       story needs the sense line read directly instead). **Measure the minimum

@@ -30,7 +30,7 @@ the thing you do not know yet.
 | **touch any machine signal at all** | the invariants, immediately below — nothing else first | Phase 0 never actuates; drive hardware may exist only behind an **open jumper in series with its OUTPUT** |
 | **put anything on the J4 `+` conductor** | the `##` block directly under the invariants | **read-only, high-impedance meter, nothing else.** This rule has been lost three times |
 | **choose or substitute a divider resistor** | `docs/taps-and-dividers.md` | J2 **150 K / 220 K**, J4 **100 K + 220 K**, J5 **8.2 K / 16.4 K**, `Disp-P4` **no shunt ever** |
-| **write actuation or one-shot code** | `docs/machine-switches-j2.md` | a hold **> ~2 s REPROGRAMS** the stored duration; use a **74HC221**, never a '123; the RC is unchosen and failing short is **silent** |
+| **write actuation or one-shot code** | `docs/machine-switches-j2.md` | a hold **> ~2 s REPROGRAMS** the stored duration; use a **74HC221**, never a '123; the pulse target is **~250 ms** (decided 2026-10-31), the RC is picked on the bench at 3.3 V, and failing short is **silent** |
 | **trust `BREW_GUARD_MS`** | `firmware/src/brew_guard.h`, then the **LEVER B LATCHES** bullet in *Machine: Ascaso Dream PID* | it is 75 s, it is too short for a lever-B draw, **and it can fail to ARM entirely** — an unguarded invariant-2 exposure |
 | **parse or re-capture the display bus** | `docs/machine-display-bus.md` | 67/66 pair, **not** 133-bit frames; GPIO4 clock, GPIO5 data, and a swap is **silent** (`frames=0`, levels perfect) |
 | **read `boiler_temp_start_c`** | `docs/machine-display-bus.md` | at ` 95` it is indistinguishable from the **setpoint**, and that is the only range it is ever sampled in |
@@ -404,15 +404,22 @@ indefinitely, which is exactly the failure the one-shot exists to prevent.
 The NE555 has the mirror-image trap and needs an RC+diode differentiator
 before it is safe here; the '221 avoids the question.
 
-**THE RC IS NOT CHOSEN, and the reason it matters is that getting it wrong
-is SILENT**: a one-shot that is too short produces a drive path that does
+<!-- fact:oneshot-target@1 250 ms -->
+**THE PULSE TARGET IS ~250 ms — DECIDED 2026-10-31.** Getting it wrong is
+SILENT: a one-shot that is too short produces a drive path that does
 nothing, while the sense tap still shows the pulse — so it looks like it
-worked. ~120 ms is comfortably under the ~2 s reprogram threshold, which
-bounds it above. Below, all that is established is that **presses the poller
-measured at 80–90 ms latched, so the true threshold is under ~140 ms** — and
-that reading is quantised by a 42–57 ms poll gap, so 80 ms means a true width
-anywhere in roughly [23, 137] ms. **It is not enough to choose the RC.**
-Redo it with the logic analyser on a J2 junction.
+worked. The target is chosen to clear that without measuring the threshold
+more finely. **Presses the poller measured at 80–90 ms latched**, and that
+reading is quantised by a 42–57 ms poll gap, so the true widths were at most
+~137 ms; 250 ms sits well above that and far below the ~2 s reprogram
+threshold. **The RC is still to be picked**: run the bench sweep at 3.3 V
+and fit whichever R and C measure closest to 250 ms, because `0.7·R·C` is
+characterised only at 4.5 V. The analyser capture on a J2 junction is no
+longer needed to choose the RC; it would only matter for a shorter press.
+*(Until 2026-10-31 this read "THE RC IS NOT CHOSEN", with ~120 ms as the
+working figure and the analyser capture as the blocker. Nothing recorded
+why ~120 ms rather than anything else under 2 s, and 120 ms was not
+cleared by the 137 ms bound.)*
 
 **Do not quote 345–480 ms as "the machine's press range".** It is one
 session's presses (2026-10-08), it is superseded by 2026-10-19's 195–295 ms

@@ -454,7 +454,8 @@ int main() {
   }
 
   // 20. A one-bit blip must NOT spend the guard. The power-on burst carries
-  //     32-33 single-bit frames (CLAUDE.md), and decodeFrame() rejects
+  //     32 single-bit frames (docs/machine-display-bus.md, power-on table),
+  //     and decodeFrame() rejects
   //     those anyway — so if one consumed skip_first, the real misaligned
   //     fragment would be handed straight through, which is the exact
   //     opposite of the intent. Attaching with the machine off and powering

@@ -249,7 +249,7 @@ Pin map, from the traced schematic:
 | Pump_Ctrl | PA15 | → FODM3053 → BTA204S triac (random-phase) |
 | Solenoid_CTRL | PB12 | |
 | HTR_CTRL | PB15 | |
-| display link | PB7/PB8 or PB8/PB9 | **UNRESOLVED, and nothing in this repo resolves it.** Checked 2026-10-19: `PB7`/`PB8`/`PB9` appear in exactly one other place, `docs/phase-0-plan.md`, which is where the ambiguity came from — *"either hardware I²C on PB8/PB9 or a bit-banged two-wire link on PB7/PB8"*. `docs/machine-display-bus.md` decodes the bus completely without ever establishing which MCU pins it lands on, and does not need to. The cell said "see below" until 2026-10-19, pointing at nothing. **The protocol on those pins is I²C (settled 2026-10-31, `docs/machine-display-bus.md`), which makes hardware I2C1 on PB8/PB9 the more natural reading — but the pins are still untraced, and a bit-bang would look the same at J5.** |
+| display link | PB7/PB8 or PB8/PB9 | **UNRESOLVED, and nothing in this repo resolves it.** Checked 2026-10-19: `PB7`/`PB8`/`PB9` appear in exactly one other place, `docs/phase-0-plan.md`, which is where the ambiguity came from — *"either hardware I²C on PB8/PB9 or a bit-banged two-wire link on PB7/PB8"*. `docs/machine-display-bus.md` decodes the bus completely without ever establishing which MCU pins it lands on, and does not need to. The cell said "see below" until 2026-10-19, pointing at nothing. *(Since 2026-10-31 `docs/machine-display-bus.md` names the group too, so "exactly one other place" is dated.)* **The protocol on those pins is I²C (settled 2026-10-31, `docs/machine-display-bus.md`). That does not pick a pair: on the F030x8 both PB6/PB7 and PB8/PB9 carry I2C1 under AF1 — PB7 is `I2C1_SDA`, PB8 `I2C1_SCL` — so PB7/PB8 can be the hardware peripheral as well as PB8/PB9, and a bit-bang looks the same at J5. Still untraced.** *(For part of 2026-10-31 this cell leaned to PB8/PB9 on the false premise that PB7/PB8 could only be a bit-bang.)* |
 
 **Switch electrical — MEASURED 2026-10-04**, not taken from the schematic:
 +5 V → R45 (100 R) → switch common. The common (J2 conductor 1) reads
@@ -501,8 +501,9 @@ decoder reads it correctly. *(Until 2026-10-31 this said "The bus is not
 I²C — plain synchronous serial … sigrok's `i2c` decoder will happily
 'decode' it as endless writes to address 0x00; that output is the symptom
 of a wrong guess, not a result." It was the result: the frame lengths that
-seemed to rule I²C out include one STOP set-up edge per transaction, three
-per frame. The protocol is OBSERVED; the chip identity is INFERRED from a
+seemed to rule I²C out include one set-up edge per STOP and one per
+repeated START — three in the digit frame, four in the keyscan frame, 63
+bit-clocks of real bytes in each. The protocol is OBSERVED; the chip identity is INFERRED from a
 six-point datasheet match plus a repairer's chip read on another unit, and
 no chip on this machine has been read. `docs/machine-display-bus.md` has
 the anatomy, the grades and the datasheet cross-check.)* The firmware

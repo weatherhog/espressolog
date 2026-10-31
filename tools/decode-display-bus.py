@@ -59,9 +59,10 @@ PROTOCOL (measured, not guessed -- see docs/phase-0-status.md)
   Framing     : frames repeat every ~41 ms, separated by >1 ms of clock
                 idle. The bus actually sends a 67-bit frame (a read of the
                 keyscan registers: buttons) then a 66-bit frame (a write of
-                the three digit registers); each is three I2C transactions
-                and each transaction's STOP set-up adds one counted edge,
-                hence 67 and 66 rather than multiples of nine. A "133-bit frame" is the two
+                the three digit registers); each is three I2C transactions,
+                and each STOP set-up, plus the keyscan read's repeated
+                START, adds one counted edge: three in the digit frame,
+                four in the keyscan frame, hence 66 and 67 rather than 63. A "133-bit frame" is the two
                 merged because the gap between them usually falls under
                 FRAME_GAP_S. See CLAUDE.md. This decoder only handles the
                 merged form, so it drops standalone 66-bit frames and the

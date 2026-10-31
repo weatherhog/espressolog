@@ -25,8 +25,9 @@
 **The display shows a version string for ~3 s at power-on. The operator
 reads it as `02.4` (2026-10-05); the bus writes `U2.4`** — digit bytes
 `3E ED 33`, the last transaction of the power-on initialisation sequence,
-in both boot captures (`-cold-boot.sr` and `-boot-version.sr`, +1.05 s
-after the rails come up; see the power-on table). `3E` is segments
+in both boot captures (`-cold-boot.sr` and `-boot-version.sr`, starting
++1.10 s after the rails come up — the init sequence starts at +1.03 s and
+this is its last write; see the power-on table). `3E` is segments
 b c d e f, the `U` of this file's own glyph table, not the `0` (`7E`) the
 same display draws at the start of every timer; `ED` is a `2` with its
 decimal point lit; `33` is a `4`. **The main MCU's firmware writes it**:
@@ -369,18 +370,24 @@ and 66 are not multiples of 9, so neither "frame" parses as I²C bytes —
 until you see that each frame is **three transactions**, and that a decoder
 counting SCL rising edges counts **one extra edge per transaction**: the
 master raises SCL with SDA low to set up the STOP, and that is a bit to an
-edge counter and nothing to I²C. Three transactions, three extra edges,
-and the arithmetic closes. `0x00` as an address looked like a null result;
-it is the AS1115's factory address. The protocol was dismissed on
-arithmetic that was off by three.
+edge counter and nothing to I²C. The repeated START in the keyscan read
+costs one more edge the same way. Three STOP set-ups in the digit frame,
+three plus a repeated-START set-up in the keyscan frame: 66 − 3 = 63 and
+67 − 4 = 63, seven bytes each, and the arithmetic closes. `0x00` as an
+address looked like a null result; it is the AS1115's factory address. The
+protocol was dismissed on arithmetic that was off by three and four.
+*(A first draft of this paragraph said "three extra edges" for both
+frames; 67 − 3 is not a multiple of nine, and the 67-bit table below had
+the fourth edge at bit 38 all along.)*
 
 ### Anatomy of the two frames
 
 Bit numbers are this repo's: SCL rising edges counted from the first edge
 after a ≥ 1 ms gap, 0-based, as `display.cpp` and
 `tools/decode-display-bus.py` count them. `S` START, `P` STOP, `Sr`
-repeated START, `A` ACK, `N` NACK. **Every transaction is preceded by two
-empty writes** — START, address `0x00` + W, ACK, STOP: ten edges each.
+repeated START, `A` ACK, `N` NACK. **Every payload transaction — each
+frame's third — is preceded by two empty writes**: START, address `0x00` +
+W, ACK, STOP, ten edges each.
 
 **66-bit frame — the digit write.** `S 00 A · 01 A · d0 A · d1 A · d2 A · P`
 
@@ -425,11 +432,12 @@ lines idle high on the 4.7 K pull-ups.
 **Every regular frame in the repo fits.** A census of all twelve display
 captures, 21,543 gap-delimited frames: **21,467** — 15,307 merged, 5,816
 keyscan reads, 344 digit writes — match the two anatomies above edge for
-edge, with only the payload bytes varying. The other 76 are the 62 bare
-clock pulses at power-on, the two boot sequences (two frames each), a
-keyscan read with one stray leading edge, a merged frame missing its first
-eleven edges at capture start, a read cut off at capture end, and seven
-shorter scraps at capture edges. Reproduce with stock tooling; no script
+edge, with only the payload bytes varying. The other 76 are the 64 bare
+clock pulses at power-on (32 per boot), the two boot sequences (two frames
+each), two rail-settling scraps at the instant the rails come up, a keyscan
+read with one stray leading edge, a merged frame missing its first eleven
+edges at capture start, a read cut off at capture end, and three shorter
+scraps at capture edges. Reproduce with stock tooling; no script
 from this repo is needed:
 
     sigrok-cli -i analysis/captures/2026-10-03-display-bus-setup-menu.sr \
@@ -441,18 +449,23 @@ from this repo is needed:
 
 ### What it does not settle
 
-- **The two empty writes before every transaction.** START, `0x00` + W,
-  ACK, STOP — twice, always, inside the init sequence too. SDA is low
+- **The two empty writes before every payload transaction.** START,
+  `0x00` + W, ACK, STOP — twice, always, before each of the init
+  sequence's writes too. SDA is low
   from the START to the STOP set-up, so **whether that ACK is the slave's
   or the master's own SDA still held low cannot be told from a capture.**
   A device-ready probe is the obvious guess; nothing tests it.
-- **Hardware I2C1 on PB8/PB9 or a bit-bang on PB7/PB8** — CLAUDE.md's
-  pin-table question. Still open. I²C makes the peripheral the more
-  natural reading; the 35 % duty cycle and the empty-write habit fit
-  either.
+- **Which MCU pins, and whether the I2C1 peripheral drives them** —
+  CLAUDE.md's pin-table question. Still open, and I²C does not narrow it:
+  on the F030x8 both PB6/PB7 and PB8/PB9 carry I2C1 under AF1 (PB7 is
+  `I2C1_SDA`, PB8 `I2C1_SCL`), so PB7/PB8 is a hardware pairing as much
+  as PB8/PB9 is. The 35 % duty cycle and the empty-write habit fit a
+  peripheral or a bit-bang. *(A first draft leaned to "hardware I2C1 on
+  PB8/PB9" on the false premise that PB7/PB8 could only be a bit-bang.)*
 - **Whether `Disp-P4` is the AS1115 `IRQ`.** See the `Disp-P4` section
   above: the captures argue against it.
-- **The 33 bare SCL pulses** before the init sequence — power-on table.
+- **The 32 bare SCL pulses** before the init sequence, and the 408 ms of
+  driven-low SCL before them — power-on table.
 
 ### What changes for the firmware: nothing
 
@@ -581,8 +594,9 @@ display can do and no capture has caught. Open.
 
 **The loose end about bit 132 is closed.** It is set in the 564-bit init
 burst because, counting from the burst's first edge, bit 132 is the LSB of
-the register-address byte `0x01` in the burst's blank-digits write
-(its fourth transaction, bits 116–161). It is zero in every 133-bit frame
+the register-address byte `0x01` in the init sequence's blank-digits
+write — its fourth write, the burst's ninth transaction once the empty
+writes are counted — at bits 116–161 from the burst's first edge. It is zero in every 133-bit frame
 because there it is the STOP set-up edge, which the master drives low.
 
 **The `SET UP` menu**, entered by holding 23 while pressing 22 for ~3 s,
@@ -608,9 +622,10 @@ Three 7-segment digit fields, MSB = segment a, order abcdefg:
 | 0 | all three lines leave 0 V; `ESD1`/`ESD4` settle in ~1 µs on their 4.7 K pull-ups |
 | +194 µs | `Disp-P4` starts settling, taking ~250 µs — see the `Disp-P4` section **above** (rail settling, R32 = 100 K against the 4.7 K pull-ups). *(This said "see below" and the explanation is ~325 lines above it.)* |
 | +3.2 ms to +204.5 ms | `Disp-P4` LOW, then high for good — the 201 ms pulse described in the `Disp-P4` section. |
-| +0.41 to +0.93 s | **33 bare SCL pulses, SDA high throughout**: a 99 Hz square wave on the clock line (5.04 ms high, 5.04 ms low), 16 cycles, a 212 ms pause, 16 more, then one. SCL sits LOW before them and idles HIGH after. Not I²C transactions; a bus-recovery toggle or GPIO initialisation is the obvious guess and nothing tests it. *(Called "32–33 single-bit blips" until 2026-10-31.)* |
+| **+3.3 ms to +0.41 s** | **SCL driven LOW** (cold +3.3 ms, hot +3.5 ms) after the pull-up had taken it high at +0.2–0.4 ms, and held there until the pulse train. SDA stays high. That fall lands within 0.5 ms of `Disp-P4`'s, which bears on the `IRQ` question: a line that goes low alongside SCL at what looks like MCU GPIO initialisation is a different story from a keyscan interrupt. *(Added later on 2026-10-31; a first draft of this table had SCL settling high at ~1 µs and "sitting LOW" before the train with nothing between.)* |
+| +0.41 to +0.93 s | **32 bare SCL pulses, SDA high throughout**: a 99 Hz square wave on the clock line (5.04 ms high, 5.04 ms low), 16 cycles, a 212 ms pause, 16 more — the same on both boots. SCL idles HIGH after them. Not I²C transactions; a bus-recovery toggle or GPIO initialisation is the obvious guess and nothing tests it. *(Called "32–33 single-bit blips" until 2026-10-31, then "33 … then one" for part of that day: the hot boot's 33rd single-edge scrap is the rail glitch at +0.4 ms, 412 ms before the train.)* |
 | **+1.03 to +1.11 s** | **The AS1115 initialisation sequence: twelve I²C writes**, each preceded by the usual two empty writes — the "48-bit frame" (one write) and the "564-bit burst" (eleven) of earlier drafts, split only by a gap. In order: Feature ← `02` (reg_res: reset all control registers) · Shutdown ← `00` · Feature ← `04` (HEX decode select — moot, decode is off next) · Digits 0–2 ← `00 00 00` (blank) · Decode ← `00` (no decode: raw segments) · Intensity ← `06` · Scan-limit ← `02` (digits 0–2: a three-digit display) · Display-test ← `00` · Shutdown ← `80` then `81` (normal operation, feature register kept) · Intensity ← `07` · **Digits 0–2 ← `3E ED 33` = `U2.4`**. Byte-identical on both boots. Anything parsing *frames* here gets garbage; parsing *transactions* gets this. *(Until 2026-10-31: "irregular bus activity, not frames … plausibly display-controller init".)* |
-| **~+1.1 s to +4.1 s** | **THE BUS IS SILENT — no transactions for ~3 s** — and the display shows **`U2.4`** throughout, because an AS1115 holds its digit registers and multiplexes the LEDs itself. The string was written once, at +1.05 s, and stays until the mainboard blanks it at +4.12 s. *(Until 2026-10-31 this row said the display showed "`02.4`, the firmware version, with a decimal point — and nothing on the bus carries it". The bus carries it; see Provenance.)* |
+| **~+1.1 s to +4.1 s** | **THE BUS IS SILENT — no transactions for ~3 s** — and the display shows **`U2.4`** throughout, because an AS1115 holds its digit registers and multiplexes the LEDs itself. The string was written once, at +1.10 s (the write's last edge is at +1.11 s), and stays until the mainboard blanks it at +4.12 s — about 3.0 s on the glass. *(Until 2026-10-31 this row said the display showed "`02.4`, the firmware version, with a decimal point — and nothing on the bus carries it". The bus carries it; see Provenance.)* |
 | +4.1 s | normal 67/66 framing begins |
 | +4.12 s | blank |
 | +4.63 s | **`  0`** |

@@ -14,8 +14,9 @@
 // does not speak I²C: it counts SCL rising edges, samples SDA on each, and
 // reads segment bits by offset — which works because the mainboard's
 // transactions are fixed in shape. Every frame below is three I²C
-// transactions, and the master's STOP set-up adds one SCL edge per
-// transaction, so the counts are 67 and 66 rather than multiples of nine.
+// transactions, and each STOP set-up — plus the repeated START in the
+// keyscan read — adds one SCL edge: three in the digit frame, four in the
+// keyscan frame, so the counts are 66 and 67 rather than 63.
 // (This header said "plain synchronous serial, NOT I²C whatever sigrok's
 // i2c decoder claims" until 2026-10-31. sigrok was right.)
 //

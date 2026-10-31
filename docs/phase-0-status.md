@@ -1266,7 +1266,7 @@ number at three times, and the load-bearing bound depends on which:**
 
 **FOUR, NOT THREE — and a draft listed only the lower three.** The 113 ms sits
 in the bench-rig entry above and was left out, which matters because
-CLAUDE.md's **[23, 137] ms** press-width bound and the plan's **"below
+`docs/machine-switches-j2.md`'s **[23, 137] ms** press-width bound *(CLAUDE.md's until 2026-10-31)* and the plan's **"below
 ~140 ms"** are computed from 57 ms being the worst. At 113 the band would be
 roughly [−33, 193] ms and bound nothing.
 
@@ -1377,6 +1377,9 @@ claimed "a ~120 ms pulse has 1.5× margin over a demonstrated-latching 80 ms";
 **137 ms exceeds 120 ms, so the margin may be negative**, and this same file
 says a page earlier that the switch log *"is not an instrument below
 ~100 ms"*. **Redo it with the analyser.** CLAUDE.md is normative.
+*(Superseded 2026-10-31: the pulse target is now ~250 ms, above that
+bound, and the RC is picked on the bench sweep — the analyser capture no
+longer gates it. See CLAUDE.md.)*
 
 ### The bench sequence, in order
 
@@ -1728,7 +1731,7 @@ unidentified, both marked "do not buy yet".)*
 
 | | needs | gates |
 |---|---|---|
-| **Minimum latching press width** | analyser on a J2 junction, machine on | **the one-shot RC.** Current bound is "under ~140 ms" from poller-quantised readings — [23, 137] ms true. Not enough to choose R and C |
+| **Minimum latching press width** — **no longer gates the RC** <!-- fact:oneshot-target 250 ms --> | analyser on a J2 junction, machine on | not the one-shot RC since 2026-10-31: the pulse target is **250 ms**, above the ~137 ms upper bound on the latching threshold that the poller readings already give. It still feeds the proposed gate's `t_min` (next row), which is OPEN with the gate. *(Gated the one-shot RC until 2026-10-31)* |
 | **The '221's pulse at 3.3 V** | the parts, a breadboard | the RC again. `t_W = 0.7·R·C` is characterised at **4.5 V**; this runs at 3.3 V where the coefficient is not guaranteed |
 | **The proposed arm-window gate** *(added 2026-10-30)* | the same sweep, after the drive RC | whether the gate is kept at all, and if so its RC, the minimum gap between gate pulses, the margin ordering, and `t_min` against the latching width. `docs/phase-0-plan.md`, "OPEN — the gate, readback and `drivetest`", is the list; the layout reserves the gate's footprint, and dropping it later is one wire from GPIO38 to the `R̅` net plus a firmware change, **and the gate's `Q` readback removed or repurposed in the same rework** (left in, it taps the `R̅` net, so a readback pin mis-set as an output HIGH arms all four channels whenever GPIO38 is not holding the net low). **Re-fitting a gate chip afterwards means removing the GPIO38 wire first**, or GPIO38 fights the gate's push-pull `Q`. The readback series value is open too |
 | **0d-i — weigh the split** | portafilter, scale, drip tray | **every "~5×" in this repo.** The figure divides by an *assumed* inlet |

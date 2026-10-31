@@ -55,9 +55,10 @@ lead routing. The conclusion is sound — a swap of 2/5 would have logged
 ## The press width, and what actually latches
 
 **The pulse width's UPPER bound is sound and its LOWER bound is not
-established.** ~120 ms is comfortably under the ~2 s reprogram threshold, and
-no RC tolerance gets near it. But nothing has established the shortest press
-this board actually latches.
+established.** The ~250 ms target (~120 ms until 2026-10-31) is comfortably
+under the ~2 s reprogram threshold, and no RC tolerance gets near it. Nothing
+has established the shortest press this board actually latches; the target
+is set well above the bound the poller readings give instead.
 
 **The 345–480 ms figure IS machine presses — confirmed by the operator
 2026-10-12, after a review questioned it.** It was recorded on 2026-10-08, by
@@ -187,13 +188,19 @@ most-logged error committed against its own warning.
 a large improvement on 345-480 ms, and still the first latching evidence this
 project has. It is **not** enough to choose the RC.
 
-**THE RC REMAINS UNCHOSEN, and the warning that motivated it still stands**:
-*a one-shot that is too short produces a drive path that silently does
-nothing, and the sense tap would still show the pulse, so it would look like
-it worked.* **Redo the measurement with the logic analyser on a J2 junction**
-— microsecond edges instead of 50 ms quantisation. That is precisely why the
-analyser is in the bench plan, and it was connected on 2026-10-19 and not
-used for this.
+<!-- fact:oneshot-target@1 250 ms -->
+**THE PULSE TARGET IS ~250 ms — DECIDED 2026-10-31**, and the warning that
+motivated the question still stands: *a one-shot that is too short produces
+a drive path that silently does nothing, and the sense tap would still show
+the pulse, so it would look like it worked.* 250 ms clears the ~137 ms upper
+end of the quantised band with room for the photoMOS overlap and RC spread,
+and stays far below the ~2 s reprogram threshold. **The RC is picked on the
+bench**: sweep at 3.3 V and fit the R and C that measure closest to 250 ms.
+*(Until 2026-10-31 this read "THE RC REMAINS UNCHOSEN" and asked for the
+measurement to be redone with the logic analyser on a J2 junction before
+the RC could be chosen. With a target this far above the bound, that
+capture is no longer on the critical path; it would matter only for a
+shorter press.)*
 
 **Use the 74HC221, NOT the 74HC123 CLAUDE.md used to name.** The '123 is
 **retriggerable**: a new trigger edge restarts the pulse, so a GPIO

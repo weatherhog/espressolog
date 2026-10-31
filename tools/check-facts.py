@@ -184,6 +184,10 @@ REQUIRED = {
     # tags to whatever then bounds the arm window and re-state the margin
     # ordering with them -- do not just delete the entry.
     "arm-window-cap":      {"min_files": 2, "claude_md": True},
+    # The one-shot pulse target, decided 2026-10-31 (~120 ms before). Three
+    # sites state it as live; losing a tag must fail rather than let one
+    # copy drift back to the old figure.
+    "oneshot-target":      {"min_files": 3, "claude_md": True},
     # The photoMOS LED-drive resistor. Tagged 2026-10-19 after two review
     # rounds each found a surviving "330 or 390" / unqualified "guaranteed
     # 3.0 mA" site in a file the correction had not reached. NOT claude_md:

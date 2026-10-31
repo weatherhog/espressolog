@@ -815,7 +815,13 @@ otherwise:**
   RC, pulls and two pins on the layout. Dropping it later is a small,
   deliberate rework — one wire from GPIO38 to the tied `R̅` net — and no
   link position is reserved for it, because an unfitted link beside a
-  socketed gate is a bridge hazard. It bounds each window, **not the gap between windows**, and a
+  socketed gate is a bridge hazard. **That rework also removes or
+  repurposes the gate's `Q` readback**, which would otherwise tap the
+  `R̅` net through its series resistor, so a readback pin mis-set as an
+  output HIGH arms all four channels whenever GPIO38 is not holding the
+  net low; **and re-fitting a gate chip later
+  means removing the GPIO38 wire first**, or GPIO38 fights the gate's
+  push-pull `Q`. It bounds each window, **not the gap between windows**, and a
   stuck-high gate `Q` would arm all four channels with no disarm — the
   main cost against keeping it. Its timing, the `Q` checks and
   `drivetest` are **OPEN** pending the bench sweep (`docs/phase-0-plan.md`,

@@ -410,8 +410,8 @@ SILENT: a one-shot that is too short produces a drive path that does
 nothing, while the sense tap still shows the pulse — so it looks like it
 worked. The target is chosen to clear that without measuring the threshold
 more finely. **Presses the poller measured at 80–90 ms latched**, and that
-reading is quantised by a 42–57 ms poll gap, so the true widths were at most
-~137 ms; 250 ms sits well above that and far below the ~2 s reprogram
+reading is quantised by a 42–57 ms poll gap, so the latching threshold is at
+most ~137 ms; 250 ms sits above that and far below the ~2 s reprogram
 threshold. **The RC is still to be picked**: run the bench sweep at 3.3 V
 and fit whichever R and C measure closest to 250 ms, because `0.7·R·C` is
 characterised only at 4.5 V. The analyser capture on a J2 junction is no

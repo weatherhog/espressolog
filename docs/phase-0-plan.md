@@ -1038,20 +1038,19 @@ does not work:
       device 2 alone *is* a press.
 
       **Whether a ~120 ms press starts a cycle was unknown, which is why the
-      target moved to ~250 ms on 2026-10-31 — and the reason had changed and this passage stated the old one until
-      2026-10-19.** It read *"the shortest press this board latches has never
-      been measured, and every press ever recorded was 345-480 ms"*. Both
-      halves are now false: 2026-10-19 logged presses **observed to latch** at
-      a poller-measured 80-90 ms, so the threshold is **below ~140 ms** once
-      the poller's 42-57 ms quantisation is carried through.
+      target moved to ~250 ms on 2026-10-31.** Until 2026-10-19 this passage
+      gave a different reason: *"the shortest press this board latches has
+      never been measured, and every press ever recorded was 345-480 ms"*.
+      Both halves are now false: 2026-10-19 logged presses **observed to
+      latch** at a poller-measured 80-90 ms, so the threshold is **below
+      ~140 ms** once the poller's 42-57 ms quantisation is carried through.
 
-      **That did NOT clear ~120 ms**, the target until 2026-10-31: the upper
-      end of the quantised band is 137 ms. **The target is now ~250 ms**,
-      which does — see CLAUDE.md.
-      So either it runs a cycle (the spurious cycle is the alarm,
-      at the price of an unwanted flush) or it does not (and the detection
-      story needs the sense line read directly instead). **Measure the minimum
-      latching width before relying on either reading.**
+      **That did not clear ~120 ms**: the upper end of the quantised band is
+      137 ms. **~250 ms does** (see CLAUDE.md), so energising one device of a
+      pair whose partner has failed short runs a cycle — the spurious cycle
+      is the alarm, at the price of an unwanted flush. *(Until 2026-10-31
+      this left both outcomes open and ended "Measure the minimum latching
+      width before relying on either reading.")*
 
     **Off-machine testing commissions the pair; it does not replace this.** A
     draft called it "the better first pass", which reads as a substitute. The

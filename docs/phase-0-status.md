@@ -1737,9 +1737,12 @@ unidentified, both marked "do not buy yet".)*
 | **0d-i — weigh the split** | portafilter, scale, drip tray | **every "~5×" in this repo.** The figure divides by an *assumed* inlet |
 | **`boiler_temp_start_c`'s meaning** | a capture with the boiler pulled off setpoint | 0e's open half |
 | **0f re-run** | 30 shots carrying `machine_timer_s` | the Phase 3 deadband |
+| **What `Disp-P4` (J5 pin 4) is** *(added 2026-11-01)* | machine **off and unplugged**, the display harness unplugged at J5, a meter on continuity, the display board in hand | **nothing in the build** — the rule is "never drive it, never load it" whatever it turns out to be. It settles what the line is for and grades the display driver. Three readings, display end of the harness: **J5 pin 4 → the driver's `IRQ` pin**, **J5 pin 2 (`ESD1`) → its SDA**, **J5 pin 3 (`ESD4`) → its SCL**. On an AS1115 in QSOP-24 those are pins **24, 1 and 14** (TQFN-24: 21, 22, 11) — **confirm the package before probing**. While the board is out, **read the chip marking**: that alone promotes the AS1115 from INFERRED to OBSERVED. Pin 4 reaching `IRQ` makes it the interrupt, and then the open question is why it never asserts during 79 key changes; pin 4 reaching anything else kills the interrupt reading and leaves a presence or reset line, which is what its boot behaviour looks like (driven low ~0.4 ms after SCL and SDA at +3.4 ms, released at +204.7 ms, never moves again). `docs/machine-display-bus.md`, the `Disp-P4` section, has the evidence |
 
 **Only the first is doable tonight** — the rig is semi-permanent and the
-three T-pieces carry their series resistors.
+three T-pieces carry their series resistors. *(The `Disp-P4` row, added
+2026-11-01, is doable any time the machine is off: it needs a meter and the
+display harness unplugged, not the rig.)*
 
 **Grade the analyser clearance as `docs/taps-and-dividers.md` grades it, not
 as "harmless", which a draft of this line wrote.** The reading is 2.89 V

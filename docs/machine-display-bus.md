@@ -479,7 +479,9 @@ from this repo is needed:
   peripheral or a bit-bang. *(A first draft leaned to "hardware I2C1 on
   PB8/PB9" on the false premise that PB7/PB8 could only be a bit-bang.)*
 - **Whether `Disp-P4` is the AS1115 `IRQ`.** See the `Disp-P4` section
-  above: the captures argue against it.
+  above: the captures argue against it. The meter check that settles it,
+  and the chip-marking read that would grade the AS1115 OBSERVED, are in
+  `docs/phase-0-status.md`'s open-measurements table.
 - **The 32 bare SCL pulses** before the init sequence, and the 408 ms of
   driven-low SCL before them — power-on table.
 

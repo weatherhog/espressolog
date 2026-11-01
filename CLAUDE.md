@@ -249,7 +249,7 @@ Pin map, from the traced schematic:
 | Pump_Ctrl | PA15 | → FODM3053 → BTA204S triac (random-phase) |
 | Solenoid_CTRL | PB12 | |
 | HTR_CTRL | PB15 | |
-| display link | PB7/PB8 or PB8/PB9 | **UNRESOLVED, and nothing in this repo resolves it.** Checked 2026-10-19: `PB7`/`PB8`/`PB9` appear in exactly one other place, `docs/phase-0-plan.md`, which is where the ambiguity came from — *"either hardware I²C on PB8/PB9 or a bit-banged two-wire link on PB7/PB8"*. `docs/machine-display-bus.md` decodes the bus completely without ever establishing which MCU pins it lands on, and does not need to. The cell said "see below" until 2026-10-19, pointing at nothing. *(Since 2026-10-31 `docs/machine-display-bus.md` names the group too, so "exactly one other place" is dated.)* **The protocol on those pins is I²C (settled 2026-10-31, `docs/machine-display-bus.md`). That does not pick a pair: on the F030x8 both PB6/PB7 and PB8/PB9 carry I2C1 under AF1 — PB7 is `I2C1_SDA`, PB8 `I2C1_SCL` — so PB7/PB8 can be the hardware peripheral as well as PB8/PB9, and a bit-bang looks the same at J5. Still untraced.** *(For part of 2026-10-31 this cell leaned to PB8/PB9 on the false premise that PB7/PB8 could only be a bit-bang.)* |
+| display link | PB7/PB8 or PB8/PB9 | **UNRESOLVED, and nothing in this repo resolves it.** Checked 2026-10-19: `PB7`/`PB8`/`PB9` appear in exactly one other place, `docs/phase-0-plan.md`, which is where the ambiguity came from — *"either hardware I²C on PB8/PB9 or a bit-banged two-wire link on PB7/PB8"*. `docs/machine-display-bus.md` decodes the bus completely without ever establishing which MCU pins it lands on, and does not need to. The cell said "see below" until 2026-10-19, pointing at nothing. *(Since 2026-10-31 `docs/machine-display-bus.md` names the group too, so "exactly one other place" is dated.)* **The protocol on those pins is I²C (settled 2026-10-31, `docs/machine-display-bus.md`). That does not pick a pair: on the F030x8 both PB6/PB7 and PB8/PB9 carry I2C1 under AF1 — PB7 is `I2C1_SDA`, PB8 `I2C1_SCL` — so PB7/PB8 can be the hardware peripheral as well as PB8/PB9 provided PB8 is the SCL (`ESD4`) net, and a bit-bang looks the same at J5. Still untraced.** *(For part of 2026-10-31 this cell leaned to PB8/PB9 on the false premise that PB7/PB8 could only be a bit-bang.)* |
 
 **Switch electrical — MEASURED 2026-10-04**, not taken from the schematic:
 +5 V → R45 (100 R) → switch common. The common (J2 conductor 1) reads
@@ -492,7 +492,8 @@ Zero frames with correct levels is the swapped-pair signature. It happened on
 
 <!-- fact:display-bus-driver@1 AS1115|address 0x00 -->
 **The bus IS I²C, to an AS1115 LED driver with keyscan at address 0x00** —
-settled 2026-10-31 from the existing captures, no new hardware contact. SCL
+the I²C OBSERVED, the AS1115 INFERRED, both 2026-10-31 from the existing
+captures, no new hardware contact. SCL
 ~9.9 kHz on `ESD4`, SDA on `ESD1`. The 66-bit frame is a write of the three
 digit registers, the 67-bit frame a read of the two keyscan registers, each
 preceded by two empty address-only writes, and every one of the 21,467

@@ -1843,7 +1843,7 @@ state; closing it is the deliberate act, with the RC chosen first.
    wire colour and regardless of which pad is square; sigrok's `i2c`
    decoder output — endless writes to address 0x00 — **is correct, and this
    entry called it "confident garbage on what is actually plain synchronous
-   serial" until 2026-10-31** (the bus is I²C to an AS1115 at 0x00;
+   serial" until 2026-10-31** (the bus is I²C at 0x00, observed, to a driver inferred to be an AS1115;
    `docs/machine-display-bus.md` is normative); and J5 carries **no +5 V**
    — it is ground plus three signals, so the constant-high channel is an
    idle signal, not a supply (pinout now in CLAUDE.md, from the traced

@@ -1,15 +1,16 @@
 # The display bus — J5
 
 > **Normative on:** the J5 display bus — connector identification, the
-> clock/data assignment, `Disp-P4`, **the protocol — I²C to an AS1115 LED
-> driver at address 0x00, settled 2026-10-31 — and the transaction anatomy
-> of the two frames**, the glyph table, the bit offsets, the blink rates,
+> clock/data assignment, `Disp-P4`, **the protocol — I²C at address 0x00,
+> OBSERVED 2026-10-31, to a driver INFERRED to be an AS1115 — and the
+> transaction anatomy of the two frames**, the glyph table, the bit offsets, the blink rates,
 > the power-on sequence, and what the displayed temperature actually means.
 >
 > **CLAUDE.md carries** the live conclusions in its `Display bus` stub: where
 > to tap and with what, the pin table, clock-on-GPIO4/data-on-GPIO5 and its
 > silent failure mode, never drive or load `Disp-P4`, parse the 67/66 pair
-> rather than 133 bits, bit 114, the buttons, the two blink rates and the
+> rather than 133 bits, the protocol and driver and their grades, bit 114,
+> the buttons, the two blink rates and the
 > 600 ms threshold between them, and the narrow meaning of
 > `boiler_temp_start_c`. Those change what you build; the captures,
 > arithmetic and retractions below are what they rest on.
@@ -150,7 +151,9 @@ previously used to argue a conclusion it does not support:
     1, 187, 1, 34, 1, 18, 1, 13, 2, 1, 9, 1, 23, 1, 32, 1, 94, 1,
     2814, 1, 2, 2, 6, 201273
 
-Twenty-four edges inside the first 3.25 ms look like **rail settling**:
+Twenty-four edges inside the first 3.25 ms look like **rail settling** —
+*the last five of them, at +3.43 ms, do not: they are `Disp-P4` being driven
+low 0.4 ms after SCL and SDA, see below (2026-10-31)*:
 irregular, converging, and `ESD1`/`ESD4` glitch at the same instant but
 settle within ~5 µs because they sit on 4.7 K pull-ups while `Disp-P4`
 reaches the MCU through **R32 = 100 K**, twenty times the impedance. A
@@ -178,12 +181,18 @@ still not a protocol. Note also `-flush-timer.sr` carries 4 `Disp-P4` edges
 mid-flush, so it is not purely a boot phenomenon.
 
 **Read off the level rather than the edges, the late edge is the END of a
-201 ms LOW**: `Disp-P4` settles low at the end of the settling burst
-(+3.2 ms cold, +3.0 ms hot), stays low, rises at +204.5 / +204.3 ms, and is
-high in every sample afterwards — both boots. So the reproducible thing is
-a ~201 ms low pulse that starts with the rails. *(Added 2026-10-31; the
-edge list above was always consistent with this and nobody had stated the
-level.)*
+201 ms LOW.** Measured from the first edge on any line: `Disp-P4` is high
+from ~+0.4 to +3.4 ms, is driven low at +3.43 ms cold / +3.48 ms hot, stays
+low, rises at +204.71 / +204.74 ms, and is high in every sample afterwards
+— both boots. **It goes low ~0.4 ms after SCL and SDA are both driven low**
+(see the power-on table), so it is not settling at the rails: three lines
+pulled low within half a millisecond looks like the MCU initialising its
+pins. On the cold boot the last five of the "twenty-four" settling edges
+above are that fall, not settling. *(Added 2026-10-31, first as "settles
+low at the end of the settling burst (+3.2 ms cold, +3.0 ms hot) … rises at
++204.5 / +204.3 ms" — figures measured from the first `Disp-P4` edge, a
+different base from the power-on table's, which put `Disp-P4` ahead of SCL
+when it is 0.4 ms behind.)*
 
 **Is it the AS1115's `IRQ`?** The 2026-10-31 identification of the display
 driver (see *The protocol*) makes that the obvious reading of a line that
@@ -332,8 +341,9 @@ Two traps, both of which cost time on 2026-09-28:
 **I²C is OBSERVED** — 2026-10-31, from the existing captures alone, no
 new hardware contact. Every transaction on the bus starts with SDA falling
 while SCL is high, ends with SDA rising while SCL is high, carries
-nine-clock bytes with the ninth pulled low by the receiver, and changes SDA
-only while SCL is low. The slave address is `0x00` in every transaction of
+nine-clock bytes whose ninth bit is the receiver's ACK — low, except the
+master's NACK after the last byte of a read — and changes SDA only while
+SCL is low, apart from the STARTs and STOPs. The slave address is `0x00` in every transaction of
 every capture. Something on the display end answers: a key byte goes from
 `FF` to `BF` while a button is held, so the slave is driving SDA.
 
@@ -361,10 +371,11 @@ display board has been read.** That is what holds the identification at
 INFERRED, and reading the marking is the one thing that would promote it.
 
 **What this file said until 2026-10-31, and why it was wrong.** It said
-*"It is not I²C. Plain synchronous serial: clock ~9.9 kHz, data sampled on
-the rising edge"*, and that sigrok's `i2c` decoder "happily decodes this as
+*"It is not I²C. Plain synchronous serial: clock ~9.9 kHz (high 36 µs, low
+65.5 µs), data sampled on the rising edge and stable across a whole clock
+period."* and *"Beware: sigrok's `i2c` decoder happily "decodes" this as
 endless writes to address 0x00 — that output is the symptom of a wrong
-guess, not a result." The output was the result. The argument that
+guess, not a result."* (emphasis dropped). The output was the result. The argument that
 dismissed it was never written down; the trap is easy to reconstruct. 67
 and 66 are not multiples of 9, so neither "frame" parses as I²C bytes —
 until you see that each frame is **three transactions**, and that a decoder
@@ -420,13 +431,16 @@ land at 106/115/124 and the point at 114 — as this file has always said.
 The two button bits are the same key node on the two scan lines.
 
 **Timing** (static capture, 2 MHz): SCL high 35.5 µs, low 65.5 µs —
-9.9 kHz at 35 % duty. SDA changes 0.5–1.5 µs after SCL falls and no less
-than 62 µs before it rises again; the only SDA edges during SCL-high are
-the STARTs and STOPs. That is I²C's data-valid rule, and "sampled on the
+9.9 kHz at 35 % duty. SDA changes up to ~6.5 µs after SCL falls and at
+least 58.5 µs before it rises again; the only SDA edges during SCL-high
+are the STARTs and STOPs. *(A first draft said "0.5–1.5 µs after … no less
+than 62 µs before", read off a sample rather than the whole capture.)* That is I²C's data-valid rule, and "sampled on the
 rising edge, stable across a whole clock period" was a correct description
-of it from the receiver's side. Inside a frame the master rests SCL high
-for ~65 µs between transactions — the STOP and the next START share that
-high, which is why SCL never idles low between them; between frames both
+of it from the receiver's side. Inside a frame the STOP and the next START
+share one SCL high of ~137 µs — STOP ~37 µs after SCL rises, START 65 µs
+later, SCL falling 35.5 µs after that — which is why SCL never idles low
+between transactions *(a first draft called the 65 µs bus-free time the
+SCL-high rest)*; between frames both
 lines idle high on the 4.7 K pull-ups.
 
 **Every regular frame in the repo fits.** A census of all twelve display
@@ -459,7 +473,9 @@ from this repo is needed:
   CLAUDE.md's pin-table question. Still open, and I²C does not narrow it:
   on the F030x8 both PB6/PB7 and PB8/PB9 carry I2C1 under AF1 (PB7 is
   `I2C1_SDA`, PB8 `I2C1_SCL`), so PB7/PB8 is a hardware pairing as much
-  as PB8/PB9 is. The 35 % duty cycle and the empty-write habit fit a
+  as PB8/PB9 is — **provided PB8 is the SCL (`ESD4`) net**. PB8 is in
+  both candidates and is SCL in both pairings; if it carried SDA, neither
+  pairing would be the peripheral. The 35 % duty cycle and the empty-write habit fit a
   peripheral or a bit-bang. *(A first draft leaned to "hardware I2C1 on
   PB8/PB9" on the false premise that PB7/PB8 could only be a bit-bang.)*
 - **Whether `Disp-P4` is the AS1115 `IRQ`.** See the `Disp-P4` section
@@ -510,7 +526,7 @@ exactly when the machine is working hardest. **Parse the 67/66 pair
 directly rather than relying on a gap threshold.**
 
 **sigrok's `i2c` decoder reads this bus correctly** — writes to address
-0x00 are what it carries. *(From 2026-09-28 to 2026-10-31 this line read
+0x00, and the keyscan reads from it, are what it carries. *(From 2026-09-28 to 2026-10-31 this line read
 "that output is the symptom of a wrong guess, not a result." The guess that
 was wrong was ours.)*
 
@@ -578,15 +594,16 @@ draft before that one had said "no decimal point observed", wrong for the
 simpler reason that no brew had been captured yet.)
 
 Across all twelve captures the only decimal-point bit ever set is 114: in
-every timer frame (`00.1` … `16.9`, `21.0`) and in the `U2.4` the boot
+every timer frame (`00.0` … `16.9`, `21.0`) and in the `U2.4` the boot
 sequence writes. **105 and 123 are set in no frame at all.** The point is
 lit by the mainboard, byte by byte, like every other segment.
 
 **And the power-on string is on the bus** — see *Provenance* at the top.
-The 2026-10-05 search for the `0`/`2`/`4` segment patterns found nothing
-because the first glyph is `U`, not `0`, and because the `2` carries its
-point (`ED`, not `6D`). The `4` was there, nine bits after it, in the last
-transaction of the init sequence.
+The 2026-10-05 search for the `0`/`2`/`4` segment patterns found nothing.
+The leading `U` explains the `0`; the `2`'s seven segments are in `ED`
+whatever its point bit, and the `4` was nine bits after it, so why the
+search missed those two is unknown — its code is not in the repo. *(A
+first draft blamed the point on the `2`.)*
 
 Consequence: the operator's `E.01` reading may be punctuation, as the
 manual's `E01` suggests — or a lit point on the leading digit, which this
@@ -614,17 +631,22 @@ Three 7-segment digit fields, MSB = segment a, order abcdefg:
 | tens | `[115:122]` |
 | units | `[124:131]` |
 
-**Power-on sequence**, measured from genuinely off in
+**Power-on sequence**, every time measured from row 0 — the first edge on
+any line, 4.022235 s in the cold boot and 56.336406 s in the hot one — from
+genuinely off in
 `analysis/captures/2026-10-03-display-bus-cold-boot.sr`:
 
 | From rails up | What happens |
 |---|---|
-| 0 | all three lines leave 0 V; `ESD1`/`ESD4` settle in ~1 µs on their 4.7 K pull-ups |
+| 0 | all three lines leave 0 V; `ESD1`/`ESD4` rise on their 4.7 K pull-ups within ~1 µs — **and stay high only ~3 ms**, see the +3.0 ms row |
 | +194 µs | `Disp-P4` starts settling, taking ~250 µs — see the `Disp-P4` section **above** (rail settling, R32 = 100 K against the 4.7 K pull-ups). *(This said "see below" and the explanation is ~325 lines above it.)* |
-| +3.2 ms to +204.5 ms | `Disp-P4` LOW, then high for good — the 201 ms pulse described in the `Disp-P4` section. |
-| **+3.3 ms to +0.41 s** | **SCL driven LOW** (cold +3.3 ms, hot +3.5 ms) after the pull-up had taken it high at +0.2–0.4 ms, and held there until the pulse train. SDA stays high. That fall lands within 0.5 ms of `Disp-P4`'s, which bears on the `IRQ` question: a line that goes low alongside SCL at what looks like MCU GPIO initialisation is a different story from a keyscan interrupt. *(Added later on 2026-10-31; a first draft of this table had SCL settling high at ~1 µs and "sitting LOW" before the train with nothing between.)* |
-| +0.41 to +0.93 s | **32 bare SCL pulses, SDA high throughout**: a 99 Hz square wave on the clock line (5.04 ms high, 5.04 ms low), 16 cycles, a 212 ms pause, 16 more — the same on both boots. SCL idles HIGH after them. Not I²C transactions; a bus-recovery toggle or GPIO initialisation is the obvious guess and nothing tests it. *(Called "32–33 single-bit blips" until 2026-10-31, then "33 … then one" for part of that day: the hot boot's 33rd single-edge scrap is the rail glitch at +0.4 ms, 412 ms before the train.)* |
-| **+1.03 to +1.11 s** | **The AS1115 initialisation sequence: twelve I²C writes**, each preceded by the usual two empty writes — the "48-bit frame" (one write) and the "564-bit burst" (eleven) of earlier drafts, split only by a gap. In order: Feature ← `02` (reg_res: reset all control registers) · Shutdown ← `00` · Feature ← `04` (HEX decode select — moot, decode is off next) · Digits 0–2 ← `00 00 00` (blank) · Decode ← `00` (no decode: raw segments) · Intensity ← `06` · Scan-limit ← `02` (digits 0–2: a three-digit display) · Display-test ← `00` · Shutdown ← `80` then `81` (normal operation, feature register kept) · Intensity ← `07` · **Digits 0–2 ← `3E ED 33` = `U2.4`**. Byte-identical on both boots. Anything parsing *frames* here gets garbage; parsing *transactions* gets this. *(Until 2026-10-31: "irregular bus activity, not frames … plausibly display-controller init".)* |
+| **+3.0 ms** | **SCL and SDA driven LOW together** — SDA 8 µs after SCL, at +3.04/+3.05 ms cold and +3.08/+3.09 ms hot. |
+| **+3.4 ms** | **`Disp-P4` driven LOW**, ~0.4 ms after SCL and SDA on both boots (+3.43 ms cold, +3.48 ms hot) — and on the cold boot that fall carries the last five edges of what this file counted as the settling burst. Three lines going low in the same half-millisecond and released at three different times looks like MCU pin initialisation, which is a different story from rail settling and from a keyscan interrupt. |
+| +204.7 ms | `Disp-P4` released HIGH, for good (+204.71 ms cold, +204.74 ms hot) — the ~201 ms low pulse described in the `Disp-P4` section. |
+| +305.6 ms | SDA released HIGH (+305.55 ms cold, +305.57 ms hot), and high until the init sequence. |
+| +411.4 ms | SCL released HIGH (+411.41 ms cold, +411.43 ms hot): the first edge of the pulse train. |
+| +0.41 to +0.93 s | **32 bare SCL pulses, SDA high throughout** — the same on both boots. Two groups of 16 at 99 Hz (5.04 ms high, 5.04 ms low): the first is high pulses from a low baseline, the second low pulses from a high baseline, and SCL stays HIGH for the 207 ms between them. SCL idles HIGH after. Not I²C transactions; a bus-recovery toggle or GPIO initialisation is the obvious guess and nothing tests it. *(Called "32–33 single-bit blips" until 2026-10-31. A frame parser on the hot boot does see 33 single-edge frames, because the rail rise at +0.4 ms is one too; the pulses are 32.)* |
+| **+1.03 to +1.11 s** | **The AS1115 initialisation sequence: twelve I²C writes**, each preceded by the usual two empty writes — the "48-bit frame" (one write) and the "564-bit burst" (eleven) of earlier drafts, split only by a gap. In order: Feature ← `02` (reg_res: reset all control registers except Feature itself) · Shutdown ← `00` (shutdown, and with D7 clear it resets Feature to default too) · Feature ← `04` (HEX decode select — moot, decode is off next) · Digits 0–2 ← `00 00 00` (blank) · Decode ← `00` (no decode: raw segments) · Intensity ← `06` · Scan-limit ← `02` (digits 0–2: a three-digit display) · Display-test ← `00` · Shutdown ← `80` then `81` (normal operation, feature register kept) · Intensity ← `07` · **Digits 0–2 ← `3E ED 33` = `U2.4`**. Byte-identical on both boots. Anything parsing *frames* here gets garbage; parsing *transactions* gets this. *(Until 2026-10-31: "irregular bus activity, not frames … plausibly display-controller init".)* |
 | **~+1.1 s to +4.1 s** | **THE BUS IS SILENT — no transactions for ~3 s** — and the display shows **`U2.4`** throughout, because an AS1115 holds its digit registers and multiplexes the LEDs itself. The string was written once, at +1.10 s (the write's last edge is at +1.11 s), and stays until the mainboard blanks it at +4.12 s — about 3.0 s on the glass. *(Until 2026-10-31 this row said the display showed "`02.4`, the firmware version, with a decimal point — and nothing on the bus carries it". The bus carries it; see Provenance.)* |
 | +4.1 s | normal 67/66 framing begins |
 | +4.12 s | blank |

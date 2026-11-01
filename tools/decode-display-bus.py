@@ -43,8 +43,10 @@ PROTOCOL (measured, not guessed -- see docs/phase-0-status.md)
   Electrical  : 5 V logic, both signal lines idled high by the board's
                 4.7 K pull-ups, exactly as the traced schematic predicted.
   Signalling  : I2C. The mainboard is the master; the display board's
-                AS1115 LED driver with keyscan is the slave at its factory
-                address 0x00 (settled 2026-10-31; docs/machine-display-bus.md
+                LED driver is the slave at address 0x00 -- almost certainly
+                an AS1115 with keyscan, though no chip on this machine has
+                been read (I2C observed, AS1115 inferred, 2026-10-31;
+                docs/machine-display-bus.md
                 has the anatomy). sigrok's i2c decoder reads it correctly:
                   sigrok-cli -i capture.sr -P i2c:scl=D1:sda=D0
                 (scl=D0:sda=D1 for the 2026-09-28 files.) This script does
@@ -55,7 +57,7 @@ PROTOCOL (measured, not guessed -- see docs/phase-0-status.md)
                 is how you know it is wrong". It was right.
                   SCL ~9.9 kHz (high 35.5 us, low 65.5 us)
                   SDA sampled on the RISING clock edge, as I2C specifies
-                  SDA changes only while SCL is low
+                  SDA changes only while SCL is low, except at START/STOP
   Framing     : frames repeat every ~41 ms, separated by >1 ms of clock
                 idle. The bus actually sends a 67-bit frame (a read of the
                 keyscan registers: buttons) then a 66-bit frame (a write of

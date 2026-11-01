@@ -7,9 +7,10 @@
 // protocol; the captures everything here was derived from, with their
 // channel mapping and sample rates, are in analysis/captures/.
 //
-// The bus is I²C: the mainboard is the master, the display board's AS1115
-// LED driver with keyscan is the slave, at its factory address 0x00
-// (settled 2026-10-31 from the captures; docs/machine-display-bus.md has the
+// The bus is I²C: the mainboard is the master, the display board's LED
+// driver is the slave at address 0x00 — almost certainly an AS1115 with
+// keyscan at its factory address, though no chip on this machine has been
+// read (I²C observed, AS1115 inferred, 2026-10-31, from the captures; docs/machine-display-bus.md has the
 // transaction anatomy). ~9.9 kHz SCL on ESD4, SDA on ESD1. This decoder
 // does not speak I²C: it counts SCL rising edges, samples SDA on each, and
 // reads segment bits by offset — which works because the mainboard's

@@ -25,7 +25,8 @@ A visual tour is in [docs/overview.md](docs/overview.md).
 ## Two results worth reading even if you don't own this machine
 
 **The front display bus is decoded.** The Ascaso's mainboard talks to its
-display over **I²C — an AS1115 LED driver with keyscan at address 0x00**
+display over **I²C, at address 0x00, to what the evidence says is an AS1115
+LED driver with keyscan** (no chip on this machine has been read)
 (this README said "not I²C, whatever sigrok's decoder claims" until
 2026-10-31; sigrok's decoder was right). ~9.9 kHz SCL, and a **67-bit frame
 followed by a 66-bit frame** every ~41 ms — the 67 is a read of the keyscan

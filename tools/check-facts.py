@@ -188,6 +188,9 @@ REQUIRED = {
     # sites state it as live; losing a tag must fail rather than let one
     # copy drift back to the old figure.
     "oneshot-target":      {"min_files": 3, "claude_md": True},
+    # The display bus protocol and driver, settled 2026-10-31 from the
+    # captures. Two sites: the CLAUDE.md headline and the normative doc.
+    "display-bus-driver":  {"min_files": 2, "claude_md": True},
     # The photoMOS LED-drive resistor. Tagged 2026-10-19 after two review
     # rounds each found a surviving "330 or 390" / unqualified "guaranteed
     # 3.0 mA" site in a file the correction had not reached. NOT claude_md:

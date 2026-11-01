@@ -143,8 +143,10 @@ bool DisplayBus::finishFrame(uint32_t t_us) {
   if (n == 0) return false;
   if (skip_first) {
     // Spend the guard only on a frame that WOULD have been decoded. The
-    // power-on burst is full of one-bit blips (32-33 of them, see
-    // CLAUDE.md) and decodeFrame() rejects those anyway; letting one
+    // power-on activity is full of one-bit blips (32-33 of them: 32 clock
+    // pulses before the init sequence, plus the rail rise on some boots; see
+    // the power-on table in docs/machine-display-bus.md) and decodeFrame()
+    // rejects those anyway; letting one
     // consume the guard would hand the real misaligned fragment straight
     // through, which is the opposite of the intent.
     if (n == MERGED_FRAME_BITS || n == BUTTON_FRAME_BITS || n == DIGIT_FRAME_BITS)

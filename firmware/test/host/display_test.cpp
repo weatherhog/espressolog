@@ -453,8 +453,9 @@ int main() {
     printf("attach fragment is discarded; a lone fragment never latched OK\n");
   }
 
-  // 20. A one-bit blip must NOT spend the guard. The power-on burst carries
-  //     32-33 single-bit frames (CLAUDE.md), and decodeFrame() rejects
+  // 20. A one-bit blip must NOT spend the guard. Power-on carries 32-33
+  //     single-bit frames (32 clock pulses, plus the rail rise on some boots;
+  //     docs/machine-display-bus.md, power-on table), and decodeFrame() rejects
   //     those anyway — so if one consumed skip_first, the real misaligned
   //     fragment would be handed straight through, which is the exact
   //     opposite of the intent. Attaching with the machine off and powering

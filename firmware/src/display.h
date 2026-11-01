@@ -7,9 +7,19 @@
 // protocol; the captures everything here was derived from, with their
 // channel mapping and sample rates, are in analysis/captures/.
 //
-// Plain synchronous serial, NOT I²C whatever sigrok's i2c decoder claims:
-// a ~9.9 kHz clock, data stable across a whole clock period and sampled on
-// the RISING edge.
+// The bus is I²C: the mainboard is the master, the display board's LED
+// driver is the slave at address 0x00 — almost certainly an AS1115 with
+// keyscan at its factory address, though no chip on this machine has been
+// read (I²C observed, AS1115 inferred, 2026-10-31, from the captures; docs/machine-display-bus.md has the
+// transaction anatomy). ~9.9 kHz SCL on ESD4, SDA on ESD1. This decoder
+// does not speak I²C: it counts SCL rising edges, samples SDA on each, and
+// reads segment bits by offset — which works because the mainboard's
+// transactions are fixed in shape. Every frame below is three I²C
+// transactions, and each STOP set-up — plus the repeated START in the
+// keyscan read — adds one SCL edge: three in the digit frame, four in the
+// keyscan frame, so the counts are 66 and 67 rather than 63.
+// (This header said "plain synchronous serial, NOT I²C whatever sigrok's
+// i2c decoder claims" until 2026-10-31. sigrok was right.)
 //
 // FRAME STRUCTURE. Every ~41 ms the bus sends a 67-bit frame carrying the
 // BUTTON state, then a 66-bit frame carrying the DIGITS. The gap between
@@ -28,10 +38,13 @@
 // 1Cup and 2Cup emit byte-identical button frames, so J2 sensing (0c)
 // still has a job.
 //
-// THE MODE BIT. Bit 47 of the digit frame is set while the display is
-// showing a timer and clear while it is showing a temperature — verified
-// across every capture, including a setpoint ramp through 96…120 °C where
-// it stays clear. So "100" is unambiguous. This decoder used to guess,
+// THE MODE BIT. Bit 47 of the digit frame is the middle digit's DECIMAL
+// POINT — D7 of the AS1115 digit-1 byte — and the mainboard lights it
+// while the display is showing a timer (it reads `16.9`) and never while it
+// is showing a temperature — verified across every capture, including a
+// setpoint ramp through 96…120 °C where it stays clear. So "100" is
+// unambiguous. (Called a mode flag here until 2026-10-31; functionally it
+// still is one.) This decoder used to guess,
 // by assuming three digits that stopped changing for 1.5 s must be a
 // temperature; the machine had been saying so outright all along.
 //

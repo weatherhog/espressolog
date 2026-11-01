@@ -42,15 +42,29 @@ PROTOCOL (measured, not guessed -- see docs/phase-0-status.md)
                 red/black/red/black because it was cut from two reels)
   Electrical  : 5 V logic, both signal lines idled high by the board's
                 4.7 K pull-ups, exactly as the traced schematic predicted.
-  Signalling  : plain synchronous serial, NOT I2C. An i2c decoder will
-                "successfully" decode it as endless writes to address 0x00,
-                which is how you know it is wrong.
-                  clock ~9.9 kHz (high 36 us, low 65.5 us)
-                  data sampled on the RISING clock edge
-                  data is stable across a whole clock period
+  Signalling  : I2C. The mainboard is the master; the display board's
+                LED driver is the slave at address 0x00 -- almost certainly
+                an AS1115 with keyscan, though no chip on this machine has
+                been read (I2C observed, AS1115 inferred, 2026-10-31;
+                docs/machine-display-bus.md
+                has the anatomy). sigrok's i2c decoder reads it correctly:
+                  sigrok-cli -i capture.sr -P i2c:scl=D1:sda=D0
+                (scl=D0:sda=D1 for the 2026-09-28 files.) This script does
+                not speak I2C -- it counts SCL rising edges and reads
+                segment bits by offset, which works because the master's
+                transactions are fixed in shape. Until 2026-10-31 this
+                docstring said "plain synchronous serial, NOT I2C ... which
+                is how you know it is wrong". It was right.
+                  SCL ~9.9 kHz (high 35.5 us, low 65.5 us)
+                  SDA sampled on the RISING clock edge, as I2C specifies
+                  SDA changes only while SCL is low, except at START/STOP
   Framing     : frames repeat every ~41 ms, separated by >1 ms of clock
-                idle. The bus actually sends a 67-bit frame (buttons)
-                then a 66-bit frame (digits); a "133-bit frame" is the two
+                idle. The bus actually sends a 67-bit frame (a read of the
+                keyscan registers: buttons) then a 66-bit frame (a write of
+                the three digit registers); each is three I2C transactions,
+                and each STOP set-up, plus the keyscan read's repeated
+                START, adds one counted edge: three in the digit frame,
+                four in the keyscan frame, hence 66 and 67 rather than 63. A "133-bit frame" is the two
                 merged because the gap between them usually falls under
                 FRAME_GAP_S. See CLAUDE.md. This decoder only handles the
                 merged form, so it drops standalone 66-bit frames and the

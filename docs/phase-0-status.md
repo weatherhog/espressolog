@@ -1737,12 +1737,9 @@ unidentified, both marked "do not buy yet".)*
 | **0d-i — weigh the split** | portafilter, scale, drip tray | **every "~5×" in this repo.** The figure divides by an *assumed* inlet |
 | **`boiler_temp_start_c`'s meaning** | a capture with the boiler pulled off setpoint | 0e's open half |
 | **0f re-run** | 30 shots carrying `machine_timer_s` | the Phase 3 deadband |
-| **What `Disp-P4` (J5 pin 4) is** *(added 2026-11-01)* | machine **off and unplugged**, the display harness unplugged at J5, a meter on continuity, the display board in hand | **nothing in the build** — the rule is "never drive it, never load it" whatever it turns out to be. It settles what the line is for and grades the display driver. Three readings, display end of the harness: **J5 pin 4 → the driver's `IRQ` pin**, **J5 pin 2 (`ESD1`) → its SDA**, **J5 pin 3 (`ESD4`) → its SCL**. On an AS1115 in QSOP-24 those are pins **24, 1 and 14** (TQFN-24: 21, 22, 11) — **confirm the package before probing**. While the board is out, **read the chip marking**: that alone promotes the AS1115 from INFERRED to OBSERVED. Pin 4 reaching `IRQ` makes it the interrupt, and then the open question is why it never asserts during 79 key changes; pin 4 reaching anything else kills the interrupt reading and leaves a presence or reset line, which is what its boot behaviour looks like (driven low ~0.4 ms after SCL and SDA at +3.4 ms, released at +204.7 ms, never moves again). `docs/machine-display-bus.md`, the `Disp-P4` section, has the evidence |
 
 **Only the first is doable tonight** — the rig is semi-permanent and the
-three T-pieces carry their series resistors. *(The `Disp-P4` row, added
-2026-11-01, is doable any time the machine is off: it needs a meter and the
-display harness unplugged, not the rig.)*
+three T-pieces carry their series resistors.
 
 **Grade the analyser clearance as `docs/taps-and-dividers.md` grades it, not
 as "harmless", which a draft of this line wrote.** The reading is 2.89 V
@@ -1752,6 +1749,68 @@ a datasheet worst case** (1 µA of HC leakage into an 89 kΩ source is up to
 89 mV), and what it clears is **bench** use. This measurement is machine-on,
 which is not the case that was cleared. Very probably fine; not the same
 claim.
+
+### Open, and gates nothing — what `Disp-P4` (J5 pin 4) is *(added 2026-11-01)*
+
+**The build does not wait on this.** The rule is "never drive it, never
+load it" whatever the line turns out to be. This tests one reading of it —
+that it is the display driver's interrupt — and, with one look at the chip,
+grades the driver.
+
+**Needs:** the machine off and unplugged; the display board off the front
+panel, so the chip is in hand; the J5 harness lifted off its header, which
+means taking the J5 T-piece off — **a rig-down job, not an any-time one**.
+A meter in **Ω mode**, not on the beeper: a beeper stays silent above a few
+tens of ohms, so a series resistor on the display board would read as no
+path.
+
+1. **Mark pin 4 before unplugging**, or orient the loose plug by the pads
+   as `docs/machine-display-bus.md` describes; the wire colours alone do
+   not orient it. Probe the plug's own contacts with the T-piece off:
+   through the T-piece branch every reading carries its 8.2 K series
+   resistor.
+2. **Pins 2 and 3 first.** J5 pin 2 (`ESD1`) to the driver's SDA, J5 pin 3
+   (`ESD4`) to its SCL. Record the Ω values. **Both must land before the
+   pin 4 reading counts** — a reversed plug makes "pin 4" `VSS`.
+3. **Pin 4 to the driver's `IRQ`.** Record the Ω value.
+4. **Pin 4 to the display board's VDD**, Ω. This is what pulls the line
+   high, and CLAUDE.md gives "its pull-up strength is unrecorded" as the
+   reason never to load it. It costs nothing while the board is out.
+5. **Read the chip marking.** "AS1115" promotes the identification from
+   INFERRED to OBSERVED.
+
+AS1115 pins, from the datasheet's Table 1 and pin drawings: **QSOP-24**
+`IRQ` 24, SDA 1, SCL 14; **TQFN-24** `IRQ` 21, SDA 22, SCL 11. Confirm the
+package first. On TQFN the pads sit under the body; probe the traces they
+fan out to.
+
+**Grading the result.**
+
+- **A low Ω from pin 4 to `IRQ`** makes it the interrupt. The open question
+  then becomes why it never asserted across 79 key changes in the button
+  captures (`docs/machine-display-bus.md`, the `Disp-P4` section).
+- **A finite value** means a series part on the way. That is still a path.
+- **No continuity is INCONCLUSIVE, not "not `IRQ`"**, until the trace has
+  been followed. Probing near J5 has produced a false null before: the J4
+  entry further down this file records the board header pins giving "no
+  beep at all" against the J5 pin 1 pad.
+- **A traced path to somewhere else** retires the interrupt reading, and
+  what the line is then stays open.
+
+What is known of its behaviour, from `docs/machine-display-bus.md`: driven
+low at +3.4 ms, ~0.4 ms after SCL and SDA; released at +204.7 ms; high in
+every sample afterwards on both boots. The bus doc reads that as MCU pin
+initialisation. It is not perfectly silent afterwards either:
+`2026-09-28-display-bus-flush-timer.sr` carries two 1 µs glitches
+mid-flush. **A presence or reset line is a guess, not a reading** — and the
+AS1115 has no reset input.
+
+*(First written 2026-11-01 as a row in the table above, under a heading
+that says its rows gate things; it gates nothing. That draft read a beeper
+null as ruling out `IRQ`, said the check "settles what the line is for",
+said the line "never moves again" after boot, called it a presence or
+reset line without grading that, and cited 79 key changes the bus doc did
+not yet state. A pre-push review caught all of it.)*
 
 ### Assembly — unblocked, nothing waiting on it
 

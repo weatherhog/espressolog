@@ -200,8 +200,10 @@ reaches the MCU through a sensing transistor: the AS1115 pulls `IRQ` low
 when its debounced keyscan registers change and releases it when they are
 read. **The captures say no, or at least not as the datasheet describes
 it**: across `-buttons.sr`, `-buttons-separated.sr` and `-setup-menu.sr` —
-130 s, more than twenty presses and releases, every one of them visible in
-the KEYA/KEYB bytes of the 67-bit frames — `Disp-P4` has **zero** edges
+130 s and **79 changes of the KEYA/KEYB pair** (32 + 20 + 27, counted
+2026-11-01 from sigrok's `i2c` data-read annotations; "more than twenty
+presses and releases" until then), every one of them visible in the
+67-bit frames — `Disp-P4` has **zero** edges
 and sits high throughout. With the mainboard polling the keyscan every
 41 ms, a key change should have pulled it low for up to 41 ms, which a
 1 MHz capture cannot miss. Either it is not the `IRQ`, or the `IRQ` is not
@@ -479,7 +481,9 @@ from this repo is needed:
   peripheral or a bit-bang. *(A first draft leaned to "hardware I2C1 on
   PB8/PB9" on the false premise that PB7/PB8 could only be a bit-bang.)*
 - **Whether `Disp-P4` is the AS1115 `IRQ`.** See the `Disp-P4` section
-  above: the captures argue against it.
+  above: the captures argue against it. The meter check that tests it,
+  and the chip-marking read that would grade the AS1115 OBSERVED, are in
+  `docs/phase-0-status.md`, under *Open, and gates nothing*.
 - **The 32 bare SCL pulses** before the init sequence, and the 408 ms of
   driven-low SCL before them — power-on table.
 

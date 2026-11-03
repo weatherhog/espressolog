@@ -113,7 +113,7 @@ Its J4 entry already says that tap is unplugged.)*
 
 ### Ordered, in transit
 
-**Reichelt, €42.28, 2026-10-27.** `CD74HC221E` ×10 · BC547B ×14 · 330 Ω ×25
+**Reichelt, €42.28, 2026-10-27 — RECEIVED by 2026-11-03**, when its '221, 330 K and 1 µF MKT were on the bench. `CD74HC221E` ×10 · BC547B ×14 · 330 Ω ×25
 · **330 K ×10 and 470 K ×10** · MKT 470 nF / 680 nF / 1 µF ×10 each ·
 470 pF NP0 ×10 · 100 nF X7R ×10 · `DIL08PZ` ×10 · `DIL16PZ` ×10 ·
 `WSL040G` male header · adhesive 3:1 heat-shrink 4.8 mm and 6.0 mm, 1 m each.
@@ -163,8 +163,8 @@ Give it a §7 row with a stated purpose, or drop it from the build. Flagged
 
 **The RC pair is the point of the 330 K / 470 K order**, and it is not
 obvious from the line item: against the three MKT values it gives a
-six-point sweep for the one-shot, which is the measurement this project has
-been unable to make. `t_W = 0.7·R·C`:
+six-point sweep for the one-shot. `t_W = 0.7·R·C`, as predicted before the
+bench:
 
 | | 470 nF | 680 nF | 1 µF |
 |---|---|---|---|
@@ -175,8 +175,9 @@ All six are far below the ~2 s reprogram threshold. **109 ms may be too
 short** — the latching minimum is bounded only at "under ~140 ms", true
 value in [23, 137] ms — which is exactly why a sweep was bought rather than
 a pair. `t_W = 0.7·R·C` is characterised at 4.5 V and this runs at 3.3 V,
-so the widths above are predictions to check on the bench, not values to
-build to.
+so the widths above are predictions, not values to build to. **One pair has
+since been measured: 330 K / 1 µF gives 220 ms at 3.3 V (2026-11-03), and it
+is the pair chosen.** The other five were not measured.
 
 ### Outstanding
 
@@ -616,8 +617,8 @@ with the vendor's label, and nothing had been counted at all.
 **Material: FR-4, not FR-2 phenolic.** A ten-pack of brown
 *Holzleimplatte 94HB* was the cheaper candidate and was rejected: phenolic
 pads are glued to the substrate with no plated barrel, so they lift under
-heat. **This board will be reworked** — the one-shot RC went through a bench
-sweep before it was chosen *("is unchosen and there is a six-point sweep to
+heat. **This board will be reworked** — the one-shot RC was chosen by
+measuring one pair on the bench *("is unchosen and there is a six-point sweep to
 run through it" until 2026-11-03)* — and a lifted pad under a
 photoMOS is an invariant-1 question, not a cosmetic one. FR-4 at 1.6 mm
 fixes the adhesion; plated-through would be a bonus and the listing does
@@ -842,7 +843,7 @@ keeps its need and says so in the cell. *(Two rows read 0 for a day on
 | **2-pin male header** | 3 | the disables. **Buy no shunts** — open is the specified state and a loose shunt in the box is a hazard. Cut from a 1×40 male strip. |
 | ~~DIP-16 socket~~ **ALREADY HELD, TWICE OVER — see §1** | 0 | wire the socket, verify, *then* insert the '221 — 16 hand-wired joints with no heat near the part. Pulling the IC is also a third disable, stronger than an open jumper. **Twenty are on hand or in transit against the three this needs** *(three until 2026-10-29, two until the gate on 2026-10-30 — see the '221 row above)* (round-hole ×10 received, `DIL16PZ` ×10 ordered); §1 records the duplicate. |
 | ~~Machined **round-pin** SIP socket strip 1×40~~ → **`DIL08PZ`, cut in half — ORDERED ×10, see §1** | 2 | **DIP-4 sockets are not a stocked item, and a SIP strip is not the only answer — SETTLED 2026-10-28.** A DIP-8 precision socket is 4+4 on **7.62 mm rows — the same row spacing and 2.54 mm pitch as the AQY212EH, which is itself 2+2**; cut one crosswise and each half is a 2+2 DIP-4 socket. *(This row said 4+4 "is exactly the AQY212EH footprint" until 2026-10-29. It is not — 4+4 is the DIP-8's own layout, and what matches is the row spacing and pitch, which is all the cut needs. The geometry was right and the sentence named the wrong part.)* Ten were ordered, giving twenty against the **four** DIP-4 sockets needed, so a ragged cut costs nothing. <!-- fact:dip4-sockets four DIP-4 --> *(The Qty cell read **3** until 2026-10-29, then **0** for a day, then **4** until 2026-10-30. **[SUPERSEDED 2026-10-30: "neither the ten ordered nor the four DIP-8s that eight DIP-4 sockets require. Three would have been short"]** — the board has four photoMOS in service, so it needs four DIP-4 sockets, which is two DIP-8s, and three was over rather than short. Where the eight came from is **INFERRED, not recorded**: the SIP row it replaced (`1885247`) cut "two per photoMOS", and two SIP pieces per photoMOS looks to have been carried over as two sockets.)* Soldering the photoMOS directly is still acceptable: a socket contact going intermittent fails **open**, which is the safe direction here. |
-| ~~Film capacitors, ~0.47 / 1 / 2.2 µF~~ **ORDERED 2026-10-27 as a deliberate sweep, in transit — see §1** | few | one-shot RC. **MKT 470 nF / 680 nF / 1 µF ×10 each, with 330 K and 470 K ×10**, which is the six-point 109–329 ms sweep §1 sets out; **2.2 µF was never ordered and 150 kΩ is no longer the resistor for this job.** **FIXED 2026-11-03: 330 K / 1 µF, measured 220 ms at 3.3 V** *("Do not fix the value yet — the sweep exists to be run" until then)*. **MOUNTING DECIDED 2026-10-29: 2-pin headers for the bench sweep, then SOLDERED for the build, never a socket in service** — an intermittent `R_ext` fails toward a HOLD, the opposite direction to the photoMOS socket this list accepts; `docs/phase-0-plan.md` has the reasoning under "Two things that bound the firmware-side failures". The caveats below are unchanged and are why it is a sweep rather than a calculation. `t_W = 0.7 · R_x · C_x` **characterised at V_CC = 4.5 V** — and this build runs the '221 at **3.3 V**, where the coefficient is not guaranteed; Fairchild's version of the same part documents `PW = R·C` with no 0.7 at all, and part-to-part spread is ±5 %. *(Kept as a retraction: at the 150 kΩ this row used to assume, 1 µF gives **105 ms**, not the ~120 ms a draft stated — 120 ms needs 1.14 µF, or 171 kΩ at 1 µF. The ordered pair starts at 330 K, so neither number is live.)* It was measured on the bench and is the pair closest to the **~250 ms target** (decided 2026-10-31). Minimum R_x ≈ 500 Ω. |
+| ~~Film capacitors, ~0.47 / 1 / 2.2 µF~~ **ORDERED 2026-10-27 as a deliberate sweep, RECEIVED — see §1** | few | one-shot RC. **MKT 470 nF / 680 nF / 1 µF ×10 each, with 330 K and 470 K ×10**, which is the six-point 109–329 ms sweep §1 sets out; **2.2 µF was never ordered and 150 kΩ is no longer the resistor for this job.** **FIXED 2026-11-03: 330 K / 1 µF, measured 220 ms at 3.3 V** *("Do not fix the value yet — the sweep exists to be run" until then)*. **MOUNTING DECIDED 2026-10-29: 2-pin headers for the bench sweep, then SOLDERED for the build, never a socket in service** — an intermittent `R_ext` fails toward a HOLD, the opposite direction to the photoMOS socket this list accepts; `docs/phase-0-plan.md` has the reasoning under "Two things that bound the firmware-side failures". The caveats below are why the value was measured rather than calculated; only the chosen pair was measured. `t_W = 0.7 · R_x · C_x` **characterised at V_CC = 4.5 V** — and this build runs the '221 at **3.3 V**, where the coefficient is not guaranteed; Fairchild's version of the same part documents `PW = R·C` with no 0.7 at all, and part-to-part spread is ±5 %. *(Kept as a retraction: at the 150 kΩ this row used to assume, 1 µF gives **105 ms**, not the ~120 ms a draft stated — 120 ms needs 1.14 µF, or 171 kΩ at 1 µF. The ordered pair starts at 330 K, so neither number is live.)* It was measured on the bench and is the pair closest to the **~250 ms target** (decided 2026-10-31). Minimum R_x ≈ 500 Ω. |
 
 ### The LED drive, which this list did not previously cost at all
 

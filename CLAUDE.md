@@ -423,8 +423,9 @@ Eight pulses on one '221 channel on a breadboard read 219.8–221.0 ms
 (`analysis/captures/2026-11-03-oneshot-330k-1u.sr`), so the effective
 coefficient for those parts is ~0.67, not the datasheet's 0.7 at 4.5 V. It
 is the ordered pair closest to 250 ms; the next is 470 K / 680 nF at a
-predicted ~213 ms. 220 ms is still 1.6× the ~137 ms bound. The analyser capture on a J2 junction is no
-longer needed to choose the RC; it would only matter for a shorter press.
+predicted ~213 ms. 220 ms is one channel's width, 1.6× the ~137 ms bound;
+the press the machine sees is the overlap of two channels and is shorter.
+The analyser capture on a J2 junction is no longer needed to choose the RC; it would only matter for a shorter press.
 *(Until 2026-10-31 this read "THE RC IS NOT CHOSEN", with ~120 ms as the
 working figure and the analyser capture as the blocker. Nothing recorded
 why ~120 ms rather than anything else under 2 s, and 120 ms was not

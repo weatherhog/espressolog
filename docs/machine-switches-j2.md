@@ -8,7 +8,8 @@
 > that a hold > ~2 s REPROGRAMS the stored duration (so the durations are
 > user-modifiable state and no fail-safe-open design is possible), that
 > Phase 1 needs a hardware one-shot and it must be a 74HC221 and not a
-> '123, that the RC is still unchosen and getting it wrong fails silently,
+> '123, that the RC is 330 K / 1 µF (220 ms measured on one channel) and
+> getting it wrong fails silently,
 > that 345–480 ms is one session's presses and `grep` rather than a list is
 > how its citation sites are found, and the brew-guard fail-to-ARM exposure
 > — which is a live invariant-2 finding and is NOT here.

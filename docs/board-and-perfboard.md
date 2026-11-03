@@ -250,7 +250,7 @@ The enumeration above agrees with that document at all 44 positions.
 
 **NO TAP DRAWS FROM 3V3.** The position table calls positions 1-2 "the
 divider supply" and that is wrong — every divider here is fed from a
-**machine** signal and returns to GND (J2: 150 K from the direction line, on the board at the J2 header since 2026-11-03;
+**machine** signal and returns to GND (J2: 150 K from the direction line, on the board at the J2 header for the build, decided 2026-11-03;
 J4: 100 K from `#`; J5: 8.2 K at the T-piece). 3V3 carries zero *tap* current.
 
 **The rail is still needed, and a draft of this paragraph said it was not.**

@@ -194,8 +194,13 @@ motivated the question still stands: *a one-shot that is too short produces
 a drive path that silently does nothing, and the sense tap would still show
 the pulse, so it would look like it worked.* 250 ms clears the ~137 ms upper
 end of the quantised band with room for the photoMOS overlap and RC spread,
-and stays far below the ~2 s reprogram threshold. **The RC is picked on the
-bench**: sweep at 3.3 V and fit the R and C that measure closest to 250 ms.
+and stays far below the ~2 s reprogram threshold.
+<!-- fact:oneshot-rc 330 K / 1 µF|220 ms -->
+**The RC is 330 K / 1 µF, measured 220 ms at 3.3 V on 2026-11-03** — the
+ordered pair closest to 250 ms, eight pulses at 219.8–221.0 ms, an
+effective coefficient of ~0.67 (`analysis/captures/2026-11-03-oneshot-330k-1u.sr`).
+*(Until 2026-11-03 this said "the RC is picked on the bench: sweep at 3.3 V
+and fit the R and C that measure closest to 250 ms".)*
 *(Until 2026-10-31 this read "THE RC REMAINS UNCHOSEN" and asked for the
 measurement to be redone with the logic analyser on a J2 junction before
 the RC could be chosen. With a target this far above the bound, that

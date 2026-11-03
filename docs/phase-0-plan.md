@@ -1467,8 +1467,9 @@ does not work:
   - **OPEN — the gate, readback and `drivetest`, for the bench sweep
     (recorded 2026-10-30, not settled on paper).** Four drafts of this
     design went wrong in one day, mostly by deciding behaviour before
-    anything was measured. The gate's timing waits for the drive channels'
-    RC to be chosen:
+    anything was measured. The drive channels' RC is chosen since
+    2026-11-03 (330 K / 1 µF, 220 ms measured on one channel; CLAUDE.md);
+    the gate's own timing is still open:
     - **A minimum gap between gate pulses.** Each window is bounded; the
       gap between windows is not, so runaway firmware can chain them into
       one press past ~2 s. Candidates: a second '221 stage or an RC

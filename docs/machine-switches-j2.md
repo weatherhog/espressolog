@@ -8,7 +8,8 @@
 > that a hold > ~2 s REPROGRAMS the stored duration (so the durations are
 > user-modifiable state and no fail-safe-open design is possible), that
 > Phase 1 needs a hardware one-shot and it must be a 74HC221 and not a
-> '123, that the RC is still unchosen and getting it wrong fails silently,
+> '123, that the RC is 330 K / 1 µF (220 ms measured on one channel) and
+> getting it wrong fails silently,
 > that 345–480 ms is one session's presses and `grep` rather than a list is
 > how its citation sites are found, and the brew-guard fail-to-ARM exposure
 > — which is a live invariant-2 finding and is NOT here.
@@ -194,8 +195,13 @@ motivated the question still stands: *a one-shot that is too short produces
 a drive path that silently does nothing, and the sense tap would still show
 the pulse, so it would look like it worked.* 250 ms clears the ~137 ms upper
 end of the quantised band with room for the photoMOS overlap and RC spread,
-and stays far below the ~2 s reprogram threshold. **The RC is picked on the
-bench**: sweep at 3.3 V and fit the R and C that measure closest to 250 ms.
+and stays far below the ~2 s reprogram threshold.
+<!-- fact:oneshot-rc 330 K / 1 µF|220 ms -->
+**The RC is 330 K / 1 µF, measured 220 ms at 3.3 V on 2026-11-03** — the
+ordered pair closest to 250 ms, eight pulses at 219.8–221.0 ms, an
+effective coefficient of ~0.67 (`analysis/captures/2026-11-03-oneshot-330k-1u.sr`).
+*(Until 2026-11-03 this said "the RC is picked on the bench: sweep at 3.3 V
+and fit the R and C that measure closest to 250 ms".)*
 *(Until 2026-10-31 this read "THE RC REMAINS UNCHOSEN" and asked for the
 measurement to be redone with the logic analyser on a J2 junction before
 the RC could be chosen. With a target this far above the bound, that

@@ -188,6 +188,9 @@ REQUIRED = {
     # sites state it as live; losing a tag must fail rather than let one
     # copy drift back to the old figure.
     "oneshot-target":      {"min_files": 3, "claude_md": True},
+    # The drive one-shot RC and its measured 3.3 V pulse, picked 2026-11-03
+    # from one measured pair. The pair and the width travel together.
+    "oneshot-rc":          {"min_files": 3, "claude_md": True},
     # The display bus protocol and driver, settled 2026-10-31 from the
     # captures. Two sites: the CLAUDE.md headline and the normative doc.
     "display-bus-driver":  {"min_files": 2, "claude_md": True},

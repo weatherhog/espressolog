@@ -252,3 +252,12 @@ not a defect in the capture.
 **Do not read "0 edges" as "the flowmeter does not pulse".** The capture
 cannot distinguish a dead sensor, wrong nets, a shorted conductor, and
 probes on nothing.
+
+## Bench, not machine: the one-shot pulse
+
+`2026-11-03-oneshot-330k-1u.sr` is **not** a machine capture. It is one
+CD74HC221E channel on a breadboard at 3.3 V, `R_X` = 330 K, `C_X` = 1 µF,
+`B` and `R̅` tied high. **1 MHz, D0 = `1Q` (pin 13), D1 = `1A̅` (pin 1).**
+Eight `Q` pulses at 219.8–221.0 ms. There are twice as many pulses as
+touches: the trigger wire was held longer than the pulse, so its release
+bounce fired a second one. That is normal for a non-retriggerable part.

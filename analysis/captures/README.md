@@ -261,3 +261,10 @@ CD74HC221E channel on a breadboard at 3.3 V, `R_X` = 330 K, `C_X` = 1 µF,
 Eight `Q` pulses at 219.8–221.0 ms. There are twice as many pulses as
 touches: the trigger wire was held longer than the pulse, so its release
 bounce fired a second one. That is normal for a non-retriggerable part.
+
+`2026-11-03-oneshot-470k-1u.sr` is the same rig with `R_X` = 470 K and the
+same 1 µF capacitor: the PROPOSED gate's RC candidate. **1 MHz, D0 = `1Q`,
+D1 = `1A̅`, 60 s.** Thirteen `Q` pulses at 313.1–316.5 ms, all in the last
+half of the file. The pulses at 31.7 s and 32.0 s run back to back: the
+trigger wire's release bounce put a fresh falling edge on `A̅` 41 µs after
+the first pulse ended, and that fired the second.

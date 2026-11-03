@@ -1477,14 +1477,21 @@ does not work:
       second. The spare channel on the gate chip is the obvious part.
     - **The margin ordering**: drive `t_max` sample < gate minimum width;
       gate maximum width ≤ 500 ms < gate `t_max` sample < firmware ISR cap
-      < ~2 s. Every value in it is unchosen.
-    - **The gate RC values.** The drive sweep's ordered 330 K / 470 K
-      against 470 nF–1 µF spans roughly 109–329 ms at `0.7 R C` (the 4.5 V
-      formula). A drive choice below the top of that range leaves an ordered
-      pair long enough for the gate; **only if the sweep picks a drive pulse
-      near the top does the gate need parts not yet bought.** *(This said
-      "no ordered pair is known to reach a gate longer than the drive
-      pulse" until review the same day — false as written.)*
+      < ~2 s. The two pulse widths in it are now measured on one channel
+      each — drive 220 ms, gate candidate 315 ms — and the sample points and
+      the ISR cap are unchosen. *("Every value in it is unchosen" until
+      2026-11-03.)*
+    <!-- fact:gate-rc-candidate@1 470 K / 1 µF|315 ms -->
+    - **The gate RC candidate is 470 K / 1 µF, measured 315 ms at 3.3 V on
+      2026-11-03** (13 pulses, 313.1–316.5 ms,
+      `analysis/captures/2026-11-03-oneshot-470k-1u.sr`). It is the only
+      ordered pair between the drive's 220 ms and the 500 ms cap. It is a
+      candidate, not a choice: the gate itself is still PROPOSED. Both
+      measured pairs share one 1 µF capacitor, so the matching ~0.67
+      coefficient does not separate the chip from that capacitor's
+      tolerance. *(Until 2026-11-03 this bullet gave only the `0.7 R C`
+      predictions and said the gate would need parts not yet bought if the
+      drive pulse landed near the top of the range.)*
     - **A gate `R_ext` that fails in service stays hidden until the next
       boot**, because every normal arm ends the gate early and `drivetest`
       runs once per boot. The board runs for weeks, so the first of the

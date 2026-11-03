@@ -847,7 +847,8 @@ otherwise:**
   neither and is on the plan's known-unmitigated list.
 - *PROPOSED 2026-10-30, not decided.* **A third '221 channel, the gate,
   bounds each arm window in hardware at ≤ 500 ms**; reserve its DIP-16, <!-- fact:arm-window-cap@1 500 ms -->
-  RC, pulls and two pins on the layout. Dropping it later is a small,
+  RC, pulls and two pins on the layout. Its RC candidate is <!-- fact:gate-rc-candidate@1 470 K / 1 µF|315 ms -->
+  **470 K / 1 µF, measured 315 ms at 3.3 V** (2026-11-03). Dropping it later is a small,
   deliberate rework — one wire from GPIO38 to the tied `R̅` net — and no
   link position is reserved for it, because an unfitted link beside a
   socketed gate is a bridge hazard. **That rework also removes or

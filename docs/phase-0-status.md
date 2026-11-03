@@ -821,7 +821,11 @@ not assumed from the build:
 
 That placement is not tidiness. **GPIO15-18 emit a ~60 µs low pulse at
 power-up** and three switch pins are in that range; the series resistor at the
-machine end is what keeps the tap passive through it. The same sweep also
+machine end is what keeps the tap passive through it. **For the build, J2's
+four 150 K move onto the board at the J2 header (decided 2026-11-03)**, so
+the drive can reach the raw direction lines; the resistor still sits between
+the GPIO and the machine line, which is what keeps the tap passive. The table
+above records the bench rig as it was. The same sweep also
 re-derived which Dupont female is which conductor, so the labels come from a
 measurement rather than from memory — which is what went wrong on the
 2026-10-09 rebuild.

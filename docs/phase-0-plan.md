@@ -1595,7 +1595,14 @@ does not work:
 **J2 position 1 must come to the board.** Today it deliberately does not — it
 is the supply and is never tapped. The drive path needs it as the switching
 source, so the J2 T-piece goes from four conductors to five, and that
-connector carries the switch common. **Not "switching current rather than
+connector carries the switch common. **The four direction conductors must
+arrive RAW**: the photoMOS has to close pos 1 onto the line itself, and
+through the 0c rig's 150 K series leg in the T-piece it could not pull the
+line high against the machine's pull-down. **So J2's four 150 K move onto
+the board, at the J2 header (decided 2026-11-03)**, with each photoMOS
+output joining its line on the machine side of its 150 K, as the topology
+diagram above already draws it. The T-piece then carries five plain
+conductors. **Not "switching current rather than
 microamps"**, as this said until 2026-10-12 — the press loop is ~0.1-1 mA. Our 370 K
 sense tap draws 13.5 µA of that — ~12 % of the line current on the
 favourable branch, not a negligible fraction.

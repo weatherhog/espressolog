@@ -497,7 +497,7 @@ tighter than they need to be for the sake of a few euro.
 | 8.2 kΩ | 10 | 0e T-piece, series leg (**×3** — `ESD1`, `ESD4`, `Disp-P4`); **0e shunt legs, ×4 — two in series per leg to make 16.4 kΩ, on `ESD1` and `ESD4` only** (new 2026-10-19, replaces the 15 kΩ); 0b analyser tap (×3). **Bought: 25**, so the extra 4 are covered. |
 | 15 kΩ | 10 | **SUPERSEDED for 0e — do not fit.** Was the 0e divider ground leg; it fails its tolerance corner at −70 to −87 mV (2026-10-19). **Use 2 × 8.2 kΩ in series = 16.4 kΩ** per leg (**×2** — `Disp-P4` stays unterminated). Both in stock, no new parts. |
 | **10 kΩ** | **25** | **'221 input pulls, ×7 — five `A` pull-ups to 3V3 (four drive channels and the gate) and two `R` pull-downs (GPIO38, the gate's `R̅`, and the drive channels' tied `R̅` net) (`docs/phase-0-plan.md`, "An arm gate"; ×5 from 2026-10-29 until the gate, 2026-10-30).** **25 held, COUNTED by the operator 2026-10-29**, which is the grade `docs/taps-and-dividers.md` asks for ("in stock should mean counted"). Seven needed, eighteen spare *(five and twenty until 2026-10-30)*. *(This cell read "in stock per the operator — count not taken" for part of that day, and a draft before it claimed five of the 15 kΩ bag instead; 10 K is held and is the conventional value, so the 15 K stay with their 0e supersession note.)* |
-| 150 kΩ | 10 | 0c switch divider, series leg (**×4** — all four J2 lines). **In stock 2026-10-07.** |
+| 150 kΩ | 10 | 0c switch divider, series leg (**×4** — all four J2 lines), **on the board at the J2 header, for the build** (decided 2026-11-03, so the drive reaches the raw lines; the bench rig still has them in the T-piece). **In stock 2026-10-07.** |
 | 220 kΩ | 10 | Ground leg: **×4 at J2** (1Cup, 2Cup, Steam, Water) **+ ×1 at J4** = **5**. **In stock.** |
 | 10 nF ceramic | — | **CANDIDATE, do not buy yet.** ×1 across the J4 220 K shunt, 218 Hz. Nothing has been fitted and there is no before/after; it may raise the glitch count by slowing the falling edge to ~1.1 ms through the noise band. Decide after the re-measurement in `phase-0-status.md`. |
 | 470 pF ceramic | 2 *(×10 ordered)* | **CANDIDATE, weaker case than J4's.** ×2 across the J5 shunts — **now 16.4 kΩ, not the 15 kΩ this row used to name**, so the sizing in `docs/taps-and-dividers.md` needs redoing — **and it was bought anyway**: 470 pF NP0 ×10 is on the 2026-10-27 Reichelt order (§1). Having the part does not retire the resizing; the row's precondition is simply now unmet rather than pending. *(This said "before it is bought" until 2026-10-29.)* **Never 10 nF** (69 µs against 36 µs clock highs stops the bus decoding). But the J5 drops are **not coupling, and their cause is unidentified** — `docs/taps-and-dividers.md` is normative and retracted "serial polling" on 2026-10-19. `phase-0-status.md` already carried this value as a contingent remedy after raising the shunt to 16.4 K — **that raise is no longer contingent; the capacitor still is.** |
@@ -679,8 +679,8 @@ quantity and the price are both superseded by what was actually bought —
 rather than changed: five is practice, service and spare. §1 is normative
 on what was ordered.)*
 
-**Space is tight but was never the binding constraint**, against **~47
-discrete parts (~38 resistors, 4 BC547, 5 timing caps), 7 sockets (three
+**Space is tight but was never the binding constraint**, against **~51
+discrete parts (~42 resistors, 4 BC547, 5 timing caps), 7 sockets (three
 DIP-16, four DIP-4)** and 3 XH connectors *(said "~29 discrete parts, 5
 sockets" until 2026-10-29 — the single-'221 count — and ~42 / 6 until the
 arm-window gate, 2026-10-30)*:
@@ -709,12 +709,13 @@ to put the dividers there.
 **Resistor count, corrected.** A draft of this note said "only 9 resistors are
 on the board", which counts the **sense** side alone — 4 × J2 shunt, 1 × J4
 shunt, and 4 × 8.2 K making the two J5 shunts, every series leg living in its
-T-piece. **The actuation block adds ~29 more**: 330 Ω, 8.2 K and 100 K per
+T-piece. **Since 2026-11-03 J2's four 150 K series legs are on the board too,
+at the J2 header, so the sense side is 13** *(9 until then)*. **The actuation block adds ~29 more**: 330 Ω, 8.2 K and 100 K per
 photoMOS × 4, **five '221 timing resistors — one `R_X` per channel, and
 2026-10-29 made it one channel per photoMOS; the fifth is the gate's** —
 **seven 10 K pulls on the '221 inputs** (five 2026-10-29; the gate's `A̅`
 pull-up and the second `R̅` pull-down 2026-10-30) and **five `Q` readback series resistors (2026-10-30) — 1 K proposed, value
-OPEN** (`docs/phase-0-plan.md`, OPEN block). **~38 in total** *(~34 before the gate)* *(~23 until the pulls were
+OPEN** (`docs/phase-0-plan.md`, OPEN block). **~42 in total** *(~38 until J2's 150 K came onto the board, 2026-11-03; ~34 before the gate)* *(~23 until the pulls were
 added; ~28 for part of 2026-10-29, still counting the two timing resistors
 of the single-chip design in the commit that moved to four channels)*, and
 the "space was never binding" conclusion rests on the right number, not the

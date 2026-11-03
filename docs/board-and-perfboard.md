@@ -387,8 +387,9 @@ nominal 27 × 35**. Commodity 7 × 9 boards are **24 × 30 = 720**, giving
 **390 beside the devkit** — a 30 % cut in the only quantity the choice
 rested on, and below the "often ~24 × 34" hedge under *"Count the holes on
 the board you actually receive"*. The
-board bought is **35 × 37 = 1295, 888 beside** (24 × 37 exactly — the
-uncertainty is in the grid, not the multiplication), and the argument that
+board bought is **35 × 38 = 1330** as counted on delivery, **912 beside**
+in the orientation this table uses *(35 × 37 = 1295, 888 beside, from the
+listing photo until 2026-11-03)*, and the argument that
 settles it is `docs/phase-0-plan.md`'s requirement that pos 1 keep
 *"maximum spacing from the four direction lines"* on the board:
 **58.4 mm there against 30.5 mm on 7 × 9**.
@@ -431,9 +432,14 @@ delivered board settles two questions, not one.**
 
 **COUNTED ON THE DELIVERED BOARD 2026-11-03: 35 × 38 = 1330.** 35 along one
 axis, A–Z then A–L (26 + 12 = 38) along the other. The photo count below was
-one letter short and the vendor's 1295 is wrong for this board. **58.4 mm
-stands** — the 24-column field is on the 35-hole axis, which did not change —
-and free-beside becomes **24 × 38 = 912**, not 888. The two questions
+one letter short and the vendor's 1295 is wrong for this board. With the
+devkit's long side along the 38-hole axis, the free field is still 24
+columns, **58.4 mm**, and free-beside becomes **24 × 38 = 912**, not 888.
+**Turned 90°** — long side along the 35-hole axis, which its ~25-row body
+fits — it is **27 columns = 26 pitches = 66.0 mm, 27 × 35 = 945 beside**,
+and that is the most spacing pos 1 can get. Every figure in this file
+before 2026-11-03 assumed the first orientation without saying so; the
+choice is the layout's. The two questions
 "counting the delivered board settles" are settled: not 36 × 36, and not
 35 × 37 either.
 
@@ -475,9 +481,9 @@ the same day to the three sentences the file did not already have.)*
 USB and buttons the other) by roughly 5 mm each, so the body covers ~25 rows.
 Budget rows against the outline.
 
-**Count the holes on the board you actually receive — still owed for the
-10 × 10, which on 2026-10-29 went from inferred to photo-counted, not to
-counted.** *(This said "done … inferred to counted" for part of that day.)*
+**Count the holes on the board you actually receive — done for the
+10 × 10 on 2026-11-03: 35 × 38 = 1330**, one row more than the photo count
+*(until then "still owed … photo-counted, not counted")*. *(This said "done … inferred to counted" for part of that day.)*
 Commodity "7 × 9"
 protoboards are often ~24 × 34 rather than 27 × 35, and "5 × 7" ones 18 × 24 —
 and the hedge should be applied to both, not just to the one being rejected.

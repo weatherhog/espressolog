@@ -140,21 +140,22 @@ yet confirmed — unlike the 24 AWG and 26 AWG wire, which are in hand.
 **Amazon.** **Perfboard 10 × 10 cm, FR-4, 1.6 mm, 1295 holes, ×5** — ordered
 2026-10-28, **RECEIVED by 2026-11-03, and the delivered board is 35 × 38 =
 1330, not 1295** (counted that day: A–Z then A–L along one axis, 35 along
-the other) *("NOT RECEIVED as of 2026-10-29" until then)* — the Received table at the
-top of this section does not list it and should not; supersedes 7 × 9, see
-§5. *("the Received table below" for part of that day; it is above.)* *(This line said
+the other) *("NOT RECEIVED as of 2026-10-29" until then)* ; supersedes 7 × 9, see §5. *(Until 2026-11-03 this added "the Received
+table at the top of this section does not list it and should not"; it stays
+under this heading only so the order record is in one place.)* *("the Received table below" for part of that day; it is above.)* *(This line said
 "in hand by 2026-10-29, when the grid was counted" for part of that day. The
 grid was counted on the listing's product photo, not on a board.)* **Listing, verbatim (operator,
 2026-10-29):** *"Material: hochwertige Glasfaser FR4 · dicke: ca. 1,6mm ·
 Lochabstand: 2,54 mm · Lochdurchmesser: 1 mm · 10x10cm / 3,94 x 3,94 Zoll ·
 Anzahl Löcher: 10 x 10 CM mit 1295 Löchern"*. **It states the count and not
-the grid**; the grid was **counted off the product photo, 2026-10-29:
-35 × 37**, which is the vendor's 1295 to the hole, so the 36 × 36 reading
+the grid**, and the count is **wrong for the delivered board** (see above).
+*(Superseded 2026-11-03 — kept as the record of the photo count:)* the grid
+was **counted off the product photo, 2026-10-29: 35 × 37**, which is the vendor's 1295 to the hole, so the 36 × 36 reading
 that "3,94 × 3,94" leaned on is dead — it would need the stated count and
 the photographed grid both wrong. **PHOTO-COUNTED, not counted in hand**: a
 listing photo can be a stock image shared across sizes, and the agreement
-with 1295 is what makes this one credible for this size. Count the delivered
-board anyway. *(Read "exactly as open as §5 says" until the photo count, the
+with 1295 is what made this one credible for this size. The delivered board
+was counted on 2026-11-03 and differs. *(Read "exactly as open as §5 says" until the photo count, the
 same day.)*
 
 **`100 nF X7R ×10` is the one ordered line here with no row and no recorded
@@ -562,7 +563,7 @@ because the machine caught it:
 | Breadboard, 830-point | 6 | For the **J5 bench test before the perfboard**. **Corrected 2026-10-12:** a DevKitC-1 straddles a standard board with its headers in columns **A and I** — 1.0 in row-to-row — so **one row (J) stays free**, not none as this line said. The advice is unchanged and was followed: put only the resistor junctions on the breadboard and jumper across to the devkit's headers. Note that is exactly why the ESP was NOT seated during the bench sessions, which a later commit wrongly cited as proof of the pin pitch. |
 | **Jumper wires, male-female AND male-male** | 6 | The easily-forgotten part. M-F reaches the devkit header pins from the breadboard. |
 | **XH board headers: 3, 4 and 5 pin** | 3 | **×5 each, decided 2026-10-12.** The perfboard gets one socket per harness: **3-pin J4** (`B3B-XH-A`), **4-pin J5** (`B4B-XH-A`), **5-pin J2** (`B5B-XH-A`). **The pin counts self-key** — nothing can be cross-plugged, so do not standardise them to one size for tidiness. **SIDE-ENTRY (90°), DECIDED BY PURCHASE 2026-10-28.** This row said *"side-entry `S`-series if the printed box has a side gland; decide before designing the box"* — that is now settled, and settled the way the row anticipated. **The harnesses leave the board SIDEWAYS, parallel to it**, so a side gland is the natural placement and the box needs side clearance for the plug body plus wire bend radius rather than headroom above the board. **It can therefore be flatter than the 40 mm height the box note carries** *(the plan dimensions beside it are withdrawn; the 40 is retained as a bound — see "The box has no dimensions any more")* — and it must be **WIDER in plan** to pay for it, which is the half of that consequence the box row carries. **Provenance, and gender: see under this table.** |
-| Perfboard **10 × 10 cm, FR-4** ×5 + **FEMALE** pin headers ×5 | 10 + 4.59 | **SIZE AND MATERIAL BOTH SUPERSEDED 2026-10-28 — see the note below this table.** Ordered: FR-4, 1.6 mm, 2.54 mm pitch, 1 mm holes, **1295 holes, read as 35 × 37**, five boards. **Female** headers so the ESP32 sockets in and comes out — soldering the devkit down means it cannot be swapped or easily reflashed. **Buy 5 header strips**: 1×40 is the standard item, you cut each to 22 (losing the position you cut through), you need two, and female strips do not snap cleanly like male ones so the first one is practice. **The €10 is the five boards alone** — §1 prices the female strips separately at €4.59 (CHANZON ×10). *(This row priced both at €10 until 2026-10-29, as did `docs/phase-0-plan.md`, which also folded in the DIP-16 sockets at a further €2.19.)* |
+| Perfboard **10 × 10 cm, FR-4** ×5 + **FEMALE** pin headers ×5 | 10 + 4.59 | **SIZE AND MATERIAL BOTH SUPERSEDED 2026-10-28 — see the note below this table.** Ordered: FR-4, 1.6 mm, 2.54 mm pitch, 1 mm holes, **1295 holes as listed; the delivered board counts 35 × 38 = 1330** (2026-11-03), five boards. **Female** headers so the ESP32 sockets in and comes out — soldering the devkit down means it cannot be swapped or easily reflashed. **Buy 5 header strips**: 1×40 is the standard item, you cut each to 22 (losing the position you cut through), you need two, and female strips do not snap cleanly like male ones so the first one is practice. **The €10 is the five boards alone** — §1 prices the female strips separately at €4.59 (CHANZON ×10). *(This row priced both at €10 until 2026-10-29, as did `docs/phase-0-plan.md`, which also folded in the DIP-16 sockets at a further €2.19.)* |
 | Second mixed balance-lead pack | 7 | **Insurance.** The 4S is the only lead that fits J2 and there is no spare if a strip-and-solder goes wrong. The T-pieces are the most laborious part of the build and the pack is seven euro. |
 | ~~ABS project box, ~120 x 80 x 40 mm~~ **PRINTED, not bought** | 0 | ESP32 mounts **outside** the machine. **The plan dimensions are WITHDRAWN and only the 40 mm height is retained, as a bound — see "The box has no dimensions any more".** Both earlier figures were sized to boards this project no longer builds: ~120 × 80 to a 5 × 7, then ~110 × 100 × 40 to a 70 × 90. **PETG or ASA, not PLA** — it lives beside an espresso machine and PLA softens around 60 °C. **SETTLED 2026-10-23 — print it LAST, build ONE board.** It still has to clear **three** harnesses (J5, J2's five wires and four dividers, J4), now leaving **sideways**. |
 | Cable gland or grommet | 3 | Where the harness leaves the case |
@@ -646,8 +647,10 @@ contradicts 35 × 37, this section, `CLAUDE.md` and
 35 × 37** — 35 along one axis, A–Z then A–K along the other, read off the
 listing's product photo while the pack is still in transit. Nothing moves;
 the 36 × 36 reading is retired, because it would now need the vendor's
-number and the vendor's photo both wrong. **The delivered board is still
-uncounted**, and the sentence above this one still applies to it. *(This
+number and the vendor's photo both wrong. **[SUPERSEDED 2026-11-03: the
+pack arrived and the delivered board counts 35 × 38 = 1330. That
+contradicts 35 × 37, so this section, `CLAUDE.md` and
+`docs/board-and-perfboard.md` moved, as the sentence above required.]** *(This
 said "COUNTED 2026-10-29" without the "photo" for part of that day, in a
 paragraph that had just explained the boards were in transit.)*
 
@@ -759,9 +762,9 @@ in would re-create the defect a third time. What follows are the
   is right. The one hole count ever read off a listing, 24 × 30, disagreed
   with THIS REPO'S derived nominal 27 × 35 — not with the vendor's "7 × 9",
   which a 24 × 30 grid fits — and "5 × 7 ones at 18 × 24" is a generic hedge
-  from `docs/board-and-perfboard.md`, not a listing. No board in this
-  project has been counted in hand; the 10 × 10 was counted on its
-  listing photo on 2026-10-29. Two drafts of one sentence promoted an
+  from `docs/board-and-perfboard.md`, not a listing. Until 2026-11-03 no board
+  in this project had been counted in hand; the 10 × 10 was counted on its
+  listing photo on 2026-10-29, and on delivery on 2026-11-03. Two drafts of one sentence promoted an
   ungraded claim instead of grading it, and a third said "counted" of a
   board in transit.)*
 - **On the harness side, add plug body plus wire bend radius** — the

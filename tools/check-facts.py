@@ -194,6 +194,9 @@ REQUIRED = {
     # The PROPOSED gate's measured RC candidate, 2026-11-03. Sits between
     # the drive's 220 ms and the 500 ms arm-window cap.
     "gate-rc-candidate":   {"min_files": 3, "claude_md": True},
+    # The delivered perfboard's hole grid, counted 2026-11-03. It differed
+    # from both the vendor's 1295 and the photo count, so pin it.
+    "perfboard-grid":      {"min_files": 3, "claude_md": True},
     # The display bus protocol and driver, settled 2026-10-31 from the
     # captures. Two sites: the CLAUDE.md headline and the normative doc.
     "display-bus-driver":  {"min_files": 2, "claude_md": True},

@@ -11,7 +11,7 @@
 > contiguous at positions 4–10 with 3V3 at 1 and GND at 22, 5Vin-beside-GND
 > is a solder hazard, no tap draws from 3V3, 2.54 mm pitch, 10-pitch row
 > spacing, an 11 × 22 pin footprint in a ~25-row body, the board is
-> 10 × 10 FR-4, 35 × 37 PHOTO-COUNTED 2026-10-29 (board not received). Those are
+> 10 × 10 FR-4, 35 × 38 COUNTED on the delivered board 2026-11-03. Those are
 > what a reader acts on; the enumeration and the retraction history below are
 > what they rest on.
 >
@@ -370,7 +370,7 @@ accounting properly — **a draft of this paragraph got it backwards**:
 | 5 × 7 cm — **as the hedge below expects** | 18 × 24 = 432 | 11 × 22 | **7 × 24 = 168** | 9 × 22 = 198 |
 | 7 × 9 cm — *nominal, and not what is sold* | 27 × 35 = 945 | 11 × 22 | **16 × 35 = 560** | 9 × 22 = 198 |
 | 7 × 9 cm — **as actually sold** | 24 × 30 = 720 | 11 × 22 | **13 × 30 = 390** | 9 × 22 = 198 |
-| **10 × 10 cm FR-4 — BOUGHT 2026-10-28** | **35 × 37 = 1295** *(PHOTO-COUNTED 2026-10-29)* | 11 × 22 | **24 × 37 = 888** | 9 × 22 = 198 |
+| **10 × 10 cm FR-4 — RECEIVED, counted 2026-11-03** <!-- fact:perfboard-grid 35 × 38 = 1330 --> | **35 × 38 = 1330** *(35 × 37 = 1295 on the listing's photo, 2026-10-29)* | 11 × 22 | **24 × 38 = 912** | 9 × 22 = 198 |
 
 That draft said 5 × 7 "does not fit" because "the devkit eats 22 of the 27
 rows, leaving five" — which treats the devkit's **11-column** footprint as if
@@ -429,7 +429,16 @@ between the axes. If the grid is 36 × 36 then free-beside is **25 × 36 = 900**
 ~61 mm corrected above. Nothing here distinguishes them, so **counting the
 delivered board settles two questions, not one.**
 
-**PHOTO-COUNTED 2026-10-29: 35 × 37.** The operator counted 35 along one
+**COUNTED ON THE DELIVERED BOARD 2026-11-03: 35 × 38 = 1330.** 35 along one
+axis, A–Z then A–L (26 + 12 = 38) along the other. The photo count below was
+one letter short and the vendor's 1295 is wrong for this board. **58.4 mm
+stands** — the 24-column field is on the 35-hole axis, which did not change —
+and free-beside becomes **24 × 38 = 912**, not 888. The two questions
+"counting the delivered board settles" are settled: not 36 × 36, and not
+35 × 37 either.
+
+**PHOTO-COUNTED 2026-10-29: 35 × 37** *(superseded 2026-11-03 by the count
+above)*. The operator counted 35 along one
 axis and the letters A–Z then A–K — 26 + 11 = 37 — along the other, **on the
 listing's product photo; the pack had not arrived.** That is a grade of its
 own: stronger than the vendor's bare number, because the photo and the
@@ -444,8 +453,9 @@ But "5 × 7 does not fit" is still not what the numbers say, and that
 correction is the reason this table exists.
 
 **Grades, moved here from CLAUDE.md on 2026-10-29, which keeps only the
-conclusion.** 888 and 58.4 mm are **PHOTO-COUNTED** grade since the 35 × 37
-count above *(INFERRED for the hours between the move and the count, and
+conclusion.** 912 and 58.4 mm are **COUNTED** grade since 2026-11-03 (888
+and 58.4 mm were **PHOTO-COUNTED** grade from the 35 × 37
+count above until then *(INFERRED for the hours between the move and the count, and
 "COUNTED" for the hours after it until the photo was named as the source)*;
 30.5 mm is
 **LISTING**, since 24 × 30 is stated outright and no 7 × 9 was ever

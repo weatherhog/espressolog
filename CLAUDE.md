@@ -915,21 +915,23 @@ the document, not the document.
   covers ~25 rows**, the PCB overhanging ~5 mm at each end, so budget
   against the outline. 9 free columns sit underneath the devkit if it is
   socketed high enough, which is why `docs/shopping-list.md` specifies
-  female headers. **The board is 10 × 10 cm FR-4, bought 2026-10-28, NOT
-  RECEIVED as of 2026-10-29, and its grid is PHOTO-COUNTED 2026-10-29:
-  35 × 37 = 1295** — 35 along one axis, lettered A–Z then A–K (26 + 11 = 37)
-  along the other, read off the listing's product photo. That matches the
-  vendor's 1295 to the hole, so the 36 × 36 reading is dead; it is not a
-  count of the board that will be drilled. **The free field beside the devkit is
+  female headers. <!-- fact:perfboard-grid@2 35 × 38 = 1330 -->
+  **The board is 10 × 10 cm FR-4, RECEIVED by 2026-11-03, and its grid is
+  COUNTED on the delivered board: 35 × 38 = 1330** — 35 along one axis,
+  lettered A–Z then A–L (26 + 12 = 38) along the other. **Neither the
+  vendor's 1295 nor the 35 × 37 photo count is the board in hand**: the
+  photo had one letter fewer. **The free field beside the devkit is
   24 columns = 23 pitches = 58.4 mm, which is the most spacing pos 1 can be
-  given.** `docs/board-and-perfboard.md` carries the derivation, the 7 × 9
+  given** — unchanged, because the extra row runs along the devkit, not
+  across it. *(Until 2026-11-03 this read "NOT RECEIVED … PHOTO-COUNTED
+  2026-10-29: 35 × 37 = 1295".)* `docs/board-and-perfboard.md` carries the derivation, the 7 × 9
   it supersedes and why, and the pitch-count correction — all moved out of
   this bullet on 2026-10-29, when it had grown to thirty lines of history in
   a file that promises live conclusions only. *(The grid read "INFERRED from
   a vendor hole count, not confirmed until counted" until the photo count,
   later the same day — then "COUNTED", and "in hand", for part of that day,
-  while the pack was in transit.)* The rule stands, and is still owed:
-  **count the holes on the board you actually receive.**
+  while the pack was in transit.)* The rule "count the holes on the board
+  you actually receive" was met on 2026-11-03.
 - **GPIO33–37 are octal-PSRAM internal on this N16R8 module** — present on
   the header, unusable, do not even probe them.
 - **J2 CARRIES NO GROUND, so the ground bus is anchored at J5 and J4 only.**

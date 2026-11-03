@@ -138,7 +138,9 @@ why. *("the **eight** needed" until 2026-10-30; see §7's socket row.)*
 yet confirmed — unlike the 24 AWG and 26 AWG wire, which are in hand.
 
 **Amazon.** **Perfboard 10 × 10 cm, FR-4, 1.6 mm, 1295 holes, ×5** — ordered
-2026-10-28, **NOT RECEIVED as of 2026-10-29** — the Received table at the
+2026-10-28, **RECEIVED by 2026-11-03, and the delivered board is 35 × 38 =
+1330, not 1295** (counted that day: A–Z then A–L along one axis, 35 along
+the other) *("NOT RECEIVED as of 2026-10-29" until then)* — the Received table at the
 top of this section does not list it and should not; supersedes 7 × 9, see
 §5. *("the Received table below" for part of that day; it is above.)* *(This line said
 "in hand by 2026-10-29, when the grid was counted" for part of that day. The
@@ -585,7 +587,7 @@ below even that file's own pessimistic "often ~24 × 34" hedge.
 | 5 × 7 — rejected, **as the hedge expects** *(24 rows: shorter than the devkit's ~25-row body)* | 18 × 24 = 432 | 168 |
 | 7 × 9 — **as assumed** | 27 × 35 = 945 | 560 |
 | 7 × 9 — **as actually sold** | 24 × 30 = 720 | 390 |
-| **10 × 10 — bought** | **35 × 37 = 1295** *(grid PHOTO-COUNTED 2026-10-29; board not received)* | **888** |
+| **10 × 10 — received** <!-- fact:perfboard-grid 35 × 38 = 1330 --> | **35 × 38 = 1330** *(counted on the delivered board 2026-11-03; 35 × 37 on the listing's photo)* | **912** |
 
 **The deciding argument is invariant-1 adjacent, not comfort.**
 `docs/phase-0-plan.md` requires pos 1 to be *"physically segregated in the
@@ -607,10 +609,9 @@ the box constrains the layout; this is that retirement being spent.
 
 Two numbers to keep: **the devkit body covers ~25 rows, not its 22 pin
 rows** (the PCB overhangs ~5 mm at each end), so budget against the
-outline; and **count the holes on arrival — still to do.** The grid was
-counted on the listing's photo on 2026-10-29 (35 × 37, the vendor's 1295
-to the hole), which retires 36 × 36 but is not a count of the board that
-will be drilled. *(This said "done 2026-10-29" for part of that day.)*
+outline; and **count the holes on arrival — done 2026-11-03: 35 × 38 =
+1330.** The listing's photo had given 35 × 37, the vendor's 1295 to the
+hole, and both were one row short of the board in hand. *(This said "done 2026-10-29" for part of that day.)*
 Before the photo count, the one hole count ever read off a listing
 (24 × 30) had disagreed with this repo's derived nominal (27 × 35), not
 with the vendor's label, and nothing had been counted at all.
@@ -687,7 +688,7 @@ arm-window gate, 2026-10-30)*:
 | 27 × 35 — 7 × 9 *nominal* | 560 holes | 198 |
 | 24 × 34 — 7 × 9, the generic hedge | 442 | 198 |
 | 24 × 30 — 7 × 9 **as actually sold** | 390 | 198 |
-| **35 × 37 — 10 × 10, bought** *(grid PHOTO-COUNTED 2026-10-29)* | **888** | 198 |
+| **35 × 38 — 10 × 10, received** *(counted 2026-11-03; 35 × 37 on the photo)* | **912** | 198 |
 
 **This table carried only the first two rows until 2026-10-29**, so the
 section arguing space was never binding was still arguing it about a board
@@ -748,9 +749,9 @@ in would re-create the defect a third time. What follows are the
 *constraints*, which are what a printed box actually needs:
 
 - **In plan: the finished board plus the harness side.** The hole field is
-  **86.4 × 91.4 mm** centre to centre (34 and 36 pitches at 2.54 mm — 35 × 37,
-  **counted on the product photo 2026-10-29**, board not yet received; the
-  88.9 × 88.9 of the 36 × 36 reading is retired), and
+  **86.4 × 94.0 mm** centre to centre (34 and 37 pitches at 2.54 mm — 35 × 38,
+  **counted on the delivered board 2026-11-03**; the photo's 35 × 37 gave
+  86.4 × 91.4 and the 36 × 36 reading 88.9 × 88.9), and
   the outline is bigger by whatever the edge margins turn out to be.
   **MEASURE THE BOARD** — "10 × 10" is a label, not a measurement. *(This
   said "the centimetre label has been wrong twice" until 2026-10-29, then

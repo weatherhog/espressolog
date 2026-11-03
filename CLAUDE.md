@@ -925,8 +925,12 @@ the document, not the document.
   24 columns = 23 pitches = **58.4 mm**; turned 90°, long side along the
   35-hole axis (its ~25-row body still fits), it leaves 27 columns =
   26 pitches = **66.0 mm**, which is the most spacing pos 1 can be given.
-  The orientation is a layout choice and is not made yet. *(58.4 mm was
-  stated as the maximum until 2026-11-03; it was only ever one orientation.)* *(Until 2026-11-03 this read "NOT RECEIVED … PHOTO-COUNTED
+  **Chosen 2026-11-03: long side along the 35-hole axis, 66.0 mm.** The
+  sense side is drawn hole by hole in `docs/board-and-perfboard.md`,
+  "Sense-side layout": shunts under the devkit (10 mm clearance, measured),
+  harness headers on the top edge, and **J4's `+` never enters the box** —
+  the T-piece's branch carries `T` and `#` only. *(58.4 mm was stated as the
+  maximum until 2026-11-03; it was only ever one orientation.)* *(Until 2026-11-03 this read "NOT RECEIVED … PHOTO-COUNTED
   2026-10-29: 35 × 37 = 1295".)* `docs/board-and-perfboard.md` carries the derivation, the 7 × 9
   it supersedes and why, and the pitch-count correction — all moved out of
   this bullet on 2026-10-29, when it had grown to thirty lines of history in

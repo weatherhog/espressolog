@@ -538,7 +538,9 @@ leaving only the instruction that calipers cannot execute.)*
 
 **The first hole-level layout in this repo. Sense side only; the drive side
 is not drawn yet.** Coordinates are the delivered board's own marks:
-**letters A–Z then A′–L′ across (38), numbers 1–35 down (35)**. Components
+**letters A–Z then A–L again across (38), numbers 1–35 down (35)**. The
+board prints the second run without primes; **here A′–L′ means the second
+run**, and a bare letter always means the first. Components
 on top, every link insulated wire on the underside unless a row says
 "bridge".
 
@@ -564,20 +566,31 @@ connected at or beside it.**
 
 | Header | Pins | Notes |
 |---|---|---|
-| J5, 4-pin | B3 `VSS` · C3 `ESD1` · D3 `ESD4` · E3 `Disp-P4` | **E3 connects to nothing.** `Disp-P4` arrives behind its 8.2 K in the T-piece |
-| J4, 3-pin | G3 `T` · H3 *empty* · I3 `#` | **`+` never enters the box**: the T-piece's branch to the board carries `T` (yellow) and `#` (black) only, and the plug's middle cavity is left **without a contact**. `+` (green) runs machine-to-sensor inside the T-piece. H3 connects to nothing, and G4–I4 stay empty |
+| J5, 4-pin | B3 `VSS` · C3 `ESD1` · D3 `ESD4` · E3 `Disp-P4` | **E3 connects to nothing.** All three signals arrive behind their 8.2 K in the T-piece |
+| J4, 3-pin | G3 *empty* · H3 `T` · I3 `#` | **`+` never enters the box**: the T-piece's branch to the board carries `T` (yellow) and `#` (black) only — `#` behind its 100 K in the T-piece — and the cavity mating G3 is left **without a contact**. `T` takes the middle, as on the machine's header, so a branch wrongly built with all three wires puts `+` on the dead G3 or on `#`, never on the ground bus. `+` (green) runs machine-to-sensor inside the T-piece. G3 connects to nothing, and G4–I4 stay empty |
 | J2, 5-pin | P3 Water · Q3 1Cup · R3 2Cup · S3 Steam · **T3 +5 V (pos 1)** | pos 1 at the right end, nearest the drive jumpers, farthest from the sense side |
 
 **There are no 2-pin XH parts in stock**, which is why J4 is a 3-pin header
 with one cavity unpopulated rather than a 2-pin one. The keying still fixes
 the orientation.
 
+**Crimp every branch plug by HOLE, not by JST pin number.** All three
+headers are the same side-entry part facing the same way, so the tables
+above name the net at each board hole; J2's pos 1 sits at T3 because of
+where its wire is crimped, not because of the part's pin-1 mark. A plug
+seen from the wire side is mirrored, which is how a cavity gets swapped:
+on J5 a swap puts `Disp-P4` on the ground bus and swaps `ESD1`/`ESD4`; on
+J2 it puts +5 V into Water's 150 K. **Before first power, meter continuity
+from each T-piece conductor to the board hole this layout names for it.**
+
 **Ground bus:** bare wire down **column I, rows 6–30**, fed from J5 `VSS`
-(B3) and J4 `T` (G3), and tied to the devkit at **K30**, the opposite
+(B3) and J4 `T` (H3), and tied to the devkit at **K30**, the opposite
 column's GND, so no ground joint sits beside the 5Vin pin at A29.
 
-**Shunts, under the devkit.** Each tap pin A_r is bridged to B_r, and the
-shunt runs from B_r to the bus:
+**Shunts, under the devkit.** Each tap pin A_r is joined to B_r, and the
+shunt runs from B_r to the bus. **Make that join with the resistor lead or a
+short wire, not a solder blob**: the seven joins sit in consecutive rows on
+seven different nets, and a blob that spreads one row joins two of them:
 
 | Row | Tap | Shunt | Holes |
 |---|---|---|---|
@@ -591,19 +604,21 @@ shunt runs from B_r to the bus:
 
 Signals in: J5 `ESD4` (D3) → B12, J5 `ESD1` (C3) → B13, J4 `#` (I3) → B14.
 
-**J2's four 150 K, standing under the J2 header**, staggered so
-neighbouring bodies are offset:
+**J2's four 150 K, lying flat and running down the board under the J2
+header**, alternately starting at row 5 and row 6, so that no two raw nodes
+are neighbours — a solder bridge between raw direction lines would join two
+machine signals with no 150 K in the path:
 
-| Line | Raw node | 150 K | Sense end → tap |
+| Line | Raw node = top lead | 150 K | Sense end → tap |
 |---|---|---|---|
 | Water | P5 | P5–P9 | P9 → B18 |
-| 1Cup | Q5 | Q6–Q10 | Q10 → B15 |
+| 1Cup | Q6 | Q6–Q10 | Q10 → B15 |
 | 2Cup | R5 | R5–R9 | R9 → B16 |
-| Steam | S5 | S6–S10 | S10 → B17 |
+| Steam | S6 | S6–S10 | S10 → B17 |
 
-Each raw node is linked to its J2 pin above it. **Q5 and R5 are the raw
-1Cup and 2Cup nodes the photoMOS outputs join** when the drive side is
-drawn. Pos 1 (T3) leaves along row 3 to the right, away from this block.
+Each raw node is linked by wire to its J2 pin above it (P3, Q3, R3, S3);
+Q5 and S5 stay empty. **Q6 and R5 are the raw 1Cup and 2Cup nodes the
+photoMOS outputs join** when the drive side is drawn. Pos 1 (T3) leaves along row 3 to the right, away from this block.
 
 **Selftest header:** 2-pin at **L33–M33**, GPIO8 (from A20) and GPIO6
 (from A14), below the drive field and clear of the devkit's USB end. Its

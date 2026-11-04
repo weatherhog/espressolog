@@ -627,9 +627,8 @@ proposed arm-window gate, whose spare channel is not a drive channel; the
 buttons would need
 two more chips, four more trigger GPIOs — **eight pins if each channel gets
 a `Q` readback like the levers', against five free after the proposed gate
-and readbacks — fewer still if J3's NTC ever wants an ADC1 pin from
-GPIO9/10, depending on which pins the layout spends — so the GPIO budget
-would then bind** — and the board space
+and readbacks (11–14 and 18 since the drive layout, 2026-11-04, none of them
+ADC1) — so the GPIO budget would then bind** — and the board space
 for both, none of
 which is allocated — the chips are held (ten bought), the rest is not. *(This
 said "Three '221s are on the order and cover the levers" until 2026-10-29 —
@@ -987,8 +986,8 @@ does not work:
 
       **Free GPIOs are not the constraint.** Against the pinout in
       `docs/board-and-perfboard.md`:
-      9-14, 18, 21 and 47, four of which go to the gate trigger and the last
-      three `Q` readbacks — **38 and 39-42 were on this list until
+      9-14, 18, 21 and 47, four of which the drive layout (2026-11-04) gave to
+      the gate trigger (10) and the last three `Q` readbacks (47, 21, 9) — **38 and 39-42 were on this list until
       2026-10-29 and are now the gate enable and the four triggers, and 1
       and 2 are the first two `Q` readbacks** (CLAUDE.md's drive table) — (33-37 are octal-PSRAM
       internal on this N16R8 module, *"35-37" until 2026-10-30*;
@@ -1386,7 +1385,8 @@ does not work:
     the whole arm window looks like a normal press until a second fault
     turns it into a real hold. So each `Q` goes through a series resistor
     (1 K proposed) into a GPIO
-    input — GPIO1, GPIO2 and three of 9-14, 18, 21, 47, chosen at layout.
+    input — GPIO1, GPIO2, GPIO47, GPIO21 and GPIO9 (the gate's), fixed by the
+    drive layout 2026-11-04 *("three of 9-14, 18, 21, 47, chosen at layout" until then)*.
     **The gate trigger is not GPIO18**: GPIO15–18 emit a ~60 µs low pulse at
     power-up, and a falling `A̅` fires the gate. Harmless while GPIO38's
     pull-down holds the gate in reset, one fault closer after a CPU reset

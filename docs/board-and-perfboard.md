@@ -124,10 +124,10 @@ use nothing else"; see the retraction below.
 | **12** | **GPIO8** — selftest | | GPIO36 ‡ |
 | 13 | GPIO3 † | | GPIO35 ‡ |
 | 14 | GPIO46 † | | GPIO0 † |
-| 15 | GPIO9 | | GPIO45 † |
-| 16 | GPIO10 | | **GPIO48 — onboard RGB LED** ◆ |
-| 17 | GPIO11 | | GPIO47 |
-| 18 | GPIO12 | | GPIO21 |
+| 15 | **GPIO9** — gate `Q` readback, proposed | | GPIO45 † |
+| 16 | **GPIO10** — gate trigger, proposed | | **GPIO48 — onboard RGB LED** ◆ |
+| 17 | GPIO11 | | **GPIO47** — `Q` readback, 2Cup photoMOS 1 |
+| 18 | GPIO12 | | **GPIO21** — `Q` readback, 2Cup photoMOS 2 |
 | 19 | GPIO13 | | GPIO20 † |
 | 20 | GPIO14 | | GPIO19 † |
 | 21 | **5Vin** | | **GND** |
@@ -568,7 +568,7 @@ connected at or beside it.**
 |---|---|---|
 | J5, 4-pin | B3 `VSS` · C3 `ESD1` · D3 `ESD4` · E3 `Disp-P4` | **E3 connects to nothing.** All three signals arrive behind their 8.2 K in the T-piece |
 | J4, 3-pin | G3 `#` · H3 *empty* · I3 `T` | **`+` never enters the box**: the T-piece's branch to the board carries `T` (yellow) and `#` (black) only — `#` behind its 100 K in the T-piece — and the plug's **middle** cavity is left **without a contact**. **`T` and `#` take the two outer pins so a hole separates them**: a bridge between them would hang 100 K to ground on the machine's `#` node, pulling it from ~4.68 V to ~4.28 V (~8.6 %), three times the 2.9 % this tap is meant to cost. `+` (green) runs machine-to-sensor inside the T-piece. H3 connects to nothing, and G4–I4 stay empty. A branch wrongly built with all three wires is caught by the pre-power check below, which requires `+` to read open *(T sat in the middle, beside `#`, for part of 2026-11-03)* |
-| J2, 5-pin | P3 Water · Q3 1Cup · R3 2Cup · S3 Steam · **T3 +5 V (pos 1)** | pos 1 at the right end, nearest the drive jumpers, farthest from the sense side |
+| J2, 5-pin | E′3 Water · F′3 1Cup · G′3 2Cup · H′3 Steam · **I′3 +5 V (pos 1)** | in the top-right corner since 2026-11-04, with every machine-voltage net of the drive side — see "Drive-side layout". Pos 1 at the right end, beside the drive-leg jumpers *(P3–T3 until then)* |
 
 **There are no 2-pin XH parts in stock**, which is why J4 is a 3-pin header
 with one cavity unpopulated rather than a 2-pin one. The keying still fixes
@@ -576,7 +576,7 @@ the orientation.
 
 **Crimp every branch plug by HOLE, not by JST pin number.** All three
 headers are the same side-entry part facing the same way, so the tables
-above name the net at each board hole; J2's pos 1 sits at T3 because of
+above name the net at each board hole; J2's pos 1 sits at I′3 because of
 where its wire is crimped, not because of the part's pin-1 mark. A plug
 seen from the wire side is mirrored, which is how a cavity gets swapped:
 on J5 a swap puts `Disp-P4` on the ground bus and swaps `ESD1`/`ESD4`; on
@@ -598,7 +598,7 @@ this layout names:
 | J4 `T` (yellow) | I3 | ~0 Ω |
 | J4 `#` (black) | G3 | 100 kΩ |
 | **J4 `+` (green)** | **G3, H3 and I3** | **open on all three** |
-| J2 pos 1 … pos 5 | T3, S3, R3, Q3, P3 | ~0 Ω each — J2's T-piece has no resistors now |
+| J2 pos 1 … pos 5 | I′3, H′3, G′3, F′3, E′3 | ~0 Ω each — J2's T-piece has no resistors now |
 
 *(This said "meter continuity" until 2026-11-03.)*
 
@@ -630,15 +630,155 @@ machine signals with no 150 K in the path:
 
 | Line | Raw node = top lead | 150 K | Sense end → tap |
 |---|---|---|---|
-| Water | P5 | P5–P9 | P9 → B18 |
-| 1Cup | Q6 | Q6–Q10 | Q10 → B15 |
-| 2Cup | R5 | R5–R9 | R9 → B16 |
-| Steam | S6 | S6–S10 | S10 → B17 |
+| Water | E′5 | E′5–E′9 | E′9 → B18 |
+| 1Cup | F′6 | F′6–F′10 | F′10 → B15 |
+| 2Cup | G′5 | G′5–G′9 | G′9 → B16 |
+| Steam | H′6 | H′6–H′10 | H′10 → B17 |
 
-Each raw node is linked by wire to its J2 pin above it (P3, Q3, R3, S3);
-Q5 and S5 stay empty. **Q6 and R5 are the raw 1Cup and 2Cup nodes the
-photoMOS outputs join** when the drive side is drawn. Pos 1 (T3) leaves along row 3 to the right, away from this block.
+Each raw node is linked by wire to its J2 pin above it (E′3, F′3, G′3,
+H′3); F′5 and H′5 stay empty. **F′6 and G′5 are the raw 1Cup and 2Cup
+nodes the photoMOS outputs join** (see "Drive-side layout"). Pos 1 (I′3)
+goes straight right into the drive-leg jumpers. *(The block sat at P3–T3
+with raw nodes P5/Q6/R5/S6 until 2026-11-04, when it moved to the corner
+before anything was soldered.)*
 
 **Selftest header:** 2-pin at **L33–M33**, GPIO8 (from A20) and GPIO6
 (from A14), below the drive field and clear of the devkit's USB end. Its
 jumper is never fitted in service.
+
+## Drive-side layout — DRAWN 2026-11-04
+
+**Phase 1 hardware, laid out now so it is built and bench-tested behind open
+jumpers, as `docs/phase-0-plan.md` decided.** Same coordinates as the sense
+side. The machine-voltage parts are drawn **hole by hole**; the '221 area,
+which is 3V3 logic only and cannot reach the machine, is given as
+**placement plus netlist**. Every link is insulated wire on the underside
+unless it joins two holes of the same net.
+
+**Zones.**
+
+- **Top-right corner — machine voltage:** J2, its four 150 K, pos 1, the two
+  drive-leg jumpers (a) and the photoMOS outputs. Everything that can press
+  a lever is in this corner.
+- **Right edge, rows 12–28 — the photoMOS stack**, outputs on the edge
+  column L′, LED side facing left. The isolation inside each AQY212EH is the
+  boundary between machine voltage and our 3V3.
+- **Columns C′–I′, rows 12–31 — four LED-driver cells.**
+- **Columns M–Y, rows 12–30 — the three '221s**, next to the devkit's drive
+  column K.
+- **Bottom-right — jumper (b)**, the LED supply, at the far end of the board
+  from the (a) pair.
+
+### Machine corner
+
+| Part | Holes | Net / note |
+|---|---|---|
+| J2 header | E′3–I′3 | see "Sense-side layout"; **I′3 is pos 1, +5 V** |
+| J2's four 150 K | E′5–E′9, F′6–F′10, G′5–G′9, H′6–H′10 | see "Sense-side layout"; **raw 1Cup = F′6, raw 2Cup = G′5** |
+| **Jumper (a1), 1Cup** | **K′3** (pos 1) – **K′4** (1Cup leg) | 2-pin header, **OPEN through Phase 0** |
+| **Jumper (a2), 2Cup** | **K′6** (pos 1) – **K′7** (2Cup leg) | 2-pin header, **OPEN through Phase 0** |
+
+**Pos 1** is I′3, K′3 and K′6 and nothing else: I′3 → K′3 → K′6 by
+insulated wire, skipping J′3, K′4 and K′5. With both jumpers open, **every
+other drive-side hole is dead to the machine in Phase 0**.
+
+### PhotoMOS stack (AQY212EH in DIP-4 sockets)
+
+Each sits **vertically**: pin 1 (LED anode) at (I′, r), pin 2 (cathode) at
+(I′, r+1), pin 3 at (L′, r+1), pin 4 at (L′, r) — counter-clockwise seen
+from the top, as a DIP is numbered. **Pin 1, the dimple, faces left and
+up.** Outputs 3 and 4 are interchangeable; only the LED has a polarity to
+get wrong.
+
+| Device | r | Pins 1 / 2 | Pins 4 / 3 |
+|---|---|---|---|
+| U4 — 1Cup, photoMOS 1 | 12 | I′12 / I′13 | L′12 / L′13 |
+| U5 — 1Cup, photoMOS 2 | 17 | I′17 / I′18 | L′17 / L′18 |
+| U6 — 2Cup, photoMOS 1 | 22 | I′22 / I′23 | L′22 / L′23 |
+| U7 — 2Cup, photoMOS 2 | 27 | I′27 / I′28 | L′27 / L′28 |
+
+**Drive chains, all insulated wire:**
+
+- **1Cup:** K′4 → L′12 · L′13 → L′17 · **L′18 → F′6** (raw 1Cup)
+- **2Cup:** K′7 → L′22 · L′23 → L′27 · **L′28 → G′5** (raw 2Cup)
+
+Three empty rows separate each device's outputs from the next, and the 1Cup
+chain's last node (L′18) from the 2Cup chain's first (L′22). Keep the two
+return wires, L′18 → F′6 and L′28 → G′5, at least one hole away from
+I′3, K′3 and K′6: they are direction lines and those are pos 1.
+
+### LED-driver cell, ×4
+
+**Rails:** **C′12–C′34 is the LED rail** (our 3V3 after jumper (b)),
+**G′12–G′32 is the drive GND bus**, both bare wire. D′–F′ lie between them.
+
+Each cell occupies rows r to r+4, with r = 12, 17, 22, 27, matching its
+photoMOS. All resistors stand upright (hairpin, two adjacent holes).
+
+| Part | Holes | Connects |
+|---|---|---|
+| 330 Ω | C′r – D′r | C′r on the LED rail; **D′r → I′r** (pin 1) |
+| BC547B | D′(r+2) C · E′(r+2) B · F′(r+2) E | **flat face toward the bottom edge**, so C–B–E run left to right. **D′(r+2) → I′(r+1)** (pin 2); F′(r+2) → G′(r+2), the GND bus |
+| 100 K | E′(r+3) – F′(r+3) | E′(r+3) joined to E′(r+2), the base; F′(r+3) joined to F′(r+2), the emitter |
+| 8.2 K | E′(r+4) – F′(r+4) | E′(r+4) joined to E′(r+3), the base; **F′(r+4) is the cell's `Q` input** from its '221 channel |
+
+**The part is a BC547 (C–B–E). A 2N3904 is E–B–C and would go in reversed**
+— the shopping list allows either, but the order bought BC547B.
+
+**Neighbouring holes on different nets in each cell, and what a bridge does:**
+
+| Bridge | Effect |
+|---|---|
+| D′r anode – C′r rail | that is the 330 Ω itself |
+| D′(r+2) collector – C′(r+2) rail | LED shorted out: never lights. Fail-safe |
+| E′(r+2) base – F′(r+2) emitter, or E′(r+3)–F′(r+3) | transistor held off. Fail-safe |
+| F′(r+4) `Q` – F′(r+3) emitter | `Q` shorted to GND: the channel never fires. Fail-safe |
+
+No bridge between neighbours in a cell can turn an LED on.
+
+### The '221s — placement and netlist
+
+| Chip | Pins 1–8 | Pins 16–9 | Channels |
+|---|---|---|---|
+| U1 | N12 → N19 | Q12 → Q19 | ch 1 = 1Cup photoMOS 1, ch 2 = 1Cup photoMOS 2 |
+| U2 | N23 → N30 | Q23 → Q30 | ch 1 = 2Cup photoMOS 1, ch 2 = 2Cup photoMOS 2 |
+| U3, the **PROPOSED** gate | T12 → T19 | W12 → W19 | ch 1 = gate, ch 2 unused |
+
+Pin 1 at the top of each N/T column (row 12 or 23), DIP-16 sockets.
+Pinout per `docs/phase-0-plan.md`: 1 1A̅ · 2 1B · 3 1R̅ · 4 1Q̄ · 5 2Q ·
+6 2C_X · 7 2C_XR_X · 8 GND · 9 2A̅ · 10 2B · 11 2R̅ · 12 2Q̄ · 13 1Q ·
+14 1C_X · 15 1C_XR_X · 16 V_CC.
+
+**Netlist:**
+
+| Net | Connects |
+|---|---|
+| 3V3 | devkit A9 (by wire under the devkit) → a bare bus along **row 35, M35 to C′35** → every '221 pin 16, every pin 2 and 10 except U3's pin 10, every 10 K pull-up, every `R_X`, and jumper (b)'s supply side |
+| drive GND | devkit **K29** → bus G′12–G′32 and every '221 pin 8. Separate from the sense ground tie at K30 |
+| Triggers (`A̅`) | GPIO42 K14 → U1 pin 1 · GPIO41 K15 → U1 pin 9 · GPIO40 K16 → U2 pin 1 · GPIO39 K17 → U2 pin 9 — each with a **10 K pull-up to 3V3** |
+| Tied `R̅` (arm) net | U1 pins 3 and 11, U2 pins 3 and 11, **U3 pin 13 (gate `Q`)**, and a **10 K pull-down to GND** |
+| Gate enable | GPIO38 K18 → U3 pin 3, with a **10 K pull-down** |
+| Gate trigger | GPIO10 A24 (wire under the devkit) → U3 pin 1, with a **10 K pull-up** |
+| U3 ch 2, unused | pin 9 → 3V3, pins 10 and 11 → GND; pins 6, 7, 12 open |
+| Timing, drive | per channel: **330 K** from pin 15 (or 7) to 3V3, **1 µF** between pins 14 and 15 (or 6 and 7) — soldered, never socketed |
+| Timing, gate | **470 K / 1 µF** on U3 pins 14/15 |
+| `Q` → cells | U1 pin 13 → F′16 (cell r 12) · U1 pin 5 → F′21 (r 17) · U2 pin 13 → F′26 (r 22) · U2 pin 5 → F′31 (r 27) |
+| `Q` readbacks, 1 K each | U1 pin 13 → GPIO1 K12 · U1 pin 5 → GPIO2 K13 · U2 pin 13 → GPIO47 K25 · U2 pin 5 → GPIO21 K26 · U3 pin 13 → GPIO9 A23 (wire under the devkit) |
+| Decoupling | 100 nF from each pin 16 to GND, at the chip |
+| Not connected | every pin 4 and 12 (`Q̄`) |
+| Jumper (b) | **C′34** (LED rail) – **C′35** (3V3 bus); open until the bench test |
+
+GPIO18 stays unused, as `docs/phase-0-plan.md` advises. The values marked
+open there — the readback series value, the gate's timing — are drawn at
+their proposed values and are not settled by this layout.
+
+### State in Phase 0
+
+- **Jumpers (a1), (a2) and (b) all open.** The photoMOS outputs see no
+  voltage and the LEDs no supply.
+- **U3 left out of its socket** while the gate is PROPOSED. Its 10 K
+  pull-down then holds the tied `R̅` net low, so all four drive channels are
+  held in reset — nothing fires even if a trigger pin moves.
+- The order from `docs/phase-0-plan.md` stands: fit (b) first, on the bench,
+  watching the '221 outputs with J2 unplugged; fit the (a) jumpers last, at
+  the machine.

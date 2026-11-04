@@ -567,7 +567,7 @@ connected at or beside it.**
 | Header | Pins | Notes |
 |---|---|---|
 | J5, 4-pin | B3 `VSS` · C3 `ESD1` · D3 `ESD4` · E3 `Disp-P4` | **E3 connects to nothing.** All three signals arrive behind their 8.2 K in the T-piece |
-| J4, 3-pin | G3 `#` · H3 *empty* · I3 `T` | **`+` never enters the box**: the T-piece's branch to the board carries `T` (yellow) and `#` (black) only — `#` behind its 100 K in the T-piece — and the plug's **middle** cavity is left **without a contact**. **`T` and `#` take the two outer pins so a hole separates them**: a bridge between them would hang 100 K to ground on the machine's `#` node, several times the disturbance invariant 1 allows. `+` (green) runs machine-to-sensor inside the T-piece. H3 connects to nothing, and G4–I4 stay empty. A branch wrongly built with all three wires is caught by the pre-power check below, which requires `+` to read open *(T sat in the middle, beside `#`, for part of 2026-11-03)* |
+| J4, 3-pin | G3 `#` · H3 *empty* · I3 `T` | **`+` never enters the box**: the T-piece's branch to the board carries `T` (yellow) and `#` (black) only — `#` behind its 100 K in the T-piece — and the plug's **middle** cavity is left **without a contact**. **`T` and `#` take the two outer pins so a hole separates them**: a bridge between them would hang 100 K to ground on the machine's `#` node, pulling it from ~4.68 V to ~4.28 V (~8.6 %), three times the 2.9 % this tap is meant to cost. `+` (green) runs machine-to-sensor inside the T-piece. H3 connects to nothing, and G4–I4 stay empty. A branch wrongly built with all three wires is caught by the pre-power check below, which requires `+` to read open *(T sat in the middle, beside `#`, for part of 2026-11-03)* |
 | J2, 5-pin | P3 Water · Q3 1Cup · R3 2Cup · S3 Steam · **T3 +5 V (pos 1)** | pos 1 at the right end, nearest the drive jumpers, farthest from the sense side |
 
 **There are no 2-pin XH parts in stock**, which is why J4 is a 3-pin header
@@ -582,8 +582,12 @@ seen from the wire side is mirrored, which is how a cavity gets swapped:
 on J5 a swap puts `Disp-P4` on the ground bus and swaps `ESD1`/`ESD4`; on
 J2 it puts +5 V into Water's 150 K. **Before first power, check each conductor by resistance, not continuity**
 — the J5 signals and J4 `#` sit behind their T-piece resistors, so a
-continuity beeper stays silent on a correct joint. With the T-piece
-unplugged from the machine, the devkit out and the board unpowered, meter
+continuity beeper stays silent on a correct joint. **Disconnect the
+T-piece on both sides** — from the machine's header and from the original
+harness plug (flowmeter, display, switches) — and leave only its branch
+plug mated to the board, with the devkit out and the board unpowered.
+Anything still attached adds a parallel path: the flowmeter alone makes
+`+` read finite to I3 and pulls the `#` reading toward ~69 kΩ. Then meter
 from each conductor at the T-piece's machine-side plug to the board hole
 this layout names:
 

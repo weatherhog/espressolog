@@ -37,8 +37,8 @@ the thing you do not know yet.
 | **believe a flowmeter pulse count** | `docs/flowmeter-j4.md` | counts are **~5× the datasheet and UNRESOLVED** — and the 5× itself divides by an **assumed** inlet |
 | **plan a flowmeter experiment** | `docs/flowmeter-j4.md` | **0d-i first** (weigh the split). And check whether the operator already does it every morning — three for three so far |
 | **compare flow data across sessions** | `docs/flowmeter-j4.md` | the **OPV is adjustable state and nothing records it** — invariant-5 class |
-| **pick a free GPIO, or drill the perfboard** | `docs/board-and-perfboard.md` | **GPIO48 is the LED, GPIO38 is the (proposed) gate enable, 39–42 are the triggers, 1 and 2 are `Q` readbacks — free: 9–14, 18, 21, 47, four of them owed to three more readbacks and the gate trigger**; GPIO33–37 unusable; 5Vin at position 21 beside GND at 22 is a **solder hazard** |
-| **lay out the perfboard — what connects to what** | `docs/phase-0-plan.md` §*Topology, per actuated line* and §*Two things that bound the firmware-side failures*; then `docs/board-and-perfboard.md` for the header | sense: **seven shunts (nine resistors) plus J2's four 150 K series legs, thirteen in all** — J4's and J5's series legs stay in the T-pieces, **J2's go on the board at the J2 header** (decided 2026-11-03: the drive needs the raw lines); drive: **2 × '221, plus a third for the PROPOSED arm-window gate (footprint reserved), 4 × AQY212EH (two series pairs), 4 × BC547, three OPEN jumpers** — pins, pulls and the arm gate are in the DRIVE table below; **J2 has no ground**; **keep the two jumper fields apart**; **AQY pin 1 = LED anode**, the only polarity to get wrong |
+| **pick a free GPIO, or drill the perfboard** | `docs/board-and-perfboard.md` | **GPIO48 is the LED, GPIO38 is the (proposed) gate enable, 39–42 are the triggers, 1, 2, 47, 21 and 9 are `Q` readbacks and 10 the (proposed) gate trigger — free: 11–14 and 18** *(since the drive layout, 2026-11-04)*; GPIO33–37 unusable; 5Vin at position 21 beside GND at 22 is a **solder hazard** |
+| **lay out the perfboard — what connects to what** | `docs/phase-0-plan.md` §*Topology, per actuated line* and §*Two things that bound the firmware-side failures*; then `docs/board-and-perfboard.md` for the header | sense: **seven shunts (nine resistors) plus J2's four 150 K series legs, thirteen in all** — J4's and J5's series legs stay in the T-pieces, **J2's go on the board at the J2 header** (decided 2026-11-03: the drive needs the raw lines); drive (drawn in `docs/board-and-perfboard.md`, "Drive-side layout" — hole by hole where it touches machine voltage, netlist for the '221s — with J2 moved to the top-right corner): **2 × '221, plus a third for the PROPOSED arm-window gate (footprint reserved), 4 × AQY212EH (two series pairs), 4 × BC547, three OPEN jumpers** — pins, pulls and the arm gate are in the DRIVE table below; **J2 has no ground**; **keep the two jumper fields apart**; **AQY pin 1 = LED anode**, the only polarity to get wrong |
 | **tee into the water circuit** | `docs/hydraulics.md` | everything is 1/8, the **gauge end cannot be teed**, there are **no spare ports**, and **whether invariant 1 covers plumbing is UNDECIDED** |
 | **work out what has actually been built and bench-tested** | `docs/phase-0-status.md` | the bench record and the resume point |
 | **buy a part** | `docs/shopping-list.md` | supersedes the parts tables in `docs/phase-0-plan.md` |
@@ -830,8 +830,8 @@ table and the plan together**, as with the sense pins.
 | trigger — 2Cup, photoMOS 1 | **40** | |
 | trigger — 2Cup, photoMOS 2 | **39** | |
 | **gate enable** *(PROPOSED)* | **38** | the **gate** '221 channel's `R̅`; external 10 K pull-down. The gate's `Q` drives the four drive channels' tied `R̅` (reset) net, which keeps its own 10 K pull-down; `B` tied to 3V3 on all five. No external AND. *(GPIO38 drove the tied `R̅` net directly until 2026-10-30; `B` until later on 2026-10-29.)* |
-| **gate trigger** *(PROPOSED)* | one of 9–14, 21, 47 | the gate's `A̅`; **10 K pull-up**, pulse low to fire. Chosen at layout; 18 avoided as a precaution. *(Added 2026-10-30.)* |
-| **`Q` readback ×5** | **1, 2** + three of 9–14, 18, 21, 47 | each drive channel's `Q` and the gate's, through a series resistor into an input — **1 K proposed, value OPEN** (with its '221 pulled, 1 K lets a mis-set readback pin drive the `Q` node). The pins are the layout part; the checks on them — the `Q` window and `drivetest` — are **PROPOSED, with known defects** (`docs/phase-0-plan.md`, "OPEN — the gate, readback and `drivetest`"). Chosen at layout. *(Added 2026-10-30.)* |
+| **gate trigger** *(PROPOSED)* | **10** | the gate's `A̅`; **10 K pull-up**, pulse low to fire. 18 avoided as a precaution. *(Added 2026-10-30; "one of 9–14, 21, 47, chosen at layout" until the drive layout, 2026-11-04.)* |
+| **`Q` readback ×5** | **1, 2** (1Cup) · **47, 21** (2Cup) · **9** (gate) *("three of 9–14, 18, 21, 47" until 2026-11-04)* | each drive channel's `Q` and the gate's, through a series resistor into an input — **1 K proposed, value OPEN** (with its '221 pulled, 1 K lets a mis-set readback pin drive the `Q` node). The pins are the layout part; the checks on them — the `Q` window and `drivetest` — are **PROPOSED, with known defects** (`docs/phase-0-plan.md`, "OPEN — the gate, readback and `drivetest`"). *(Added 2026-10-30.)* |
 
 **The rules a layout acts on — DATASHEET grade since 2026-10-29
 (TI SCHS166F; ESP32-S3 Series Datasheet v2.2) unless a bullet says
@@ -1002,12 +1002,14 @@ Two things worth knowing about the chosen pins:
 - **GPIO11–18 share ADC2, unusable while Wi-Fi is up**, and 15/16/17 are
   in that set. Fine as digital inputs. Both ADC1-capable pins in the budget
   (6, 7) are allocated, and GPIO8 — also ADC1 — is now claimed by `selftest`.
-  **GPIO9 and 10 are ADC1 and unallocated** unless the layout spends them on
-  the gate trigger or the last three `Q` readbacks *(GPIO1 and 2 were on this list until
-  2026-10-30, when they became `Q` readbacks)*, so an analog read is still
-  possible; an earlier version of this line said "there is no ADC1 pin left",
-  which was wrong even before GPIO8 was claimed. It matters only if J3's NTC
-  is ever wanted, since 0e takes temperature from the display bus instead.
+  **GPIO9 and 10 were the last ADC1 pins, and the drive layout spent them**
+  on the gate's readback and trigger (2026-11-04) *(GPIO1 and 2 were on this list until
+  2026-10-30, when they became `Q` readbacks)*, so **no ADC1 pin is left
+  while the gate is kept**; dropping it frees 9 and 10 again. *(An earlier
+  version said "there is no ADC1 pin left" when 9 and 10 were still free,
+  and the next said an analog read was still possible; it became true on
+  2026-11-04.)* It matters only if J3's NTC is ever wanted, since 0e takes
+  temperature from the display bus instead.
 
 **The 5 V rail is MEASURED (2026-10-04)**, so this divider is sized against
 a reading rather than the schematic — the step that was skipped at J4. The

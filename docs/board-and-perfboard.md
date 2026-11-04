@@ -683,14 +683,12 @@ unless it joins two holes of the same net.
 | **Jumper (a2), 2Cup** | **K′6** (pos 1) – **K′7** (2Cup leg) | 2-pin header, **OPEN through Phase 0** |
 
 **Pos 1** is I′3, K′3 and K′6 and nothing else: I′3 → K′3 → K′6 by
-insulated wire, skipping J′3, K′4 and K′5. With both jumpers open, every
-drive-side hole is dead to the machine in Phase 0 **except the two
-raw-line returns**: L′18 → F′6 and L′28 → G′5 sit on the live 1Cup and 2Cup
-direction lines, which go to 5 V on every press. Route those two wires
-along the right edge and up to the corner, **never past the G′ GND bus, the
-C′ LED rail or the row-35 3V3 bus**: a chafe to ground loads R45 and
-suppresses the lever, a chafe to 3V3 is a phantom press. *(Said "every
-other drive-side hole is dead" until review, 2026-11-04.)*
+insulated wire, skipping J′3, K′4 and K′5. **With both jumpers open, the
+live machine holes on the drive side are exactly these: pos 1 (I′3, K′3,
+K′6) and the two raw-line returns (L′18 → F′6, L′28 → G′5)**, which sit on
+the 1Cup and 2Cup direction lines and go to 5 V on every press. Everything
+else is dead to the machine in Phase 0. *(Until review, 2026-11-04, a draft
+listed only one of those two groups at a time.)*
 
 ### PhotoMOS stack (AQY212EH in DIP-4 sockets)
 
@@ -714,8 +712,17 @@ get wrong.
 
 Three empty rows separate each device's outputs from the next, and the 1Cup
 chain's last node (L′18) from the 2Cup chain's first (L′22). Keep the two
-return wires, L′18 → F′6 and L′28 → G′5, at least one hole away from
-I′3, K′3 and K′6: they are direction lines and those are pos 1.
+return wires, L′18 → F′6 and L′28 → G′5, by these rules — they are
+direction lines:
+
+- at least one hole from I′3, K′3 and K′6 (pos 1) and from K′4 and K′7;
+- never past the G′ GND bus, the C′ LED rail or the row-35 3V3 bus — a
+  chafe to ground loads R45 and suppresses the lever, a chafe to 3V3 is a
+  phantom press;
+- the 2Cup return kept clear of the 1Cup chain's holes (L′12–L′18), and the
+  two returns not run as a pair.
+
+*(A draft said "along the right edge", which puts them beside pos 1.)*
 
 ### LED-driver cell, ×4
 
@@ -743,12 +750,10 @@ photoMOS. All resistors stand upright (hairpin, two adjacent holes).
 | D′(r+2) collector – C′(r+2) rail | LED shorted out: never lights. Fail-safe |
 | E′(r+2) base – F′(r+2) emitter, or E′(r+3)–F′(r+3) | transistor held off. Fail-safe |
 | F′(r+4) `Q` – F′(r+3) emitter | `Q` shorted to GND: the channel never fires. Fail-safe |
-
 | **D′(r+2) collector – E′(r+2) base** — adjacent TO-92 legs | **lights the LED**: the BC547 becomes a diode, ~4.4 mA flows through the LED, above the AQY212EH's 3 mA operate current, and that photoMOS stays closed whenever (b) is fitted, invisible to the `Q` readback |
 
 **So one bridge in a cell CAN light an LED: collector to base.** Inspect
-those two legs under the loupe on every cell, and run the output check
-below. *(Said "no bridge between neighbours in a cell can turn an LED on"
+those two legs under the loupe on every cell. *(Said "no bridge between neighbours in a cell can turn an LED on"
 until review, 2026-11-04.)*
 
 ### The '221s — placement and netlist
@@ -774,7 +779,7 @@ Pinout per `docs/phase-0-plan.md`: 1 1A̅ · 2 1B · 3 1R̅ · 4 1Q̄ · 5 2Q ·
 | Tied `R̅` (arm) net | U1 pins 3 and 11, U2 pins 3 and 11, **U3 pin 13 (gate `Q`)**, and a **10 K pull-down to GND** |
 | Gate enable | GPIO38 K18 → U3 pin 3, with a **10 K pull-down** |
 | Gate trigger | GPIO10 A24 (wire under the devkit) → U3 pin 1, with a **10 K pull-up** |
-| U3 ch 2, unused | pin 9 → 3V3, pins 10 and 11 → GND; pins 5, 6, 7 open (12 is under "Not connected") |
+| U3 ch 2, unused | pins 9, 10 and 11 → GND (held in reset, so `A̅` may be low), so no 3V3 sits between U3's GND pins; pins 5, 6, 7 open (12 is under "Not connected") |
 | Timing, drive | per channel: **330 K** from pin 15 (or 7) to 3V3, **1 µF** between pins 14 and 15 (or 6 and 7) — soldered, never socketed |
 | Timing, gate | **470 K / 1 µF** on U3 pins 14/15 |
 | `Q` → cells | U1 pin 13 → F′16 (cell r 12) · U1 pin 5 → F′21 (r 17) · U2 pin 13 → F′26 (r 22) · U2 pin 5 → F′31 (r 27) |
@@ -802,8 +807,9 @@ their proposed values and are not settled by this layout.
 - The order from `docs/phase-0-plan.md` stands: fit (b) first, on the bench,
   watching the '221 outputs with J2 unplugged; fit the (a) jumpers last, at
   the machine. **For that bench step U3 and its 1 K must go in**, or every
-  channel stays in reset and the board looks dead. J2 stays unplugged
-  throughout.
+  channel stays in reset and the board looks dead, with J2 unplugged.
+- **U3 and its readback 1 K always go in or come out together.** Never one
+  without the other.
 
 ### Bridges that can arm or light a channel
 
@@ -811,17 +817,23 @@ Single adjacent-pin bridges on the '221 sockets that are **not** fail-safe:
 
 | Bridge | Effect |
 |---|---|
-| pins 2–3 or 10–11 (`B` = 3V3 beside `R̅`) | the tied arm net held HIGH: all four channels permanently armed |
-| pins 4–5 or 12–13 (`Q̄` beside `Q`) | `Q̄` is HIGH while disarmed and drags `Q` toward mid-rail; ~0.1 mA through the 8.2 K saturates the BC547 and lights that LED, while the readback reads LOW |
+| U1/U2 pins 2–3 or 10–11 (`B` = 3V3 beside `R̅`) | the tied arm net held HIGH: all four channels permanently armed |
+| U1/U2 pins 3–4 or 11–12 (`R̅` beside `Q̄`) | `Q̄` is HIGH while disarmed and drives the arm net HIGH: all four armed |
+| U1/U2 pins 4–5 or 12–13 (`Q̄` beside `Q`) | `Q̄` drags `Q` toward mid-rail; ~0.1 mA through the 8.2 K saturates the BC547 and lights that LED, while the readback reads LOW |
 | U3 pins 12–13 (spare `Q̄` beside the gate `Q`) | the arm net held HIGH: all four armed |
-| pins 7–8 (timing node beside GND) | that one-shot holds |
+| any pins 7–8 (timing node beside GND) | that one-shot holds |
 
-**None of them can reach the machine while the (a) jumpers are open**, and
-the check below finds each one before they are fitted.
+**None of them can reach the machine while the (a) jumpers are open — but
+most of them are invisible to a static check.** An armed board and a held
+one-shot both look normal with nothing firing. **So inspect every '221
+socket's adjacent pins under the loupe**, and treat the drive as unverified
+until the bench test of `docs/phase-0-plan.md` — which is OPEN, with
+`drivetest`, pending the bench sweep — has passed.
 
-**Output check, after (b) is fitted and before any (a) jumper:** with J2
-unplugged, every trigger idle and the arm net low, meter **pins 3 and 4 of
-each AQY212EH on resistance: all four must read open.** A closed one is an
-LED being lit by a fault — one of the bridges above, or the collector–base
-bridge in its cell. Then fire each channel once and check that only its
-own photoMOS closes.
+**One static check does work, after (b) is fitted and before any (a)
+jumper:** with J2 unplugged and every trigger idle, **pins 3 and 4 of each
+AQY212EH read open.** A closed one is an LED lit by a fault: the
+collector–base bridge in its cell, or a `Q̄`–`Q` bridge. That is all it
+catches. *(A draft said this check "finds each one" of the bridges above and
+added a fire-each-channel step that named no instrument and no way to arm;
+both withdrawn after review, 2026-11-04.)*

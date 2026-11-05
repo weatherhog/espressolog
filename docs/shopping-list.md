@@ -78,7 +78,11 @@ were made with 22 AWG, not the 26 AWG `docs/phase-0-status.md` records, and
 **the build T-pieces will be made fresh** from the 26 AWG silicone bought
 2026-10-28. So the as-built record was wrong by four gauges, in the safe
 direction — 22 is *thicker* than 26, so the chafe-to-ground concern below
-never applied to them (the series-resistor protection was given up for the build on 2026-11-05 and the chafe risk accepted — and with raw lines in the cable, a chafe is now a hard short, so gauge and insulation matter more, not less) — and the wire going into the machine will be the
+never applied to them. *(For the build the series-resistor protection
+was given up — J2's on 2026-11-03, J4's and J5's on 2026-11-05 — and the
+chafe risk accepted. With raw lines in the cable a chafe is now a hard
+short; insulation, not gauge, is what resists it, so the 26 AWG
+silicone stands.)* And the wire going into the machine will be the
 specified one. The 2026-10-18 series-resistance check stands for the test
 articles; it says nothing about T-pieces not yet built. *(22 AWG is the top
 of `SXH-001T-P0.6`'s AWG 28–22 range; the rebuild's 26 AWG sits inside it.)*
@@ -103,7 +107,8 @@ operator confirms no T-pieces are fitted at present. They are on the bench,
 so this is a caliper or a strip-and-look away, today, with nothing to
 disassemble and no machine to open. **The chafe-to-ground argument that
 made it sound urgent applies to where they are GOING, not where they are**
-*(the series-resistor protection was given up for the build on 2026-11-05 and the chafe risk accepted — and with raw lines in the cable, a chafe is now a hard short, so gauge and insulation matter more, not less)*:
+*(for the build that risk was accepted, 2026-11-03/05 — see the note
+above)*:
 it is a reason to settle the gauge before they go back in, not a reason to
 open a machine. Thinner than specified is still the direction that matters.
 
@@ -545,10 +550,10 @@ only ever ended at a board hole that connects to nothing, and a wire out
 to the one line that must never be loaded is risk with no use. **The box
 end stays an `XHP-4` with cavity 4 empty**: a 3-pin plug would mate the
 J4 header. *(Whether a smaller XH plug can be forced offset into a larger
-shroud — J4's into J5's header, J4's into J2's — is untested; check it by
-trial before relying on the pin counts as keying. J5's into J2's presses
-nothing, since J2's own plug is then not connected. The list read "J4's
-into J5's header, J5's into J2's" until 2026-11-05.)*
+shroud — J4's into J5's header, and J4's or J5's into J2's — is untested;
+check it by trial before relying on the pin counts as keying. Into J2's
+header neither reaches a J2 machine net in Phase 0, since J2's own plug is
+then out, but both become hazards once the drive jumpers close.)*
 *(Until 2026-11-05: "Wire the T straight through and branch **all four**
 conductors: `ESD1`, `ESD4` and `Disp-P4` each through an 8.2 kΩ, ground
 directly" — which is how the bench T-piece is built.)* Ground gets
@@ -772,9 +777,10 @@ on what was ordered.)*
 **Space is tight but was never the binding constraint**, against **~54
 discrete parts (~45 resistors, 4 BC547, 5 timing caps), 7 sockets (three
 DIP-16, four DIP-4)** and 3 XH connectors *(said "~29 discrete parts, 5
-sockets" until 2026-10-29 — the single-'221 count — ~42 / 6 until the
-arm-window gate, 2026-10-30, and ~51 discrete parts (~42 resistors) until
-J4's and J5's series legs came onto the board, 2026-11-05)*:
+sockets" until 2026-10-29 — the single-'221 count — ~42 parts / 6
+sockets until the arm-window gate, 2026-10-30, ~47 parts (~38 resistors)
+until J2's 150 K came onto the board, 2026-11-03, and ~51 parts (~42
+resistors) until J4's and J5's series legs did, 2026-11-05)*:
 <!-- fact:dip4-sockets four DIP-4 -->
 
 | board grid | free beside the devkit | free underneath it |

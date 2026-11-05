@@ -585,18 +585,18 @@ seen from the wire side is mirrored, which is how a cavity gets swapped:
 on J5 a swap puts `VSS` on the empty E3, leaves the ground bus without its J5 anchor and swaps `ESD1`/`ESD4`; on
 J2 it puts +5 V into Water's 150 K. **Before first power, check each conductor by resistance, not continuity**
 — the by-value checks of the on-board series resistors below need Ω
-mode, and so does the `+` row: a forgotten flowmeter shows there as a
-finite reading — kΩ-scale if the 10.04 K pull-up sits in the sensor,
-which is unrecorded — that a beeper stays silent on and so passes as
-"open". *(Until
+mode. *(Until
 2026-11-05 the reason given was that the J5 signals and J4 `#` sat behind
 T-piece resistors, which a beeper does not sound through.)* **Disconnect the
 T-piece on both sides** — from the machine's header and from the original
 harness plug (flowmeter, display, switches) — and leave only its branch
 plug mated to the board, with the devkit out and the board unpowered.
-Anything still attached adds a parallel path: the flowmeter alone makes
-`+` read finite to I3, and **the `+` row is now the only one that reveals
-it** — `#` reads ~0 Ω whatever else is attached *(until 2026-11-05, with
+Anything still attached adds a parallel path. **Confirm by eye that the
+flowmeter's plug is off**: no meter row reliably reveals it now. `#` reads
+~0 Ω whatever else is attached, and the `+` row may still read open with
+the flowmeter on — `docs/taps-and-dividers.md` treats the 10.04 K pull-up
+as the machine board's own, so with the machine disconnected the only
+path is through the sensor's electronics, which may read finite or OL *(until 2026-11-05, with
 the 100 K in the T-piece, a forgotten flowmeter also pulled the `#`
 reading toward ~69 kΩ)*. Then meter
 from each conductor at the T-piece's crimped plug that mates the machine header (the soldered header end reads the same) to the board hole
@@ -621,7 +621,11 @@ has had to meter to tell them apart before. Do it with the T-piece and
 devkit off and the board unpowered, both drive jumpers (a) open: then the
 header holes have no other path to the ground bus, so the shunts hanging
 off the tap rows are not in parallel with the reading, and F′6/G′5 reach
-only open photoMOS outputs.
+only open photoMOS outputs. **Then meter every shunt by value**, tap row
+to the ground bus: B12 and B13 **16.4 kΩ** each (a reading of 8.2 kΩ is a
+single resistor, an open reading a half left unfitted), B14–B18 **220 kΩ**
+each. *(Added 2026-11-05: a missing J5 shunt half still decodes, so
+nothing else catches it.)*
 
 *(This said "meter continuity" until 2026-11-03.)*
 

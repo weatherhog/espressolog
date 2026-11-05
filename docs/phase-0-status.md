@@ -1229,10 +1229,16 @@ looked alive, while the ISR — which needs a real edge — never fired once.
 are 25 of them in stock. Putting one in the shunt position is an easy
 substitution and it fails exactly this way. Series 8.2 kΩ at the T-piece,
 shunt 15 kΩ at the board — the two are not interchangeable. *(That is the
-bench rig. In the build, from 2026-11-05, every part involved is 8.2 K —
-the series legs at C5–C9 and D6–D10 and both halves of each shunt — so a
-swap among them is harmless. The failure there is a shunt fitted as ONE
-8.2 K instead of two in series, which reads exactly as described above.)*
+bench rig. In the build, from 2026-11-05, the J5 series legs at C5–C9
+and D6–D10 and both halves of each J5 shunt are all 8.2 K, so a swap
+**among those** is harmless. Two failures remain: **a J5 shunt built as
+one 8.2 K** instead of two in series, which reads as described above; and
+**one half of a shunt left unfitted**, which leaves no shunt at all — the
+pin sees the bus line through 8.2 K alone, into its clamp diode, and
+still decodes, so nothing shows. And **J4's 100 K (G5–G9) and the 220 K
+shunts (rows 14–18) sit beside them**, where a swap does matter. The
+pre-power check meters series legs by value but not shunts, so check
+every shunt position by value too.)*
 
 #### The switch poller has a resolution floor, and the counter that looks like it would warn you does not
 
@@ -1966,7 +1972,8 @@ state; closing it is the deliberate act, with the RC chosen first.
    nothing. The firmware is the authority; it is already written.
 
    **All four conductors are branched, but only three are terminated.**
-   *(The "At the T-piece" column is the bench T-piece. The build T-piece, from
+   *(This whole entry — the diagram, this table and the `Disp-P4`
+   paragraphs below — describes the bench T-piece. The build T-piece, from
    2026-11-05, does not branch `Disp-P4` at all — `docs/shopping-list.md`
    §3 — and carries **no resistors**: both 8.2K series legs sit on the board
    (`docs/board-and-perfboard.md`, "Series legs for J4 and J5"). **Do not
@@ -2157,13 +2164,17 @@ state; closing it is the deliberate act, with the RC chosen first.
    T-pieces are plain wire and every board header carries raw machine nets,
    so **the pin-count keying is now load-bearing for invariant 1**: a
    smaller plug forced offset into a larger header lands raw machine nets
-   on other machine nets or on our ground, with no series resistor in the
-   cable to limit it. Whether a smaller XH plug can be forced offset into a
+   on our ground or on other board nets, with no series resistor in the
+   cable to limit it. Into J5's header that reaches our ground at once.
+   Into J2's header — with J2's own plug then out — nothing reaches a J2
+   machine net in Phase 0, but **both offsets become hazards once the drive
+   jumpers close**, since a fired photoMOS then joins pos 1's hole to a
+   raw-line hole. Whether a smaller XH plug can be forced offset into a
    larger shroud is untested (`docs/shopping-list.md` §3); try it before
    relying on the keying. *(Two drafts of this paragraph, 2026-11-05,
    worked particular offsets through with voltage estimates; each review
-   found new corners in them, and the trial settles the question
-   outright.)* **The 5S and 6S become practice pieces** for the
+   found new corners in them. A failed trial settles the question; a
+   successful one reopens the per-offset analysis.)* **The 5S and 6S become practice pieces** for the
    strip-and-solder — the pack holds one of each, so write the allocation
    down rather than rediscovering it with a bag of cut leads.
 
@@ -2210,7 +2221,10 @@ state; closing it is the deliberate act, with the RC chosen first.
    §1 has the history), so the "3 x 26 AWG" in the layout and the
    `[26 AWG out]` branch were the specification, and this paragraph let them
    read as the as-built. Thicker than specified, so the chafe argument is
-   unaffected *(the series-resistor protection was given up for the build on 2026-11-05 and the chafe risk accepted — and with raw lines in the cable, a chafe is now a hard short, so gauge and insulation matter more, not less)*. **These are test articles: the T-pieces that go into the
+   unaffected *(for the build the series-resistor protection was given up —
+   J2's on 2026-11-03, J4's and J5's on 2026-11-05 — and the chafe risk
+   accepted; insulation, not gauge, resists a chafe, so 26 AWG stands)*.
+   **These are test articles: the T-pieces that go into the
    machine will be rebuilt from the 26 AWG silicone now in hand**, and the
    verification in this paragraph belongs to the 22 AWG set, not to them.
 

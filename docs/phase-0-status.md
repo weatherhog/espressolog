@@ -1960,6 +1960,8 @@ state; closing it is the deliberate act, with the RC chosen first.
    nothing. The firmware is the authority; it is already written.
 
    **All four conductors are branched, but only three are terminated.**
+   *(This is the bench T-piece. The build T-piece, from 2026-11-05, does not
+   branch `Disp-P4` at all — `docs/shopping-list.md` §3.)*
 
    | J5 pin | Net | At the T-piece | At the box |
    |---|---|---|---|

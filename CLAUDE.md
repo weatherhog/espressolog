@@ -477,7 +477,7 @@ on a red one.
 strength is unrecorded**, so the consequence of loading it is unknown. That is
 reason enough. **The build T-piece passes it straight through and does not
 branch it** (decided 2026-11-05; the J5 box plug stays 4-pin with cavity 4
-empty, so it cannot mate J4's 3-pin header). Never hang anything on it that
+empty, so it cannot go into J4's 3-pin header). Never hang anything on it that
 can source or sink current — in particular **not the shunt**. *(Until
 2026-11-05: "Branch it through its 8.2 K for symmetry if you like, leave the
 far end open" — which is how the bench T-piece is built.)*

@@ -350,57 +350,9 @@ Build: plug in line, strip a window mid-cable, solder branch wires to the
 conductors you want, adhesive-lined heat-shrink over it. Unplugging
 returns the machine to stock.
 
-### The build T-pieces: crimped plug plus soldered header — DECIDED 2026-11-05
-
-**The balance leads are no longer the plan for the build T-pieces.** With
-the crimp set, the 26 AWG silicone and XH housings and headers all in
-hand, each T-piece is made from parts:
-
-```
-machine header <-[XHP female, crimped]- 26 AWG -[B*B-XH-A, soldered]-> machine's harness plug
-                                                  |  each branched pin also carries
-                                                  +- resistor - 26 AWG -[XHP female, crimped]-> box
-```
-
-That is the first fallback below ("solder directly to a `B4B-XH-A`'s
-pins"), promoted. What it buys: **a ruined piece costs a contact, not the
-only lead of its size**, and pin order is set by you and checked by meter
-rather than inherited from a lead that may be mirrored.
-
-**What it costs, and the rule for each:**
-
-- **Two wires on one header pin at 2.54 mm pitch.** On J2, pos 1 (+5 V)
-  sits beside Steam: a solder bridge there starts a steam cycle.
-  **Meter every adjacent pair for no continuity before any heat-shrink
-  goes on.** The 4.8 / 6.0 mm adhesive heat-shrink is too big for a single
-  pin: either sleeve each pin with ~1.5 mm heat-shrink, or join the branch
-  to the pass-through wire a few cm before the header so each pin carries
-  one wire.
-- **The solder joints take all the strain**, and the machine has a
-  vibratory pump. Adhesive-lined heat-shrink over the whole header back,
-  a cable tie behind it; a scrap of perfboard under the header if that is
-  still floppy.
-- **A heated XH header pin can walk in its housing.** Solder with a spare
-  `XHP` mated onto the header, which holds the pins aligned and sinks heat.
-- **Mate each header with the machine's real harness plug before
-  soldering anything.** This file has been caught by a listing twice.
-
-**The series resistors stay at the source** — header pin → resistor → 26
-AWG — for the chafe argument in `docs/phase-0-status.md`.
-
-**Per connector:** J5 branches `VSS` direct and `ESD1`/`ESD4` through
-8.2 K — **three branches, `Disp-P4` passes through unbranched** (see §3).
-J4 branches `T` direct and `#` through 100 K; `+` passes through only. J2
-branches all five, no resistors.
-
-**Order:** a practice piece first, then J5 (critical path), J4, and J2
-last — it carries pos 1 beside the direction lines.
-
-**Each finished piece:** pass-through ~0 Ω on every pin; branch as the
-pre-power table in `docs/board-and-perfboard.md` says; no adjacent pair
-continuous; a pull test on every crimp.
-
-Note the window is **not** empty: the two 8.2 kΩ series resistors live in
+*(The next two paragraphs describe the balance-lead build, superseded
+2026-11-05 by "The build T-pieces" below; the resistors-at-the-source rule
+in them still holds.)* Note the window is **not** empty: the two 8.2 kΩ series resistors live in
 it, soldered inline, because series resistance has to be at the source to
 protect the machine from a fault further down the cable (reasoning in
 `docs/phase-0-status.md`). So allow for two resistor bodies, generous
@@ -420,8 +372,8 @@ section's conclusion**: the male cable end still does not exist as a JST
 part, so **every T-piece still starts life as a balance extension lead**,
 and the second pack in §5 is still the insurance against ruining one.
 *(Superseded 2026-11-05: the build T-pieces use a soldered `B*B-XH-A` as
-the male end instead — see "The build T-pieces" above. The pin-by-pin
-check below still applies to any balance lead used.)*
+the male end instead — see "The build T-pieces" below. The pin-by-pin
+check below applies to that build as well as to any balance lead.)*
 
 **Verify continuity pin-by-pin before it touches the board.** Some balance
 extensions are deliberately wired **mirrored** for particular adapters, and
@@ -454,6 +406,69 @@ perfboard (robust, but a rigid lump).
 **Do not substitute 2.54 mm Dupont male pins.** They insert — 0.12 mm of
 accumulated error across four pins — but the `XHP-4` latch has nothing to
 grab, and this machine has a vibratory pump.
+
+### The build T-pieces: crimped plug plus soldered header — DECIDED 2026-11-05
+
+**The balance leads are no longer the plan for the build T-pieces.** With
+the crimp set, the 26 AWG silicone and XH housings and headers all in
+hand, each T-piece is made from parts:
+
+```
+machine header <-[XHP female, crimped]- 26 AWG -[B*B-XH-A, soldered]-> machine's harness plug
+                                                  |  each branched pin also carries
+                                                  +- resistor where specified - 26 AWG -[XHP female, crimped]-> box
+```
+
+That is the first fallback above ("solder directly to a `B4B-XH-A`'s
+pins"), promoted. What it buys: **a ruined piece costs a contact, not the
+only lead of its size**, and pin order is set by you and checked by meter
+rather than inherited from a lead that may be mirrored.
+
+**What it costs, and the rule for each:**
+
+- **Two wires on one header pin at 2.54 mm pitch.** On J2, pos 1 (+5 V)
+  sits beside Steam: a solder bridge there starts a steam cycle.
+  **Meter every adjacent pair for no continuity before any heat-shrink
+  goes on.** The 4.8 / 6.0 mm adhesive heat-shrink is too big for a single
+  pin: either sleeve each pin with ~1.5 mm heat-shrink, or join the branch
+  to the pass-through wire a few cm before the header so each pin carries
+  one wire.
+  **The same rule covers J4 by name: `+` passes through between `T` and
+  `#`, both of which carry two wires.** A `+`–`T` bridge shorts the
+  IRM-03-5 sensor rail to ground and a `+`–`#` bridge ties it to the
+  open-collector output — both break the J4 `+` rule. On J5 a
+  `VSS`–`ESD1` bridge holds SDA low and an `ESD4`–`Disp-P4` bridge loads
+  `Disp-P4`.
+- **The solder joints take all the strain**, and the machine has a
+  vibratory pump. Adhesive-lined heat-shrink over the whole header back,
+  a cable tie behind it; a scrap of perfboard under the header if that is
+  still floppy.
+- **A heated XH header pin can walk in its housing.** Solder with a spare
+  `XHP` mated onto the header, which holds the pins aligned and sinks heat.
+- **Mate each header with the machine's real harness plug before
+  soldering anything.** This file has been caught by a listing twice.
+
+**The series resistors stay at the source** — header pin → resistor → 26
+AWG — for the chafe argument in `docs/phase-0-status.md`.
+
+**Per connector:** J5 branches `VSS` direct and `ESD1`/`ESD4` through
+8.2 K — **three branches, `Disp-P4` passes through unbranched** (see §3).
+J4 branches `T` direct and `#` through 100 K; `+` passes through only. J2
+branches all five, no resistors.
+
+**Order:** a practice piece first, then J5 (critical path), J4, and J2
+last — it carries pos 1 beside the direction lines.
+
+**Each finished piece:**
+
+- **Pass-through, position by position — the soldered header can be
+  wired mirrored exactly as a balance lead can**, because you solder it
+  from the back. With both latches facing up (steps 1–4 of the pin-by-pin
+  check above), XHP cavity N must read ~0 Ω to header pin N **and open to
+  every other header pin**. A mirrored J5 puts machine `VSS` on `Disp-P4`.
+- **Branch** as the pre-power table in `docs/board-and-perfboard.md` says.
+- **No adjacent pair continuous**, on the header and on both plugs.
+- **A pull test on every crimp.**
 
 ### If the pigtails turn out to be PVC
 
@@ -499,7 +514,8 @@ leave the machine unable to run.
 
 | Item | Qty | ~€ |
 |---|---|---|
-| **3S** balance extension lead (**4**-pin, male↔female) | 1 | — |
+| **`XHP-4` ×2 crimped + `B4B-XH-A` soldered** — the build T-piece, §2 "The build T-pieces" | 1 set | in stock |
+| ~~**3S** balance extension lead (**4**-pin, male↔female)~~ — the bench T-piece; **superseded for the build 2026-11-05** | 1 | — |
 | ~~— optional — pre-crimped XH kit, for detachable tap ends~~ **NOT BOUGHT 2026-10-28 — crimp set instead, see §2** | — | 0 |
 | — fallback — `B4B-XH-A` header + perfboard | 5 | 3 |
 | — fallback — Ascaso display harness `I.4312` (spare) | 1 | 10–20 |
@@ -507,7 +523,7 @@ leave the machine unable to run.
 **Bought**, as part of the mixed pack in section 1 — one 3S, no spare.
 Practise on the 5S and 6S first; neither has a connector job (see section 1).
 
-A 3S balance extension, solder and heat-shrink is the whole T. Ascaso's own spare
+*(Until 2026-11-05: "A 3S balance extension, solder and heat-shrink is the whole T." The build T-piece is now crimped plugs plus a soldered header — §2.)* Ascaso's own spare
 harness, **part `I.4312`** (mainboard is `I.3957`, matching the board
 silkscreen), is the last fallback if anything about the generic connector
 turns out not to mate — cut it and both ends are guaranteed by
@@ -519,7 +535,9 @@ four**: `ESD1` and `ESD4` each through an 8.2 kΩ, ground directly.
 only ever ended at a board hole that connects to nothing, and a wire out
 to the one line that must never be loaded is risk with no use. **The box
 end stays an `XHP-4` with cavity 4 empty**: a 3-pin plug would mate the
-J4 header, and the different pin counts are what key the three harnesses.
+J4 header. *(Whether a smaller XH plug can be forced offset into a larger
+shroud — J4's into J5's header, J5's into J2's — is untested; check it by
+trial before relying on the pin counts as keying.)*
 *(Until 2026-11-05: "Wire the T straight through and branch **all four**
 conductors: `ESD1`, `ESD4` and `Disp-P4` each through an 8.2 kΩ, ground
 directly" — which is how the bench T-piece is built.)* Ground gets
@@ -555,7 +573,7 @@ tighter than they need to be for the sake of a few euro.
 
 | Value | Qty | Where |
 |---|---|---|
-| 8.2 kΩ | 10 | 0e T-piece, series leg (**×2** — `ESD1`, `ESD4`; ×3 with `Disp-P4` until 2026-11-05); **0e shunt legs, ×4 — two in series per leg to make 16.4 kΩ, on `ESD1` and `ESD4` only** (new 2026-10-19, replaces the 15 kΩ); 0b analyser tap (×3). **Bought: 25**, so the extra 4 are covered. |
+| 8.2 kΩ | 9 (was 10 with `Disp-P4`) | 0e T-piece, series leg (**×2** — `ESD1`, `ESD4`; ×3 with `Disp-P4` until 2026-11-05); **0e shunt legs, ×4 — two in series per leg to make 16.4 kΩ, on `ESD1` and `ESD4` only** (new 2026-10-19, replaces the 15 kΩ); 0b analyser tap (×3). **Bought: 25**, so the extra 4 are covered. |
 | 15 kΩ | 10 | **SUPERSEDED for 0e — do not fit.** Was the 0e divider ground leg; it fails its tolerance corner at −70 to −87 mV (2026-10-19). **Use 2 × 8.2 kΩ in series = 16.4 kΩ** per leg (**×2** — `Disp-P4` stays unterminated). Both in stock, no new parts. |
 | **10 kΩ** | **25** | **'221 input pulls, ×7 — five `A` pull-ups to 3V3 (four drive channels and the gate) and two `R` pull-downs (GPIO38, the gate's `R̅`, and the drive channels' tied `R̅` net) (`docs/phase-0-plan.md`, "An arm gate"; ×5 from 2026-10-29 until the gate, 2026-10-30).** **25 held, COUNTED by the operator 2026-10-29**, which is the grade `docs/taps-and-dividers.md` asks for ("in stock should mean counted"). Seven needed, eighteen spare *(five and twenty until 2026-10-30)*. *(This cell read "in stock per the operator — count not taken" for part of that day, and a draft before it claimed five of the 15 kΩ bag instead; 10 K is held and is the conventional value, so the 15 K stay with their 0e supersession note.)* |
 | 150 kΩ | 10 | 0c switch divider, series leg (**×4** — all four J2 lines), **on the board at the J2 header, for the build** (decided 2026-11-03, so the drive reaches the raw lines; the bench rig still has them in the T-piece). **In stock 2026-10-07.** |

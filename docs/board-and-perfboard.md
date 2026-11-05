@@ -593,12 +593,12 @@ harness plug (flowmeter, display, switches) — and leave only its branch
 plug mated to the board, with the devkit out and the board unpowered.
 Anything still attached adds a parallel path. **Confirm by eye that the
 flowmeter's plug is off**: no meter row reliably reveals it now. `#` reads
-~0 Ω whatever else is attached, and the `+` row may still read open with
-the flowmeter on — `docs/taps-and-dividers.md` treats the 10.04 K pull-up
-as the machine board's own, so with the machine disconnected the only
-path is through the sensor's electronics, which may read finite or OL *(until 2026-11-05, with
-the 100 K in the T-piece, a forgotten flowmeter also pulled the `#`
-reading toward ~69 kΩ)*. Then meter
+~0 Ω whatever else is attached *(until 2026-11-05, with the 100 K in the
+T-piece, a forgotten flowmeter pulled the `#` reading toward ~69 kΩ)*, and
+the `+` row may still read open with the flowmeter on —
+`docs/taps-and-dividers.md` treats the 10.04 K pull-up as the machine
+board's own, so with the machine disconnected the only path is through
+the sensor's electronics, which may read finite or OL. Then meter
 from each conductor at the T-piece's crimped plug that mates the machine header (the soldered header end reads the same) to the board hole
 this layout names:
 
@@ -627,7 +627,7 @@ single resistor, an open reading a half left unfitted), B14–B18 **220 kΩ**
 each. *(Added 2026-11-05: a missing J5 shunt half still decodes, so
 nothing else catches it.)*
 
-*(This said "meter continuity" until 2026-11-03.)*
+*(The pre-power check said "meter continuity" until 2026-11-03.)*
 
 **Ground bus:** bare wire down **column I, rows 6–30**, fed from J5 `VSS`
 (B3) and J4 `T` (I3, straight down the bus column), and tied to the devkit at **K30**, the opposite

@@ -105,7 +105,10 @@ Violating any of these is a bug, not a design choice.
    the larger risk** — see `docs/phase-0-plan.md`. **From PHASE 0 onward**
    J2 position 1 (+5 V common) rides in the loom; a bridge from it to
    a direction line actuates the machine and no jumper on the board is in
-   that path. Plumbing is likewise outside this invariant, for the same
+   that path. **And from 2026-11-05 the J4 and J5 branches carry raw `#`,
+   `ESD1` and `ESD4`** — their series resistors moved onto the board, so a
+   fault in those cables reaches the machine line unlimited; the operator
+   accepted that risk (the GPIO15–18 bullet in the GPIO budget). Plumbing is likewise outside this invariant, for the same
    reason and recorded separately.
 
    **This clause said "from Phase 1 provisioning onward" until 2026-10-27,
@@ -1006,7 +1009,8 @@ Two things worth knowing about the chosen pins:
   or to its neighbour now reaches the machine line with nothing in series —
   J4 `#` held low (the `E01` dose-control class), or a J5 bus line shorted.
   **The operator accepted that risk on 2026-11-05**; for J2 it was already
-  gone, since pos 1 rides bare in the same loom. `docs/phase-0-status.md`
+  gone, since its 150 K moved onto the board on 2026-11-03 so the drive
+  reaches the raw lines. `docs/phase-0-status.md`
   keeps the original argument. *(Until 2026-11-03 this said the resistor
   "belongs at the machine end".)*
 - **GPIO11–18 share ADC2, unusable while Wi-Fi is up**, and 15/16/17 are
@@ -1244,8 +1248,8 @@ never baked in, and Digmesa's own datasheet recommends calibrating it.
 
 **PATH DONE 2026-10-07** (shot 109); **what the number means is OPEN.** The J5 tap is
 wired to the ESP32 and `boiler_temp_start_c` / `machine_timer_s` land in
-the database off the machine's own display. Conditioning: 8.2 K series at
-the T-piece, 15 K shunt at the board, `ESD4`→GPIO4, `ESD1`→GPIO5, `VSS`
+the database off the machine's own display. Conditioning (as built on the bench): 8.2 K series at
+the T-piece — **on the board for the build, from 2026-11-05** — 15 K shunt at the board, `ESD4`→GPIO4, `ESD1`→GPIO5, `VSS`
 ground direct, `Disp-P4` unterminated.
 
 **The as-built 15 K shunt decodes and FAILS its tolerance corner**, and the

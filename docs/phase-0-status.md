@@ -2034,6 +2034,17 @@ state; closing it is the deliberate act, with the RC chosen first.
    commutation spike above 210 mV corrupts frames intermittently, which is
    the worst kind of fault to chase.
 
+   **This describes the BENCH geometry (divider split across the cable).
+   From 2026-11-05 the build does not split it**: the 8.2 K sits on the
+   board, so the cable carries the raw machine-driven line and the
+   lowest-margin junction is on the board, not on 50 cm of wire. Two
+   consequences: the junction's noise margin improves, and **pickup on the
+   cable now couples straight onto the machine's own bus line** rather than
+   through 8.2 K. The same holds at J4 — the 100 K/220 K junction moves off
+   the cable — so glitch counts in `docs/flowmeter-j4.md`, taken on the
+   bench geometry, are not directly comparable with build counts. Keep the
+   cable away from the mains loom either way.
+
    **The first of these is NO LONGER CONTINGENT — 15 K fails its corner and
    16.4 K is now the specified value regardless of whether drops occur.** The
    second remains contingent. Read what follows with that split in mind; its
@@ -2058,8 +2069,8 @@ state; closing it is the deliberate act, with the RC chosen first.
 
    **SUPERSEDED 2026-11-05 — the build puts these 8.2K on the board, and the
    operator accepted the chafe risk argued here.** For J2 the protection was
-   already gone (pos 1 rides bare in the loom, and the drive needs the raw
-   lines), and the build T-pieces are plain wire. The argument below stays
+   already gone — its 150 K moved onto the board on 2026-11-03 so the drive
+   reaches the raw lines — and the build T-pieces are plain wire. The argument below stays
    as the record of what that gives up: a branch chafed to ground is now a
    hard short on the bus line, not the 3.18 V soft fault. The clamp-current
    bound is unaffected — the 8.2K still sits between machine and GPIO.
@@ -2129,7 +2140,14 @@ state; closing it is the deliberate act, with the RC chosen first.
 
    Each cable carries its own series conditioning in its T-piece, so the box
    side is always high-impedance and a swapped cable is a swap, not a
-   rebuild. **The 5S and 6S become practice pieces** for the
+   rebuild. **True of the bench rig only, from 2026-11-05:** the build
+   T-pieces are plain wire and every board header carries raw machine nets,
+   so **the pin-count keying is now load-bearing for invariant 1.** A J5
+   plug forced offset into J2's header would put `ESD1`/`ESD4` straight onto
+   raw 1Cup/2Cup — a possible phantom press, with no 8.2 K between them any
+   more. Whether a smaller XH plug can be forced offset into a larger shroud
+   is untested (`docs/shopping-list.md` §3); try it before relying on the
+   keying. **The 5S and 6S become practice pieces** for the
    strip-and-solder — the pack holds one of each, so write the allocation
    down rather than rediscovering it with a bag of cut leads.
 

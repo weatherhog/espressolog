@@ -579,7 +579,7 @@ tighter than they need to be for the sake of a few euro.
 
 | Value | Qty | Where |
 |---|---|---|
-| 8.2 kΩ | 9 (was 10 with `Disp-P4`) | 0e series leg (**×2** — `ESD1`, `ESD4`; ×3 with `Disp-P4` until 2026-11-05), **on the board below the J5 header, for the build** (2026-11-05; the bench rig still has them in the T-piece); **0e shunt legs, ×4 — two in series per leg to make 16.4 kΩ, on `ESD1` and `ESD4` only** (new 2026-10-19, replaces the 15 kΩ); 0b analyser tap (×3). **Bought: 25**, so the extra 4 are covered. |
+| 8.2 kΩ | 13 *(9 until 2026-11-05, which omitted the four base resistors; 10 with `Disp-P4` before that)* | **LED-driver base resistor ×4** (`docs/board-and-perfboard.md`, LED-driver cells); 0e series leg (**×2** — `ESD1`, `ESD4`; ×3 with `Disp-P4` until 2026-11-05), **on the board below the J5 header, for the build** (2026-11-05; the bench rig still has them in the T-piece); **0e shunt legs, ×4 — two in series per leg to make 16.4 kΩ, on `ESD1` and `ESD4` only** (new 2026-10-19, replaces the 15 kΩ); 0b analyser tap (×3). **Bought: 25**, so the extra 4 are covered. |
 | 15 kΩ | 10 | **SUPERSEDED for 0e — do not fit.** Was the 0e divider ground leg; it fails its tolerance corner at −70 to −87 mV (2026-10-19). **Use 2 × 8.2 kΩ in series = 16.4 kΩ** per leg (**×2** — `Disp-P4` stays unterminated). Both in stock, no new parts. |
 | **10 kΩ** | **25** | **'221 input pulls, ×7 — five `A` pull-ups to 3V3 (four drive channels and the gate) and two `R` pull-downs (GPIO38, the gate's `R̅`, and the drive channels' tied `R̅` net) (`docs/phase-0-plan.md`, "An arm gate"; ×5 from 2026-10-29 until the gate, 2026-10-30).** **25 held, COUNTED by the operator 2026-10-29**, which is the grade `docs/taps-and-dividers.md` asks for ("in stock should mean counted"). Seven needed, eighteen spare *(five and twenty until 2026-10-30)*. *(This cell read "in stock per the operator — count not taken" for part of that day, and a draft before it claimed five of the 15 kΩ bag instead; 10 K is held and is the conventional value, so the 15 K stay with their 0e supersession note.)* |
 | 150 kΩ | 10 | 0c switch divider, series leg (**×4** — all four J2 lines), **on the board at the J2 header, for the build** (decided 2026-11-03, so the drive reaches the raw lines; the bench rig still has them in the T-piece). **In stock 2026-10-07.** |
@@ -764,11 +764,12 @@ quantity and the price are both superseded by what was actually bought —
 rather than changed: five is practice, service and spare. §1 is normative
 on what was ordered.)*
 
-**Space is tight but was never the binding constraint**, against **~51
-discrete parts (~42 resistors, 4 BC547, 5 timing caps), 7 sockets (three
+**Space is tight but was never the binding constraint**, against **~54
+discrete parts (~45 resistors, 4 BC547, 5 timing caps), 7 sockets (three
 DIP-16, four DIP-4)** and 3 XH connectors *(said "~29 discrete parts, 5
-sockets" until 2026-10-29 — the single-'221 count — and ~42 / 6 until the
-arm-window gate, 2026-10-30)*:
+sockets" until 2026-10-29 — the single-'221 count — ~42 / 6 until the
+arm-window gate, 2026-10-30, and ~51 / ~42 resistors until J4's and J5's
+series legs came onto the board, 2026-11-05)*:
 <!-- fact:dip4-sockets four DIP-4 -->
 
 | board grid | free beside the devkit | free underneath it |

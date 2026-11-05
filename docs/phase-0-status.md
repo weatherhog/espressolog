@@ -1229,9 +1229,10 @@ looked alive, while the ISR — which needs a real edge — never fired once.
 are 25 of them in stock. Putting one in the shunt position is an easy
 substitution and it fails exactly this way. Series 8.2 kΩ at the T-piece,
 shunt 15 kΩ at the board — the two are not interchangeable. *(That is the
-bench rig. In the build, from 2026-11-05, the series 8.2 K sits on the
-board too — C5–C9 and D6–D10 — a few rows from the 2 × 8.2 K shunts at
-rows 12–13, so the same swap is now possible on the board itself.)*
+bench rig. In the build, from 2026-11-05, every part involved is 8.2 K —
+the series legs at C5–C9 and D6–D10 and both halves of each shunt — so a
+swap among them is harmless. The failure there is a shunt fitted as ONE
+8.2 K instead of two in series, which reads exactly as described above.)*
 
 #### The switch poller has a resolution floor, and the counter that looks like it would warn you does not
 
@@ -1965,7 +1966,7 @@ state; closing it is the deliberate act, with the RC chosen first.
    nothing. The firmware is the authority; it is already written.
 
    **All four conductors are branched, but only three are terminated.**
-   *(This is the bench T-piece throughout. The build T-piece, from
+   *(The "At the T-piece" column is the bench T-piece. The build T-piece, from
    2026-11-05, does not branch `Disp-P4` at all — `docs/shopping-list.md`
    §3 — and carries **no resistors**: both 8.2K series legs sit on the board
    (`docs/board-and-perfboard.md`, "Series legs for J4 and J5"). **Do not
@@ -2143,31 +2144,26 @@ state; closing it is the deliberate act, with the RC chosen first.
 
    **The scheme instead: a separate keyed connector per harness, and the pin
    counts do the keying for free.** J5 is 4-pin, J2 is 5-pin, J4 is 3-pin, so
-   a larger plug cannot enter a smaller header — **but a smaller plug forced
-   offset into a larger one is UNTESTED** (below), so "physically incapable
-   of being cross-plugged", as this said until 2026-11-05, is not
-   established —
-   which matters, because plugging J2 into the J4 socket would put 5 V where
-   a flowmeter signal belongs. Standardising on one connector type would
-   throw that away.
+   a larger plug cannot enter a smaller header — which matters, because
+   plugging J2 into the J4 socket would put 5 V where a flowmeter signal
+   belongs. Standardising on one connector type would throw that away.
+   **But a smaller plug forced offset into a larger header is UNTESTED**
+   (below), so "physically incapable of being cross-plugged", as this said
+   until 2026-11-05, is not established.
 
    Each cable carries its own series conditioning in its T-piece, so the box
    side is always high-impedance and a swapped cable is a swap, not a
    rebuild. **True of the bench rig only, from 2026-11-05:** the build
    T-pieces are plain wire and every board header carries raw machine nets,
-   so **the pin-count keying is now load-bearing for invariant 1.** The case
-   that got worse is **J4's 3-pin plug forced offset into J5's header** at
-   B3–D3: `#` lands on B3, the ground bus, and `T` on D3, which returns to
-   the bus through the 8.2 K series leg and the 16.4 K shunt — so ~24.6 K
-   hangs from `#` to `T` on a 9.4 kΩ source, pulling the node from ~4.7 V
-   to roughly 3.4 V *(inferred, not measured; with the 100 K in the T-piece
-   the same path was ~125 K)*. Phase 1 adds J4 offset into J2's header at
-   G′3–I′3, which puts `T` on the pos-1 net and `#` on raw 2Cup. *(A draft
-   of this paragraph named J5 into J2 instead; that case presses nothing,
-   because J2's own plug, the only path to the machine's direction lines,
-   cannot be in the header at the same time.)* Whether a smaller XH plug can be forced offset into a larger shroud
-   is untested (`docs/shopping-list.md` §3); try it before relying on the
-   keying. **The 5S and 6S become practice pieces** for the
+   so **the pin-count keying is now load-bearing for invariant 1**: a
+   smaller plug forced offset into a larger header lands raw machine nets
+   on other machine nets or on our ground, with no series resistor in the
+   cable to limit it. Whether a smaller XH plug can be forced offset into a
+   larger shroud is untested (`docs/shopping-list.md` §3); try it before
+   relying on the keying. *(Two drafts of this paragraph, 2026-11-05,
+   worked particular offsets through with voltage estimates; each review
+   found new corners in them, and the trial settles the question
+   outright.)* **The 5S and 6S become practice pieces** for the
    strip-and-solder — the pack holds one of each, so write the allocation
    down rather than rediscovering it with a bag of cut leads.
 
@@ -2214,7 +2210,7 @@ state; closing it is the deliberate act, with the RC chosen first.
    §1 has the history), so the "3 x 26 AWG" in the layout and the
    `[26 AWG out]` branch were the specification, and this paragraph let them
    read as the as-built. Thicker than specified, so the chafe argument is
-   unaffected *(and for the build it was given up anyway, 2026-11-05)*. **These are test articles: the T-pieces that go into the
+   unaffected *(the series-resistor protection was given up for the build on 2026-11-05 and the chafe risk accepted — and with raw lines in the cable, a chafe is now a hard short, so gauge and insulation matter more, not less)*. **These are test articles: the T-pieces that go into the
    machine will be rebuilt from the 26 AWG silicone now in hand**, and the
    verification in this paragraph belongs to the 22 AWG set, not to them.
 

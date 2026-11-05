@@ -586,7 +586,8 @@ on J5 a swap puts `VSS` on the empty E3, leaves the ground bus without its J5 an
 J2 it puts +5 V into Water's 150 K. **Before first power, check each conductor by resistance, not continuity**
 — the by-value checks of the on-board series resistors below need Ω
 mode, and so does the `+` row: a forgotten flowmeter shows there as a
-finite kΩ-scale reading, which a beeper stays silent on and so passes as
+finite reading — kΩ-scale if the 10.04 K pull-up sits in the sensor,
+which is unrecorded — that a beeper stays silent on and so passes as
 "open". *(Until
 2026-11-05 the reason given was that the J5 signals and J4 `#` sat behind
 T-piece resistors, which a beeper does not sound through.)* **Disconnect the

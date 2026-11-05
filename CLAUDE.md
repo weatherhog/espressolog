@@ -38,7 +38,7 @@ the thing you do not know yet.
 | **plan a flowmeter experiment** | `docs/flowmeter-j4.md` | **0d-i first** (weigh the split). And check whether the operator already does it every morning — three for three so far |
 | **compare flow data across sessions** | `docs/flowmeter-j4.md` | the **OPV is adjustable state and nothing records it** — invariant-5 class |
 | **pick a free GPIO, or drill the perfboard** | `docs/board-and-perfboard.md` | **GPIO48 is the LED, GPIO38 is the (proposed) gate enable, 39–42 are the triggers, 1, 2, 47, 21 and 9 are `Q` readbacks and 10 the (proposed) gate trigger — free: 11–14 and 18** *(since the drive layout, 2026-11-04)*; GPIO33–37 unusable; 5Vin at position 21 beside GND at 22 is a **solder hazard** |
-| **lay out the perfboard — what connects to what** | `docs/phase-0-plan.md` §*Topology, per actuated line* and §*Two things that bound the firmware-side failures*; then `docs/board-and-perfboard.md` for the header | sense: **seven shunts (nine resistors) plus J2's four 150 K series legs, thirteen in all** — J4's and J5's series legs stay in the T-pieces, **J2's go on the board at the J2 header** (decided 2026-11-03: the drive needs the raw lines); drive (drawn in `docs/board-and-perfboard.md`, "Drive-side layout" — hole by hole where it touches machine voltage, netlist for the '221s — with J2 moved to the top-right corner): **2 × '221, plus a third for the PROPOSED arm-window gate (footprint reserved), 4 × AQY212EH (two series pairs), 4 × BC547, three OPEN jumpers** — pins, pulls and the arm gate are in the DRIVE table below; **J2 has no ground**; **keep the two jumper fields apart**; **AQY pin 1 = LED anode**, the only polarity to get wrong |
+| **lay out the perfboard — what connects to what** | `docs/phase-0-plan.md` §*Topology, per actuated line* and §*Two things that bound the firmware-side failures*; then `docs/board-and-perfboard.md` for the header | sense: **seven shunts (nine resistors) plus all seven series legs, sixteen in all — every series leg is on the board and the T-pieces are plain wire** (J2's four since 2026-11-03, because the drive needs the raw lines; J4's and J5's since 2026-11-05, with the cable-fault risk accepted — *thirteen, with J4's and J5's in the T-pieces, until then*); drive (drawn in `docs/board-and-perfboard.md`, "Drive-side layout" — hole by hole where it touches machine voltage, netlist for the '221s — with J2 moved to the top-right corner): **2 × '221, plus a third for the PROPOSED arm-window gate (footprint reserved), 4 × AQY212EH (two series pairs), 4 × BC547, three OPEN jumpers** — pins, pulls and the arm gate are in the DRIVE table below; **J2 has no ground**; **keep the two jumper fields apart**; **AQY pin 1 = LED anode**, the only polarity to get wrong |
 | **tee into the water circuit** | `docs/hydraulics.md` | everything is 1/8, the **gauge end cannot be teed**, there are **no spare ports**, and **whether invariant 1 covers plumbing is UNDECIDED** |
 | **work out what has actually been built and bench-tested** | `docs/phase-0-status.md` | the bench record and the resume point |
 | **buy a part** | `docs/shopping-list.md` | supersedes the parts tables in `docs/phase-0-plan.md` |
@@ -999,8 +999,15 @@ Two things worth knowing about the chosen pins:
   matters is that it sits between the GPIO and the machine line, not that
   it sits in the T-piece**: from 2026-11-03 J2's four 150 K move onto the
   board, at the J2 header, so the photoMOS drive can reach the **raw**
-  1Cup and 2Cup lines — through 150 K it could not pull them high. The
-  bound above is unchanged. *(Until 2026-11-03 this said the resistor
+  1Cup and 2Cup lines — through 150 K it could not pull them high. **From
+  2026-11-05 J4's 100 K and J5's two 8.2 K are on the board too**, and the
+  T-pieces carry no resistors. The bound above is unchanged. **What the
+  move gives up is cable-fault protection**: a branch wire chafed to ground
+  or to its neighbour now reaches the machine line with nothing in series —
+  J4 `#` held low (the `E01` dose-control class), or a J5 bus line shorted.
+  **The operator accepted that risk on 2026-11-05**; for J2 it was already
+  gone, since pos 1 rides bare in the same loom. `docs/phase-0-status.md`
+  keeps the original argument. *(Until 2026-11-03 this said the resistor
   "belongs at the machine end".)*
 - **GPIO11–18 share ADC2, unusable while Wi-Fi is up**, and 15/16/17 are
   in that set. Fine as digital inputs. Both ADC1-capable pins in the budget

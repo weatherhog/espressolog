@@ -824,8 +824,10 @@ power-up** and three switch pins are in that range; the series resistor at the
 machine end is what keeps the tap passive through it. **For the build, J2's
 four 150 K move onto the board at the J2 header (decided 2026-11-03)**, so
 the drive can reach the raw direction lines; the resistor still sits between
-the GPIO and the machine line, which is what keeps the tap passive. The table
-above records the bench rig as it was. The same sweep also
+the GPIO and the machine line, which is what keeps the tap passive. **From
+2026-11-05 J4's 100 K and J5's two 8.2 K are on the board as well**, and the
+build T-pieces carry no resistors — see the chafe argument under 0e below
+for what that gives up. The table above records the bench rig as it was. The same sweep also
 re-derived which Dupont female is which conductor, so the labels come from a
 measurement rather than from memory — which is what went wrong on the
 2026-10-09 rebuild.
@@ -1771,8 +1773,8 @@ path.
 1. **Mark pin 4 before unplugging**, or orient the loose plug by the pads
    as `docs/machine-display-bus.md` describes; the wire colours alone do
    not orient it. Probe the plug's own contacts with the T-piece off:
-   through the T-piece branch every reading carries its 8.2 K series
-   resistor.
+   through the bench T-piece's branch every reading carries its 8.2 K
+   series resistor (the build T-piece has none, from 2026-11-05).
 2. **Pins 2 and 3 first.** J5 pin 2 (`ESD1`) to the driver's SDA, J5 pin 3
    (`ESD4`) to its SCL. Record the Ω values. **Both must land before the
    pin 4 reading counts** — a reversed plug makes "pin 4" `VSS`.
@@ -2053,6 +2055,14 @@ state; closing it is the deliberate act, with the RC chosen first.
    The internal-pull-down warning applies to both: with a 16.4K shunt the
    45K pull-down drags the pin to 2.41 V, below VIH, exactly as it does
    with 15K.
+
+   **SUPERSEDED 2026-11-05 — the build puts these 8.2K on the board, and the
+   operator accepted the chafe risk argued here.** For J2 the protection was
+   already gone (pos 1 rides bare in the loom, and the drive needs the raw
+   lines), and the build T-pieces are plain wire. The argument below stays
+   as the record of what that gives up: a branch chafed to ground is now a
+   hard short on the bus line, not the 3.18 V soft fault. The clamp-current
+   bound is unaffected — the 8.2K still sits between machine and GPIO.
 
    **The 8.2K series resistors go at the T-piece, not in the box.** Solder
    each into the stripped window so the branch is

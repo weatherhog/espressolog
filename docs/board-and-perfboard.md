@@ -568,8 +568,8 @@ connected at or beside it.**
 
 | Header | Pins | Notes |
 |---|---|---|
-| J5, 4-pin | B3 `VSS` · C3 `ESD1` · D3 `ESD4` · E3 *empty* | **`Disp-P4` is not branched** (2026-11-05): it passes through the T-piece only, and the plug's cavity 4 is left **without a contact** — kept 4-pin so it cannot go into the 3-pin J4 header. E3 connects to nothing. Both signals arrive behind their 8.2 K in the T-piece *(until 2026-11-05 E3 took a `Disp-P4` branch behind 8.2 K, terminated at nothing)* |
-| J4, 3-pin | G3 `#` · H3 *empty* · I3 `T` | **`+` never enters the box**: the T-piece's branch to the board carries `T` (yellow) and `#` (black) only — `#` behind its 100 K in the T-piece — and the plug's **middle** cavity is left **without a contact**. **`T` and `#` take the two outer pins so a hole separates them**: a bridge between them would hang 100 K to ground on the machine's `#` node, pulling it from ~4.68 V to ~4.28 V (~8.6 %), three times the 2.9 % this tap is meant to cost. `+` (green) runs machine-to-sensor inside the T-piece. H3 connects to nothing, and G4–I4 stay empty. A branch wrongly built with all three wires is caught by the pre-power check below, which requires `+` to read open *(T sat in the middle, beside `#`, for part of 2026-11-03)* |
+| J5, 4-pin | B3 `VSS` · C3 `ESD1` · D3 `ESD4` · E3 *empty* | **`Disp-P4` is not branched** (2026-11-05): it passes through the T-piece only, and the plug's cavity 4 is left **without a contact** — kept 4-pin so it cannot go into the 3-pin J4 header. E3 connects to nothing. **Both signals arrive RAW** and meet their 8.2 K on the board, below the header ("Series legs", below) — so a bridge between C3 and D3 joins the bus lines directly, and one from B3 to either holds that line at ground *(until 2026-11-05 E3 took a `Disp-P4` branch behind 8.2 K, terminated at nothing; and both signals arrived behind their 8.2 K in the T-piece)* |
+| J4, 3-pin | G3 `#` · H3 *empty* · I3 `T` | **`+` never enters the box**: the T-piece's branch to the board carries `T` (yellow) and `#` (black) only — **`#` arrives RAW** and meets its 100 K on the board ("Series legs", below) — and the plug's **middle** cavity is left **without a contact**. **`T` and `#` take the two outer pins so a hole separates them**: a bridge between them now **shorts the machine's `#` node to ground**, holding the flowmeter signal low — the `E01` dose-control class. *(With the 100 K in the T-piece, until 2026-11-05, the same bridge hung 100 K to ground on the node, ~4.68 V → ~4.28 V, ~8.6 %.)* `+` (green) runs machine-to-sensor inside the T-piece. H3 connects to nothing, and G4–I4 stay empty. A branch wrongly built with all three wires is caught by the pre-power check below, which requires `+` to read open *(T sat in the middle, beside `#`, for part of 2026-11-03)* |
 | J2, 5-pin | E′3 Water · F′3 1Cup · G′3 2Cup · H′3 Steam · **I′3 +5 V (pos 1)** | in the top-right corner since 2026-11-04, with every machine-voltage net of the drive side — see "Drive-side layout". Pos 1 at the right end, beside the drive-leg jumpers *(P3–T3 until then)* |
 
 **There are no 2-pin XH parts in stock**, which is why J4 is a 3-pin header
@@ -583,8 +583,10 @@ where its wire is crimped, not because of the part's pin-1 mark. A plug
 seen from the wire side is mirrored, which is how a cavity gets swapped:
 on J5 a swap puts `VSS` on the empty E3, leaves the ground bus without its J5 anchor and swaps `ESD1`/`ESD4`; on
 J2 it puts +5 V into Water's 150 K. **Before first power, check each conductor by resistance, not continuity**
-— the J5 signals and J4 `#` sit behind their T-piece resistors, so a
-continuity beeper stays silent on a correct joint. **Disconnect the
+— the `+` and `Disp-P4` rows must read OPEN, and the on-board series
+resistors are checked by value, which a beeper cannot do. *(Until
+2026-11-05 the reason given was that the J5 signals and J4 `#` sat behind
+T-piece resistors, which a beeper does not sound through.)* **Disconnect the
 T-piece on both sides** — from the machine's header and from the original
 harness plug (flowmeter, display, switches) — and leave only its branch
 plug mated to the board, with the devkit out and the board unpowered.
@@ -596,12 +598,18 @@ this layout names:
 | Conductor | Board hole | Expect |
 |---|---|---|
 | J5 `VSS` | B3 | ~0 Ω |
-| J5 `ESD1`, `ESD4` | C3, D3 | 8.2 kΩ each |
+| J5 `ESD1`, `ESD4` | C3, D3 | ~0 Ω each *(8.2 kΩ until 2026-11-05)* |
 | **J5 `Disp-P4`** | **B3, C3, D3 and E3** | **open on all four** — it is not branched |
 | J4 `T` (yellow) | I3 | ~0 Ω |
-| J4 `#` (black) | G3 | 100 kΩ |
+| J4 `#` (black) | G3 | ~0 Ω *(100 kΩ until 2026-11-05)* |
 | **J4 `+` (green)** | **G3, H3 and I3** | **open on all three** |
-| J2 pos 1 … pos 5 | I′3, H′3, G′3, F′3, E′3 | ~0 Ω each — J2's T-piece has no resistors now |
+| J2 pos 1 … pos 5 | I′3, H′3, G′3, F′3, E′3 | ~0 Ω each |
+
+**No T-piece carries a resistor** — J2's since 2026-11-03, J4's and J5's
+since 2026-11-05. Then, T-piece unplugged, check the on-board series legs
+header hole to tap row: C3 → B13 and D3 → B12 **8.2 kΩ**, G3 → B14
+**100 kΩ**, with the devkit out — the shunt hangs off the tap row, not
+the header hole, so it is not in parallel with the reading.
 
 *(This said "meter continuity" until 2026-11-03.)*
 
@@ -624,7 +632,24 @@ seven different nets, and a blob that spreads one row joins two of them:
 | 17 | Steam | 220 K | B17–I17 |
 | 18 | Water | 220 K | B18–I18 |
 
-Signals in: J5 `ESD4` (D3) → B12, J5 `ESD1` (C3) → B13, J4 `#` (G3) → B14.
+Signals in, each through its series leg: J5 `ESD4` (D3) → B12, J5 `ESD1` (C3) → B13, J4 `#` (G3) → B14.
+
+**Series legs for J4 and J5 — on the board since 2026-11-05**, laid out as
+J2's 150 K are: flat, running down the board under the header, raw nodes
+offset by a row so no two raw nodes are neighbours:
+
+| Line | Raw node = top lead | Series | Sense end → tap |
+|---|---|---|---|
+| `ESD1` | C5 | 8.2 K, C5–C9 | C9 → B13 |
+| `ESD4` | D6 | 8.2 K, D6–D10 | D10 → B12 |
+| `#` | G5 | 100 K, G5–G9 | G9 → B14 |
+
+Each raw node is linked by wire to its header pin above it (C3, D3, G3);
+C4, D4, D5 and G4 stay empty. **These three raw nodes are machine nets**,
+as J2's are: a bridge from one to the ground bus (column I) or to its
+neighbour bypasses the resistor. *(Until 2026-11-05 these resistors lived
+in the T-pieces and the signals ran from the header holes straight to the
+tap rows.)*
 
 **J2's four 150 K, lying flat and running down the board under the J2
 header**, alternately starting at row 5 and row 6, so that no two raw nodes

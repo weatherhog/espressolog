@@ -569,7 +569,7 @@ connected at or beside it.**
 
 | Header | Pins | Notes |
 |---|---|---|
-| J5, 4-pin | B3 `VSS` · C3 `ESD1` · D3 `ESD4` · E3 *empty* | **`Disp-P4` is not branched** (2026-11-05): it passes through the T-piece only, and the plug's cavity 4 is left **without a contact** — kept 4-pin so it cannot go into the 3-pin J4 header. E3 connects to nothing. **Both signals arrive RAW** and meet their 8.2 K on the board, below the header ("Series legs", below) — so a bridge between C3 and D3 joins the bus lines directly, and one from B3 to either holds that line at ground — and, if J5 is push-pull (untested, `docs/taps-and-dividers.md`), shorts the display driver's output *(until 2026-11-05 E3 took a `Disp-P4` branch behind 8.2 K, terminated at nothing; and both signals arrived behind their 8.2 K in the T-piece)* |
+| J5, 4-pin | B3 `VSS` · C3 `ESD1` · D3 `ESD4` · E3 *empty* | **`Disp-P4` is not branched** (2026-11-05): it passes through the T-piece only, and the plug's cavity 4 is left **without a contact** — kept 4-pin so it cannot go into the 3-pin J4 header. E3 connects to nothing. **Both signals arrive RAW** and meet their 8.2 K on the board, below the header ("Series legs", below) — so a bridge between C3 and D3 joins the bus lines directly, and one from B3 to either holds that line at ground — and if J5 is push-pull (untested, `docs/taps-and-dividers.md`), either bridge shorts a display-driver output, into ground or into the other output *(until 2026-11-05 E3 took a `Disp-P4` branch behind 8.2 K, terminated at nothing; and both signals arrived behind their 8.2 K in the T-piece)* |
 | J4, 3-pin | G3 `#` · H3 *empty* · I3 `T` | **`+` never enters the box**: the T-piece's branch to the board carries `T` (yellow) and `#` (black) only — **`#` arrives RAW** and meets its 100 K on the board ("Series legs", below) — and the plug's **middle** cavity is left **without a contact**. **`T` and `#` take the two outer pins so a hole separates them**: a bridge between them now **shorts the machine's `#` node to ground**, holding the flowmeter signal low — the `E01` dose-control class. *(With the 100 K in the T-piece, until 2026-11-05, the same bridge hung 100 K to ground on the node, ~4.68 V → ~4.28 V, ~8.6 %.)* `+` (green) runs machine-to-sensor inside the T-piece. H3 connects to nothing, and G4–I4 stay empty. A branch wrongly built with all three wires is caught by the pre-power check below, which requires `+` to read open *(T sat in the middle, beside `#`, for part of 2026-11-03)* |
 | J2, 5-pin | E′3 Water · F′3 1Cup · G′3 2Cup · H′3 Steam · **I′3 +5 V (pos 1)** | in the top-right corner since 2026-11-04, with every machine-voltage net of the drive side — see "Drive-side layout". Pos 1 at the right end, beside the drive-leg jumpers *(P3–T3 until then)* |
 
@@ -585,8 +585,9 @@ seen from the wire side is mirrored, which is how a cavity gets swapped:
 on J5 a swap puts `VSS` on the empty E3, leaves the ground bus without its J5 anchor and swaps `ESD1`/`ESD4`; on
 J2 it puts +5 V into Water's 150 K. **Before first power, check each conductor by resistance, not continuity**
 — the by-value checks of the on-board series resistors below need Ω
-mode, which a beeper cannot give; the OPEN rows a beeper would catch as
-well. *(Until
+mode, and so does the `+` row: a forgotten flowmeter shows there as a
+finite kΩ-scale reading, which a beeper stays silent on and so passes as
+"open". *(Until
 2026-11-05 the reason given was that the J5 signals and J4 `#` sat behind
 T-piece resistors, which a beeper does not sound through.)* **Disconnect the
 T-piece on both sides** — from the machine's header and from the original

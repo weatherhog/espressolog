@@ -1228,7 +1228,10 @@ looked alive, while the ISR — which needs a real edge — never fired once.
 **The 8.2 kΩ is the J5 SERIES value**, fitted in the T-piece branch, and there
 are 25 of them in stock. Putting one in the shunt position is an easy
 substitution and it fails exactly this way. Series 8.2 kΩ at the T-piece,
-shunt 15 kΩ at the board — the two are not interchangeable.
+shunt 15 kΩ at the board — the two are not interchangeable. *(That is the
+bench rig. In the build, from 2026-11-05, the series 8.2 K sits on the
+board too — C5–C9 and D6–D10 — a few rows from the 2 × 8.2 K shunts at
+rows 12–13, so the same swap is now possible on the board itself.)*
 
 #### The switch poller has a resolution floor, and the counter that looks like it would warn you does not
 
@@ -1962,8 +1965,11 @@ state; closing it is the deliberate act, with the RC chosen first.
    nothing. The firmware is the authority; it is already written.
 
    **All four conductors are branched, but only three are terminated.**
-   *(This is the bench T-piece. The build T-piece, from 2026-11-05, does not
-   branch `Disp-P4` at all — `docs/shopping-list.md` §3.)*
+   *(This is the bench T-piece throughout. The build T-piece, from
+   2026-11-05, does not branch `Disp-P4` at all — `docs/shopping-list.md`
+   §3 — and carries **no resistors**: both 8.2K series legs sit on the board
+   (`docs/board-and-perfboard.md`, "Series legs for J4 and J5"). **Do not
+   wire the build's T-piece from the "At the T-piece" column.**)*
 
    | J5 pin | Net | At the T-piece | At the box |
    |---|---|---|---|
@@ -2038,14 +2044,15 @@ state; closing it is the deliberate act, with the RC chosen first.
    From 2026-11-05 the build does not split it**: the 8.2 K sits on the
    board, so the cable carries the raw machine-driven line and the
    lowest-margin junction is on the board, not on 50 cm of wire. Two
-   consequences: the junction's noise margin improves, and **pickup on the
+   consequences: the junction's **exposure to pickup shrinks** — its DC
+   margin is unchanged, the divider being the same — and **pickup on the
    cable now couples straight onto the machine's own bus line** rather than
    through 8.2 K. The same holds at J4 — the 100 K/220 K junction moves off
    the cable — so glitch counts in `docs/flowmeter-j4.md`, taken on the
    bench geometry, are not directly comparable with build counts. Keep the
    cable away from the mains loom either way.
 
-   **The first of these is NO LONGER CONTINGENT — 15 K fails its corner and
+   **The first of the two remedies below is NO LONGER CONTINGENT — 15 K fails its corner and
    16.4 K is now the specified value regardless of whether drops occur.** The
    second remains contingent. Read what follows with that split in mind; its
    sizing inputs (5.3 kΩ source, 210 mV margin) are **15 K figures** and would
@@ -2072,8 +2079,11 @@ state; closing it is the deliberate act, with the RC chosen first.
    already gone — its 150 K moved onto the board on 2026-11-03 so the drive
    reaches the raw lines — and the build T-pieces are plain wire. The argument below stays
    as the record of what that gives up: a branch chafed to ground is now a
-   hard short on the bus line, not the 3.18 V soft fault. The clamp-current
-   bound is unaffected — the 8.2K still sits between machine and GPIO.
+   hard short on the bus line, not the 3.18 V soft fault. **It is not an
+   invariant-1 breach**: the harness is outside invariant 1 by its own
+   carve-out (CLAUDE.md, invariant 1, "The harness is NOT covered"), which
+   is where this accepted risk is recorded. The clamp-current bound is
+   unaffected — the 8.2K still sits between machine and GPIO.
 
    **The 8.2K series resistors go at the T-piece, not in the box.** Solder
    each into the stripped window so the branch is
@@ -2133,7 +2143,10 @@ state; closing it is the deliberate act, with the RC chosen first.
 
    **The scheme instead: a separate keyed connector per harness, and the pin
    counts do the keying for free.** J5 is 4-pin, J2 is 5-pin, J4 is 3-pin, so
-   the three cables are **physically incapable of being cross-plugged** —
+   a larger plug cannot enter a smaller header — **but a smaller plug forced
+   offset into a larger one is UNTESTED** (below), so "physically incapable
+   of being cross-plugged", as this said until 2026-11-05, is not
+   established —
    which matters, because plugging J2 into the J4 socket would put 5 V where
    a flowmeter signal belongs. Standardising on one connector type would
    throw that away.
@@ -2142,10 +2155,17 @@ state; closing it is the deliberate act, with the RC chosen first.
    side is always high-impedance and a swapped cable is a swap, not a
    rebuild. **True of the bench rig only, from 2026-11-05:** the build
    T-pieces are plain wire and every board header carries raw machine nets,
-   so **the pin-count keying is now load-bearing for invariant 1.** A J5
-   plug forced offset into J2's header would put `ESD1`/`ESD4` straight onto
-   raw 1Cup/2Cup — a possible phantom press, with no 8.2 K between them any
-   more. Whether a smaller XH plug can be forced offset into a larger shroud
+   so **the pin-count keying is now load-bearing for invariant 1.** The case
+   that got worse is **J4's 3-pin plug forced offset into J5's header** at
+   B3–D3: `#` lands on B3, the ground bus, and `T` on D3, which returns to
+   the bus through the 8.2 K series leg and the 16.4 K shunt — so ~24.6 K
+   hangs from `#` to `T` on a 9.4 kΩ source, pulling the node from ~4.7 V
+   to roughly 3.4 V *(inferred, not measured; with the 100 K in the T-piece
+   the same path was ~125 K)*. Phase 1 adds J4 offset into J2's header at
+   G′3–I′3, which puts `T` on the pos-1 net and `#` on raw 2Cup. *(A draft
+   of this paragraph named J5 into J2 instead; that case presses nothing,
+   because J2's own plug, the only path to the machine's direction lines,
+   cannot be in the header at the same time.)* Whether a smaller XH plug can be forced offset into a larger shroud
    is untested (`docs/shopping-list.md` §3); try it before relying on the
    keying. **The 5S and 6S become practice pieces** for the
    strip-and-solder — the pack holds one of each, so write the allocation
@@ -2194,7 +2214,7 @@ state; closing it is the deliberate act, with the RC chosen first.
    §1 has the history), so the "3 x 26 AWG" in the layout and the
    `[26 AWG out]` branch were the specification, and this paragraph let them
    read as the as-built. Thicker than specified, so the chafe argument is
-   unaffected. **These are test articles: the T-pieces that go into the
+   unaffected *(and for the build it was given up anyway, 2026-11-05)*. **These are test articles: the T-pieces that go into the
    machine will be rebuilt from the 26 AWG silicone now in hand**, and the
    verification in this paragraph belongs to the 22 AWG set, not to them.
 

@@ -78,7 +78,7 @@ were made with 22 AWG, not the 26 AWG `docs/phase-0-status.md` records, and
 **the build T-pieces will be made fresh** from the 26 AWG silicone bought
 2026-10-28. So the as-built record was wrong by four gauges, in the safe
 direction — 22 is *thicker* than 26, so the chafe-to-ground concern below
-never applied to them — and the wire going into the machine will be the
+never applied to them (and for the build it was given up, 2026-11-05) — and the wire going into the machine will be the
 specified one. The 2026-10-18 series-resistance check stands for the test
 articles; it says nothing about T-pieces not yet built. *(22 AWG is the top
 of `SXH-001T-P0.6`'s AWG 28–22 range; the rebuild's 26 AWG sits inside it.)*
@@ -102,7 +102,9 @@ next time the case is open" until 2026-10-29, and both were wrong** — the
 operator confirms no T-pieces are fitted at present. They are on the bench,
 so this is a caliper or a strip-and-look away, today, with nothing to
 disassemble and no machine to open. **The chafe-to-ground argument that
-made it sound urgent applies to where they are GOING, not where they are**:
+made it sound urgent applies to where they are GOING, not where they are**
+*(and was given up for the build on 2026-11-05, when the series legs moved
+onto the board)*:
 it is a reason to settle the gauge before they go back in, not a reason to
 open a machine. Thinner than specified is still the direction that matters.
 
@@ -231,8 +233,10 @@ no second 4-pin lead in the bag.
 **The 5S and 6S are both practice pieces.** Nothing on this machine is 6-
 or 7-pin. An earlier version made the 6S the shared cable-to-box connector;
 that is **superseded** — the box now takes **one keyed connector per
-harness** (J5 4-pin, J2 5-pin, J4 3-pin), which cannot be cross-plugged
-because the pin counts differ, and which the 6S's seven conductors could not
+harness** (J5 4-pin, J2 5-pin, J4 3-pin), keyed by pin count — a larger
+plug cannot enter a smaller header; a smaller plug forced offset into a
+larger one is untested (§3) *("cannot be cross-plugged" until
+2026-11-05)* — and which the 6S's seven conductors could not
 have carried anyway against the ten now needed. See
 `docs/phase-0-status.md`. Practise the strip-and-solder on the 5S and 6S;
 only then touch the 3S.
@@ -579,7 +583,7 @@ tighter than they need to be for the sake of a few euro.
 
 | Value | Qty | Where |
 |---|---|---|
-| 8.2 kΩ | 13 *(9 until 2026-11-05, which omitted the four base resistors; 10 with `Disp-P4` before that)* | **LED-driver base resistor ×4** (`docs/board-and-perfboard.md`, LED-driver cells); 0e series leg (**×2** — `ESD1`, `ESD4`; ×3 with `Disp-P4` until 2026-11-05), **on the board below the J5 header, for the build** (2026-11-05; the bench rig still has them in the T-piece); **0e shunt legs, ×4 — two in series per leg to make 16.4 kΩ, on `ESD1` and `ESD4` only** (new 2026-10-19, replaces the 15 kΩ); 0b analyser tap (×3). **Bought: 25**, so the extra 4 are covered. |
+| 8.2 kΩ | 13 *(9 until 2026-11-05, which omitted the four base resistors; 10 with `Disp-P4` before that)* | **LED-driver base resistor ×4** (`docs/board-and-perfboard.md`, LED-driver cells); 0e series leg (**×2** — `ESD1`, `ESD4`; ×3 with `Disp-P4` until 2026-11-05), **on the board below the J5 header, for the build** (2026-11-05; the bench rig still has them in the T-piece); **0e shunt legs, ×4 — two in series per leg to make 16.4 kΩ, on `ESD1` and `ESD4` only** (new 2026-10-19, replaces the 15 kΩ); 0b analyser tap (×3). **Bought: 25** — 13 needed, plus the J4 analyser one (row below), so 11 spare. |
 | 15 kΩ | 10 | **SUPERSEDED for 0e — do not fit.** Was the 0e divider ground leg; it fails its tolerance corner at −70 to −87 mV (2026-10-19). **Use 2 × 8.2 kΩ in series = 16.4 kΩ** per leg (**×2** — `Disp-P4` stays unterminated). Both in stock, no new parts. |
 | **10 kΩ** | **25** | **'221 input pulls, ×7 — five `A` pull-ups to 3V3 (four drive channels and the gate) and two `R` pull-downs (GPIO38, the gate's `R̅`, and the drive channels' tied `R̅` net) (`docs/phase-0-plan.md`, "An arm gate"; ×5 from 2026-10-29 until the gate, 2026-10-30).** **25 held, COUNTED by the operator 2026-10-29**, which is the grade `docs/taps-and-dividers.md` asks for ("in stock should mean counted"). Seven needed, eighteen spare *(five and twenty until 2026-10-30)*. *(This cell read "in stock per the operator — count not taken" for part of that day, and a draft before it claimed five of the 15 kΩ bag instead; 10 K is held and is the conventional value, so the 15 K stay with their 0e supersession note.)* |
 | 150 kΩ | 10 | 0c switch divider, series leg (**×4** — all four J2 lines), **on the board at the J2 header, for the build** (decided 2026-11-03, so the drive reaches the raw lines; the bench rig still has them in the T-piece). **In stock 2026-10-07.** |
@@ -767,9 +771,10 @@ on what was ordered.)*
 **Space is tight but was never the binding constraint**, against **~54
 discrete parts (~45 resistors, 4 BC547, 5 timing caps), 7 sockets (three
 DIP-16, four DIP-4)** and 3 XH connectors *(said "~29 discrete parts, 5
-sockets" until 2026-10-29 — the single-'221 count — ~42 / 6 until the
-arm-window gate, 2026-10-30, and ~51 / ~42 resistors until J4's and J5's
-series legs came onto the board, 2026-11-05)*:
+sockets" until 2026-10-29 — the single-'221 count — and ~42 parts / 6
+sockets until the arm-window gate, 2026-10-30; in resistors it was ~38
+until J2's 150 K came onto the board on 2026-11-03 and ~42 until J4's and
+J5's series legs did on 2026-11-05)*:
 <!-- fact:dip4-sockets four DIP-4 -->
 
 | board grid | free beside the devkit | free underneath it |

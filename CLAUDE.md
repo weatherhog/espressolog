@@ -475,10 +475,13 @@ on a red one.
 **`Disp-P4` MUST NOT BE LOADED — fit nothing on it, ever.** It is
 **bidirectional**, it reaches the MCU through R32 = 100 K, and **its pull-up
 strength is unrecorded**, so the consequence of loading it is unknown. That is
-reason enough. Branch it through its 8.2 K for symmetry if you like, leave the
-far end open, and never hang anything on it that can source or sink current —
-in particular **not the shunt**. `docs/shopping-list.md` specifies exactly
-that, and it is the built configuration.
+reason enough. **The build T-piece passes it straight through and does not
+branch it** (decided 2026-11-05; the J5 box plug stays 4-pin with cavity 4
+empty, so it cannot go into J4's 3-pin header). Never hang anything on it that
+can source or sink current — in particular **not the shunt**. *(Until
+2026-11-05: "Branch it through its 8.2 K for symmetry if you like, leave the
+far end open" — which is how the bench T-piece is built.)*
+`docs/shopping-list.md` §3 specifies it.
 
 <!-- fact:divider-j5-shunt@1 16.4 K -->
 **`ESD1` and `ESD4` are 8.2 K series + 16.4 K shunt.** The shunt is two

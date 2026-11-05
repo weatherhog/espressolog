@@ -25,7 +25,7 @@
 | **J2** — four direction lines | **150 K / 220 K** | 2.89 V measured | **+203 mV** |
 | **J4** — flowmeter `#` | **100 K + 220 K** | 3.13 V | **+348 mV** |
 | **J5** — `ESD1`, `ESD4` | **8.2 K / 16.4 K** | — | **+18 mV** |
-| **J5** — `Disp-P4` | 8.2 K, **no shunt, ever** | — | n/a |
+| **J5** — `Disp-P4` | **not branched** in the build T-piece (2026-11-05); 8.2 K and nothing else on the bench T-piece; **no shunt, ever** | — | n/a |
 
 <!-- fact:divider-j2 150 K / 220 K -->
 <!-- fact:divider-j4 100 K + 220 K -->
@@ -69,8 +69,10 @@ both hazards, but both are flagged as such.)
   the buttons are bits 49/58 of the 67-bit frames, and `Disp-P4` moves only in
   the ~204 ms after rails-up. What is actually true is narrower and still
   sufficient: **its pull-up strength is unrecorded, so the consequence of
-  loading it is unknown.** That is reason enough to fit nothing. `docs/shopping-list.md` specifies `Disp-P4` as branched through
-  8.2 K and **terminated at nothing**, and that is the built configuration.
+  loading it is unknown.** That is reason enough to fit nothing. `docs/shopping-list.md` specifies the build T-piece with
+  `Disp-P4` **not branched at all** (2026-11-05); the bench T-piece branches it
+  through 8.2 K and terminates it at nothing. *(Until 2026-11-05 this said the
+  branched-and-unterminated version "is the built configuration".)*
 
 **So: the 8.2 K / 15 K divider is correct on `ESD1` and `ESD4`** — correct as
 against the 8.2 K / 8.2 K that was mistakenly fitted, which is the error this
@@ -102,9 +104,10 @@ exactly like push-pull. A DC reading on the live line is no good either —
 `ESD1`/`ESD4` switch continuously, so a meter gives a duty-cycle mean, not a
 level. The built board decodes and is not an emergency; the perfboard should
 not copy it either way. **And the 15 K
-shunt must NOT be fitted to `Disp-P4`.** Branch it through its 8.2 K for
-symmetry if you like, leave the far end open, and never hang anything on it
-that can source or sink current.
+shunt must NOT be fitted to `Disp-P4`.** The build T-piece does not branch it
+at all (2026-11-05), and nothing that can source or sink current is ever hung
+on it. *(Until 2026-11-05: "Branch it through its 8.2 K for symmetry if you
+like, leave the far end open".)*
 
 ### The J5 filter capacitor — a candidate, not a requirement
 

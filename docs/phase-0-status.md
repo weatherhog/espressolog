@@ -824,8 +824,10 @@ power-up** and three switch pins are in that range; the series resistor at the
 machine end is what keeps the tap passive through it. **For the build, J2's
 four 150 K move onto the board at the J2 header (decided 2026-11-03)**, so
 the drive can reach the raw direction lines; the resistor still sits between
-the GPIO and the machine line, which is what keeps the tap passive. The table
-above records the bench rig as it was. The same sweep also
+the GPIO and the machine line, which is what keeps the tap passive. **From
+2026-11-05 J4's 100 K and J5's two 8.2 K are on the board as well**, and the
+build T-pieces carry no resistors — see the chafe argument under 0e below
+for what that gives up. The table above records the bench rig as it was. The same sweep also
 re-derived which Dupont female is which conductor, so the labels come from a
 measurement rather than from memory — which is what went wrong on the
 2026-10-09 rebuild.
@@ -1102,11 +1104,18 @@ day. Note how little of it is new:**
   original specification already was.
 - **Everything above ~16.6 kΩ is ruled out IF the line is push-pull** — by
   the clamp threshold at 17.4 and 18, and by outright conduction at 23.2.
-  **That qualifier is load-bearing and a draft dropped it.** The whole table
-  is a push-pull corner table; under open-drain the pin never exceeds 2.8 V
-  and none of it applies.
+  **That qualifier is load-bearing and a draft dropped it.** The clamp
+  tables are push-pull corner tables; under open-drain the 4.7 K pull-up
+  sits in series, so the pin stays lower — ~2.8 V nominal at 16.4 kΩ,
+  ~3.2 V nominal at 23.2 kΩ, and ~3.4 V at 23.2 kΩ in the worst corner
+  (rail +5 %, shunt +1 %, series and pull-up −1 to −5 %) — below the
+  ~3.53 V clamp knee (VDD −5 % + 0.4 V), so the clamp tables do not apply.
+  The open-drain floor columns of the corner table do. *(Said "under
+  open-drain the pin never exceeds 2.8 V" until 2026-11-06; that is the
+  16.4 kΩ nominal only, and the table's higher rows exceed it.)*
 - **So the feasible window is ~16.2 – 16.6 kΩ under push-pull**, and
-  16.2 kΩ upward under open-drain. **A draft left "16.2 – 17.5 kΩ" standing**
+  ~16.2 – 26 kΩ under open-drain, where the same corner reaches the clamp
+  knee at ~26 kΩ *("16.2 kΩ upward" until 2026-11-06, with no ceiling)*. **A draft left "16.2 – 17.5 kΩ" standing**
   from before the clamp corner was redone; 17.4 and 17.5 are outside it.
 
 **THE DRIVE TYPE IS STILL UNTESTED, AND NOBODY HAS A WORKING PROCEDURE FOR
@@ -1226,7 +1235,21 @@ looked alive, while the ISR — which needs a real edge — never fired once.
 **The 8.2 kΩ is the J5 SERIES value**, fitted in the T-piece branch, and there
 are 25 of them in stock. Putting one in the shunt position is an easy
 substitution and it fails exactly this way. Series 8.2 kΩ at the T-piece,
-shunt 15 kΩ at the board — the two are not interchangeable.
+shunt 15 kΩ at the board — the two are not interchangeable. *(That is the
+bench rig. In the build, from 2026-11-05, the J5 series legs at C5–C9
+and D6–D10 and both halves of each J5 shunt are all 8.2 K, so a swap
+**among those** is harmless. Two failures remain: **a J5 shunt built as
+one 8.2 K** instead of two in series, which reads as described above; and
+**one half of a shunt left unfitted**, which leaves no shunt at all — the
+pin sees the bus line through 8.2 K alone and, whenever the line is
+high — most of the time — **pushes current into its clamp diode**:
+under push-pull, several times the 33–60 µA the clamp-current table above
+rejects at 23.2 K; under open-drain ~0.1 mA, where 23.2 K draws none. All the
+while it very probably still
+decodes (inferred, not tried), so nothing shows. And **J4's 100 K (G5–G9) and the
+220 K shunts (rows 14–18) sit beside them**, where a swap does matter.
+The pre-power check in `docs/board-and-perfboard.md` meters every shunt by
+value as well as the series legs, from 2026-11-05.)*
 
 #### The switch poller has a resolution floor, and the counter that looks like it would warn you does not
 
@@ -1771,8 +1794,8 @@ path.
 1. **Mark pin 4 before unplugging**, or orient the loose plug by the pads
    as `docs/machine-display-bus.md` describes; the wire colours alone do
    not orient it. Probe the plug's own contacts with the T-piece off:
-   through the T-piece branch every reading carries its 8.2 K series
-   resistor.
+   through the bench T-piece's branch every reading carries its 8.2 K
+   series resistor (the build T-piece has none, from 2026-11-05).
 2. **Pins 2 and 3 first.** J5 pin 2 (`ESD1`) to the driver's SDA, J5 pin 3
    (`ESD4`) to its SCL. Record the Ω values. **Both must land before the
    pin 4 reading counts** — a reversed plug makes "pin 4" `VSS`.
@@ -1960,8 +1983,13 @@ state; closing it is the deliberate act, with the RC chosen first.
    nothing. The firmware is the authority; it is already written.
 
    **All four conductors are branched, but only three are terminated.**
-   *(This is the bench T-piece. The build T-piece, from 2026-11-05, does not
-   branch `Disp-P4` at all — `docs/shopping-list.md` §3.)*
+   *(The layout diagram below, this table and the `Disp-P4` paragraphs
+   describe the bench T-piece; the wiring diagram above holds for both,
+   with the 8.2 K on the board in the build. The build T-piece, from
+   2026-11-05, does not branch `Disp-P4` at all — `docs/shopping-list.md`
+   §3 — and carries **no resistors**: both 8.2K series legs sit on the board
+   (`docs/board-and-perfboard.md`, "Series legs for J4 and J5"). **Do not
+   wire the build's T-piece from the "At the T-piece" column.**)*
 
    | J5 pin | Net | At the T-piece | At the box |
    |---|---|---|---|
@@ -2032,7 +2060,19 @@ state; closing it is the deliberate act, with the RC chosen first.
    commutation spike above 210 mV corrupts frames intermittently, which is
    the worst kind of fault to chase.
 
-   **The first of these is NO LONGER CONTINGENT — 15 K fails its corner and
+   **This describes the BENCH geometry (divider split across the cable).
+   From 2026-11-05 the build does not split it**: the 8.2 K sits on the
+   board, so the cable carries the raw machine-driven line and the
+   lowest-margin junction is on the board, not on 50 cm of wire. Two
+   consequences: the junction's **exposure to pickup shrinks** — its DC
+   margin is unchanged, the divider being the same — and **pickup on the
+   cable now couples straight onto the machine's own bus line** rather than
+   through 8.2 K. The same holds at J4 — the 100 K/220 K junction moves off
+   the cable — so glitch counts in `docs/flowmeter-j4.md`, taken on the
+   bench geometry, are not directly comparable with build counts. Keep the
+   cable away from the mains loom either way.
+
+   **The first of the two remedies below is NO LONGER CONTINGENT — 15 K fails its corner and
    16.4 K is now the specified value regardless of whether drops occur.** The
    second remains contingent. Read what follows with that split in mind; its
    sizing inputs (5.3 kΩ source, 210 mV margin) are **15 K figures** and would
@@ -2053,6 +2093,17 @@ state; closing it is the deliberate act, with the RC chosen first.
    The internal-pull-down warning applies to both: with a 16.4K shunt the
    45K pull-down drags the pin to 2.41 V, below VIH, exactly as it does
    with 15K.
+
+   **SUPERSEDED 2026-11-05 — the build puts these 8.2K on the board, and the
+   operator accepted the chafe risk argued here.** For J2 the protection was
+   already gone — its 150 K moved onto the board on 2026-11-03 so the drive
+   reaches the raw lines — and the build T-pieces are plain wire. The argument below stays
+   as the record of what that gives up: a branch chafed to ground is now a
+   hard short on the bus line, not the 3.18 V soft fault. **It is not an
+   invariant-1 breach**: the harness is outside invariant 1 by its own
+   carve-out (CLAUDE.md, invariant 1, "The harness is NOT covered"), which
+   is where this accepted risk is recorded. The clamp-current bound is
+   unaffected — the 8.2K still sits between machine and GPIO.
 
    **The 8.2K series resistors go at the T-piece, not in the box.** Solder
    each into the stripped window so the branch is
@@ -2112,14 +2163,29 @@ state; closing it is the deliberate act, with the RC chosen first.
 
    **The scheme instead: a separate keyed connector per harness, and the pin
    counts do the keying for free.** J5 is 4-pin, J2 is 5-pin, J4 is 3-pin, so
-   the three cables are **physically incapable of being cross-plugged** —
-   which matters, because plugging J2 into the J4 socket would put 5 V where
-   a flowmeter signal belongs. Standardising on one connector type would
-   throw that away.
+   a larger plug cannot enter a smaller header — which matters, because
+   plugging J2 into the J4 socket would put 5 V where a flowmeter signal
+   belongs. Standardising on one connector type would throw that away.
+   **But a smaller plug forced offset into a larger header is UNTESTED**
+   (below), so "physically incapable of being cross-plugged", as this said
+   until 2026-11-05, is not established.
 
    Each cable carries its own series conditioning in its T-piece, so the box
    side is always high-impedance and a swapped cable is a swap, not a
-   rebuild. **The 5S and 6S become practice pieces** for the
+   rebuild. **True of the bench rig only, from 2026-11-05:** the build
+   T-pieces are plain wire and every board header carries raw machine nets,
+   so **the pin-count keying is now load-bearing for invariant 1**: a
+   smaller plug forced offset into a larger header lands raw machine nets
+   on our ground or on other board nets, with no series resistor in the
+   cable to limit it — and once the drive jumpers close, the J2 header's
+   pos-1 hole joins that set, since firing both photoMOS of a series pair
+   then joins it to the 1Cup or 2Cup hole. Whether a smaller XH plug can be forced
+   offset into a larger shroud is untested (`docs/shopping-list.md` §3);
+   try it before relying on the keying. *(Four drafts of this paragraph,
+   2026-11-05, worked particular offsets through, case by case; each
+   review found new corners in them, so this states only the rule. A
+   failed trial settles the question; a successful one reopens the
+   per-offset analysis.)* **The 5S and 6S become practice pieces** for the
    strip-and-solder — the pack holds one of each, so write the allocation
    down rather than rediscovering it with a bag of cut leads.
 
@@ -2165,10 +2231,18 @@ state; closing it is the deliberate act, with the RC chosen first.
    2026-10-29.** No 26 AWG was owned until 2026-10-28 (`docs/shopping-list.md`
    §1 has the history), so the "3 x 26 AWG" in the layout and the
    `[26 AWG out]` branch were the specification, and this paragraph let them
-   read as the as-built. Thicker than specified, so the chafe argument is
-   unaffected. **These are test articles: the T-pieces that go into the
-   machine will be rebuilt from the 26 AWG silicone now in hand**, and the
-   verification in this paragraph belongs to the 22 AWG set, not to them.
+   read as the as-built. **The chafe risk is accepted, not answered by the
+   wire**: for the build the series-resistor protection was given up —
+   J2's on 2026-11-03, J4's and J5's on 2026-11-05 — and silicone
+   insulation has poor abrasion resistance, so sleeving the cable where it passes the
+   gland is worth considering. *(This said "Thicker than specified, so the
+   chafe argument is unaffected" until 2026-11-05.)*
+   **These are test articles: the build T-pieces will be made from the 26
+   AWG silicone now in hand**, and the verification in this paragraph
+   belongs to the 22 AWG set, not to them. *(Said "the T-pieces that go
+   into the machine will be rebuilt from the 26 AWG silicone" until
+   2026-11-06.)* The bench J4 T-piece may go back in for 0d, with the bench
+   breadboard only (`docs/shopping-list.md` §1).
 
    Then `display on` (persisted in NVS) and check `status`.
 

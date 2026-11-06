@@ -72,14 +72,21 @@ leaving the inside of the machine needs. Neither substitutes for the
 other: solid core work-hardens and snaps under vibration, and stranded
 silicone will not stand up in a perfboard.
 
-**CLOSED 2026-10-29 — THE TEST T-PIECES ARE 22 AWG, and they are being
-rebuilt.** Operator: the three T-pieces used for every bench session so far
-were made with 22 AWG, not the 26 AWG `docs/phase-0-status.md` records, and
+**CLOSED 2026-10-29 — THE TEST T-PIECES ARE 22 AWG, and the build set
+will be made fresh** (the bench J4 one may go back in for 0d — below).
+*(The heading said "and they are being rebuilt" until 2026-11-06.)*
+Operator: the three T-pieces used for every bench session so far were made with 22 AWG, not the 26 AWG `docs/phase-0-status.md` records, and
 **the build T-pieces will be made fresh** from the 26 AWG silicone bought
-2026-10-28. So the as-built record was wrong by four gauges, in the safe
-direction — 22 is *thicker* than 26, so the chafe-to-ground concern below
-never applied to them — and the wire going into the machine will be the
-specified one. The 2026-10-18 series-resistance check stands for the test
+2026-10-28. So the as-built record was wrong by four gauges *(which went
+on "in the safe direction — 22 is thicker than 26, so the chafe-to-ground
+concern below never applied to them" until 2026-11-05)*, and the build's
+wire will be the specified one *("the wire going into the machine will be
+the specified one" until 2026-11-06)*. For the build
+the series-resistor protection was given up — J2's on 2026-11-03, J4's
+and J5's on 2026-11-05 — and **the chafe risk is accepted, not answered
+by the wire**: with raw lines in the cable a chafe is now a hard short,
+and silicone insulation has poor abrasion resistance, so sleeving at the
+gland is worth considering. The 2026-10-18 series-resistance check stands for the test
 articles; it says nothing about T-pieces not yet built. *(22 AWG is the top
 of `SXH-001T-P0.6`'s AWG 28–22 range; the rebuild's 26 AWG sits inside it.)*
 
@@ -102,9 +109,16 @@ next time the case is open" until 2026-10-29, and both were wrong** — the
 operator confirms no T-pieces are fitted at present. They are on the bench,
 so this is a caliper or a strip-and-look away, today, with nothing to
 disassemble and no machine to open. **The chafe-to-ground argument that
-made it sound urgent applies to where they are GOING, not where they are**:
-it is a reason to settle the gauge before they go back in, not a reason to
-open a machine. Thinner than specified is still the direction that matters.
+made it sound urgent applies to where they are GOING, not where they are**.
+*(That sentence went on "it is a reason to settle the gauge before they go
+back in, not a reason to open a machine. Thinner than specified is still
+the direction that matters" until 2026-11-05.)* The gauge question is
+answered (22 AWG, CLOSED above). **The bench J4 T-piece may go back in for
+the 0d experiments, with the bench breadboard only — never the build
+board**, whose own 100 K would sit in series with the T-piece's and pull
+the GPIO6 divider junction below VIH (~2.40 V against 2.475 V). Check
+its insulation first. *(A draft of 2026-11-06 said these test articles
+were not going back at all.)*
 
 *(`docs/phase-0-status.md` does say "all three T-pieces in the machine" —
 that is inside its dated **2026-10-08 bench session** heading, a record of
@@ -231,8 +245,10 @@ no second 4-pin lead in the bag.
 **The 5S and 6S are both practice pieces.** Nothing on this machine is 6-
 or 7-pin. An earlier version made the 6S the shared cable-to-box connector;
 that is **superseded** — the box now takes **one keyed connector per
-harness** (J5 4-pin, J2 5-pin, J4 3-pin), which cannot be cross-plugged
-because the pin counts differ, and which the 6S's seven conductors could not
+harness** (J5 4-pin, J2 5-pin, J4 3-pin), keyed by pin count — a larger
+plug cannot enter a smaller header; a smaller plug forced offset into a
+larger one is untested (§3) *("cannot be cross-plugged" until
+2026-11-05)* — and which the 6S's seven conductors could not
 have carried anyway against the ten now needed. See
 `docs/phase-0-status.md`. Practise the strip-and-solder on the 5S and 6S;
 only then touch the 3S.
@@ -351,8 +367,8 @@ conductors you want, adhesive-lined heat-shrink over it. Unplugging
 returns the machine to stock.
 
 *(The next two paragraphs describe the balance-lead build, superseded
-2026-11-05 by "The build T-pieces" below; the resistors-at-the-source rule
-in them still holds.)* Note the window is **not** empty: the two 8.2 kΩ series resistors live in
+2026-11-05 by "The build T-pieces" below. So is their resistors-at-the-source
+rule: from 2026-11-05 every series leg is on the board.)* Note the window is **not** empty: the two 8.2 kΩ series resistors live in
 it, soldered inline, because series resistance has to be at the source to
 protect the machine from a fault further down the cable (reasoning in
 `docs/phase-0-status.md`). So allow for two resistor bodies, generous
@@ -416,7 +432,7 @@ hand, each T-piece is made from parts:
 ```
 machine header <-[XHP female, crimped]- 26 AWG -[B*B-XH-A, soldered]-> machine's harness plug
                                                   |  each branched pin also carries
-                                                  +- resistor where specified - 26 AWG -[XHP female, crimped]-> box
+                                                  +- 26 AWG -[XHP female, crimped]-> box   (no resistor: all on the board)
 ```
 
 That is the first fallback above ("solder directly to a `B4B-XH-A`'s
@@ -448,13 +464,18 @@ rather than inherited from a lead that may be mirrored.
 - **Mate each header with the machine's real harness plug before
   soldering anything.** This file has been caught by a listing twice.
 
-**The series resistors stay at the source** — header pin → resistor → 26
-AWG — for the chafe argument in `docs/phase-0-status.md`.
+**No T-piece carries a resistor (decided 2026-11-05).** Every series leg
+is on the board — J2's since 2026-11-03, J4's and J5's since 2026-11-05 —
+and the T-pieces are plain wire. That gives up the chafe argument in
+`docs/phase-0-status.md`, deliberately: the operator accepted the
+cable-fault risk, which for J2 was already gone. *(Until 2026-11-05: "The
+series resistors stay at the source — header pin → resistor → 26 AWG".)*
 
-**Per connector:** J5 branches `VSS` direct and `ESD1`/`ESD4` through
-8.2 K — **three branches, `Disp-P4` passes through unbranched** (see §3).
-J4 branches `T` direct and `#` through 100 K; `+` passes through only. J2
-branches all five, no resistors.
+**Per connector:** J5 branches `VSS`, `ESD1` and `ESD4`, all direct —
+**three branches, `Disp-P4` passes through unbranched** (see §3). J4
+branches `T` and `#` direct; `+` passes through only. J2 branches all
+five. *(Until 2026-11-05 `ESD1`/`ESD4` branched through 8.2 K and `#`
+through 100 K.)*
 
 **Order:** a practice piece first, then J5 (critical path), J4, and J2
 last — it carries pos 1 beside the direction lines.
@@ -530,14 +551,16 @@ turns out not to mate — cut it and both ends are guaranteed by
 construction. Worth knowing the part number exists; not worth buying first.
 
 **From 2026-11-05 the build T-piece branches THREE conductors, not
-four**: `ESD1` and `ESD4` each through an 8.2 kΩ, ground directly.
+four**: `ESD1`, `ESD4` and ground, all direct — the two 8.2 kΩ sit on the
+board.
 **`Disp-P4` passes straight through and is not branched** — its branch
 only ever ended at a board hole that connects to nothing, and a wire out
 to the one line that must never be loaded is risk with no use. **The box
 end stays an `XHP-4` with cavity 4 empty**: a 3-pin plug would mate the
 J4 header. *(Whether a smaller XH plug can be forced offset into a larger
-shroud — J4's into J5's header, J5's into J2's — is untested; check it by
-trial before relying on the pin counts as keying.)*
+shroud — J4's into J5's header, and J4's or J5's into J2's — is untested;
+check it by trial before relying on the pin counts as keying. The list
+read "J4's into J5's header, J5's into J2's" until 2026-11-05.)*
 *(Until 2026-11-05: "Wire the T straight through and branch **all four**
 conductors: `ESD1`, `ESD4` and `Disp-P4` each through an 8.2 kΩ, ground
 directly" — which is how the bench T-piece is built.)* Ground gets
@@ -573,7 +596,7 @@ tighter than they need to be for the sake of a few euro.
 
 | Value | Qty | Where |
 |---|---|---|
-| 8.2 kΩ | 9 (was 10 with `Disp-P4`) | 0e T-piece, series leg (**×2** — `ESD1`, `ESD4`; ×3 with `Disp-P4` until 2026-11-05); **0e shunt legs, ×4 — two in series per leg to make 16.4 kΩ, on `ESD1` and `ESD4` only** (new 2026-10-19, replaces the 15 kΩ); 0b analyser tap (×3). **Bought: 25**, so the extra 4 are covered. |
+| 8.2 kΩ | 13 *(9 until 2026-11-05, which omitted the four base resistors; 10 with `Disp-P4` before that)* | **LED-driver base resistor ×4** (`docs/board-and-perfboard.md`, LED-driver cells); 0e series leg (**×2** — `ESD1`, `ESD4`; ×3 with `Disp-P4` until 2026-11-05), **on the board below the J5 header, for the build** (2026-11-05; the bench rig still has them in the T-piece); **0e shunt legs, ×4 — two in series per leg to make 16.4 kΩ, on `ESD1` and `ESD4` only** (new 2026-10-19, replaces the 15 kΩ); 0b analyser tap (×3). **25 in stock** — 13 needed, plus the J4 analyser one (row below). |
 | 15 kΩ | 10 | **SUPERSEDED for 0e — do not fit.** Was the 0e divider ground leg; it fails its tolerance corner at −70 to −87 mV (2026-10-19). **Use 2 × 8.2 kΩ in series = 16.4 kΩ** per leg (**×2** — `Disp-P4` stays unterminated). Both in stock, no new parts. |
 | **10 kΩ** | **25** | **'221 input pulls, ×7 — five `A` pull-ups to 3V3 (four drive channels and the gate) and two `R` pull-downs (GPIO38, the gate's `R̅`, and the drive channels' tied `R̅` net) (`docs/phase-0-plan.md`, "An arm gate"; ×5 from 2026-10-29 until the gate, 2026-10-30).** **25 held, COUNTED by the operator 2026-10-29**, which is the grade `docs/taps-and-dividers.md` asks for ("in stock should mean counted"). Seven needed, eighteen spare *(five and twenty until 2026-10-30)*. *(This cell read "in stock per the operator — count not taken" for part of that day, and a draft before it claimed five of the 15 kΩ bag instead; 10 K is held and is the conventional value, so the 15 K stay with their 0e supersession note.)* |
 | 150 kΩ | 10 | 0c switch divider, series leg (**×4** — all four J2 lines), **on the board at the J2 header, for the build** (decided 2026-11-03, so the drive reaches the raw lines; the bench rig still has them in the T-piece). **In stock 2026-10-07.** |
@@ -583,7 +606,7 @@ tighter than they need to be for the sake of a few euro.
 | 1 kΩ | 10 | 0d flowmeter, **at PA8/PA9 only** — the board side, after its own conditioning. **Never at J4.** Also the **five `Q` readback series resistors** — four drive channels and the gate (2026-10-30) — **if the proposed 1 K holds; the value is OPEN** (`docs/phase-0-plan.md`). **In stock.** |
 | 8.2 kΩ (J4) | — | **J4 ANALYSER tap only: 8.2 kΩ, one channel, `#` only, no shunt.** The ESP32 tap at J4 is **100 K + 220 K** — see the 0d entry in `docs/phase-0-status.md`. Covered by the 8.2 kΩ bag above. |
 | **330 Ω, 1 %** *(390 Ω only for a box that stays cool — "cool" is undefined: no ambient has been measured inside the box, so read this as "only after measuring it"; see the 85 °C note under "Datasheet read")* | 20 | **PhotoMOS LED drive, ×4 — ORDERED 2026-10-27 (Reichelt, ×25); §1 is normative.** *(Read "NOT IN STOCK, added 2026-10-12" until 2026-10-29.)* AQY212EH is guaranteed to operate at 3.0 mA **at 25 °C** (see the 85 °C note under "Datasheet read") and wants 5–30 mA (C, 2026; 5–10 in A and B); 330 Ω from 3.3 V gives ~6 mA nominal. **Do not substitute the in-stock 1 kΩ** — it gives ~2 mA, above typical and below guaranteed, which is the one range that works on the bench and fails in service. 680 Ω if driving from 5 V instead. <!-- fact:led-drive-resistor 330 Ω, 1 % --> <!-- fact:photomos-guarantee-25c 3.0 mA at 25 °C --> |
-| **100 kΩ** | 10 | **0d J4 divider, series leg (×1)** — the chosen value since 2026-10-08. Also the **base-emitter resistors (×4)** for the LED drivers, added 2026-10-12: with the '221 pulled from its socket — a deliberate third disable — four bases would otherwise float with the rail up. **In stock.** |
+| **100 kΩ** | 10 | **0d J4 divider, series leg (×1)** — the chosen value since 2026-10-08; **on the board below the J4 header, for the build** (2026-11-05; the bench rig still has it in the T-piece). Also the **base-emitter resistors (×4)** for the LED drivers, added 2026-10-12: with the '221 pulled from its socket — a deliberate third disable — four bases would otherwise float with the rail up. **In stock.** |
 | 120 kΩ | 0 | **NOT in stock.** Recorded as in stock on 2026-10-07 from a verbal report; the bag held 100 K and 150 K. Superseded by 100 kΩ, which has ~double the margin — not needed. |
 | E12 assortment kit, 1/4 W | 0 | **Not required.** It covers no named requirement, and cheap kits are 5 % where the rows above are 1 %. Both dividers survive 5 % (J4 +271 mV, 0c +110 mV — the J4 figure was +96 mV while 120 K was specified), and 100 kΩ is already in stock. |
 
@@ -758,11 +781,13 @@ quantity and the price are both superseded by what was actually bought —
 rather than changed: five is practice, service and spare. §1 is normative
 on what was ordered.)*
 
-**Space is tight but was never the binding constraint**, against **~51
-discrete parts (~42 resistors, 4 BC547, 5 timing caps), 7 sockets (three
+**Space is tight but was never the binding constraint**, against **~54
+discrete parts (~45 resistors, 4 BC547, 5 timing caps), 7 sockets (three
 DIP-16, four DIP-4)** and 3 XH connectors *(said "~29 discrete parts, 5
-sockets" until 2026-10-29 — the single-'221 count — and ~42 / 6 until the
-arm-window gate, 2026-10-30)*:
+sockets" until 2026-10-29 — the single-'221 count — ~42 parts / 6
+sockets until the arm-window gate, 2026-10-30, ~47 parts (~38 resistors)
+until J2's 150 K came onto the board, 2026-11-03, and ~51 parts (~42
+resistors) until J4's and J5's series legs did, 2026-11-05)*:
 <!-- fact:dip4-sockets four DIP-4 -->
 
 | board grid | free beside the devkit | free underneath it |
@@ -789,12 +814,13 @@ to put the dividers there.
 on the board", which counts the **sense** side alone — 4 × J2 shunt, 1 × J4
 shunt, and 4 × 8.2 K making the two J5 shunts, every series leg living in its
 T-piece. **Since 2026-11-03 J2's four 150 K series legs are on the board too,
-at the J2 header, so the sense side is 13** *(9 until then)*. **The actuation block adds ~29 more**: 330 Ω, 8.2 K and 100 K per
+at the J2 header, and since 2026-11-05 J4's 100 K and J5's two 8.2 K, so the
+sense side is 16** *(13 from 2026-11-03, 9 before)*. **The actuation block adds ~29 more**: 330 Ω, 8.2 K and 100 K per
 photoMOS × 4, **five '221 timing resistors — one `R_X` per channel, and
 2026-10-29 made it one channel per photoMOS; the fifth is the gate's** —
 **seven 10 K pulls on the '221 inputs** (five 2026-10-29; the gate's `A̅`
 pull-up and the second `R̅` pull-down 2026-10-30) and **five `Q` readback series resistors (2026-10-30) — 1 K proposed, value
-OPEN** (`docs/phase-0-plan.md`, OPEN block). **~42 in total** *(~38 until J2's 150 K came onto the board, 2026-11-03; ~34 before the gate)* *(~23 until the pulls were
+OPEN** (`docs/phase-0-plan.md`, OPEN block). **~45 in total** *(~42 until J4's and J5's series legs came onto the board, 2026-11-05; ~38 until J2's 150 K did, 2026-11-03; ~34 before the gate)* *(~23 until the pulls were
 added; ~28 for part of 2026-10-29, still counting the two timing resistors
 of the single-chip design in the commit that moved to four channels)*, and
 the "space was never binding" conclusion rests on the right number, not the

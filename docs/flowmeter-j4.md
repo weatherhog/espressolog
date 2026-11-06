@@ -13,6 +13,14 @@
 > first, that the OPV is 11 bar full-flow and is unrecorded adjustable state,
 > and that both experiments need the J4 tap refitted behind the `E01`.
 >
+> **Bench and build counts are not directly comparable (2026-11-05).** Every
+> count in this file was taken with the 100 K series leg in the T-piece, so
+> the 100 K/220 K junction sat at the end of the cable. The build puts the
+> 100 K on the board: the cable then carries the raw `#` node and the
+> junction is a short board trace, which changes what pickup reaches the
+> counter. Treat a build-geometry glitch count as a new series, as with an
+> OPV adjustment.
+>
 > **The J4 `+` read-only rule is NOT here and must never be copied here.** It
 > lives at the top of CLAUDE.md beside the invariants, because it has been
 > lost three times by being written down next to J4 conditioning material.

@@ -1235,10 +1235,9 @@ and D6–D10 and both halves of each J5 shunt are all 8.2 K, so a swap
 one 8.2 K** instead of two in series, which reads as described above; and
 **one half of a shunt left unfitted**, which leaves no shunt at all — the
 pin sees the bus line through 8.2 K alone and, whenever the line is
-high — most of the time — **pushes current into its clamp diode**: under
-push-pull ~0.16–0.21 mA, three to five times the 33–60 µA this file
-rejects at 23.2 K; under open-drain, through the 4.7 K pull-up as well,
-~0.1 mA, where 23.2 K draws none. All the while it very probably still
+high — most of the time — **pushes current into its clamp diode**,
+several times what the J5 corner table above rejects at 23.2 K. All the
+while it very probably still
 decodes (inferred, not tried), so nothing shows. And **J4's 100 K (G5–G9) and the
 220 K shunts (rows 14–18) sit beside them**, where a swap does matter.
 The pre-power check in `docs/board-and-perfboard.md` meters every shunt by
@@ -2171,8 +2170,8 @@ state; closing it is the deliberate act, with the RC chosen first.
    smaller plug forced offset into a larger header lands raw machine nets
    on our ground or on other board nets, with no series resistor in the
    cable to limit it — and once the drive jumpers close, the J2 header's
-   pos-1 hole joins that set, since a fired photoMOS then joins it to the
-   1Cup or 2Cup hole. Whether a smaller XH plug can be forced
+   pos-1 hole joins that set, since firing both photoMOS of a series pair
+   then joins it to the 1Cup or 2Cup hole. Whether a smaller XH plug can be forced
    offset into a larger shroud is untested (`docs/shopping-list.md` §3);
    try it before relying on the keying. *(Four drafts of this paragraph,
    2026-11-05, worked particular offsets through, case by case; each
@@ -2230,9 +2229,10 @@ state; closing it is the deliberate act, with the RC chosen first.
    insulation has poor abrasion resistance, so sleeving the cable where it passes the
    gland is worth considering. *(This said "Thicker than specified, so the
    chafe argument is unaffected" until 2026-11-05.)*
-   **These are test articles: the T-pieces that go into the
-   machine will be rebuilt from the 26 AWG silicone now in hand**, and the
-   verification in this paragraph belongs to the 22 AWG set, not to them.
+   **These are test articles: the build T-pieces will be made from the 26
+   AWG silicone now in hand**, and the verification in this paragraph
+   belongs to the 22 AWG set, not to them. The bench J4 T-piece may go back
+   in for 0d, with the bench breadboard only (`docs/shopping-list.md` §1).
 
    Then `display on` (persisted in NVS) and check `status`.
 

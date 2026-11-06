@@ -77,7 +77,7 @@ rebuilt.** Operator: the three T-pieces used for every bench session so far
 were made with 22 AWG, not the 26 AWG `docs/phase-0-status.md` records, and
 **the build T-pieces will be made fresh** from the 26 AWG silicone bought
 2026-10-28. So the as-built record was wrong by four gauges, and the
-wire going into the machine will be the specified one. *(This went on
+build's wire will be the specified one. *(This went on
 "in the safe direction — 22 is thicker than 26, so the chafe-to-ground
 concern below never applied to them" until 2026-11-05.)* For the build
 the series-resistor protection was given up — J2's on 2026-11-03, J4's
@@ -107,15 +107,15 @@ next time the case is open" until 2026-10-29, and both were wrong** — the
 operator confirms no T-pieces are fitted at present. They are on the bench,
 so this is a caliper or a strip-and-look away, today, with nothing to
 disassemble and no machine to open. **The chafe-to-ground argument that
-made it sound urgent applies to where they are GOING, not where they are**
-— and the gauge question it raised is answered (22 AWG, CLOSED above).
-The build T-pieces are made fresh, but **the bench J4 T-piece may go
-back in for the 0d experiments**, which need the J4 tap refitted, so
-check its insulation before it does. It still carries its 100 K, so a
-chafe there is a soft fault. *(This went on
-"it is a reason to settle the gauge before they go back in, not a reason
-to open a machine. Thinner than specified is still the direction that
-matters" until 2026-11-05.)*
+made it sound urgent applies to where they are GOING, not where they are**.
+*(That sentence went on "it is a reason to settle the gauge before they go
+back in, not a reason to open a machine. Thinner than specified is still
+the direction that matters" until 2026-11-05.)* The gauge question is
+answered (22 AWG, CLOSED above). **The bench J4 T-piece may go back in for
+the 0d experiments, with the bench breadboard only — never the build
+board**, whose own 100 K would sit in series with the T-piece's and pull
+`#` below VIH. Check its insulation first. *(A draft of 2026-11-06 said
+these test articles were not going back at all.)*
 
 *(`docs/phase-0-status.md` does say "all three T-pieces in the machine" —
 that is inside its dated **2026-10-08 bench session** heading, a record of

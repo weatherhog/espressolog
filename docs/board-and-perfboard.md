@@ -624,8 +624,9 @@ off the tap rows are not in parallel with the reading, and F′6/G′5 reach
 only open photoMOS outputs. **Then meter every shunt by value**, tap row
 to the ground bus: B12 and B13 **16.4 kΩ** each (a reading of 8.2 kΩ is a
 single resistor, an open reading a half left unfitted), B14–B18 **220 kΩ**
-each. *(Added 2026-11-05, graded 2026-11-06: a missing J5 shunt half very probably still
-decodes — inferred, not tried — so nothing else catches it.)*
+each. *(Added 2026-11-05: a missing J5 shunt half very probably still
+decodes — inferred, not tried — so nothing else catches it. Said "still
+decodes" unqualified until 2026-11-06.)*
 
 **Ground bus:** bare wire down **column I, rows 6–30**, fed from J5 `VSS`
 (B3) and J4 `T` (I3, straight down the bus column), and tied to the devkit at **K30**, the opposite

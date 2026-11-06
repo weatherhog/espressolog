@@ -76,15 +76,15 @@ silicone will not stand up in a perfboard.
 rebuilt.** Operator: the three T-pieces used for every bench session so far
 were made with 22 AWG, not the 26 AWG `docs/phase-0-status.md` records, and
 **the build T-pieces will be made fresh** from the 26 AWG silicone bought
-2026-10-28. So the as-built record was wrong by four gauges. *(This
-went on "in the safe direction — 22 is thicker than 26, so the
-chafe-to-ground concern below never applied to them" until 2026-11-05.)*
-For the build the series-resistor protection was given up — J2's on
-2026-11-03, J4's and J5's on 2026-11-05 — and **the chafe risk is
-accepted, not answered by the wire**: with raw lines in the cable a chafe
-is now a hard short, and silicone insulation abrades poorly, so sleeving
-at the gland is worth considering. And the wire going into the machine will be the
-specified one. The 2026-10-18 series-resistance check stands for the test
+2026-10-28. So the as-built record was wrong by four gauges, and the
+wire going into the machine will be the specified one. *(This went on
+"in the safe direction — 22 is thicker than 26, so the chafe-to-ground
+concern below never applied to them" until 2026-11-05.)* For the build
+the series-resistor protection was given up — J2's on 2026-11-03, J4's
+and J5's on 2026-11-05 — and **the chafe risk is accepted, not answered
+by the wire**: with raw lines in the cable a chafe is now a hard short,
+and silicone insulation has poor abrasion resistance, so sleeving at the
+gland is worth considering. The 2026-10-18 series-resistance check stands for the test
 articles; it says nothing about T-pieces not yet built. *(22 AWG is the top
 of `SXH-001T-P0.6`'s AWG 28–22 range; the rebuild's 26 AWG sits inside it.)*
 
@@ -108,8 +108,11 @@ operator confirms no T-pieces are fitted at present. They are on the bench,
 so this is a caliper or a strip-and-look away, today, with nothing to
 disassemble and no machine to open. **The chafe-to-ground argument that
 made it sound urgent applies to where they are GOING, not where they are**
-— and these 22 AWG test articles are not going back: the build T-pieces
-are made fresh (above), so the gauge question is moot. *(This went on
+— and the gauge question it raised is answered (22 AWG, CLOSED above).
+The build T-pieces are made fresh, but **the bench J4 T-piece may go
+back in for the 0d experiments**, which need the J4 tap refitted, so
+check its insulation before it does. It still carries its 100 K, so a
+chafe there is a soft fault. *(This went on
 "it is a reason to settle the gauge before they go back in, not a reason
 to open a machine. Thinner than specified is still the direction that
 matters" until 2026-11-05.)*

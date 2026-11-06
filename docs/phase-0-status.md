@@ -1234,11 +1234,12 @@ and D6–D10 and both halves of each J5 shunt are all 8.2 K, so a swap
 **among those** is harmless. Two failures remain: **a J5 shunt built as
 one 8.2 K** instead of two in series, which reads as described above; and
 **one half of a shunt left unfitted**, which leaves no shunt at all — the
-pin sees the bus line through 8.2 K alone and **continuously pushes
-~0.1–0.2 mA into its clamp diode** (open-drain through 4.7 K + 8.2 K at
-the low end, push-pull through 8.2 K at the high) — several times the
-33–60 µA this file rejects at 23.2 K — while very probably still
-decoding (inferred, not tried), so nothing shows. And **J4's 100 K (G5–G9) and the
+pin sees the bus line through 8.2 K alone and, whenever the line is
+high — most of the time — **pushes current into its clamp diode**: under
+push-pull ~0.16–0.21 mA, three to five times the 33–60 µA this file
+rejects at 23.2 K; under open-drain, through the 4.7 K pull-up as well,
+~0.1 mA, where 23.2 K draws none. All the while it very probably still
+decodes (inferred, not tried), so nothing shows. And **J4's 100 K (G5–G9) and the
 220 K shunts (rows 14–18) sit beside them**, where a swap does matter.
 The pre-power check in `docs/board-and-perfboard.md` meters every shunt by
 value as well as the series legs, from 2026-11-05.)*
@@ -1975,8 +1976,9 @@ state; closing it is the deliberate act, with the RC chosen first.
    nothing. The firmware is the authority; it is already written.
 
    **All four conductors are branched, but only three are terminated.**
-   *(The wiring diagram above, the layout diagram below, this table and
-   the `Disp-P4` paragraphs describe the bench T-piece. The build T-piece, from
+   *(The layout diagram below, this table and the `Disp-P4` paragraphs
+   describe the bench T-piece; the wiring diagram above holds for both,
+   with the 8.2 K on the board in the build. The build T-piece, from
    2026-11-05, does not branch `Disp-P4` at all — `docs/shopping-list.md`
    §3 — and carries **no resistors**: both 8.2K series legs sit on the board
    (`docs/board-and-perfboard.md`, "Series legs for J4 and J5"). **Do not
@@ -2169,7 +2171,8 @@ state; closing it is the deliberate act, with the RC chosen first.
    smaller plug forced offset into a larger header lands raw machine nets
    on our ground or on other board nets, with no series resistor in the
    cable to limit it — and once the drive jumpers close, the J2 header's
-   pos-1 hole joins that set. Whether a smaller XH plug can be forced
+   pos-1 hole joins that set, since a fired photoMOS then joins it to the
+   1Cup or 2Cup hole. Whether a smaller XH plug can be forced
    offset into a larger shroud is untested (`docs/shopping-list.md` §3);
    try it before relying on the keying. *(Four drafts of this paragraph,
    2026-11-05, worked particular offsets through, case by case; each
@@ -2224,7 +2227,7 @@ state; closing it is the deliberate act, with the RC chosen first.
    read as the as-built. **The chafe risk is accepted, not answered by the
    wire**: for the build the series-resistor protection was given up —
    J2's on 2026-11-03, J4's and J5's on 2026-11-05 — and silicone
-   insulation abrades poorly, so sleeving the cable where it passes the
+   insulation has poor abrasion resistance, so sleeving the cable where it passes the
    gland is worth considering. *(This said "Thicker than specified, so the
    chafe argument is unaffected" until 2026-11-05.)*
    **These are test articles: the T-pieces that go into the

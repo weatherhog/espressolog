@@ -1235,8 +1235,9 @@ and D6–D10 and both halves of each J5 shunt are all 8.2 K, so a swap
 one 8.2 K** instead of two in series, which reads as described above; and
 **one half of a shunt left unfitted**, which leaves no shunt at all — the
 pin sees the bus line through 8.2 K alone and, whenever the line is
-high — most of the time — **pushes current into its clamp diode**,
-several times what the J5 corner table above rejects at 23.2 K. All the
+high — most of the time — **pushes current into its clamp diode**:
+under push-pull, several times the 33–60 µA the clamp-current table above
+rejects at 23.2 K; under open-drain ~0.1 mA, where 23.2 K draws none. All the
 while it very probably still
 decodes (inferred, not tried), so nothing shows. And **J4's 100 K (G5–G9) and the
 220 K shunts (rows 14–18) sit beside them**, where a swap does matter.
@@ -2233,6 +2234,8 @@ state; closing it is the deliberate act, with the RC chosen first.
    AWG silicone now in hand**, and the verification in this paragraph
    belongs to the 22 AWG set, not to them. The bench J4 T-piece may go back
    in for 0d, with the bench breadboard only (`docs/shopping-list.md` §1).
+   *(Said "the T-pieces that go into the machine will be rebuilt from the
+   26 AWG silicone" until 2026-11-06.)*
 
    Then `display on` (persisted in NVS) and check `status`.
 

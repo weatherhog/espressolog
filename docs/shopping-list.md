@@ -72,14 +72,15 @@ leaving the inside of the machine needs. Neither substitutes for the
 other: solid core work-hardens and snaps under vibration, and stranded
 silicone will not stand up in a perfboard.
 
-**CLOSED 2026-10-29 — THE TEST T-PIECES ARE 22 AWG, and they are being
-rebuilt.** Operator: the three T-pieces used for every bench session so far
+**CLOSED 2026-10-29 — THE TEST T-PIECES ARE 22 AWG, and the build set is
+made fresh** (the bench J4 one may go back in for 0d — below). Operator: the three T-pieces used for every bench session so far
 were made with 22 AWG, not the 26 AWG `docs/phase-0-status.md` records, and
 **the build T-pieces will be made fresh** from the 26 AWG silicone bought
-2026-10-28. So the as-built record was wrong by four gauges, and the
-build's wire will be the specified one. *(This went on
-"in the safe direction — 22 is thicker than 26, so the chafe-to-ground
-concern below never applied to them" until 2026-11-05.)* For the build
+2026-10-28. So the as-built record was wrong by four gauges *(which went
+on "in the safe direction — 22 is thicker than 26, so the chafe-to-ground
+concern below never applied to them" until 2026-11-05)*, and the build's
+wire will be the specified one *("the wire going into the machine will be
+the specified one" until 2026-11-06)*. For the build
 the series-resistor protection was given up — J2's on 2026-11-03, J4's
 and J5's on 2026-11-05 — and **the chafe risk is accepted, not answered
 by the wire**: with raw lines in the cable a chafe is now a hard short,
@@ -114,7 +115,7 @@ the direction that matters" until 2026-11-05.)* The gauge question is
 answered (22 AWG, CLOSED above). **The bench J4 T-piece may go back in for
 the 0d experiments, with the bench breadboard only — never the build
 board**, whose own 100 K would sit in series with the T-piece's and pull
-`#` below VIH. Check its insulation first. *(A draft of 2026-11-06 said
+the GPIO6 divider junction below VIH (~2.40 V against 2.475 V). Check its insulation first. *(A draft of 2026-11-06 said
 these test articles were not going back at all.)*
 
 *(`docs/phase-0-status.md` does say "all three T-pieces in the machine" —

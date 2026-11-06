@@ -584,7 +584,7 @@ where its wire is crimped, not because of the part's pin-1 mark. A plug
 seen from the wire side is mirrored, which is how a cavity gets swapped:
 on J5 a swap puts `VSS` on the empty E3, leaves the ground bus without its J5 anchor and swaps `ESD1`/`ESD4`; on
 J2 it puts +5 V into Water's 150 K. **Before first power, check each conductor by resistance, not continuity**
-— the by-value checks of the on-board series resistors below need Ω
+*(this said "meter continuity" until 2026-11-03)* — the by-value checks of the on-board series resistors below need Ω
 mode. *(Until
 2026-11-05 the reason given was that the J5 signals and J4 `#` sat behind
 T-piece resistors, which a beeper does not sound through.)* **Disconnect the
@@ -624,10 +624,8 @@ off the tap rows are not in parallel with the reading, and F′6/G′5 reach
 only open photoMOS outputs. **Then meter every shunt by value**, tap row
 to the ground bus: B12 and B13 **16.4 kΩ** each (a reading of 8.2 kΩ is a
 single resistor, an open reading a half left unfitted), B14–B18 **220 kΩ**
-each. *(Added 2026-11-05: a missing J5 shunt half still decodes, so
-nothing else catches it.)*
-
-*(The pre-power check said "meter continuity" until 2026-11-03.)*
+each. *(Added 2026-11-05: a missing J5 shunt half very probably still
+decodes — inferred, not tried — so nothing else catches it.)*
 
 **Ground bus:** bare wire down **column I, rows 6–30**, fed from J5 `VSS`
 (B3) and J4 `T` (I3, straight down the bus column), and tied to the devkit at **K30**, the opposite

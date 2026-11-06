@@ -2232,10 +2232,10 @@ state; closing it is the deliberate act, with the RC chosen first.
    chafe argument is unaffected" until 2026-11-05.)*
    **These are test articles: the build T-pieces will be made from the 26
    AWG silicone now in hand**, and the verification in this paragraph
-   belongs to the 22 AWG set, not to them. The bench J4 T-piece may go back
-   in for 0d, with the bench breadboard only (`docs/shopping-list.md` §1).
-   *(Said "the T-pieces that go into the machine will be rebuilt from the
-   26 AWG silicone" until 2026-11-06.)*
+   belongs to the 22 AWG set, not to them. *(Said "the T-pieces that go
+   into the machine will be rebuilt from the 26 AWG silicone" until
+   2026-11-06.)* The bench J4 T-piece may go back in for 0d, with the bench
+   breadboard only (`docs/shopping-list.md` §1).
 
    Then `display on` (persisted in NVS) and check `status`.
 

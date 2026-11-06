@@ -1104,15 +1104,18 @@ day. Note how little of it is new:**
   original specification already was.
 - **Everything above ~16.6 kΩ is ruled out IF the line is push-pull** — by
   the clamp threshold at 17.4 and 18, and by outright conduction at 23.2.
-  **That qualifier is load-bearing and a draft dropped it.** The whole table
-  is a push-pull corner table; under open-drain the 4.7 K pull-up sits in
-  series, so the pin stays lower — ~2.8 V nominal at 16.4 kΩ, ~3.2 V at
-  23.2 kΩ, ~3.4 V at the worst corner (rail +5 %, resistors at tolerance)
-  — below the ~3.5 V clamp knee at VDD −5 %, and none of it applies.
-  *(Said "under open-drain the pin never exceeds 2.8 V" until 2026-11-06;
-  that is the 16.4 kΩ nominal only, and the table's higher rows exceed it.)*
+  **That qualifier is load-bearing and a draft dropped it.** The clamp
+  tables are push-pull corner tables; under open-drain the 4.7 K pull-up
+  sits in series, so the pin stays lower — ~2.8 V nominal at 16.4 kΩ,
+  ~3.2 V nominal at 23.2 kΩ, and ~3.4 V at 23.2 kΩ in the worst corner
+  (rail +5 %, shunt +1 %, series and pull-up −1 to −5 %) — below the
+  ~3.53 V clamp knee (VDD −5 % + 0.4 V), so the clamp tables do not apply.
+  The open-drain floor columns of the corner table do. *(Said "under
+  open-drain the pin never exceeds 2.8 V" until 2026-11-06; that is the
+  16.4 kΩ nominal only, and the table's higher rows exceed it.)*
 - **So the feasible window is ~16.2 – 16.6 kΩ under push-pull**, and
-  16.2 kΩ upward under open-drain. **A draft left "16.2 – 17.5 kΩ" standing**
+  ~16.2 – 26 kΩ under open-drain, where the same corner reaches the clamp
+  knee at ~26 kΩ *("16.2 kΩ upward" until 2026-11-06, with no ceiling)*. **A draft left "16.2 – 17.5 kΩ" standing**
   from before the clamp corner was redone; 17.4 and 17.5 are outside it.
 
 **THE DRIVE TYPE IS STILL UNTESTED, AND NOBODY HAS A WORKING PROCEDURE FOR

@@ -52,3 +52,4 @@ firmware/test/host/armed_test
 firmware/test/host/brew_guard_test
 firmware/test/host/upload_policy_test
 firmware/test/host/spool_pick_test
+firmware/test/host/live_display_test

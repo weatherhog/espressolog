@@ -10,11 +10,12 @@
 #include "spool.h"
 #include "net.h"
 #include "display.h"
+#include "live_display.h"
 #include "machine_io.h"
 #include "brew_guard.h"
 #include <driver/gpio.h>
 
-const char* FIRMWARE_VERSION = "0.9.4";
+const char* FIRMWARE_VERSION = "0.9.8";
 const char* DETECTOR_VERSION = "0a.6";
 
 static ScaleManager scales;
@@ -162,6 +163,21 @@ static void machineContextPoll() {
 // Nothing below may take an irreversible action on that, which is why the
 // press guards are no longer cleared here — see machineBusy().
 static constexpr uint32_t DISPLAY_FRESH_US = 2000000;
+
+// The machine display on the live stream, for the PWA. Radio only, no flash,
+// so it is safe during a shot (invariant 2). The rules live in
+// live_display.h, where they are host-tested.
+static LiveDisplayGate live_display;
+
+static void liveDisplay(uint32_t now_ms) {
+  if (!display_on) return;
+  char frame[128];
+  if (live_display.poll(display_bus.reading(), display_bus.stale(micros(), DISPLAY_FRESH_US),
+                        net.liveUp(), now_ms, frame, sizeof(frame))) {
+    if (net.sendLive(frame)) live_display.sent(now_ms);
+    else                     live_display.failed(now_ms);
+  }
+}
 
 static void printDisplay(Stream& out) {
   if (!display_on) {
@@ -1128,6 +1144,7 @@ void loop() {
   pollSwitches();
   pollDisplay();
   machineContextPoll();
+  liveDisplay(millis());
 
   ShotState st = detector.state();
   // INVARIANT 2: never write flash or block on the network during a shot.

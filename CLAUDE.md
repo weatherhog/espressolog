@@ -700,6 +700,7 @@ firmware/          PlatformIO, Arduino framework
     upload_policy.{h,cpp}   retry / quarantine / delete on each HTTP code
     net.{h,cpp}             WiFi, WebSocket, HTTP POST
     display.{h,cpp}         J5 bus decode, blink discrimination
+    live_display.h          when the display goes out on the live stream (PWA only)
     machine_io.{h,cpp}      switch poller, debounce, event queue
     machine_context.h       per-shot machine facts for the spool header
     brew_guard.{h,cpp}      invariant 2 — is the pump running?

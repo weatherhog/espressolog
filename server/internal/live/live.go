@@ -25,6 +25,10 @@ type Hub struct {
 	// day), so this is ~1 MB/day — and it turns "a shot went missing, why?"
 	// from guesswork into a replay (firmware/test/host/replay). Best-effort:
 	// a journal write failure never touches the live fan-out.
+	//
+	// The machine-display frames (firmware/src/live_display.h: on change, at
+	// most 4 Hz, plus a 5 s heartbeat) are journalled too, for as long as the
+	// machine is on. Their share of that figure is not measured.
 	logDir  string
 	logDay  string
 	logFile *os.File

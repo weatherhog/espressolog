@@ -65,5 +65,5 @@ replay: replay.cpp ../../src/detector.cpp ../../src/detector.h
 
 clean:
 	rm -f detector_test display_test machine_context_test machine_io_test armed_test \
-	      brew_guard_test upload_policy_test spool_pick_test replay
+	      brew_guard_test upload_policy_test spool_pick_test live_display_test replay
 .PHONY: test clean

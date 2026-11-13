@@ -170,6 +170,57 @@ int main() {
     printf("5d. returning from stale re-earns the hold OK\n");
   }
 
+  // 5e. A failed send, then a link drop and reconnect inside the backoff:
+  //     the reconnect is still sent at once.
+  {
+    Rig k;
+    uint32_t us = 1000000;
+    for (int i = 0; i < 5; i++) { k.frame(temp(95, us)); us += 41000; }
+    k.now_ms += 1000;                           // clear of MIN_GAP_MS since the last send
+    k.send_ok = false;
+    k.frame(temp(94, us), 1, 1); us += 41000;   // change; this send fails
+    assert(k.attempts == 2 && k.sends == 1);
+    k.send_ok = true;
+    k.up = false; k.frame(temp(94, us), 1, 1); us += 41000;
+    k.up = true;  k.frame(temp(94, us), 1, 1); us += 41000;   // 2 ms after the failure
+    assert(k.sends == 2 && strstr(k.last, "\"c\":94"));
+    printf("5e. a reconnect inside the failed-send backoff is sent at once OK\n");
+  }
+
+  // 5f. A failed send, then ~25 days of silence: sending resumes as soon as
+  //     the machine is back, not ~25 days later.
+  {
+    Rig k;
+    uint32_t us = 1000000;
+    for (int i = 0; i < 5; i++) { k.frame(temp(95, us)); us += 41000; }
+    k.now_ms += 1000;
+    k.send_ok = false;
+    k.frame(temp(94, us), 1, 1); us += 41000;
+    assert(k.attempts == 2 && k.sends == 1);
+    k.send_ok = true;
+    k.stale = true; k.frame(temp(94, us), 1, 1); k.stale = false;
+    k.now_ms += 2147483648u + 1000;             // past 2^31 ms, beyond the backoff
+    for (int i = 0; i < 5; i++) { k.frame(temp(94, us)); us += 41000; }
+    assert(k.sends == 2);
+    printf("5f. a failed send does not lock sends out across a long quiet spell OK\n");
+  }
+
+  // 5g. A blank that has NOT yet earned its 1.5 s, the reader goes stale,
+  //     one BLANK frame on return: not sent. Without the reset the old start
+  //     time carries over the gap and confirms it at once.
+  {
+    Rig k;
+    uint32_t us = 1000000;
+    for (int i = 0; i < 5; i++) { k.frame(temp(95, us)); us += 41000; }
+    for (int i = 0; i < 30; i++) { k.frame(rd(DisplayBus::Mode::BLANK, "   ", us)); us += 41000; }  // 1.23 s
+    int before = k.sends;
+    k.stale = true; k.frame(rd(DisplayBus::Mode::BLANK, "   ", us)); k.stale = false;
+    us += 60000000;                             // a minute later
+    k.frame(rd(DisplayBus::Mode::BLANK, "   ", us), 30, 10); us += 41000;
+    assert(k.sends == before);
+    printf("5g. a blank across a stale gap re-earns its hold OK\n");
+  }
+
   // 6. Nothing from a stale reader.
   {
     LiveDisplayGate g;

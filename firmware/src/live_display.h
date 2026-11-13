@@ -53,7 +53,8 @@ public:
     // Latched until a send succeeds: the link can come up while the reading
     // is still being confirmed, and the edge must not be lost to that.
     if (link_up && !was_up) resend_now = true;
-    if (!link_up) resend_now = false;
+    // A dropped link also ends any backoff: the reconnect is sent at once.
+    if (!link_up) { resend_now = false; have_attempt = false; }
     was_up = link_up;
     if (r.mode == DisplayBus::Mode::NONE || stale) {
       // Forget the frame history: the first frames after the machine comes
@@ -80,7 +81,14 @@ public:
         : cand_frames >= HOLD_FRAMES;
     if (!confirmed) return false;
     if (!link_up) return false;
-    if (retry_wait && (int32_t)(now_ms - retry_at_ms) < 0) return false;
+    // Back off after a failed send. Unsigned elapsed time, like sent_ms, and
+    // the flag is dropped once the wait is over: a signed compare against a
+    // deadline that is never cleared locks sends out for ~24.8 days after a
+    // 24.8-day quiet spell (third review, 2026-11-13).
+    if (have_attempt) {
+      if (now_ms - attempt_ms < MIN_GAP_MS) return false;
+      have_attempt = false;
+    }
 
     const bool changed = !have_sent || r.mode != sent_mode
                       || memcmp(r.text, sent_text, sizeof(sent_text)) != 0;
@@ -98,8 +106,8 @@ public:
   // The send was attempted and failed with the link still reported up.
   // Without this, poll() would say "due" on every loop() until it worked.
   void failed(uint32_t now_ms) {
-    retry_wait = true;
-    retry_at_ms = now_ms + MIN_GAP_MS;
+    have_attempt = true;
+    attempt_ms = now_ms;
   }
 
   void sent(uint32_t now_ms) {
@@ -108,7 +116,7 @@ public:
     sent_ms = now_ms;
     have_sent = true;
     resend_now = false;
-    retry_wait = false;
+    have_attempt = false;
   }
 
 private:
@@ -142,8 +150,8 @@ private:
 
   bool             was_up = false;
   bool             resend_now = false;
-  bool             retry_wait = false;
-  uint32_t         retry_at_ms = 0;
+  bool             have_attempt = false;
+  uint32_t         attempt_ms = 0;
   bool             have_frame = false;
   uint32_t         last_frame_us = 0;
   DisplayBus::Mode cand_mode = DisplayBus::Mode::NONE;

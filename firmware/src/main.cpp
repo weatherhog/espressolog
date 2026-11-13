@@ -10,11 +10,12 @@
 #include "spool.h"
 #include "net.h"
 #include "display.h"
+#include "live_display.h"
 #include "machine_io.h"
 #include "brew_guard.h"
 #include <driver/gpio.h>
 
-const char* FIRMWARE_VERSION = "0.9.6";
+const char* FIRMWARE_VERSION = "0.9.7";
 const char* DETECTOR_VERSION = "0a.6";
 
 static ScaleManager scales;
@@ -163,72 +164,19 @@ static void machineContextPoll() {
 // press guards are no longer cleared here — see machineBusy().
 static constexpr uint32_t DISPLAY_FRESH_US = 2000000;
 
-// The machine display, on the live stream, for the PWA. Radio only, no flash,
-// so it is safe during a shot (invariant 2), and like every live frame it is
-// a screen, never a record: the shot's machine facts still come from
-// machine_ctx and the spool header.
-//
-// Sent on CHANGE, capped at 4 Hz, plus a 10 s heartbeat so a viewer can tell
-// "unchanged" from "gone". BLANK is never sent — the display blinks while a
-// value is being dialled, and forwarding the blanks would make the PWA flicker;
-// `adj` carries that state instead. Nothing is sent while the reading is
-// stale, so a switched-off machine goes quiet and the PWA times it out.
-//
-// A MODE CHANGE MUST HOLD FOR ~120 ms (about three frames) before it is sent.
-// Seen on the first live run, 2026-11-13: one frame at idle decoded as
-// mode=timer with text " 95", between two temp frames, with no pump running.
-// Forwarded as-is it flashed "9.5 s" on the PWA. Value changes within a mode
-// are not held, because the timer's text legitimately changes every 100 ms.
-//
-// What " 95" means is narrower than it looks: at that reading the display is
-// indistinguishable from the setpoint (CLAUDE.md, display-bus entry). The
-// PWA labels it as the machine's display, not as a measured boiler.
-static void liveDisplay(uint32_t now_ms) {
-  static char     sent_text[4] = {0};
-  static uint8_t  sent_mode = 0xFF;
-  static bool     sent_adj = false;
-  static uint32_t sent_ms = 0;
-  static uint8_t  cand_mode = 0xFF;
-  static uint32_t cand_since = 0;
-  if (!display_on) return;
-  const DisplayBus::Reading& r = display_bus.reading();
-  if (r.mode == DisplayBus::Mode::NONE || r.mode == DisplayBus::Mode::BLANK) return;
-  if (display_bus.stale(micros(), DISPLAY_FRESH_US)) return;
-  if ((uint8_t)r.mode != cand_mode) { cand_mode = (uint8_t)r.mode; cand_since = now_ms; }
-  if ((uint8_t)r.mode != sent_mode && now_ms - cand_since < 120) return;
-  const bool adj = display_bus.adjusting();
-  const bool changed = (uint8_t)r.mode != sent_mode || adj != sent_adj
-                    || memcmp(r.text, sent_text, sizeof(sent_text)) != 0;
-  const uint32_t since = now_ms - sent_ms;
-  if (changed ? since < 250 : since < 10000) return;
+// The machine display on the live stream, for the PWA. Radio only, no flash,
+// so it is safe during a shot (invariant 2). The rules live in
+// live_display.h, where they are host-tested.
+static LiveDisplayGate live_display;
 
-  // The glyph table only yields digits, space, '-' and letters, but a quote
-  // or backslash would break the JSON, so anything outside it is masked.
-  char txt[4];
-  for (int i = 0; i < 3; i++) {
-    char c = r.text[i];
-    txt[i] = (c >= ' ' && c <= '~' && c != '"' && c != '\\') ? c : '?';
-  }
-  txt[3] = 0;
-  const char* mode = r.mode == DisplayBus::Mode::TEMPERATURE ? "temp"
-                   : r.mode == DisplayBus::Mode::TIMER       ? "timer"
-                   : r.mode == DisplayBus::Mode::SETPOINT    ? "setpoint" : "text";
+static void liveDisplay(uint32_t now_ms) {
+  if (!display_on) return;
   char frame[128];
-  if (r.mode == DisplayBus::Mode::TEMPERATURE || r.mode == DisplayBus::Mode::SETPOINT) {
-    snprintf(frame, sizeof(frame), "{\"ev\":\"machine\",\"mode\":\"%s\",\"text\":\"%s\",\"c\":%d,\"adj\":%d}",
-             mode, txt, (int)r.temp_c, adj ? 1 : 0);
-  } else if (r.mode == DisplayBus::Mode::TIMER) {
-    snprintf(frame, sizeof(frame), "{\"ev\":\"machine\",\"mode\":\"timer\",\"text\":\"%s\",\"dl\":%u,\"adj\":%d}",
-             txt, (unsigned)r.timer_dl, adj ? 1 : 0);
-  } else {
-    snprintf(frame, sizeof(frame), "{\"ev\":\"machine\",\"mode\":\"text\",\"text\":\"%s\",\"adj\":%d}",
-             txt, adj ? 1 : 0);
+  if (live_display.poll(display_bus.reading(), display_bus.stale(micros(), DISPLAY_FRESH_US),
+                        net.liveUp(), now_ms, frame, sizeof(frame))
+      && net.sendLive(frame)) {
+    live_display.sent(now_ms);
   }
-  net.sendLive(frame);
-  memcpy(sent_text, r.text, sizeof(sent_text));
-  sent_mode = (uint8_t)r.mode;
-  sent_adj = adj;
-  sent_ms = now_ms;
 }
 
 static void printDisplay(Stream& out) {

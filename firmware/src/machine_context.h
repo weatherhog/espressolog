@@ -37,6 +37,16 @@ public:
   // Call on every fresh display reading. `touched_latch` is
   // DisplayBus::setpointTouched(); the caller clears it at pour start.
   void onReading(const DisplayBus::Reading& r, bool touched_latch) {
+    // main.cpp calls this every loop with the CURRENT reading, so the same
+    // frame arrives many times; `at_us` is what says a new frame decoded.
+    if (!have_frame || r.at_us != last_frame_us) {
+      prev_frame_mode = have_frame ? last_frame_mode : DisplayBus::Mode::NONE;
+      last_frame_mode = r.mode;
+      last_frame_us = r.at_us;
+      have_frame = true;
+    }
+    const bool timer_confirmed = r.mode == DisplayBus::Mode::TIMER
+                              && prev_frame_mode == DisplayBus::Mode::TIMER;
     if (r.mode == DisplayBus::Mode::TEMPERATURE) {
       // Only Mode::TEMPERATURE is the boiler. SETPOINT is the number being
       // dialled in, BLANK and TEXT are not temperatures at all.
@@ -44,7 +54,14 @@ public:
       last_boiler_us = r.at_us;
       have_boiler = true;
     }
-    if (r.mode == DisplayBus::Mode::TIMER) {
+    // A TIMER reading counts only when the frame before it was TIMER too.
+    // 2026-11-13: one idle frame decoded as TIMER with text " 95" between two
+    // temperature frames. Taken alone it reset the running maximum and set
+    // 9.5 s — and after a shot, while SETTLING, that would overwrite the
+    // real duration in the spool header. A real timer spans hundreds of
+    // frames (one per ~41 ms, a digit per 100 ms), so requiring two in a row
+    // costs at most the first frame of a brew.
+    if (timer_confirmed) {
       // A reading LOWER than the running maximum means the machine's timer
       // restarted, i.e. a new brew or flush began. Without this the maximum
       // is sticky and a short shot inherits a long one's duration — which
@@ -79,4 +96,8 @@ private:
   int16_t  last_boiler_dc = INT16_MIN;
   uint32_t last_boiler_us = 0;
   bool     have_boiler = false;
+  DisplayBus::Mode last_frame_mode = DisplayBus::Mode::NONE;
+  DisplayBus::Mode prev_frame_mode = DisplayBus::Mode::NONE;
+  uint32_t last_frame_us = 0;
+  bool     have_frame = false;
 };

@@ -130,6 +130,25 @@ int main() {
     printf("stale temperature is not claimed OK\n");
   }
 
+  // 8. A lone TIMER frame is not a timer. 2026-11-13: an idle frame decoded
+  //    as TIMER " 95" between two temperature frames. Arriving while
+  //    SETTLING, it reset the 28 s maximum and recorded 9.5 s. main.cpp
+  //    calls onReading every loop, so the same frame is fed repeatedly —
+  //    that must not count as a second frame.
+  {
+    MachineContextTracker m;
+    uint32_t t = 1000000;
+    m.onReading(temp(95, t), false);
+    m.onPourStart(t);
+    for (uint16_t d = 1; d <= 280; d++) m.onReading(timer(d, t + d * 100000), false);
+    t += 280 * 100000;
+    m.onReading(temp(95, t + 41000), false);       // pump stopped, back to temp
+    for (int i = 0; i < 5; i++) m.onReading(timer(95, t + 82000), false);  // glitch, re-fed
+    m.onReading(temp(95, t + 123000), false);
+    assert(m.context().machine_timer_dl == 280);
+    printf("a lone glitch TIMER frame does not overwrite the shot's timer OK\n");
+  }
+
   // 7. Display bus never on: everything stays "the machine did not say".
   {
     MachineContextTracker m;

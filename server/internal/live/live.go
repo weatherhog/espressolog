@@ -22,10 +22,13 @@ type Hub struct {
 
 	// Raw-stream journal: every device frame appended to <logDir>/YYYY-MM-DD.ndjson
 	// with a server timestamp. The scales only stream while awake (~30 min a
-	// day), so this is ~1 MB/day; the machine-display frames (on change plus a
-	// 10 s heartbeat while the machine is on) add well under that — and it turns "a shot went missing, why?"
+	// day), so this is ~1 MB/day — and it turns "a shot went missing, why?"
 	// from guesswork into a replay (firmware/test/host/replay). Best-effort:
 	// a journal write failure never touches the live fan-out.
+	//
+	// The machine-display frames (firmware/src/live_display.h: on change, at
+	// most 4 Hz, plus a 5 s heartbeat) are journalled too, for as long as the
+	// machine is on. Their share of that figure is not measured.
 	logDir  string
 	logDay  string
 	logFile *os.File

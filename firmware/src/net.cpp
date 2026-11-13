@@ -76,8 +76,8 @@ bool Net::wifiUp() const { return WiFi.status() == WL_CONNECTED; }
 
 bool Net::timeValid() const { return time(nullptr) > 1600000000; }
 
-void Net::sendLive(const char* json) {
-  if (ws_up) ws.sendTXT(json);
+bool Net::sendLive(const char* json) {
+  return ws_up && ws.sendTXT(json);
 }
 
 bool Net::liveUp() const { return ws_up; }

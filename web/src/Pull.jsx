@@ -168,7 +168,8 @@ export default function Pull({ shots, beans, activeBeanId, onIngested }) {
         }
         // The machine's own display, off the J5 tap. A screen, not a record:
         // the shot's machine facts come from the spool header. Sent on change
-        // plus a 10 s heartbeat, so 25 s of silence means the tap is gone.
+        // plus a 5 s heartbeat (firmware/src/live_display.h), so 15 s of
+        // silence means the machine is off or the tap is gone.
         if (f.ev === "machine") {
           L.machine = f;
           L.lastMachineAt = now;
@@ -204,7 +205,7 @@ export default function Pull({ shots, beans, activeBeanId, onIngested }) {
   const L = live.current;
   const yieldFresh = nowTs - L.lastYieldAt < 3000;
   const doseFresh = nowTs - L.lastDoseAt < 5000;
-  const machineFresh = L.machine && nowTs - L.lastMachineAt < 25000;
+  const machineFresh = L.machine && nowTs - L.lastMachineAt < 15000;
   // What the machine display shows, as a readout. At " 95" the display is
   // indistinguishable from the setpoint, so this is labelled as the display,
   // never as a measured boiler temperature.
@@ -214,6 +215,7 @@ export default function Pull({ shots, beans, activeBeanId, onIngested }) {
     if (m.mode === "temp") return { value: String(m.c), unit: "°C", label: "Boiler · display", color: T.ink };
     if (m.mode === "setpoint") return { value: String(m.c), unit: "°C", label: "Setting setpoint", color: T.flow };
     if (m.mode === "timer") return { value: (m.dl / 10).toFixed(1), unit: "s", label: "Machine timer", color: T.trace };
+    if (m.mode === "blank") return { value: "—", unit: "", label: "Machine display blank", color: T.inkSoft };
     return { value: m.text.trim() || "—", unit: "", label: "Machine display", color: T.trace };
   })();
   const bean = (beans || []).find((b) => b.id === activeBeanId);

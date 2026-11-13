@@ -290,8 +290,8 @@ was wrong was the claim that the code used it. Consequences are in
 `docs/phase-0-status.md` (top section) and CLAUDE.md — the costly one is
 that `store.go` stops carrying brew temperature and pre-infusion forward
 from a latched shot. The fix — latch on the interval between blank ONSETS —
-is open, and rewrites `display_test.cpp` cases 15 and 18, which assert the
-two-frame rule.
+is open, and rewrites `display_test.cpp` cases 15, 18 and 19, which assert the
+two-frame rule (19's attach-fragment guard included — keep what it guards).
 
 **Use the interval, never the blank duration.** Steam blanks average longer
 (0.550 s against a setpoint edit's 0.204 s), which looks like a cleaner
@@ -735,10 +735,11 @@ does not**: it confirms the behaviour only in the range the column is never
 sampled in.
 
 What the column *does* reliably carry: a steady ` 95` means at setpoint; a
-blink or a different value means not. **Except after steam** (2026-11-13):
-the as-built blink latch clears between post-steam blinks, so some ` 95`
-frames there decode as TEMPERATURE and can be stored while the boiler is
-hotter. That is still worth storing. Settling
+blink or a different value means not. That is still worth storing. **Except
+after steam** (2026-11-13): `adjust` (not the `setpoint_touched` latch) clears
+between post-steam blinks, so some ` 95` frames there decode as TEMPERATURE
+and can be stored while the boiler is hotter — and the designed
+onset-interval fix would make every post-steam frame do so. Settling
 whether it is ever a true boiler reading above 88 °C needs a capture with
 the boiler deliberately pulled off setpoint and allowed to recover. During a brew the
 machine takes the display over for a **shot timer in tenths of a second**

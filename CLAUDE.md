@@ -249,7 +249,7 @@ Pin map, from the traced schematic:
 
 | Net | Pin | Notes |
 |---|---|---|
-| 1Cup | PB5 | up direction of the switch. 15 s is the *default*; **this machine is set to ~10.5 s** — the operator reprogrammed it (2026-10-04). See below: these durations are user-modifiable state, not constants. **A clean 1Cup flush on 2026-11-13 ended at 11.7 s**, unexplained — `docs/phase-0-status.md`. |
+| 1Cup | PB5 | up direction of the switch. 15 s is the *default*; **this machine is set to ~10.5 s** — the operator reprogrammed it (2026-10-04). See below: these durations are user-modifiable state, not constants. **A clean 1Cup flush on 2026-11-13 ended at 11.7 s**, unexplained, and the same day's `E01` overrun hints the lever doses by volume — which would sit uneasily with the stored-timer model below that the one-shot and `BREW_GUARD_MS` reasoning use. Unreconciled; `docs/phase-0-status.md`. |
 | 2Cup | PB6 | down direction. 60 s is the *default*; **this machine is set to 45 s** — operator, 2026-10-19, set deliberately. Recorded as UNKNOWN from 2026-10-03 until then, because that capture was stopped by hand at 21.0 s and says nothing about the stored duration. User-modifiable, like 1Cup. |
 | Water | PB4 | **WIRED**, and the conductor mapping is **FUNCTIONAL since 2026-10-08**: with the 0c tap live, lever B **up** drove the line on J2 position 5 high and the firmware logged `water`. Lever B up also runs the pump — observed. Whether that water passes the flowmeter is still **unverified** — see 0d. |
 | Steam | PA10 | **WIRED**, and the conductor mapping is **FUNCTIONAL since 2026-10-08**: lever B **down** drove J2 position 2 high and the firmware logged `steam`. Lever B down also drives the heater to 165 °C — observed. |
@@ -576,8 +576,10 @@ that costs data:** `server/internal/store/store.go` stops carrying
 `setpoint_touched` is set, and later shots carry only from that shot onward
 — so a shot that picks up a steam latch leaves those two columns NULL until
 typed. Whether a shot pulled during a post-steam cooldown actually picks it
-up is a **prediction** (the blink would have to resume during SETTLING); no
-capture shows it. The decoder's tests (`display_test.cpp` cases 15 and 18)
+up is a **prediction** (the blink would have to resume after pump-off, while the
+detector is still in POURING or SETTLING); no
+capture shows it. The decoder's tests (`display_test.cpp` cases 15, 18 and 19 —
+19's attach-fragment guard included)
 assert the two-frame rule, so the fix — latch on the interval between blank
 ONSETS — rewrites them. Details in `docs/phase-0-status.md` (top section)
 and `docs/machine-display-bus.md`.
@@ -588,11 +590,14 @@ is **indistinguishable from the setpoint** — it holds ±0 °C for 57 s, which 
 PID boiler does, and it blinks ` 95` post-steam while the boiler is
 demonstrably hotter. The column is sampled immediately before a pour, i.e.
 **always in the ambiguous range**, so today it means **"at setpoint"**, not a
-verified temperature — **and not even that after steam**: some post-steam
-` 95` frames decode as TEMPERATURE (the blink latch above clears between
-them), so a shot pulled in the cooldown can store 95 while the boiler is
-hotter. Settling that needs a capture with the boiler pulled off
-setpoint and allowed to recover.
+verified temperature. Settling that needs a capture with the boiler pulled off
+setpoint and allowed to recover. **And after steam it does not mean even
+that**: `adjust` (not the `setpoint_touched` latch, which holds until pour
+start) clears between post-steam blinks, so some ` 95` frames decode as
+TEMPERATURE and a shot pulled in the cooldown can store 95 while the boiler is
+hotter. **The designed onset-interval fix makes this worse, not better** — it
+would never set `adjust` on a ~1 s steam blink, so every post-steam frame
+would decode as TEMPERATURE.
 
 **The display does NOT run its shot timer during a hot-water draw**, so
 `machine_timer_dl` cannot pick up a tap draw and `machine_context.h` needs no

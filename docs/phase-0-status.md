@@ -104,11 +104,13 @@ machine's display.)
   pour start `onPourStart()` resets the tracker's copy and `main.cpp` clears
   the bus latch. **A shot pulled during the cooldown probably can** — a
   prediction, not observed: if the blink resumes after the pump stops, it
-  re-latches during SETTLING and `machineContextPoll()` copies it into the
+  re-latches after pump-off (POURING or SETTLING) and `machineContextPoll()` copies it into the
   record. **That costs recipe data, not just a flag**: `store.go` returns
   early on a latched shot, leaving `brew_temp_c` and `preinfusion_s` NULL,
   and the latch becomes the floor later shots carry from, so they stay NULL
-  until typed. The decoder's tests (cases 15 and 18) assert the two-frame
+  until typed (in ingest order — a backlog ingested out of order after a WiFi
+  outage can stamp a carried value first; `store.go`'s KNOWN GAP). The
+  decoder's tests (cases 15, 18 and 19) assert the two-frame
   rule, so the fix rewrites them. A decoder fix is open; CLAUDE.md and
   `docs/machine-display-bus.md` say the same.
 
@@ -1215,7 +1217,7 @@ day. Note how little of it is new:**
   **−70 to −87 mV**. It must not go onto the perfboard. This has survived
   every round.
 <!-- fact:divider-j5-shunt 16.4 K -->
-- **Fit 16.4 kΩ** — two 8.2 K in series, 25 in stock. **+18 mV** at the
+- **Fit 16.4 kΩ** — two 8.2 K in series, 25 in stock at the time. **+18 mV** at the
   pessimistic floor corner, node disturbance **16.0 %** against the built
   16.8 %, loading 171 µA against 179 µA, and the clamp stays off at the
   ceiling corner with little to spare. **This is the value this repo
@@ -1299,7 +1301,7 @@ mis-comparison is the entire reason the draft escalated past the ceiling.**
   nominally, fails on tolerance stacking. It is the one value in the table
   that clears the *strict* ceiling, which is the only thing to be said for it.
 - **16.4 kΩ is the value to fit when something is fitted** — two 8.2 K in
-  series, 25 in stock, loading essentially unchanged at 171 µA against 179 µA,
+  series, 25 in stock at the time, loading essentially unchanged at 171 µA against 179 µA,
   and **16.0 % node disturbance against the built 16.8 %**, so invariant 1
   improves slightly rather than worsening.
 - **Its margin is +18 mV, and that is thin by this file's own standards.**

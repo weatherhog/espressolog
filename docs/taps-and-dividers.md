@@ -34,8 +34,9 @@
 *(J2's pair is written with a slash and J4's with a plus because that is how
 each is written everywhere else in this repo. They mean the same thing.)*
 
-**The J5 row is the one that is specified rather than built.** 8.2 K / 15 K is
-what is physically in the machine today and it fails its corner; see below.
+**The J5 row was specified before it was built.** 8.2 K / 15 K was the bench
+rig's and fails its corner; see below. The perfboard carries the specified
+value, live on the machine since 2026-11-13.
 
 **The J4 `+` conductor has no row because it gets no tap of any kind.** Its
 read-only rule lives at the top of CLAUDE.md, beside the invariants, and has
@@ -82,7 +83,7 @@ comes out at **−70 to −87 mV** (the spread is the unmetered 4.7 K pull-up's
 tolerance), worse than the −45 mV that got 150 K / 220 K rejected at J4.
 
 <!-- fact:divider-j5-shunt 16.4 K -->
-**Fit 16.4 K** — two 8.2 K in series, 25 in stock, **+18 mV** at the
+**Fit 16.4 K** — two 8.2 K in series, 25 in stock at the time, **+18 mV** at the
 pessimistic corner. That is the value this repo specified before any of this.
 
 **Two drafts of this line got it wrong in opposite directions**, both recorded

@@ -28,16 +28,16 @@ static DisplayBus::Reading temp(int16_t c, uint32_t at_us) {
 struct Rig {
   LiveDisplayGate g;
   uint32_t now_ms = 0;
-  bool up = true, send_ok = true;
-  int sends = 0;
+  bool up = true, send_ok = true, stale = false;
+  int sends = 0, attempts = 0;
   char last[128] = {0};
   void frame(const DisplayBus::Reading& r, int polls = 4, uint32_t step_ms = 10) {
     for (int i = 0; i < polls; i++) {
       char out[128];
-      if (g.poll(r, false, up, now_ms, out, sizeof(out)) && up && send_ok) {
-        g.sent(now_ms);
-        sends++;
-        strcpy(last, out);
+      if (g.poll(r, stale, up, now_ms, out, sizeof(out))) {
+        attempts++;
+        if (send_ok) { g.sent(now_ms); sends++; strcpy(last, out); }
+        else g.failed(now_ms);
       }
       now_ms += step_ms;
     }
@@ -124,6 +124,50 @@ int main() {
     for (int i = 0; i < 8; i++) { k.frame(temp(94, us)); us += 41000; }
     assert(k.sends == 2 && strstr(k.last, "\"c\":94"));
     printf("5. failed sends are retried, reconnects are sent at once OK\n");
+  }
+
+  // 5b. A reconnect resends an UNCHANGED reading at once — the latch, not the
+  //     first-send path.
+  {
+    Rig k;
+    uint32_t us = 1000000;
+    for (int i = 0; i < 5; i++) { k.frame(temp(95, us)); us += 41000; }
+    assert(k.sends == 1);
+    k.up = false;
+    k.frame(temp(95, us)); us += 41000;
+    k.up = true;
+    k.frame(temp(95, us), 1); us += 41000;      // one poll, well inside the 5 s heartbeat
+    assert(k.sends == 2);
+    printf("5b. a reconnect resends the unchanged reading at once OK\n");
+  }
+
+  // 5c. A failed send with the link still up is retried after MIN_GAP_MS,
+  //     not on every loop().
+  {
+    Rig k;
+    uint32_t us = 1000000;
+    k.send_ok = false;
+    for (int i = 0; i < 10; i++) { k.frame(temp(95, us), 10, 5); us += 41000; }  // 500 ms of polls
+    assert(k.attempts >= 2 && k.attempts <= 3);
+    printf("5c. failed sends back off instead of retrying every loop OK\n");
+  }
+
+  // 5d. After the reader goes stale, the hold applies again: a lone glitch
+  //     frame on return is not sent, however many frames preceded the gap.
+  {
+    Rig k;
+    uint32_t us = 1000000;
+    for (int i = 0; i < 10; i++) { k.frame(temp(95, us)); us += 41000; }
+    int before = k.sends;
+    k.stale = true;
+    k.frame(temp(95, us)); us += 60000000;      // machine off for a minute
+    k.stale = false;
+    k.frame(temp(20, us), 30, 10); us += 41000;  // same MODE as before the gap, one frame
+    assert(k.sends == before);                   // without the reset: sent on this frame
+    k.frame(temp(20, us)); us += 41000;
+    k.frame(temp(20, us)); us += 41000;
+    assert(k.sends == before + 1 && strstr(k.last, "\"c\":20"));
+    printf("5d. returning from stale re-earns the hold OK\n");
   }
 
   // 6. Nothing from a stale reader.

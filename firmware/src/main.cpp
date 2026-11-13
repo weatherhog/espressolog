@@ -173,9 +173,9 @@ static void liveDisplay(uint32_t now_ms) {
   if (!display_on) return;
   char frame[128];
   if (live_display.poll(display_bus.reading(), display_bus.stale(micros(), DISPLAY_FRESH_US),
-                        net.liveUp(), now_ms, frame, sizeof(frame))
-      && net.sendLive(frame)) {
-    live_display.sent(now_ms);
+                        net.liveUp(), now_ms, frame, sizeof(frame))) {
+    if (net.sendLive(frame)) live_display.sent(now_ms);
+    else                     live_display.failed(now_ms);
   }
 }
 

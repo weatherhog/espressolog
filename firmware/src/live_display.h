@@ -15,7 +15,7 @@
 // The rules:
 //   - A mode must hold for HOLD_FRAMES consecutive DECODED frames before it
 //     is sent. Counted in frames (Reading::at_us changing), not wall-clock,
-//     so a loop() stall cannot let a single glitch frame through.
+//     so re-polling one glitch frame through a loop() stall cannot pass it.
 //     2026-11-13: one idle frame decoded as TIMER " 95" between two
 //     temperature frames; forwarded, it flashed "9.5 s" on the PWA.
 //     Cost: the PrG banner (a frame or two) is never forwarded — the PWA
@@ -28,7 +28,16 @@
 //     repeated every HEARTBEAT_MS so a viewer can tell unchanged from gone.
 //   - A link that has just come up gets the current reading at once, and a
 //     frame is only marked sent when the send succeeded, so a reconnect or
-//     a dropped frame does not leave the PWA blank until the heartbeat.
+//     a dropped frame does not leave the PWA blank until the heartbeat. A
+//     failed send is retried after MIN_GAP_MS, not on every loop().
+//   - Leaving stale resets the frame count, so the hold applies again after
+//     the machine has been off.
+//
+// KNOWN LIMIT: frames are counted as this class OBSERVES them, one reading
+// per poll. After a loop() stall, two observed frames of one mode can have
+// unobserved frames of another between them and still count as consecutive.
+// The cost is a cosmetic flash on the PWA; the real fix is counting frames
+// inside DisplayBus, which MachineContextTracker needs too.
 class LiveDisplayGate {
 public:
   static constexpr uint8_t  HOLD_FRAMES   = 3;         // ~82 ms at 41 ms/frame
@@ -46,7 +55,14 @@ public:
     if (link_up && !was_up) resend_now = true;
     if (!link_up) resend_now = false;
     was_up = link_up;
-    if (r.mode == DisplayBus::Mode::NONE || stale) return false;
+    if (r.mode == DisplayBus::Mode::NONE || stale) {
+      // Forget the frame history: the first frames after the machine comes
+      // back must earn the hold again, not inherit a count (or, for BLANK, a
+      // start time) from before it went quiet.
+      have_frame = false;
+      cand_frames = 0;
+      return false;
+    }
 
     if (!have_frame || r.at_us != last_frame_us) {      // a new decoded frame
       if (have_frame && r.mode == cand_mode) {
@@ -59,12 +75,12 @@ public:
       last_frame_us = r.at_us;
       have_frame = true;
     }
-    if (r.mode != cand_mode) return false;
     const bool confirmed = r.mode == DisplayBus::Mode::BLANK
         ? (uint32_t)(r.at_us - cand_since_us) >= BLANK_HOLD_US
         : cand_frames >= HOLD_FRAMES;
     if (!confirmed) return false;
     if (!link_up) return false;
+    if (retry_wait && (int32_t)(now_ms - retry_at_ms) < 0) return false;
 
     const bool changed = !have_sent || r.mode != sent_mode
                       || memcmp(r.text, sent_text, sizeof(sent_text)) != 0;
@@ -79,12 +95,20 @@ public:
     return true;
   }
 
+  // The send was attempted and failed with the link still reported up.
+  // Without this, poll() would say "due" on every loop() until it worked.
+  void failed(uint32_t now_ms) {
+    retry_wait = true;
+    retry_at_ms = now_ms + MIN_GAP_MS;
+  }
+
   void sent(uint32_t now_ms) {
     sent_mode = pend_mode;
     memcpy(sent_text, pend_text, sizeof(sent_text));
     sent_ms = now_ms;
     have_sent = true;
     resend_now = false;
+    retry_wait = false;
   }
 
 private:
@@ -118,6 +142,8 @@ private:
 
   bool             was_up = false;
   bool             resend_now = false;
+  bool             retry_wait = false;
+  uint32_t         retry_at_ms = 0;
   bool             have_frame = false;
   uint32_t         last_frame_us = 0;
   DisplayBus::Mode cand_mode = DisplayBus::Mode::NONE;

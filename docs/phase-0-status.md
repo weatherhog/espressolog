@@ -1,7 +1,78 @@
-# Phase 0 status — as of 2026-10-19
+# Phase 0 status — as of 2026-11-13
 
 Phase 0a (scale logging, stages 0–6) is **complete and in production**.
 This file is the resume point: read it (and CLAUDE.md) before continuing.
+
+## THE PERFBOARD IS ON THE MACHINE — all seven sense inputs live, 2026-11-13
+
+The sense side of the perfboard (`docs/board-and-perfboard.md`, "Sense-side
+layout") was soldered 2026-11-09 to 11-11 and metered, and on 2026-11-13 all
+three T-pieces went on the machine — J5, then J4, then J2. **The drive side is
+not built**; nothing on the board can actuate.
+
+| Tap | Result on the machine |
+|---|---|
+| J5 | decodes: heat-up followed `20 → 66 °C` one degree at a time, ~20 frames/s, `dropped_edges=0` over minutes |
+| J4 | a 1Cup flush counted **257 pulses** and the machine ended the cycle itself, no `E01` — after the incident below |
+| J2 | each lever logged its own name, start and stop: 1cup 327/297 ms, 2cup 469/442 ms, water 340/305 ms, steam 332/287 ms; worst poll gap 75 ms, 0 events dropped |
+
+**The J4 header is at I3–K3, not G3–I3** (`#` I3, J3 empty, `T` K3), because
+two side-entry XH bodies do not fit side by side at the original positions.
+The board doc is updated; nothing else depends on the position.
+
+### SECOND INVARIANT-1 INCIDENT ON J4 — `E01`, cause found and fixed
+
+The first J4 fit faulted the machine with **`E01`** on a 1Cup flush: the
+display timer ran to **13.6 s** (this machine's 1Cup ends at ~10.5–11.7 s)
+and then showed `E01`. With `flow on`, the ESP32 counted **`pulses=0
+glitches=0`** for the whole cycle — so the `#` signal was dead **for the
+machine and the ESP32 alike**, which rules out loading and points at wiring.
+
+**Cause: the J4 branch plug had `#` (black) on K3, i.e. on the ground
+bus**, holding the flowmeter output at 0 V. `E01` is the dose-control fault,
+and a dose count that never arrives is what it reports. Confirmed by meter,
+fixed by swapping the two contacts in the branch plug, re-metered, and the
+next flush ran clean. Nothing is expected to be damaged: the sensor is open
+collector behind a 10 K pull-up, so the short drew ~0.5 mA continuously,
+its own "on" current.
+
+**Why it got through:** the pre-power table checks each conductor against
+its hole, and the build was checked by colour order instead — the correct
+branch plug **looks mirrored** against the machine-side plug, because the
+board header faces the other way. The board doc now says so beside the
+crimp-by-hole rule, and its pre-power table gains a `#` → K3 row that reads
+~320 kΩ when right and ~0 Ω when swapped.
+
+**This does not explain 2026-10-03.** That `E01` came with the logic analyser
+on `#` through 8.2 K, not a short; the two share a symptom, not a shown
+cause.
+
+**The J5 T-piece also misbehaved on its first fit** — the machine's display
+stayed **blank** and the ESP32 saw `frames=0` with both lines idle high. The
+original harness restored it. On the second fit, after the operator
+re-checked the wiring, it decoded normally. **What was wrong the first time
+is not recorded**; the suspect was `Disp-P4` landing on a branch, which would
+have grounded it, but no reading confirms that.
+
+### Two display-decoder observations, unexplained
+
+- **One idle frame decoded as `Mode::TIMER` with text `" 95"`**, between two
+  temperature frames, with no pump running. CLAUDE.md says bit 114 is set "in
+  exactly the brew-timer frames". If that frame reaches `MachineContextTracker`
+  near a shot it could put a wrong timer on the record — **unchecked**.
+- **`SETPOINT-TOUCHED` latched during a short steam start/stop**, with no
+  button touched. Steam's ~1 s blink is meant to sit outside the 600 ms
+  `BLINK_WINDOW_US`. It clears at the next pour start, so the next shot is
+  unaffected, but the flag is on the record and this is a false positive.
+
+### Firmware 0.9.6 — the machine display on the PWA
+
+Flashed 2026-11-13 from branch `claude/live-temperature` (**not yet
+merged**): the ESP32 forwards the display reading on the live stream and the
+Pull screen shows it. A screen, never a record; radio only, so invariant 2 is
+unaffected. 0.9.5 ran for minutes and no shot carries it. `display on`,
+`flow on` and `switches on` are all enabled on the board.
+
 
 ## DEPLOY THE SERVER BEFORE FLASHING THE FIRMWARE — 2026-10-12
 

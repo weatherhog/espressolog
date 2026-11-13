@@ -117,7 +117,7 @@ specified 10 nF. Both parts were wrong:
 
 - **10 nF would have stopped the bus decoding.** Against a 6.9 kΩ source it
   is a 69 µs time constant facing 36 µs clock highs
-  *(6.9 kΩ is the as-built 15 K arithmetic; at the specified 16.4 K it is
+  *(6.9 kΩ is the bench rig's 15 K arithmetic; at the specified 16.4 K it is
   7.2 kΩ and 72 µs. Worse, not better — the conclusion is unaffected, but
   do not reuse 6.9 kΩ when sizing the 470 pF.)* — the clock never
   settles, and it would have presented as a wiring fault rather than a filter
@@ -204,7 +204,7 @@ is that the analyser is fine to use on a J2 junction *on the bench*, which is
 all it is ever used for — not that the 89 mV bound is wrong.
 
 **Note it is specific to J2's high source impedance** — J5's junction is
-**5.47 kΩ** at the specified 16.4 K shunt (5.30 kΩ at the as-built 15 K) and
+**5.47 kΩ** at the specified 16.4 K shunt (5.30 kΩ at the bench rig's 15 K) and
 could never have been affected at either value.
 
 **0d rejects 150 K / 220 K and 0c keeps it — that is not a contradiction.**

@@ -18,8 +18,8 @@ not built**; nothing on the board can actuate.
 
 **The J4 header is at I3–K3, not G3–I3** (`#` I3, J3 empty, `T` K3): the two
 side-entry XH bodies did not fit side by side at the original positions —
-observed while fitting; nominal widths leave ~0.3 mm, so the mechanism is
-not measured.
+observed while fitting. The mechanism is not measured, and nominal body
+widths leave only ~0.3 mm between them.
 The board doc is updated; nothing else depends on the position.
 
 **The board runs firmware 0.9.7**, flashed 2026-11-13 from the unmerged
@@ -102,10 +102,15 @@ machine's display.)
   reach ~0.9 s, so late frames still decode as TEMPERATURE.
   **A steam cycle finished before the pour does not reach the record**: at
   pour start `onPourStart()` resets the tracker's copy and `main.cpp` clears
-  the bus latch. **A shot pulled during the cooldown can**: the blink
-  resumes after the pump stops and re-latches during SETTLING, and
-  `machineContextPoll()` copies it into the record. A decoder fix is open;
-  CLAUDE.md and `docs/machine-display-bus.md` now say the same.
+  the bus latch. **A shot pulled during the cooldown probably can** — a
+  prediction, not observed: if the blink resumes after the pump stops, it
+  re-latches during SETTLING and `machineContextPoll()` copies it into the
+  record. **That costs recipe data, not just a flag**: `store.go` returns
+  early on a latched shot, leaving `brew_temp_c` and `preinfusion_s` NULL,
+  and the latch becomes the floor later shots carry from, so they stay NULL
+  until typed. The decoder's tests (cases 15 and 18) assert the two-frame
+  rule, so the fix rewrites them. A decoder fix is open; CLAUDE.md and
+  `docs/machine-display-bus.md` say the same.
 
 ### Firmware 0.9.7 — the machine display on the PWA
 
@@ -686,8 +691,10 @@ flush with the yield scale disconnected so nothing is spooled, then read. Low
   unplugged, and do not read a count taken in that state.
 
 Also seen: hot-plugging the J5 tap on a live bus can latch
-`setpoint_touched`, because the garbage edges mimic the ~410 ms blink. It
-clears at the next pour start.
+`setpoint_touched`. *(This said "because the garbage edges mimic the ~410 ms
+blink" until 2026-11-13; the decoder latches on ANY two blank frames within
+600 ms, so no rhythm is needed — see the top section.)* It clears at the
+next pour start.
 
 ## 0c and 0d firmware — written 2026-10-07, bench-testable without the machine
 
@@ -1115,7 +1122,7 @@ established**, so both columns bind:
 
 | shunt | **OD corner** (pu 1 %) | **OD corner** (pu 5 %) | **PP worst** | vs flat 3.600 V | ~~vs 3.435 V~~ † | disturbance |
 |---|---|---|---|---|---|---|
-| **15 kΩ — AS BUILT** | **−70 mV ✗** | **−87 mV ✗** | 3.418 V | +182 mV | **+17 mV** | 16.8 % |
+| **15 kΩ — AS BUILT on the bench rig** | **−70 mV ✗** | **−87 mV ✗** | 3.418 V | +182 mV | **+17 mV** | 16.8 % |
 | 16.4 kΩ — the specified remedy | **+35 mV** | **+18 mV** | 3.523 V | +77 mV | **−88 mV** | 16.0 % |
 | 17.4 kΩ | +104 mV | +88 mV | 3.591 V | **+9 mV** | −156 mV | 15.5 % |
 | 18 kΩ | +144 mV | +127 mV | 3.629 V | **−29 mV** | −194 mV | 15.2 % |
@@ -1156,7 +1163,7 @@ does not conduct meaningfully below ~0.4 V"*.
 
 | shunt | PP corner | over VDD nom | over VDD at −5 % | past ~0.4 V? |
 |---|---|---|---|---|
-| 15 kΩ (as built) | 3.418 V | +118 mV | +283 mV | no |
+| 15 kΩ (bench rig) | 3.418 V | +118 mV | +283 mV | no |
 | **16.4 kΩ** | 3.523 V | +223 mV | **+388 mV** | **no — by 12 mV** |
 | 17.4 kΩ | 3.591 V | +291 mV | +456 mV | **yes** |
 | 18 kΩ | 3.629 V | +329 mV | +494 mV | **yes** |
@@ -1204,7 +1211,7 @@ draft stated it as though the arithmetic forced it.
 **THE SOBER CONCLUSION, after this section reversed itself three times in one
 day. Note how little of it is new:**
 
-- **The floor failure is the solid finding.** As built, 15 kΩ sits at
+- **The floor failure is the solid finding.** As built on the bench rig, 15 kΩ sits at
   **−70 to −87 mV**. It must not go onto the perfboard. This has survived
   every round.
 <!-- fact:divider-j5-shunt 16.4 K -->
@@ -1860,7 +1867,7 @@ unidentified, both marked "do not buy yet".)*
 
 | | |
 |---|---|
-| J5 shunt | **16.4 K** (2 × 8.2 K), the as-built 15 K superseded |
+| J5 shunt | **16.4 K** (2 × 8.2 K), the bench rig's 15 K superseded — built on the perfboard, live 2026-11-13 |
 | Board count | **one in service**, second as spare — the deciding argument is that two boards make J2 pos 1 hop between them |
 | Box | **printed LAST**, after the board is laid out. The lead-time premise that forced it early was stale |
 | One-shot part | **74HC221**, never the '123 |

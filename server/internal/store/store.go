@@ -309,7 +309,12 @@ func defaultRecipe(tx *sql.Tx, epochID any, startedAt time.Time, thisShotEditedA
 	// start and shot completion" — while the display is showing the brew
 	// timer. An edit made between shots, which is the realistic case, is
 	// latched and then cleared at the next pour start and never lands on any
-	// row. In practice this guard therefore fires rarely.
+	// row. In practice this guard therefore fires rarely — *for real edits*.
+	// 2026-11-13: the decoder latches on ANY two blank frames within
+	// BLINK_WINDOW_US, so every steam cycle latches too (CLAUDE.md, the
+	// display-bus blink paragraph). A shot whose SETTLING overlaps a
+	// post-steam blink would reach this guard and lose its carried
+	// brew_temp_c / preinfusion_s — predicted, not yet observed.
 	//
 	// That is a firmware-side question, not a reason to drop the guard: when
 	// the flag IS set it is the machine's own word that a setting moved, and

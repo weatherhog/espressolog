@@ -103,8 +103,9 @@ Violating any of these is a bug, not a design choice.
 
    **2026-11-13: the J5 T-piece's first fit blanked the machine's display**
    (cause unrecorded — `docs/phase-0-status.md`). An invariant-1 incident if
-   the board side caused it, a harness incident if the T-piece's
-   pass-through did; nobody can now say which.
+   the branch or the board side caused it, a harness incident if the
+   T-piece's pass-through did (the harness is the next paragraph's subject);
+   nobody can now say which.
 
    **This rule is about our board. The harness is NOT covered and is now
    the larger risk** — see `docs/phase-0-plan.md`. **From PHASE 0 onward**
@@ -248,7 +249,7 @@ Pin map, from the traced schematic:
 
 | Net | Pin | Notes |
 |---|---|---|
-| 1Cup | PB5 | up direction of the switch. 15 s is the *default*; **this machine is set to ~10.5 s** — the operator reprogrammed it (2026-10-04). See below: these durations are user-modifiable state, not constants. |
+| 1Cup | PB5 | up direction of the switch. 15 s is the *default*; **this machine is set to ~10.5 s** — the operator reprogrammed it (2026-10-04). See below: these durations are user-modifiable state, not constants. **A clean 1Cup flush on 2026-11-13 ended at 11.7 s**, unexplained — `docs/phase-0-status.md`. |
 | 2Cup | PB6 | down direction. 60 s is the *default*; **this machine is set to 45 s** — operator, 2026-10-19, set deliberately. Recorded as UNKNOWN from 2026-10-03 until then, because that capture was stopped by hand at 21.0 s and says nothing about the stored duration. User-modifiable, like 1Cup. |
 | Water | PB4 | **WIRED**, and the conductor mapping is **FUNCTIONAL since 2026-10-08**: with the 0c tap live, lever B **up** drove the line on J2 position 5 high and the firmware logged `water`. Lever B up also runs the pump — observed. Whether that water passes the flowmeter is still **unverified** — see 0d. |
 | Steam | PA10 | **WIRED**, and the conductor mapping is **FUNCTIONAL since 2026-10-08**: lever B **down** drove J2 position 2 high and the firmware logged `steam`. Lever B down also drives the heater to 165 °C — observed. |
@@ -304,9 +305,11 @@ either way; the grades are not interchangeable.
 
 - **Steam drives the boiler to ~165 °C**, ~70 °C off setpoint. That lands
   directly on `boiler_temp_start_dc` (spool v2) and silently invalidates an
-  0f run, exactly as `PrG` does. The blink signature will not catch it —
-  that detects a *user* editing the setpoint, not the machine moving its
-  own target.
+  0f run, exactly as `PrG` does. The blink signature was meant to catch only
+  a *user* editing the setpoint, not the machine moving its own target —
+  **but as built it fires on every steam cycle too** (2026-11-13, see the
+  blink paragraph in the display-bus entry), so `setpoint_touched` does not
+  mean "a user edited" today.
 
   **The display DOES detect it** — it blinks `165` through the cycle then
   `95` while cooling, which is a better signal than a switch tap because it
@@ -494,7 +497,7 @@ far end open" — which is how the bench T-piece is built.)*
 
 <!-- fact:divider-j5-shunt@1 16.4 K -->
 **`ESD1` and `ESD4` are 8.2 K series + 16.4 K shunt.** The shunt is two
-8.2 K in series, and there are 25 of those in stock. **The perfboard carries it, live on the
+8.2 K in series (25 were in stock before the build). **The perfboard carries it, live on the
 machine since 2026-11-13.** The **bench rig's 15 K is superseded** — it fails its
 tolerance corner at −70 to −87 mV, worse than the −45 mV that got 150 K / 220 K
 rejected at J4. 16.4 K comes out at **+18 mV**.
@@ -546,9 +549,9 @@ when it matters.
 - **bit 114 is the middle digit's DECIMAL POINT** — D7 of the AS1115's
   digit-1 byte — lit in exactly the brew-timer frames (the display reads
   `16.9`) and clear in every temperature frame, so `100` is never
-  ambiguous. One idle frame on 2026-11-13 decoded as TIMER `" 95"`, cause
-  open (`docs/phase-0-status.md`). *(called a "TIMER-MODE FLAG" until 2026-10-31; functionally it
-  still is one)*
+  ambiguous *(called a "TIMER-MODE FLAG" until 2026-10-31; functionally it
+  still is one)*. One idle frame on 2026-11-13 nonetheless decoded as TIMER
+  `" 95"`, cause open (`docs/phase-0-status.md`).
 - **the buttons**, as bits 49 (LEFT, enters `PrG` then decreases) and 58
   (RIGHT, increases) of the 67-bit frame — free, same two wires
 - **`PrG` means the brew temperature is being changed**, which silently
@@ -567,9 +570,17 @@ shorter than a setpoint blank, so duration would misfire. This is the design.
 **THE CODE DOES NOT IMPLEMENT IT — found 2026-11-13.** `display.cpp` latches
 `adjust`/`touched` when two BLANK FRAMES arrive within `BLINK_WINDOW_US`, and
 frames are ~41 ms apart, so **any blank lasting two frames latches — every
-steam cycle does**. The blink period is never measured. Consequences and the
-open fix are in `docs/phase-0-status.md` (top section) and
-`docs/machine-display-bus.md`.
+steam cycle does**. The blink period is never measured. **The consequence
+that costs data:** `server/internal/store/store.go` stops carrying
+`brew_temp_c` and `preinfusion_s` forward from a shot whose
+`setpoint_touched` is set, and later shots carry only from that shot onward
+— so a shot that picks up a steam latch leaves those two columns NULL until
+typed. Whether a shot pulled during a post-steam cooldown actually picks it
+up is a **prediction** (the blink would have to resume during SETTLING); no
+capture shows it. The decoder's tests (`display_test.cpp` cases 15 and 18)
+assert the two-frame rule, so the fix — latch on the interval between blank
+ONSETS — rewrites them. Details in `docs/phase-0-status.md` (top section)
+and `docs/machine-display-bus.md`.
 
 **WHAT `boiler_temp_start_c` MEANS IS NARROWER THAN MIGRATION 008 CLAIMS.**
 Below ~88 °C the display tracks the real boiler and jitters ±1 °C. At ` 95` it
@@ -577,7 +588,10 @@ is **indistinguishable from the setpoint** — it holds ±0 °C for 57 s, which 
 PID boiler does, and it blinks ` 95` post-steam while the boiler is
 demonstrably hotter. The column is sampled immediately before a pour, i.e.
 **always in the ambiguous range**, so today it means **"at setpoint"**, not a
-verified temperature. Settling that needs a capture with the boiler pulled off
+verified temperature — **and not even that after steam**: some post-steam
+` 95` frames decode as TEMPERATURE (the blink latch above clears between
+them), so a shot pulled in the cooldown can store 95 while the boiler is
+hotter. Settling that needs a capture with the boiler pulled off
 setpoint and allowed to recover.
 
 **The display does NOT run its shot timer during a hot-water draw**, so
@@ -1077,7 +1091,7 @@ shot boundaries, flush events, and a true `first_drip_ms`.
 
 **TWO FITS HAVE CAUSED AN INVARIANT-1 VIOLATION — 2026-10-03 and 2026-11-13
 — read `docs/phase-0-status.md` before touching J4.** The second, a branch
-plug with `#` on ground, is described below. A tap on
+plug with `#` on ground, is described below. **The first (2026-10-03):** a tap on
 J4 made the machine fault with `E01` while a 2Cup cycle was running;
 disconnecting it and power-cycling cleared the fault. **Nothing is known to have been
 damaged — the analyser's D1 input has not been re-checked**, and the

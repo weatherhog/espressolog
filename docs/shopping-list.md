@@ -640,9 +640,9 @@ because the machine caught it:
   treating this as settled history.
 <!-- fact:divider-j5-shunt 16.4 K -->
 - **0e is 8.2 K / 15 K as built on the bench rig, and that FAILS its corner (−70 to −87 mV).
-  The perfboard carries 8.2 K / 16.4 K, live on the machine since 2026-11-13.
   Fit 8.2 K / 16.4 K** — two 8.2 K in series for the shunt, 25 in stock, no
-  new parts. **+18 mV** at the pessimistic floor corner, and the clamp is not
+  new parts. *(Done: fitted on the perfboard, live on the machine since
+  2026-11-13; the stock count predates the build.)* **+18 mV** at the pessimistic floor corner, and the clamp is not
   conducting at the ceiling corner. *(A draft said "buy nothing yet" on the
   grounds that no value satisfied both ends; that rested on treating VDD + 0.3
   as a hard wall, when the 8.2 K series bounds clamp current — which this repo

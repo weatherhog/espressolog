@@ -84,9 +84,12 @@ public:
 
   // While the setpoint is being adjusted the whole display blinks: runs of
   // ~5 blank frames 41 ms apart, a value, then blank again ~250 ms later.
-  // Two blank frames this close together mean a blink; a single one does
-  // not, which is what separates adjust mode from the lone blank a cold
-  // boot emits before the first reading.
+  // Two blank frames this close together are TAKEN to mean a blink; a single
+  // one is not, which separates adjust mode from the lone blank a cold boot
+  // emits before the first reading. KNOWN DEFECT (2026-11-13): consecutive
+  // frames of ONE blank are ~41 ms apart, so any blank lasting two frames
+  // latches — every steam cycle does. The design measures the interval
+  // between blank onsets (docs/machine-display-bus.md); this does not.
   static constexpr uint32_t BLINK_WINDOW_US = 600000;
 
   struct Reading {

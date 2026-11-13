@@ -34,8 +34,9 @@
 *(J2's pair is written with a slash and J4's with a plus because that is how
 each is written everywhere else in this repo. They mean the same thing.)*
 
-**The J5 row is the one that is specified rather than built.** 8.2 K / 15 K is
-what is physically in the machine today and it fails its corner; see below.
+**The J5 row was specified before it was built.** 8.2 K / 15 K was the bench
+rig's and fails its corner; see below. The perfboard carries the specified
+value, live on the machine since 2026-11-13.
 
 **The J4 `+` conductor has no row because it gets no tap of any kind.** Its
 read-only rule lives at the top of CLAUDE.md, beside the invariants, and has
@@ -77,12 +78,12 @@ both hazards, but both are flagged as such.)
 **So: the 8.2 K / 15 K divider is correct on `ESD1` and `ESD4`** — correct as
 against the 8.2 K / 8.2 K that was mistakenly fitted, which is the error this
 passage was written about. **It is NOT the right value for the perfboard:**
-2026-10-19 ran its tolerance corner for the first time and the as-built 15 K
+2026-10-19 ran its tolerance corner for the first time and the bench rig's 15 K
 comes out at **−70 to −87 mV** (the spread is the unmetered 4.7 K pull-up's
 tolerance), worse than the −45 mV that got 150 K / 220 K rejected at J4.
 
 <!-- fact:divider-j5-shunt 16.4 K -->
-**Fit 16.4 K** — two 8.2 K in series, 25 in stock, **+18 mV** at the
+**Fit 16.4 K** — two 8.2 K in series, 25 in stock at the time, **+18 mV** at the
 pessimistic corner. That is the value this repo specified before any of this.
 
 **Two drafts of this line got it wrong in opposite directions**, both recorded
@@ -117,7 +118,7 @@ specified 10 nF. Both parts were wrong:
 
 - **10 nF would have stopped the bus decoding.** Against a 6.9 kΩ source it
   is a 69 µs time constant facing 36 µs clock highs
-  *(6.9 kΩ is the as-built 15 K arithmetic; at the specified 16.4 K it is
+  *(6.9 kΩ is the bench rig's 15 K arithmetic; at the specified 16.4 K it is
   7.2 kΩ and 72 µs. Worse, not better — the conclusion is unaffected, but
   do not reuse 6.9 kΩ when sizing the 470 pF.)* — the clock never
   settles, and it would have presented as a wiring fault rather than a filter
@@ -204,7 +205,7 @@ is that the analyser is fine to use on a J2 junction *on the bench*, which is
 all it is ever used for — not that the 89 mV bound is wrong.
 
 **Note it is specific to J2's high source impedance** — J5's junction is
-**5.47 kΩ** at the specified 16.4 K shunt (5.30 kΩ at the as-built 15 K) and
+**5.47 kΩ** at the specified 16.4 K shunt (5.30 kΩ at the bench rig's 15 K) and
 could never have been affected at either value.
 
 **0d rejects 150 K / 220 K and 0c keeps it — that is not a contradiction.**

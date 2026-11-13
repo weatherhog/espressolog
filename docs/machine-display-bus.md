@@ -263,21 +263,35 @@ arriving and being discarded. `Disp-P4` can stay an unterminated test
 point.
 
 **THE DISPLAY BLINKS FOR TWO DIFFERENT REASONS, AT DIFFERENT RATES.** Only
-one of them is a setpoint edit, and the firmware distinguishes them by
-period alone — so the period is load-bearing:
+one of them is a setpoint edit, and the design distinguishes them by period
+alone — so the period is load-bearing. **The firmware does not yet implement
+that design**; see below the table:
 
 | State | blank-to-blank | `display.cpp` |
 |---|---|---|
 | **Setpoint being adjusted** | **~410 ms** (2.44 Hz, 0.204–0.210 s per half-cycle) | latches `setpoint_touched` ✓ |
-| **Steam, and cooling afterwards** | **1.021–1.101 s** (measured over 100 intervals) | does **not** latch ✓ |
+| **Steam, and cooling afterwards** | **1.021–1.101 s** (measured over 100 intervals) | ~~does **not** latch ✓~~ **DOES latch — see below** |
 | `BLINK_WINDOW_US` | **600 ms**, sitting between them | |
 
 The guard band is **414 → 1020 ms**, and 600 ms sits inside it with
-**186 ms below and 420 ms above**. So steaming does not produce a false
-`setpoint_touched`, and a setpoint edit still latches. **The threshold was
-chosen before anyone knew the steam blink existed**; this is the
-measurement that justifies it rather than luck.
+**186 ms below and 420 ms above**. So a decoder that measured the
+blank-to-blank interval would not latch on steam, and would on a setpoint
+edit. **The threshold was chosen before anyone knew the steam blink
+existed**; this is the measurement that justifies it rather than luck.
 `2026-10-05-display-bus-steam.sr`, 102 blank onsets.
+
+**`display.cpp` DOES NOT MEASURE THAT INTERVAL — found 2026-11-13, when a
+short steam start/stop latched `SETPOINT-TOUCHED` with no button touched.**
+It latches when two BLANK FRAMES arrive within `BLINK_WINDOW_US`, and frames
+are ~41 ms apart, so any blank lasting two frames latches; steam's shortest
+blank (0.156 s) is about four. **Every steam cycle latches.** This table
+said "does not latch ✓" until then — the measurement above is right; what
+was wrong was the claim that the code used it. Consequences are in
+`docs/phase-0-status.md` (top section) and CLAUDE.md — the costly one is
+that `store.go` stops carrying brew temperature and pre-infusion forward
+from a latched shot. The fix — latch on the interval between blank ONSETS —
+is open, and rewrites `display_test.cpp` cases 15, 18 and 19, which assert the
+two-frame rule (19's attach-fragment guard included — keep what it guards).
 
 **Use the interval, never the blank duration.** Steam blanks average longer
 (0.550 s against a setpoint edit's 0.204 s), which looks like a cleaner
@@ -291,7 +305,8 @@ blink regimes. Harmless (it is also > 600 ms) but it is why the quoted
 
 While adjusting, the display blanks **entirely** (all three fields zero)
 and comes back. The steam blink does the same thing more slowly, which is
-why period is the only discriminator available.
+why period is the only discriminator available — and why the as-built
+two-frame rule cannot discriminate at all.
 
 **What blinking means is "showing a target it has not reached":** during a
 steam cycle the display blinks **`165`**, and after steam is released it
@@ -720,7 +735,11 @@ does not**: it confirms the behaviour only in the range the column is never
 sampled in.
 
 What the column *does* reliably carry: a steady ` 95` means at setpoint; a
-blink or a different value means not. That is still worth storing. Settling
+blink or a different value means not. That is still worth storing. **Except
+after steam** (2026-11-13): `adjust` (not the `setpoint_touched` latch) clears
+between post-steam blinks, so some ` 95` frames there decode as TEMPERATURE
+and can be stored while the boiler is hotter — and the designed
+onset-interval fix would make every post-steam frame do so. Settling
 whether it is ever a true boiler reading above 88 °C needs a capture with
 the boiler deliberately pulled off setpoint and allowed to recover. During a brew the
 machine takes the display over for a **shot timer in tenths of a second**

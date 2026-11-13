@@ -189,6 +189,13 @@ most-logged error committed against its own warning.
 a large improvement on 345-480 ms, and still the first latching evidence this
 project has. It is **not** enough to choose the RC.
 
+**Added 2026-11-13, on the perfboard, all four lines**: 1Cup 327/297 ms, 2Cup
+469/442 ms, Water 340/305 ms, Steam 332/287 ms (start/stop press of each).
+Ordinary presses by hand, so they widen nothing at the short end. **The
+worst poll gap that session was 75 ms**, above the 42–57 ms the
+quantisation argument above assumes — so a reading there spans a wider true
+width than that argument states.
+
 <!-- fact:oneshot-target@1 250 ms -->
 **THE PULSE TARGET IS ~250 ms — DECIDED 2026-10-31**, and the warning that
 motivated the question still stands: *a one-shot that is too short produces

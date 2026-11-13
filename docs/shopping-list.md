@@ -596,7 +596,7 @@ tighter than they need to be for the sake of a few euro.
 
 | Value | Qty | Where |
 |---|---|---|
-| 8.2 kΩ | 13 *(9 until 2026-11-05, which omitted the four base resistors; 10 with `Disp-P4` before that)* | **LED-driver base resistor ×4** (`docs/board-and-perfboard.md`, LED-driver cells); 0e series leg (**×2** — `ESD1`, `ESD4`; ×3 with `Disp-P4` until 2026-11-05), **on the board below the J5 header, for the build** (2026-11-05; the bench rig still has them in the T-piece); **0e shunt legs, ×4 — two in series per leg to make 16.4 kΩ, on `ESD1` and `ESD4` only** (new 2026-10-19, replaces the 15 kΩ); 0b analyser tap (×3). **25 in stock** — 13 needed, plus the J4 analyser one (row below). |
+| 8.2 kΩ | 13 *(9 until 2026-11-05, which omitted the four base resistors; 10 with `Disp-P4` before that)* | **LED-driver base resistor ×4** (`docs/board-and-perfboard.md`, LED-driver cells); 0e series leg (**×2** — `ESD1`, `ESD4`; ×3 with `Disp-P4` until 2026-11-05), **on the board below the J5 header, for the build** (2026-11-05; the bench rig still has them in the T-piece); **0e shunt legs, ×4 — two in series per leg to make 16.4 kΩ, on `ESD1` and `ESD4` only** (new 2026-10-19, replaces the 15 kΩ); 0b analyser tap (×3). **25 in stock before the build** — 13 needed, plus the J4 analyser one (row below); recount before ordering. |
 | 15 kΩ | 10 | **SUPERSEDED for 0e — do not fit.** Was the 0e divider ground leg; it fails its tolerance corner at −70 to −87 mV (2026-10-19). **Use 2 × 8.2 kΩ in series = 16.4 kΩ** per leg (**×2** — `Disp-P4` stays unterminated). Both in stock, no new parts. |
 | **10 kΩ** | **25** | **'221 input pulls, ×7 — five `A` pull-ups to 3V3 (four drive channels and the gate) and two `R` pull-downs (GPIO38, the gate's `R̅`, and the drive channels' tied `R̅` net) (`docs/phase-0-plan.md`, "An arm gate"; ×5 from 2026-10-29 until the gate, 2026-10-30).** **25 held, COUNTED by the operator 2026-10-29**, which is the grade `docs/taps-and-dividers.md` asks for ("in stock should mean counted"). Seven needed, eighteen spare *(five and twenty until 2026-10-30)*. *(This cell read "in stock per the operator — count not taken" for part of that day, and a draft before it claimed five of the 15 kΩ bag instead; 10 K is held and is the conventional value, so the 15 K stay with their 0e supersession note.)* |
 | 150 kΩ | 10 | 0c switch divider, series leg (**×4** — all four J2 lines), **on the board at the J2 header, for the build** (decided 2026-11-03, so the drive reaches the raw lines; the bench rig still has them in the T-piece). **In stock 2026-10-07.** |
@@ -639,9 +639,10 @@ because the machine caught it:
   out. The mechanism is **not** established; see the 0d entry before
   treating this as settled history.
 <!-- fact:divider-j5-shunt 16.4 K -->
-- **0e is 8.2 K / 15 K as built, and that FAILS its corner (−70 to −87 mV).
+- **0e is 8.2 K / 15 K as built on the bench rig, and that FAILS its corner (−70 to −87 mV).
   Fit 8.2 K / 16.4 K** — two 8.2 K in series for the shunt, 25 in stock, no
-  new parts. **+18 mV** at the pessimistic floor corner, and the clamp is not
+  new parts. *(Done: fitted on the perfboard, live on the machine since
+  2026-11-13; the stock count predates the build.)* **+18 mV** at the pessimistic floor corner, and the clamp is not
   conducting at the ceiling corner. *(A draft said "buy nothing yet" on the
   grounds that no value satisfied both ends; that rested on treating VDD + 0.3
   as a hard wall, when the 8.2 K series bounds clamp current — which this repo

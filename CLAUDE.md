@@ -75,7 +75,7 @@ Violating any of these is a bug, not a design choice.
    arithmetic again (0.80 V / 4.7 K).
 
    **AND IT WAS PINNED TO A SHUNT THIS FILE TELLS YOU NOT TO FIT, until
-   2026-10-19.** 4.16 V / 17 % / 179 µA is the **as-built 15 K** (8.2 + 15
+   2026-10-19.** 4.16 V / 17 % / 179 µA is the **bench rig's 15 K** (8.2 + 15
    against the 4.7 K pull-up). The display-bus entry below, together with
    `docs/taps-and-dividers.md` and `docs/shopping-list.md`, supersedes that
    in favour of **16.4 K**, which fails no tolerance corner — so the
@@ -84,12 +84,12 @@ Violating any of these is a bug, not a design choice.
 
    | J5 shunt | line sits at | disturbance | current |
    |---|---|---|---|
-   | 15 K — as built, superseded | 4.16 V | 16.8 % | 179 µA |
-   | **16.4 K — specified** | **4.20 V** | **16.0 %** | **171 µA** |
+   | 15 K — bench rig, superseded | 4.16 V | 16.8 % | 179 µA |
+   | **16.4 K — specified, and built on the perfboard (live 2026-11-13)** | **4.20 V** | **16.0 %** | **171 µA** |
 
    Nothing in the clause turns on which: J5 is the large disturbance either
    way, and that is the whole reason it is named here. The headline figure is
-   the specified build because that is what a reader is about to solder.
+   the specified build because that is what is soldered — the perfboard carries it.
    *(17 % was the 15 K number rounded; 16.8 % is what it actually is.)*
 
    J2's ~1 mV is
@@ -100,6 +100,11 @@ Violating any of these is a bug, not a design choice.
    "microamps against the machine's own milliamps", which is false for J5.
    The threshold is *does the machine still read what it would have read*,
    not an absolute current.
+
+   **2026-11-13: the J5 T-piece's first fit blanked the machine's display**
+   (cause unrecorded — `docs/phase-0-status.md`). An invariant-1 incident if
+   the board side caused it, a harness incident if the T-piece's
+   pass-through did; nobody can now say which.
 
    **This rule is about our board. The harness is NOT covered and is now
    the larger risk** — see `docs/phase-0-plan.md`. **From PHASE 0 onward**
@@ -489,7 +494,8 @@ far end open" — which is how the bench T-piece is built.)*
 
 <!-- fact:divider-j5-shunt@1 16.4 K -->
 **`ESD1` and `ESD4` are 8.2 K series + 16.4 K shunt.** The shunt is two
-8.2 K in series, and there are 25 of those in stock. The **as-built 15 K is superseded** — it fails its
+8.2 K in series, and there are 25 of those in stock. **The perfboard carries it, live on the
+machine since 2026-11-13.** The **bench rig's 15 K is superseded** — it fails its
 tolerance corner at −70 to −87 mV, worse than the −45 mV that got 150 K / 220 K
 rejected at J4. 16.4 K comes out at **+18 mV**.
 
@@ -540,8 +546,8 @@ when it matters.
 - **bit 114 is the middle digit's DECIMAL POINT** — D7 of the AS1115's
   digit-1 byte — lit in exactly the brew-timer frames (the display reads
   `16.9`) and clear in every temperature frame, so `100` is never
-  ambiguous *(but one idle frame decoded as TIMER `" 95"` on 2026-11-13,
-  cause open — `docs/phase-0-status.md`)* *(called a "TIMER-MODE FLAG" until 2026-10-31; functionally it
+  ambiguous. One idle frame on 2026-11-13 decoded as TIMER `" 95"`, cause
+  open (`docs/phase-0-status.md`). *(called a "TIMER-MODE FLAG" until 2026-10-31; functionally it
   still is one)*
 - **the buttons**, as bits 49 (LEFT, enters `PrG` then decreases) and 58
   (RIGHT, increases) of the 67-bit frame — free, same two wires
@@ -556,7 +562,14 @@ LOAD-BEARING.** A setpoint edit blinks at **~410 ms**; steam and the cooldown
 after it blink at **1.021–1.101 s**. `BLINK_WINDOW_US` is **600 ms**, sitting
 in a 414→1020 ms guard band with 186 ms below and 420 ms above. **Use the
 interval, never the blank duration** — steam's shortest blank is 0.156 s,
-shorter than a setpoint blank, so duration would misfire. This is deliberate.
+shorter than a setpoint blank, so duration would misfire. This is the design.
+
+**THE CODE DOES NOT IMPLEMENT IT — found 2026-11-13.** `display.cpp` latches
+`adjust`/`touched` when two BLANK FRAMES arrive within `BLINK_WINDOW_US`, and
+frames are ~41 ms apart, so **any blank lasting two frames latches — every
+steam cycle does**. The blink period is never measured. Consequences and the
+open fix are in `docs/phase-0-status.md` (top section) and
+`docs/machine-display-bus.md`.
 
 **WHAT `boiler_temp_start_c` MEANS IS NARROWER THAN MIGRATION 008 CLAIMS.**
 Below ~88 °C the display tracks the real boiler and jitters ±1 °C. At ` 95` it
@@ -1062,8 +1075,9 @@ shot boundaries, flush events, and a true `first_drip_ms`.
 
 ### 0d — flowmeter
 
-**FIRST ATTEMPT CAUSED AN INVARIANT-1 VIOLATION (2026-10-03) — read
-`docs/phase-0-status.md` before touching J4.** A tap on
+**TWO FITS HAVE CAUSED AN INVARIANT-1 VIOLATION — 2026-10-03 and 2026-11-13
+— read `docs/phase-0-status.md` before touching J4.** The second, a branch
+plug with `#` on ground, is described below. A tap on
 J4 made the machine fault with `E01` while a 2Cup cycle was running;
 disconnecting it and power-cycling cleared the fault. **Nothing is known to have been
 damaged — the analyser's D1 input has not been re-checked**, and the
@@ -1258,8 +1272,8 @@ the T-piece — **on the board for the build, from 2026-11-05** — 15 K shunt a
 (**16.4 K on the perfboard, live on the machine since 2026-11-13**), `ESD4`→GPIO4, `ESD1`→GPIO5, `VSS`
 ground direct, `Disp-P4` unterminated.
 
-**The as-built 15 K shunt decodes and FAILS its tolerance corner**, and the
-specified value is above, in the display-bus entry — stated once, not twice.
+**The bench rig's 15 K shunt decoded and FAILS its tolerance corner**, and the
+specified value — what the perfboard carries — is above, in the display-bus entry — stated once, not twice.
 The corner tables are in `docs/taps-and-dividers.md` and
 `docs/phase-0-status.md`.
 

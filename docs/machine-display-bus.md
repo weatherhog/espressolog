@@ -269,12 +269,23 @@ period alone — so the period is load-bearing:
 | State | blank-to-blank | `display.cpp` |
 |---|---|---|
 | **Setpoint being adjusted** | **~410 ms** (2.44 Hz, 0.204–0.210 s per half-cycle) | latches `setpoint_touched` ✓ |
-| **Steam, and cooling afterwards** | **1.021–1.101 s** (measured over 100 intervals) | does **not** latch ✓ |
+| **Steam, and cooling afterwards** | **1.021–1.101 s** (measured over 100 intervals) | ~~does **not** latch ✓~~ **DOES latch — see below** |
 | `BLINK_WINDOW_US` | **600 ms**, sitting between them | |
 
 The guard band is **414 → 1020 ms**, and 600 ms sits inside it with
-**186 ms below and 420 ms above**. So steaming does not produce a false
-`setpoint_touched`, and a setpoint edit still latches. **The threshold was
+**186 ms below and 420 ms above**. So a decoder that measured the
+blank-to-blank interval would not latch on steam, and would on a setpoint
+edit.
+
+**`display.cpp` DOES NOT MEASURE THAT INTERVAL — found 2026-11-13, when a
+short steam start/stop latched `SETPOINT-TOUCHED` with no button touched.**
+It latches when two BLANK FRAMES arrive within `BLINK_WINDOW_US`, and frames
+are ~41 ms apart, so any blank lasting two frames latches; steam's shortest
+blank (0.156 s) is about four. **Every steam cycle latches.** This table
+said "does not latch ✓" until then — the measurement above is right; what
+was wrong was the claim that the code used it. Consequences are in
+`docs/phase-0-status.md` (top section); the fix — latch on the interval
+between blank ONSETS — is open. **The threshold was
 chosen before anyone knew the steam blink existed**; this is the
 measurement that justifies it rather than luck.
 `2026-10-05-display-bus-steam.sr`, 102 blank onsets.

@@ -77,7 +77,7 @@ both hazards, but both are flagged as such.)
 **So: the 8.2 K / 15 K divider is correct on `ESD1` and `ESD4`** — correct as
 against the 8.2 K / 8.2 K that was mistakenly fitted, which is the error this
 passage was written about. **It is NOT the right value for the perfboard:**
-2026-10-19 ran its tolerance corner for the first time and the as-built 15 K
+2026-10-19 ran its tolerance corner for the first time and the bench rig's 15 K
 comes out at **−70 to −87 mV** (the spread is the unmetered 4.7 K pull-up's
 tolerance), worse than the −45 mV that got 150 K / 220 K rejected at J4.
 

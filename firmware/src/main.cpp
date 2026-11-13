@@ -14,7 +14,7 @@
 #include "brew_guard.h"
 #include <driver/gpio.h>
 
-const char* FIRMWARE_VERSION = "0.9.5";
+const char* FIRMWARE_VERSION = "0.9.6";
 const char* DETECTOR_VERSION = "0a.6";
 
 static ScaleManager scales;
@@ -174,6 +174,12 @@ static constexpr uint32_t DISPLAY_FRESH_US = 2000000;
 // `adj` carries that state instead. Nothing is sent while the reading is
 // stale, so a switched-off machine goes quiet and the PWA times it out.
 //
+// A MODE CHANGE MUST HOLD FOR ~120 ms (about three frames) before it is sent.
+// Seen on the first live run, 2026-11-13: one frame at idle decoded as
+// mode=timer with text " 95", between two temp frames, with no pump running.
+// Forwarded as-is it flashed "9.5 s" on the PWA. Value changes within a mode
+// are not held, because the timer's text legitimately changes every 100 ms.
+//
 // What " 95" means is narrower than it looks: at that reading the display is
 // indistinguishable from the setpoint (CLAUDE.md, display-bus entry). The
 // PWA labels it as the machine's display, not as a measured boiler.
@@ -182,10 +188,14 @@ static void liveDisplay(uint32_t now_ms) {
   static uint8_t  sent_mode = 0xFF;
   static bool     sent_adj = false;
   static uint32_t sent_ms = 0;
+  static uint8_t  cand_mode = 0xFF;
+  static uint32_t cand_since = 0;
   if (!display_on) return;
   const DisplayBus::Reading& r = display_bus.reading();
   if (r.mode == DisplayBus::Mode::NONE || r.mode == DisplayBus::Mode::BLANK) return;
   if (display_bus.stale(micros(), DISPLAY_FRESH_US)) return;
+  if ((uint8_t)r.mode != cand_mode) { cand_mode = (uint8_t)r.mode; cand_since = now_ms; }
+  if ((uint8_t)r.mode != sent_mode && now_ms - cand_since < 120) return;
   const bool adj = display_bus.adjusting();
   const bool changed = (uint8_t)r.mode != sent_mode || adj != sent_adj
                     || memcmp(r.text, sent_text, sizeof(sent_text)) != 0;

@@ -68,6 +68,13 @@ hand on the levers.
 **"Every press ever measured" is no longer true — superseded 2026-10-19**,
 which logged ten 1Cup presses at **195–295 ms** and four at **80–90 ms**.
 
+**2026-11-13, on the perfboard, all four lines:** 1Cup 327/297 ms, 2Cup
+469/442 ms, Water 340/305 ms, Steam 332/287 ms (start/stop press of each).
+Ordinary presses by hand, so they widen nothing at the short end. **The
+worst poll gap that session was 75 ms**, above the 42–57 ms the
+quantisation argument below assumes — so a reading there spans a wider true
+width than that argument states.
+
 **"All latching" is how a draft put it, and the record does not support that
 for all fourteen.** The operator watched the pump answer each of the **six
 fast presses** (four of which were logged); the ten longer ones are durations

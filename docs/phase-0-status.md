@@ -12,21 +12,28 @@ not built**; nothing on the board can actuate.
 
 | Tap | Result on the machine |
 |---|---|
-| J5 | decodes: heat-up followed `20 → 66 °C` one degree at a time, ~20 frames/s, `dropped_edges=0` over minutes |
+| J5 | decodes: heat-up followed `20 → 66 °C` one degree at a time, `dropped_edges=0` over minutes. **~20 decoded digit frames/s against the ~24/s a 41 ms digit frame implies** — about 18 % short with no dropped edge, unexplained (merged or garbled pairs are the candidates) |
 | J4 | a 1Cup flush counted **257 pulses** and the machine ended the cycle itself, no `E01` — after the incident below |
-| J2 | each lever logged its own name, start and stop: 1cup 327/297 ms, 2cup 469/442 ms, water 340/305 ms, steam 332/287 ms; worst poll gap 75 ms, 0 events dropped |
+| J2 | each lever logged its own name, start and stop: 1cup 327/297 ms, 2cup 469/442 ms, water 340/305 ms, steam 332/287 ms (also recorded in `docs/machine-switches-j2.md`); 0 events dropped. **Worst poll gap 75 ms** — above the 42–57 ms the quantisation range and the brew-guard fail-to-arm argument in CLAUDE.md assume |
 
 **The J4 header is at I3–K3, not G3–I3** (`#` I3, J3 empty, `T` K3), because
 two side-entry XH bodies do not fit side by side at the original positions.
 The board doc is updated; nothing else depends on the position.
 
+**The board runs firmware 0.9.6** from the unmerged branch
+`claude/live-temperature` (below), not the 0.9.4 that the *What runs where*
+table further down still describes.
+
 ### SECOND INVARIANT-1 INCIDENT ON J4 — `E01`, cause found and fixed
 
 The first J4 fit faulted the machine with **`E01`** on a 1Cup flush: the
-display timer ran to **13.6 s** (this machine's 1Cup ends at ~10.5–11.7 s)
-and then showed `E01`. With `flow on`, the ESP32 counted **`pulses=0
-glitches=0`** for the whole cycle — so the `#` signal was dead **for the
-machine and the ESP32 alike**, which rules out loading and points at wiring.
+display timer ran to **13.6 s** and then showed `E01`. This machine's 1Cup is
+set to ~10.5 s (CLAUDE.md, 2026-10-04); the clean flush after the fix, the
+same day, ended at **11.7 s** — 1Cup is volumetric, so it does not land on
+the stored time exactly. With `flow on` the ESP32 counted **`pulses=0
+glitches=0`** for the whole cycle. **That reading is not independent
+evidence about `#`**: with the plug swapped, GPIO6's divider sat on `T`, i.e.
+ground. What pointed at wiring was the machine's own fault plus the meter.
 
 **Cause: the J4 branch plug had `#` (black) on K3, i.e. on the ground
 bus**, holding the flowmeter output at 0 V. `E01` is the dose-control fault,
@@ -36,39 +43,56 @@ next flush ran clean. Nothing is expected to be damaged: the sensor is open
 collector behind a 10 K pull-up, so the short drew ~0.5 mA continuously,
 its own "on" current.
 
-**Why it got through:** the pre-power table checks each conductor against
-its hole, and the build was checked by colour order instead — the correct
+**Why it got through:** the pre-power table in the board doc was not run.
+Its existing rows (`#` → I3 and `T` → K3, ~0 Ω) would both have failed on the
+swapped plug; the plug was checked by colour order instead, and the correct
 branch plug **looks mirrored** against the machine-side plug, because the
-board header faces the other way. The board doc now says so beside the
-crimp-by-hole rule, and its pre-power table gains a `#` → K3 row that reads
-~320 kΩ when right and ~0 Ω when swapped.
+board header faces the other way. **The lesson is a gate, not a row: run the
+whole pre-power table, by meter, before a T-piece touches the machine.** The
+board doc now says the plug looks mirrored, and adds a `#` → K3 row
+(~320 kΩ right, ~0 Ω swapped) as a single-reading cross-check.
 
 **This does not explain 2026-10-03.** That `E01` came with the logic analyser
 on `#` through 8.2 K, not a short; the two share a symptom, not a shown
 cause.
 
-**The J5 T-piece also misbehaved on its first fit** — the machine's display
-stayed **blank** and the ESP32 saw `frames=0` with both lines idle high. The
-original harness restored it. On the second fit, after the operator
-re-checked the wiring, it decoded normally. **What was wrong the first time
-is not recorded**; the suspect was `Disp-P4` landing on a branch, which would
-have grounded it, but no reading confirms that.
+**THE J5 FIRST FIT IS AN INVARIANT-1 INCIDENT TOO, by the same test** — a
+Phase-0 tap changed what the machine did: its display stayed **blank**, and
+the ESP32 saw `frames=0` with both lines idle high. The original harness
+restored it. On the second fit, after the operator re-checked the wiring, it
+decoded normally. **What was wrong the first time is not recorded**; the
+suspect was `Disp-P4` landing on a branch, which would have grounded the
+line CLAUDE.md says must never be loaded, but no reading confirms that.
 
 ### Two display-decoder observations, unexplained
 
 - **One idle frame decoded as `Mode::TIMER` with text `" 95"`**, between two
-  temperature frames, with no pump running. CLAUDE.md says bit 114 is set "in
-  exactly the brew-timer frames". If that frame reaches `MachineContextTracker`
-  near a shot it could put a wrong timer on the record — **unchecked**.
+  temperature frames, with no pump running — against CLAUDE.md's "lit in
+  exactly the brew-timer frames" for bit 114. Why it decoded so is open.
+  **What it does to the record is not open**: `MachineContextTracker` treats a
+  lower timer reading as a restart, so one such frame while SETTLING after a
+  28 s shot sets `machine_timer_dl` to 95 and the record says 9.5 s. Before a
+  shot the restart rule erases it; after one, nothing did. **Fixed on
+  `claude/live-temperature` (0.9.7, not yet merged or flashed)**: a TIMER
+  reading counts only when the frame before it was TIMER too.
 - **`SETPOINT-TOUCHED` latched during a short steam start/stop**, with no
-  button touched. Steam's ~1 s blink is meant to sit outside the 600 ms
-  `BLINK_WINDOW_US`. It clears at the next pour start, so the next shot is
-  unaffected, but the flag is on the record and this is a false positive.
+  button touched. **The decoder explains it**: `display.cpp` latches
+  `adjust`/`touched` when two blank frames arrive within `BLINK_WINDOW_US`
+  (600 ms) of each other, and consecutive frames are ~41 ms apart — so **any
+  blank lasting two frames latches**, and steam's shortest blank (0.156 s) is
+  about four. **The blink period is never measured**, despite CLAUDE.md's
+  "use the interval, never the blank duration … This is deliberate", so
+  every steam cycle latches. The same `adjust` relabels the ` 95` readings of
+  the cooldown as SETPOINT, so they are not taken as boiler temperature.
+  **No shot record carries it**: at pour start `onPourStart()` resets the
+  tracker's copy and `main.cpp` clears the bus latch, so a steam cycle before
+  a pour is forgotten. A decoder fix is open.
 
 ### Firmware 0.9.6 — the machine display on the PWA
 
-Flashed 2026-11-13 from branch `claude/live-temperature` (**not yet
-merged**): the ESP32 forwards the display reading on the live stream and the
+0.9.6 flashed 2026-11-13 from branch `claude/live-temperature` (**not yet
+merged**; 0.9.7 on that branch carries the review fixes and is not yet
+flashed): the ESP32 forwards the display reading on the live stream and the
 Pull screen shows it. A screen, never a record; radio only, so invariant 2 is
 unaffected. 0.9.5 ran for minutes and no shot carries it. `display on`,
 `flow on` and `switches on` are all enabled on the board.
@@ -342,7 +366,7 @@ fails from anything that is not.
 
 | Piece | Where | State |
 |---|---|---|
-| **Firmware 0.9.4 is what is ON THE BOARD (flashed 2026-10-13)**, detector 0a.6. 0.9.1 through 0.9.3 were built and never flashed, so no shot record will ever carry them. **Caveat: three different binaries shipped as "0.9.0"** — the `flowSetEnabled` behaviour change landed before the bump, so `shot.firmware_version` cannot separate them. Shots 110–112 are all excluded anyway. | ESP32-S3 on a USB charger by the machine | both Bookoos bound: yield `aa:bb:cc:dd:ee:01`, dose `aa:bb:cc:dd:ee:02`. **All three taps were fitted and live on 2026-10-08** — J5, J2 and J4 — and the breadboard was then disassembled; see the bench section. The display bus **drops ~1 % of edges** during a flush, cause open (an earlier reading of `dropped=0` was taken before the other taps existed). 0.8.0's parser, written blind against the 0e captures, **was validated against a real brew**: mode flipped `temp` → `timer`, counted `042/080/112/143/174/206` in tenths, returned to `temp 95 C`. **0.8.1 and 0.8.2 both add `beginCapture()`** — 0.8.1 was flashed, then `display.cpp` changed again, so the board briefly ran a 0.8.1 that no longer existed in the repo; bumped to 0.8.2 and reflashed rather than leave that ambiguity. No shot record carries either version. See 0e. |
+| ***Superseded 2026-11-13: the board runs 0.9.6 — see the top section.*** **Firmware 0.9.4 was what was ON THE BOARD (flashed 2026-10-13)**, detector 0a.6. 0.9.1 through 0.9.3 were built and never flashed, so no shot record will ever carry them. **Caveat: three different binaries shipped as "0.9.0"** — the `flowSetEnabled` behaviour change landed before the bump, so `shot.firmware_version` cannot separate them. Shots 110–112 are all excluded anyway. | ESP32-S3 on a USB charger by the machine | both Bookoos bound: yield `aa:bb:cc:dd:ee:01`, dose `aa:bb:cc:dd:ee:02`. **All three taps were fitted and live on 2026-10-08** — J5, J2 and J4 — and the breadboard was then disassembled; see the bench section. The display bus **drops ~1 % of edges** during a flush, cause open (an earlier reading of `dropped=0` was taken before the other taps existed). 0.8.0's parser, written blind against the 0e captures, **was validated against a real brew**: mode flipped `temp` → `timer`, counted `042/080/112/143/174/206` in tenths, returned to `temp 95 C`. **0.8.1 and 0.8.2 both add `beginCapture()`** — 0.8.1 was flashed, then `display.cpp` changed again, so the board briefly ran a 0.8.1 that no longer existed in the repo; bumped to 0.8.2 and reflashed rather than leave that ambiguity. No shot record carries either version. See 0e. |
 | Go server + SQLite + PWA | Proxmox LXC `espressolog`, Debian 13, `espressolog.lan` (DHCP-reserved) | systemd `espressolog.service`, db at `/var/lib/espressolog/espressolog.db` |
 | HTTPS | Caddy on the same LXC, `https://espresso.example.com` | Let's Encrypt via Cloudflare DNS-01; CF token in `/etc/caddy/env` |
 | DNS | AdGuard Home rewrite `espresso.example.com → espressolog.lan` | resolution is LAN-only; no public A record (challenge TXT only) |

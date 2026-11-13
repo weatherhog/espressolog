@@ -540,7 +540,8 @@ when it matters.
 - **bit 114 is the middle digit's DECIMAL POINT** — D7 of the AS1115's
   digit-1 byte — lit in exactly the brew-timer frames (the display reads
   `16.9`) and clear in every temperature frame, so `100` is never
-  ambiguous *(called a "TIMER-MODE FLAG" until 2026-10-31; functionally it
+  ambiguous *(but one idle frame decoded as TIMER `" 95"` on 2026-11-13,
+  cause open — `docs/phase-0-status.md`)* *(called a "TIMER-MODE FLAG" until 2026-10-31; functionally it
   still is one)*
 - **the buttons**, as bits 49 (LEFT, enters `PrG` then decreases) and 58
   (RIGHT, increases) of the 67-bit frame — free, same two wires
@@ -1150,8 +1151,11 @@ not comparable**. If the schema ever grows a column for machine state, this
 belongs in it.
 
 **BOTH EXPERIMENTS NEED THE J4 TAP REFITTED**, which means going back behind
-the 2026-10-03 `E01` incident. It is currently unplugged. **Watch for the
-fault on first contact, and note that `+` connects to nothing, ever.**
+the 2026-10-03 `E01` incident. **It is refitted and live since 2026-11-13** —
+after a **second** `E01` the same day, from a J4 branch plug with `#` on the
+ground bus; fixed by swapping its contacts (`docs/phase-0-status.md`, top
+section). **Meter the board doc's pre-power table before any T-piece touches
+the machine, and note that `+` connects to nothing, ever.**
 
 **And before adding any experiment to that list, check whether the operator
 already does it every morning.** The repo has asked for "the cheapest thing
@@ -1250,7 +1254,8 @@ never baked in, and Digmesa's own datasheet recommends calibrating it.
 **PATH DONE 2026-10-07** (shot 109); **what the number means is OPEN.** The J5 tap is
 wired to the ESP32 and `boiler_temp_start_c` / `machine_timer_s` land in
 the database off the machine's own display. Conditioning (as built on the bench): 8.2 K series at
-the T-piece — **on the board for the build, from 2026-11-05** — 15 K shunt at the board, `ESD4`→GPIO4, `ESD1`→GPIO5, `VSS`
+the T-piece — **on the board for the build, from 2026-11-05** — 15 K shunt at the board
+(**16.4 K on the perfboard, live on the machine since 2026-11-13**), `ESD4`→GPIO4, `ESD1`→GPIO5, `VSS`
 ground direct, `Disp-P4` unterminated.
 
 **The as-built 15 K shunt decodes and FAILS its tolerance corner**, and the

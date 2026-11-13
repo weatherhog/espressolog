@@ -390,8 +390,9 @@ shot; at 14 bar it will not taste like anything.
 against it, and this procedure moves the screw twice.
 
 **BOTH 0d-i AND 0d-ii NEED THE J4 TAP, WHICH MEANS REFITTING THE CONNECTOR BEHIND
-THE 2026-10-03 `E01` INCIDENT.** It is currently unplugged (see the bench-rig
-entry in `docs/phase-0-status.md`). **Watch for the fault on first contact**,
+THE 2026-10-03 `E01` INCIDENT.** It was refitted on the perfboard on
+2026-11-13 — after a **second** `E01`, from a swapped branch plug that put `#`
+on ground, fixed the same day (`docs/phase-0-status.md`, top section). **Watch for the fault on first contact**,
 and note that `+` connects to nothing, ever. This warning sat at the foot of a
 retired experiment and lost its antecedent in a restructure; it is the only
 safety-relevant line in this section and it covers everything in it.

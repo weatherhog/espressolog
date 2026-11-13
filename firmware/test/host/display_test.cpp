@@ -346,6 +346,7 @@ int main() {
     assert(decode(d, FRAME_BLANK, 1000 + 41000));  // same blank, next frame
     assert(!d.adjusting());                        // one blank proves nothing
     assert(decode(d, FRAME_TEMP_100, 1000 + 205000));
+    // ONE shown frame, as the real bus sends while blinking (buttons capture).
     assert(decode(d, FRAME_BLANK, 1000 + 410000)); // second onset, 410 ms on
     assert(d.adjusting());
     assert(d.setpointTouched());
@@ -429,36 +430,38 @@ int main() {
     lone.poll(t + 50000);
     assert(!lone.setpointTouched());
 
-    // Fragment immediately followed by a real blank: without the guard the
-    // fragment counts as the first half of a blink that never happened.
+    // A fragment decoded as a blank is an ONSET. Followed by a shown value
+    // and a real blank inside BLINK_WINDOW_US, it pairs into a blink that
+    // never happened. (Until 2026-11-13 the sequence here was fragment +
+    // blank; under the onset rule that is one blank and latches nothing, so
+    // it stopped telling guarded from unguarded.)
     DisplayBus bug;
     t = 1000;
     for (int i = 0; i < 66; i++) { bug.feedEdge(t, 0); t += 101; }  // fragment
-    t += 50000;                                                     // frame gap
-    for (int i = 0; i < 66; i++) { bug.feedEdge(t, 0); t += 101; }  // real blank
     bug.poll(t + 50000);
-    // Since 2026-11-13 even the unguarded decoder does not latch here: a
-    // fragment-blank followed by a blank is ONE blank, one onset. The guard
-    // is no longer what stands between this and a latch; it still keeps
-    // the fragment from being decoded at all.
-    assert(!bug.setpointTouched());
+    assert(decode(bug, FRAME_95, t + 100000));
+    assert(decode(bug, FRAME_95, t + 141000));
+    assert(decode(bug, FRAME_BLANK, t + 400000));                    // real blank
+    assert(bug.setpointTouched());                                  // unguarded: latches
 
-    // Armed, the fragment is dropped and the same sequence is one blank.
+    // Armed, the fragment is dropped and the same sequence is one onset.
     DisplayBus d;
     d.beginCapture();
     t = 1000;
     for (int i = 0; i < 66; i++) { d.feedEdge(t, 0); t += 101; }
-    t += 50000;
-    for (int i = 0; i < 66; i++) { d.feedEdge(t, 0); t += 101; }
     d.poll(t + 50000);
+    assert(decode(d, FRAME_95, t + 100000));
+    assert(decode(d, FRAME_95, t + 141000));
+    assert(decode(d, FRAME_BLANK, t + 400000));
     assert(!d.setpointTouched());
     assert(!d.adjusting());
 
     // A genuine blink still latches — a "fix" that merely disabled the
     // latch would pass everything above and fail here. The real blank above
     // was the first onset; show a value, then blank again ~410 ms later.
-    uint32_t onset1 = t - 66 * 101;
+    uint32_t onset1 = t + 400000;
     assert(decode(d, FRAME_95, onset1 + 205000));
+    assert(decode(d, FRAME_95, onset1 + 246000));
     assert(decode(d, FRAME_BLANK, onset1 + 410000));
     assert(d.setpointTouched());
     printf("attach fragment is discarded; a lone fragment never latched OK\n");
@@ -542,7 +545,69 @@ int main() {
     printf("a stale onset never pairs across a long gap OK\n");
   }
 
-  // 20. A one-bit blip must NOT spend the guard. Power-on carries 32-33
+  // 25. A glitch frame inside one of steam's long blanks is not an onset.
+  //     One shown frame in the middle of a 0.55 s blank would otherwise make
+  //     a second onset ~41 ms later and latch exactly as the pre-0.9.9 rule
+  //     did.
+  {
+    DisplayBus d;
+    assert(decode(d, FRAME_95, 1000));
+    assert(decode(d, FRAME_95, 42000));
+    uint32_t t = 100000;
+    for (int i = 0; i < 6; i++) { decode(d, FRAME_BLANK, t); t += 41000; }
+    assert(decode(d, FRAME_95, t)); t += 41000;     // one glitch frame
+    for (int i = 0; i < 6; i++) { decode(d, FRAME_BLANK, t); t += 41000; }
+    assert(!d.setpointTouched());
+    assert(!d.adjusting());
+    printf("a lone shown frame inside a blank is not an onset OK\n");
+  }
+
+  // 26. Switched off mid-blink: no frames at all. poll() expires the blink,
+  //     so the cold-boot blank on power-up cannot pair with a pre-power-off
+  //     onset.
+  {
+    // After the expiry the decoder must behave like a fresh one, even when
+    // the boot blank lands within BLINK_WINDOW_US of the old onset modulo a
+    // micros() wrap.
+    DisplayBus e;
+    uint32_t t = 1000;
+    for (int i = 0; i < 4; i++) { decode(e, FRAME_BLANK, t); t += 41000; }
+    for (int i = 0; i < 6; i++) { decode(e, FRAME_95, t); t += 41000; }
+    e.poll(t + 1700000);                            // off: expiry runs here
+    assert(!e.targetBlinking() && !e.adjusting());
+    // The decoder's own timestamps restart from nothing: model the boot
+    // blank arriving 300 ms after the old onset in wrapped micros().
+    uint32_t boot = 1000 + 300000 + 0u;
+    boot += 0xFFFFFFFFu; boot += 1;                 // one wrap later, same residue
+    assert(decode(e, FRAME_BLANK, boot));
+    assert(!e.setpointTouched());
+    printf("a blink expires while the bus is silent OK\n");
+  }
+
+  // 27. An edit taking over from a steam blink clears the steam state, so
+  //     the new setpoint does not read as TARGET once the edit ends.
+  {
+    DisplayBus d;
+    uint32_t t = 1000;
+    for (int cycle = 0; cycle < 3; cycle++) {
+      uint32_t onset = t;
+      for (int i = 0; i < 4; i++) { decode(d, FRAME_BLANK, t); t += 41000; }
+      for (; t < onset + 1060000; t += 41000) decode(d, FRAME_95, t);
+    }
+    assert(d.targetBlinking());
+    for (int cycle = 0; cycle < 3; cycle++) {
+      uint32_t onset = t;
+      for (int i = 0; i < 5; i++) { decode(d, FRAME_BLANK, t); t += 41000; }
+      for (; t < onset + 410000; t += 41000) decode(d, FRAME_TEMP_100, t);
+    }
+    assert(d.adjusting() && !d.targetBlinking());
+    assert(decode(d, FRAME_95, t + 700000));        // edit over, steady
+    assert(d.reading().mode == DisplayBus::Mode::TEMPERATURE);
+    printf("an edit clears the steam blink OK\n");
+  }
+
+  // 24. A one-bit blip must NOT spend the guard. (Numbered 20 until
+  //     2026-11-13, when 20-23 were added above it.) Power-on carries 32-33
   //     single-bit frames (32 clock pulses, plus the rail rise on some boots;
   //     docs/machine-display-bus.md, power-on table), and decodeFrame() rejects
   //     those anyway — so if one consumed skip_first, the real misaligned
@@ -559,11 +624,12 @@ int main() {
 
     // Now the fragment that actually matters: 66 bits reading blank.
     for (int i = 0; i < 66; i++) { d.feedEdge(t, 0); t += 101; }
-    t += 50000;
-    // ...followed by a real blank, which together would latch if the
-    // fragment had been decoded.
-    for (int i = 0; i < 66; i++) { d.feedEdge(t, 0); t += 101; }
     d.poll(t + 50000);
+    // ...followed by a shown value and a real blank, which together would
+    // latch if the fragment had been decoded (case 19's sequence).
+    assert(decode(d, FRAME_95, t + 100000));
+    assert(decode(d, FRAME_95, t + 141000));
+    assert(decode(d, FRAME_BLANK, t + 400000));
 
     assert(!d.setpointTouched());
     printf("one-bit blips do not spend the attach guard OK\n");

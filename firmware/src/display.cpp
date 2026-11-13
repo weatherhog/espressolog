@@ -55,12 +55,15 @@ bool DisplayBus::readDigits(const uint8_t* bits, uint32_t t_us) {
   // interval between blank ONSETS is what says which blink this is — see
   // BLINK_WINDOW_US in the header.
   if (text[0] == ' ' && text[1] == ' ' && text[2] == ' ') {
-    if (!prev_blank) {                       // an onset, not a continuation
+    // An onset: the first blank after a value shown long enough to be real.
+    // Shown for less is a glitch inside one blank — a continuation.
+    if (!prev_blank && (!have_onset || t_us - first_shown_us >= MIN_SHOWN_US)) {
       if (have_onset) {
         uint32_t period = t_us - last_onset_us;
         if (period < BLINK_WINDOW_US) {
           adjust  = true;
           touched = true;
+          target  = false;                   // an edit, whatever came before
         } else if (period < TARGET_BLINK_MAX_US) {
           target = true;
         }
@@ -73,15 +76,9 @@ bool DisplayBus::readDigits(const uint8_t* bits, uint32_t t_us) {
     last.mode = Mode::BLANK;
     return true;
   }
+  if (prev_blank) first_shown_us = t_us;
   prev_blank = false;
-
-  // A shown frame long after the last blank means the blink stopped. Once
-  // neither blink is live the old onset is forgotten too, so an onset hours
-  // later cannot pair with it (and micros() wrap cannot alias it).
-  uint32_t since_blank = t_us - last_blank_us;
-  if (adjust && since_blank > BLINK_WINDOW_US) adjust = false;
-  if (target && since_blank > TARGET_END_US)   target = false;
-  if (have_onset && since_blank > TARGET_END_US) have_onset = false;
+  expireBlinks(t_us);
 
   int value = 0;
   bool numeric = true;
@@ -120,6 +117,18 @@ bool DisplayBus::readDigits(const uint8_t* bits, uint32_t t_us) {
   return true;
 }
 
+// A blink ends when no blank has come for long enough. Called on every shown
+// frame and from poll(), so a machine switched off mid-blink — no frames at
+// all — does not leave an onset armed to pair with the cold-boot blank. Once
+// neither blink is live the old onset is forgotten too, so an onset hours
+// later cannot pair with it (and micros() wrap cannot alias it). Signed, so a
+// poll() timestamp a little behind the last frame's does not read as huge.
+void DisplayBus::expireBlinks(uint32_t t_us) {
+  int32_t since_blank = (int32_t)(t_us - last_blank_us);
+  if (adjust && since_blank > (int32_t)BLINK_WINDOW_US) adjust = false;
+  if (since_blank > (int32_t)TARGET_END_US) { target = false; have_onset = false; }
+}
+
 bool DisplayBus::decodeFrame(const uint8_t* bits, size_t n, uint32_t t_us) {
   // Exact lengths only. A frame of any other size is noise, a fragment, or
   // the power-on initialisation burst, and decoding it would invent a
@@ -147,6 +156,7 @@ void DisplayBus::beginCapture() {
   last_onset_us = 0;
   have_onset    = false;
   prev_blank    = false;
+  first_shown_us = 0;
   adjust        = false;
   target        = false;
   touched       = false;  // a fresh attach starts with a clean latch; we
@@ -187,6 +197,7 @@ bool DisplayBus::feedEdge(uint32_t t_us, uint8_t data_bit) {
 }
 
 bool DisplayBus::poll(uint32_t t_us) {
+  if (have_onset || adjust || target) expireBlinks(t_us);
   if (!have_edge || count == 0) return false;
   if ((uint32_t)(t_us - last_edge_us) <= FRAME_GAP_US) return false;
   return finishFrame(last_edge_us);

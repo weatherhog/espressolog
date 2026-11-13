@@ -23,8 +23,9 @@ widths leave only ~0.3 mm between them.
 The board doc is updated; nothing else depends on the position.
 
 **The board runs firmware 0.9.8**, flashed 2026-11-13 from `main` after
-PR #19 merged; the server was deployed from that branch earlier the same
-day (below). 0.9.9 carries the decoder blink fix. The *What runs where*
+PR #19 merged; the server was deployed from `claude/live-temperature`
+earlier the same day, before the merge (below). 0.9.9 carries the decoder
+blink fix and is not yet flashed. The *What runs where*
 table's 0.9.4 row is marked superseded.
 
 ### SECOND INVARIANT-1 INCIDENT ON J4 — `E01`, cause found and fixed
@@ -90,30 +91,26 @@ machine's display.)
   too. **Two glitch frames in a row would still pass**; the real fix is in
   the decoder.
 - **`SETPOINT-TOUCHED` latched during a short steam start/stop**, with no
-  button touched. **The decoder explains it**: `display.cpp` latches
-  `adjust`/`touched` when two blank frames arrive within `BLINK_WINDOW_US`
-  (600 ms) of each other, and consecutive frames are ~41 ms apart — so **any
-  blank lasting two frames latches**, and steam's shortest blank (0.156 s) is
-  about four. **The blink period is never measured**, despite CLAUDE.md's
-  "use the interval, never the blank duration … This is deliberate", so
-  every steam cycle latches. The same `adjust` relabels **some** of the
-  cooldown's ` 95` readings as SETPOINT — `adjust` clears once a shown frame
-  comes more than 600 ms after the last blank, and steam's shown phase can
-  reach ~0.9 s, so late frames still decode as TEMPERATURE.
-  **A steam cycle finished before the pour does not reach the record**: at
+  button touched. **The decoder explained it**: up to 0.9.8 `display.cpp`
+  latched `adjust`/`touched` when two blank FRAMES arrived within
+  `BLINK_WINDOW_US` (600 ms), and consecutive frames are ~41 ms apart — so
+  **any blank lasting two frames latched**, and every steam cycle did.
+  **A steam cycle finished before the pour did not reach the record**: at
   pour start `onPourStart()` resets the tracker's copy and `main.cpp` clears
-  the bus latch. **A shot pulled during the cooldown probably can** — a
-  prediction, not observed: if the blink resumes after the pump stops, it
-  re-latches after pump-off (POURING or SETTLING) and `machineContextPoll()` copies it into the
+  the bus latch. **A shot pulled during the cooldown probably could** — a
+  prediction, not observed: a blink resuming after pump-off re-latches
+  (POURING or SETTLING) and `machineContextPoll()` copies it into the
   record. **That costs recipe data, not just a flag**: `store.go` returns
   early on a latched shot, leaving `brew_temp_c` and `preinfusion_s` NULL,
   and the latch becomes the floor later shots carry from, so they stay NULL
   until typed (in ingest order — a backlog ingested out of order after a WiFi
-  outage can stamp a carried value first; `store.go`'s KNOWN GAP). The
-  decoder's tests (cases 15, 18 and 19) assert the two-frame
-  rule, so the fix rewrites them. **Fixed in 0.9.9**: the decoder now
-  measures between blank onsets, steam no longer latches, and the slow
-  blink's numbers decode as `TARGET` (`docs/machine-display-bus.md`).
+  outage can stamp a carried value first; `store.go`'s KNOWN GAP).
+  **Fixed in 0.9.9 — NOT YET FLASHED; the board runs 0.9.8, so the latch is
+  still live.** 0.9.9 measures between blank onsets, so steam no longer
+  latches; the slow blink's numbers decode as `TARGET`; and a TARGET or
+  SETPOINT frame invalidates the last boiler reading, so a cooldown shot
+  records no boiler temperature rather than a stale `165`
+  (`docs/machine-display-bus.md`).
 
 ### Firmware 0.9.7 — the machine display on the PWA
 
@@ -1743,7 +1740,9 @@ they sample *real* `ESD1` levels, so they land on non-decodable lengths or
 
 So the rule is not "do not unplug GPIO5". It is: **any disturbance that
 zeroes the data line while the clock keeps running will latch**, and two
-such frames inside `BLINK_WINDOW_US` are enough. On 2026-10-07 both
+such frames inside `BLINK_WINDOW_US` are enough. *(True up to 0.9.8. From
+0.9.9 a continuously zeroed data line is ONE blank, one onset, and cannot
+latch; it would need a value shown for 120 ms between two blank runs.)* On 2026-10-07 both
 jumpers were swapped with the reader **on**, which necessarily passed
 through exactly that state.
 
@@ -1754,7 +1753,7 @@ marginal data line is a standing risk, not only a rewiring one.
 **Two wrong diagnoses were published before that, and both are instructive.**
 First: an attach-time fragment decoding as blank. Refuted twice over — a
 clean attach yields exactly ONE fragment and the latch needs two blanks
-(now a test assertion), and 60000 simulated attach points against three
+(two onsets from 0.9.9; now a test assertion), and 60000 simulated attach points against three
 real captures produced **zero** blank-decoding fragments on a non-blinking
 display. There is a structural reason: digit offsets 106/115/124 sit
 exactly 67 bits — the button-frame length — above 39/48/57, so **the digit
@@ -1769,7 +1768,11 @@ disturbance only matters *during* a pour. Between shots it is irrelevant.
 breaks, but the record would be silently marked as having had its setpoint
 edited, which is the flag 0f uses to discard runs.
 
-**Still open, and only one of the obvious hardenings actually works.**
+**DONE IN 0.9.9 — the alternation rule below is what the onset decoder
+implements**: an onset needs a value shown for at least 120 ms before it.
+The rest of this paragraph is the reasoning that led there.
+
+**Was open, and only one of the obvious hardenings actually works.**
 Two blanks inside 600 ms is thin evidence. But **requiring three
 consecutive blanks buys nothing**: a real setpoint blink produces runs of
 ~5 blank frames 41 ms apart (`display.h`), so it fires on both. The
@@ -2391,7 +2394,8 @@ state; closing it is the deliberate act, with the RC chosen first.
      0 °C — 99 times in one 30 s capture, because the display blanks
      constantly while a value is being edited.
    - Reads that blink as the signal it is. Two blank frames inside 600 ms
-     mean a value is being **adjusted**, so a number shown then is the
+     mean a value is being **adjusted** *(superseded in 0.9.9: two blank
+     ONSETS — one blank lasts several frames, so this rule latched on steam)*, so a number shown then is the
      **setpoint being dialled in**, not the boiler — a ramp to 120 used to
      look like a boiler at 120. A lone blank, which is what a cold boot
      emits, is not a blink.

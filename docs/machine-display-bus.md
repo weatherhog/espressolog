@@ -291,14 +291,32 @@ measurement was right; the claim that the code used it was not. The cost:
 latched shot, so shots from earlier firmware may have NULLs for that reason.
 
 **0.9.9 measures between blank ONSETS** (`display.h`, `BLINK_WINDOW_US`):
-under 600 ms is an edit (latch, `SETPOINT`); 600 ms to 1.6 s is the slow
-blink (`TARGET`, no latch); a shown frame 1.5 s after the last blank ends
-it. **Verified against every display capture in `analysis/captures/`**,
-replayed through both decoders: the steam capture latches on the old and
-not the new; the three setpoint captures latch on both, with the same
-setpoint runs; the other five decode identically. `display_test.cpp` cases
-15, 18 and 19 were rewritten for onsets, and 20–23 pin the long blank, the
-steam blink, an edit after steam and a stale onset.
+an onset is the first blank after a value shown for at least 120 ms
+(`MIN_SHOWN_US`); under 600 ms between onsets is an edit (latch,
+`SETPOINT`); 600 ms to 1.6 s is the slow blink (`TARGET`, no latch); 1.6 s
+with no blank ends a blink — checked on every shown frame and in `poll()`,
+so a machine switched off mid-blink does not leave one armed.
+
+**The guard is in TIME because the bus sends ONE frame for the shown value
+while blinking**, then nothing until the next blank ~209 ms later
+(`2026-10-03-display-bus-buttons.sr`, 6.149 → 6.358 s). A guard counting two
+shown frames was tried first, and the replay showed it stopped real edits
+being recognised. A glitch frame inside one of steam's blanks is followed
+by the next blank 41 ms later, so it is rejected.
+
+**Replayed, all twelve display captures in `analysis/captures/`, through
+the old and new decoders:** the steam capture latches on the old and not
+the new, and its blinks decode as `TARGET`; the four edits in `buttons` and
+the one in `setup-menu` latch on both, **each recognised one blink cycle
+later than before** (the second onset, ~0.41 s after the first), so the
+first value of an edit — `120` in `buttons` — decodes as TEMPERATURE and is
+then invalidated by `MachineContextTracker`; `buttons-separated` latches on
+both through `PrG`; the other eight decode identically with no latch.
+`display_test.cpp`: cases 15, 18 and 19 were rewritten for onsets, 20–23
+pin the long blank, the steam blink, an edit after steam and a stale onset,
+25–27 the glitch frame, expiry with the bus silent and an edit clearing the
+steam blink, and 24 (numbered 20 until then) the attach guard against
+blips.
 
 **Use the interval, never the blank duration.** Steam blanks average longer
 (0.550 s against a setpoint edit's 0.204 s), which looks like a cleaner
@@ -312,8 +330,8 @@ blink regimes. Harmless (it is also > 600 ms) but it is why the quoted
 
 While adjusting, the display blanks **entirely** (all three fields zero)
 and comes back. The steam blink does the same thing more slowly, which is
-why period is the only discriminator available — and why the as-built
-two-frame rule cannot discriminate at all.
+why period is the only discriminator available — and why the pre-0.9.9
+two-frame rule could not discriminate at all.
 
 **What blinking means is "showing a target it has not reached":** during a
 steam cycle the display blinks **`165`**, and after steam is released it
@@ -743,10 +761,12 @@ sampled in.
 
 What the column *does* reliably carry: a steady ` 95` means at setpoint; a
 blink or a different value means not. That is still worth storing. **After
-steam**, from 0.9.9 the blinking ` 95` decodes as `TARGET`, not
-TEMPERATURE, except during the first blink cycle (one onset is not yet a
-blink) — before 0.9.9 some of those frames were stored as the boiler while
-it was hotter. Settling
+steam**, from 0.9.9 a cooldown shot records no boiler temperature at all:
+the blinking ` 95` decodes as `TARGET`, and a TARGET or SETPOINT frame
+invalidates the last TEMPERATURE reading, including steam's first-cycle and
+steady `165`. Before 0.9.9 a stale `165` could be stored; a post-steam ` 95`
+is predicted from the period arithmetic but not seen in the steam capture.
+Settling
 whether it is ever a true boiler reading above 88 °C needs a capture with
 the boiler deliberately pulled off setpoint and allowed to recover. During a brew the
 machine takes the display over for a **shot timer in tenths of a second**

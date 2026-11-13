@@ -565,12 +565,16 @@ after it blink at **1.021–1.101 s**. `BLINK_WINDOW_US` is **600 ms**, sitting
 in a 414→1020 ms guard band with 186 ms below and 420 ms above. **Use the
 interval, never the blank duration** — steam's shortest blank is 0.156 s,
 shorter than a setpoint blank, so duration would misfire. **The interval is
-measured between blank ONSETS** — the first blank frame after a shown one —
-and a number shown during the slow blink decodes as `Mode::TARGET`, which
-is neither the boiler nor an edit.
+measured between blank ONSETS** — the first blank after a value shown for at
+least 120 ms — and a number shown during the slow blink decodes as
+`Mode::TARGET`, which is neither the boiler nor an edit. A blink is only
+recognised at its SECOND onset, so the first blink cycle of an edit or a
+steam cycle still decodes as TEMPERATURE; a SETPOINT or TARGET frame then
+invalidates the boiler reading it left (`machine_context.h`).
 
-**THAT IS TRUE FROM FIRMWARE 0.9.9; BEFORE IT, THE CODE DID NOT IMPLEMENT
-THE DESIGN — found 2026-11-13.** `display.cpp` latched on two blank FRAMES
+**THAT IS TRUE FROM FIRMWARE 0.9.9, WHICH IS NOT YET FLASHED — the board
+runs 0.9.8, so until 0.9.9 goes on, steam still latches. BEFORE 0.9.9 THE
+CODE DID NOT IMPLEMENT THE DESIGN — found 2026-11-13.** `display.cpp` latched on two blank FRAMES
 within 600 ms, and one blank lasts several frames 41 ms apart, so **every
 steam cycle latched `setpoint_touched`**. Replayed through both decoders,
 `2026-10-05-display-bus-steam.sr` latches on the old one and not the new;
@@ -588,11 +592,15 @@ PID boiler does, and it blinks ` 95` post-steam while the boiler is
 demonstrably hotter. The column is sampled immediately before a pour, i.e.
 **always in the ambiguous range**, so today it means **"at setpoint"**, not a
 verified temperature. Settling that needs a capture with the boiler pulled off
-setpoint and allowed to recover. **After steam**, from 0.9.9 the blinking
-` 95` decodes as `Mode::TARGET` and is not taken as the boiler — except the
-first blink cycle, before a second onset has arrived, and any steady frame
-more than 1.5 s after the last blank. Before 0.9.9, some post-steam ` 95`
-frames were stored as boiler temperature while the boiler was hotter.
+setpoint and allowed to recover. **After steam**, from 0.9.9 a shot pulled
+in the cooldown records **no** boiler temperature (`INT16_MIN`, "the machine
+did not say"): the blinking ` 95` decodes as `TARGET`, and each TARGET frame
+invalidates the last TEMPERATURE reading — including steam's first-cycle
+`165` and the steady `165` between the two blink regimes. The same holds
+straight after a setpoint edit. **Before 0.9.9**, a cooldown shot could store
+a stale `165`, and *possibly* a post-steam ` 95` — the latter is predicted
+from the period arithmetic; the only steam capture never shows the old
+decoder doing it.
 
 **The display does NOT run its shot timer during a hot-water draw**, so
 `machine_timer_dl` cannot pick up a tap draw and `machine_context.h` needs no

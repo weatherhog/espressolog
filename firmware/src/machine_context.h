@@ -49,10 +49,20 @@ public:
                               && prev_frame_mode == DisplayBus::Mode::TIMER;
     if (r.mode == DisplayBus::Mode::TEMPERATURE) {
       // Only Mode::TEMPERATURE is the boiler. SETPOINT is the number being
-      // dialled in, BLANK and TEXT are not temperatures at all.
+      // dialled in, TARGET is steam's 165 or the 95 it is cooling back to,
+      // BLANK and TEXT are not temperatures at all.
       last_boiler_dc = (int16_t)(r.temp_c * 10);
       last_boiler_us = r.at_us;
       have_boiler = true;
+    } else if (r.mode == DisplayBus::Mode::SETPOINT || r.mode == DisplayBus::Mode::TARGET) {
+      // AND THEY INVALIDATE the last one. A blink is only recognised on its
+      // second onset, so the first blink cycle of an edit or a steam cycle
+      // decodes as TEMPERATURE (the 120 being dialled, steam's 165), and a
+      // steady 165 sits between steam's two blink regimes. Without this, a
+      // shot pulled in the cooldown stored that value as its starting boiler
+      // temperature (review, 2026-11-13). Now it stores "the machine did not
+      // say" until the display settles and a real reading returns.
+      have_boiler = false;
     }
     // A TIMER reading counts only when the frame before it was TIMER too.
     // 2026-11-13: one idle frame decoded as TIMER with text " 95" between two

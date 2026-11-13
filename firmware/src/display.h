@@ -96,12 +96,24 @@ public:
   //   steam / cooldown    onset-to-onset 1.021-1.101 s -> target, no latch
   // One onset alone is nothing — which is what keeps a cold boot's single
   // blank, and a hot-plug fragment followed by a blank, from latching.
+  //
+  // AN ONSET COUNTS ONLY IF THE VALUE WAS SHOWN FOR MIN_SHOWN_US. A single
+  // decodable non-blank frame inside one of steam's ~0.55 s blanks would
+  // otherwise make a second onset 41 ms later and latch exactly as the
+  // pre-0.9.9 rule did (review, 2026-11-13). Measured in TIME, not frames:
+  // while blinking the bus sends ONE frame for the shown value and then
+  // nothing until the next blank ~209 ms later
+  // (2026-10-03-display-bus-buttons.sr, 6.149 -> 6.358 s). A frame-count
+  // guard was tried first and stopped real edits from being recognised.
+  static constexpr uint32_t MIN_SHOWN_US        = 120000;
   static constexpr uint32_t BLINK_WINDOW_US     = 600000;   // < this: setpoint edit
   static constexpr uint32_t TARGET_BLINK_MAX_US = 1600000;  // < this: steam-class blink
-  // A shown frame this long after the last blank ends a blink. The setpoint
-  // blink's shown phase is ~0.2 s; steam's can reach ~0.94 s (1.101 period
-  // less its 0.156 s shortest blank), so the slow blink needs the longer one.
-  static constexpr uint32_t TARGET_END_US       = 1500000;
+  // No blank for this long ends a blink and forgets the onset — checked on
+  // every shown frame and in poll(), so a machine switched off mid-blink
+  // does not leave one armed. Equal to the band's ceiling on purpose: a
+  // blink whose period is under it never goes this long without a blank.
+  // The setpoint blink ends sooner, at BLINK_WINDOW_US.
+  static constexpr uint32_t TARGET_END_US       = TARGET_BLINK_MAX_US;
 
   struct Reading {
     Mode     mode = Mode::NONE;
@@ -224,12 +236,14 @@ private:
   uint32_t last_onset_us = 0;    // latest blank ONSET
   bool     have_onset = false;
   bool     prev_blank = false;   // was the previous decoded digit frame blank?
+  uint32_t first_shown_us = 0;   // first shown frame after the last blank
   bool     adjust = false;
   bool     target = false;
   bool     touched = false;
 
   static char glyph(const uint8_t* bits);          // 7 bits -> character, 0 if unknown
   void readButtons(const uint8_t* bits, uint32_t t_us);
+  void expireBlinks(uint32_t t_us);
   bool readDigits(const uint8_t* bits, uint32_t t_us);
   bool finishFrame(uint32_t t_us);
 };

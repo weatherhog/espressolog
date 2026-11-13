@@ -117,7 +117,11 @@ int main() {
     m.onReading(temp(95, t), false);
     m.onReading(setpoint(120, t + 1000000), false);
     m.onPourStart(t + 2000000);
-    assert(m.context().boiler_temp_start_dc == 950);   // 95, not 120
+    // Not 120. And, since 2026-11-13, not the 95 before it either: an
+    // edit's first blink cycle decodes as TEMPERATURE, so the reading before
+    // a SETPOINT frame may itself be the value being dialled (case 9). A
+    // pour straight after an edit records "the machine did not say".
+    assert(m.context().boiler_temp_start_dc == INT16_MIN);
     printf("setpoint being dialled is not recorded as boiler temperature OK\n");
   }
 
@@ -147,6 +151,35 @@ int main() {
     m.onReading(temp(95, t + 123000), false);
     assert(m.context().machine_timer_dl == 280);
     printf("a lone glitch TIMER frame does not overwrite the shot's timer OK\n");
+  }
+
+  // 9. A SETPOINT or TARGET reading invalidates the last boiler reading.
+  //    The first blink cycle of an edit or a steam cycle decodes as
+  //    TEMPERATURE before the blink is recognised, so steam's 165 (or the 120
+  //    being dialled) would otherwise become the next shot's starting boiler
+  //    temperature. Recorded as "the machine did not say" instead, until a
+  //    real reading returns.
+  {
+    MachineContextTracker m;
+    uint32_t t = 1000000;
+    m.onReading(temp(165, t), false);              // steam, first cycle
+    DisplayBus::Reading tg = temp(95, t + 1000000);
+    tg.mode = DisplayBus::Mode::TARGET;            // cooling back, recognised
+    m.onReading(tg, false);
+    m.onPourStart(t + 2000000);
+    assert(m.context().boiler_temp_start_dc == INT16_MIN);
+
+    m.onReading(setpoint(120, t + 3000000), true);
+    m.onReading(temp(95, t + 9000000), false);     // settled: real again
+    m.onPourStart(t + 10000000);
+    assert(m.context().boiler_temp_start_dc == 950);
+
+    MachineContextTracker e;
+    e.onReading(temp(120, t), false);              // edit, first cycle
+    e.onReading(setpoint(120, t + 410000), true);
+    e.onPourStart(t + 1000000);
+    assert(e.context().boiler_temp_start_dc == INT16_MIN);
+    printf("SETPOINT and TARGET invalidate the last boiler reading OK\n");
   }
 
   // 7. Display bus never on: everything stays "the machine did not say".

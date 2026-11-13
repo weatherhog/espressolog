@@ -127,6 +127,7 @@ export default function Pull({ shots, beans, activeBeanId, onIngested }) {
     curve: [], capturing: false, t0: 0,
     yield_mg: 0, state: "—", lastYieldAt: 0,
     dose_mg: 0, lastDoseAt: 0,
+    machine: null, lastMachineAt: 0,
   });
 
   // ghost: last non-excluded shot on the active bean, else last overall
@@ -165,6 +166,15 @@ export default function Pull({ shots, beans, activeBeanId, onIngested }) {
           setLastEvent(f.fault ? "shot faulted (cup removed?)" : f.valid ? "shot complete" : "rejected (<5 g)");
           return;
         }
+        // The machine's own display, off the J5 tap. A screen, not a record:
+        // the shot's machine facts come from the spool header. Sent on change
+        // plus a 10 s heartbeat, so 25 s of silence means the tap is gone.
+        if (f.ev === "machine") {
+          L.machine = f;
+          L.lastMachineAt = now;
+          forceRender((n) => n + 1);
+          return;
+        }
         if (f.r === 0) {
           L.yield_mg = f.w;
           L.state = f.s;
@@ -194,6 +204,18 @@ export default function Pull({ shots, beans, activeBeanId, onIngested }) {
   const L = live.current;
   const yieldFresh = nowTs - L.lastYieldAt < 3000;
   const doseFresh = nowTs - L.lastDoseAt < 5000;
+  const machineFresh = L.machine && nowTs - L.lastMachineAt < 25000;
+  // What the machine display shows, as a readout. At " 95" the display is
+  // indistinguishable from the setpoint, so this is labelled as the display,
+  // never as a measured boiler temperature.
+  const machine = (() => {
+    const m = L.machine;
+    if (!machineFresh) return { value: "—", unit: "", label: "Machine", color: T.inkSoft };
+    if (m.mode === "temp") return { value: String(m.c), unit: "°C", label: "Boiler · display", color: T.ink };
+    if (m.mode === "setpoint") return { value: String(m.c), unit: "°C", label: "Setting setpoint", color: T.flow };
+    if (m.mode === "timer") return { value: (m.dl / 10).toFixed(1), unit: "s", label: "Machine timer", color: T.trace };
+    return { value: m.text.trim() || "—", unit: "", label: "Machine display", color: T.trace };
+  })();
   const bean = (beans || []).find((b) => b.id === activeBeanId);
   const flow = (() => {
     const c = L.curve;
@@ -221,6 +243,11 @@ export default function Pull({ shots, beans, activeBeanId, onIngested }) {
         </Panel>
 
         <Panel style={{ padding: 16 }}>
+          <Readout value={machine.value} unit={machine.unit} label={machine.label} size={30}
+            color={machine.color} />
+        </Panel>
+
+        <Panel style={{ padding: 16 }}>
           <Eyebrow>Status</Eyebrow>
           <div style={{ fontFamily: MONO, fontSize: 12, color: T.ink, lineHeight: 1.9, marginTop: 8 }}>
             <div>{wsUp ? "● server link up" : "○ server link down"}</div>
@@ -229,6 +256,9 @@ export default function Pull({ shots, beans, activeBeanId, onIngested }) {
             </div>
             <div style={{ color: doseFresh ? T.ink : T.inkSoft }}>
               {doseFresh ? `● grinder scale · ${(L.dose_mg / 1000).toFixed(1)} g` : "○ grinder scale quiet"}
+            </div>
+            <div style={{ color: machineFresh ? T.ink : T.inkSoft }}>
+              {machineFresh ? "● machine display" : "○ machine display quiet"}
             </div>
             {lastEvent && <div style={{ color: T.flow }}>{lastEvent}</div>}
           </div>

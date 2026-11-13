@@ -214,6 +214,9 @@ export default function Pull({ shots, beans, activeBeanId, onIngested }) {
     if (!machineFresh) return { value: "—", unit: "", label: "Machine", color: T.inkSoft };
     if (m.mode === "temp") return { value: String(m.c), unit: "°C", label: "Boiler · display", color: T.ink };
     if (m.mode === "setpoint") return { value: String(m.c), unit: "°C", label: "Setting setpoint", color: T.flow };
+    // Steam's 165, or the 95 it is cooling back to: where the boiler is
+    // heading, not where it is.
+    if (m.mode === "target") return { value: String(m.c), unit: "°C", label: "Heading to · not there yet", color: T.inkSoft };
     if (m.mode === "timer") return { value: (m.dl / 10).toFixed(1), unit: "s", label: "Machine timer", color: T.trace };
     if (m.mode === "blank") return { value: "—", unit: "", label: "Machine display blank", color: T.inkSoft };
     return { value: m.text.trim() || "—", unit: "", label: "Machine display", color: T.trace };

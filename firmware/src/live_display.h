@@ -136,6 +136,9 @@ private:
       case DisplayBus::Mode::SETPOINT:
         snprintf(out, n, "{\"ev\":\"machine\",\"mode\":\"setpoint\",\"text\":\"%s\",\"c\":%d}", txt, (int)r.temp_c);
         break;
+      case DisplayBus::Mode::TARGET:
+        snprintf(out, n, "{\"ev\":\"machine\",\"mode\":\"target\",\"text\":\"%s\",\"c\":%d}", txt, (int)r.temp_c);
+        break;
       case DisplayBus::Mode::TIMER:
         snprintf(out, n, "{\"ev\":\"machine\",\"mode\":\"timer\",\"text\":\"%s\",\"dl\":%u}", txt, (unsigned)r.timer_dl);
         break;

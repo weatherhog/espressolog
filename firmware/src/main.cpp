@@ -15,7 +15,7 @@
 #include "brew_guard.h"
 #include <driver/gpio.h>
 
-const char* FIRMWARE_VERSION = "0.9.8";
+const char* FIRMWARE_VERSION = "0.9.9";
 const char* DETECTOR_VERSION = "0a.6";
 
 static ScaleManager scales;
@@ -188,11 +188,13 @@ static void printDisplay(Stream& out) {
   const char* mode = r.mode == DisplayBus::Mode::TEMPERATURE ? "temp"
                    : r.mode == DisplayBus::Mode::TIMER       ? "timer"
                    : r.mode == DisplayBus::Mode::SETPOINT    ? "setpoint"
+                   : r.mode == DisplayBus::Mode::TARGET      ? "target"
                    : r.mode == DisplayBus::Mode::BLANK       ? "blank"
                    : r.mode == DisplayBus::Mode::TEXT        ? "text" : "none";
   out.printf("# display=[%s] mode=%s", r.text, mode);
   if (r.mode == DisplayBus::Mode::TEMPERATURE) out.printf(" %d C", (int)r.temp_c);
   else if (r.mode == DisplayBus::Mode::SETPOINT) out.printf(" %d C (being dialled)", (int)r.temp_c);
+  else if (r.mode == DisplayBus::Mode::TARGET)   out.printf(" %d C (target, slow blink)", (int)r.temp_c);
   else if (r.mode == DisplayBus::Mode::TIMER)  out.printf(" %u.%u s", r.timer_dl / 10, r.timer_dl % 10);
   if (display_bus.adjusting())       out.print(" ADJUSTING");
   if (display_bus.programming())     out.print(" PrG");

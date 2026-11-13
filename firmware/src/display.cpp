@@ -51,25 +51,37 @@ bool DisplayBus::readDigits(const uint8_t* bits, uint32_t t_us) {
   last.temp_c   = INT16_MIN;
   last.timer_dl = 0;
 
-  // An all-blank display is not a reading of zero. Track it, because a
-  // REPEATED blank is the blink that means a value is being edited.
+  // An all-blank display is not a reading of zero. Track it, because the
+  // interval between blank ONSETS is what says which blink this is — see
+  // BLINK_WINDOW_US in the header.
   if (text[0] == ' ' && text[1] == ' ' && text[2] == ' ') {
-    prev_blank_us = last_blank_us;
-    last_blank_us = t_us;
-    if (blanks < 2) blanks++;
-    if (blanks == 2 && (uint32_t)(last_blank_us - prev_blank_us) < BLINK_WINDOW_US) {
-      adjust  = true;
-      touched = true;
+    if (!prev_blank) {                       // an onset, not a continuation
+      if (have_onset) {
+        uint32_t period = t_us - last_onset_us;
+        if (period < BLINK_WINDOW_US) {
+          adjust  = true;
+          touched = true;
+        } else if (period < TARGET_BLINK_MAX_US) {
+          target = true;
+        }
+      }
+      last_onset_us = t_us;
+      have_onset    = true;
     }
+    prev_blank    = true;
+    last_blank_us = t_us;
     last.mode = Mode::BLANK;
     return true;
   }
+  prev_blank = false;
 
-  // A non-blank reading long after the last blank means the blink stopped.
-  if (adjust && (uint32_t)(t_us - last_blank_us) > BLINK_WINDOW_US) {
-    adjust = false;
-    blanks = 0;
-  }
+  // A shown frame long after the last blank means the blink stopped. Once
+  // neither blink is live the old onset is forgotten too, so an onset hours
+  // later cannot pair with it (and micros() wrap cannot alias it).
+  uint32_t since_blank = t_us - last_blank_us;
+  if (adjust && since_blank > BLINK_WINDOW_US) adjust = false;
+  if (target && since_blank > TARGET_END_US)   target = false;
+  if (have_onset && since_blank > TARGET_END_US) have_onset = false;
 
   int value = 0;
   bool numeric = true;
@@ -95,6 +107,11 @@ bool DisplayBus::readDigits(const uint8_t* bits, uint32_t t_us) {
   } else if (adjust) {
     // Blinking: this is the value being dialled in, not the boiler.
     last.mode   = Mode::SETPOINT;
+    last.temp_c = (int16_t)value;
+  } else if (target) {
+    // Slow blink: steam's 165, or the 95 it is cooling back to. A target,
+    // not the boiler — and not an edit, so nothing latches.
+    last.mode   = Mode::TARGET;
     last.temp_c = (int16_t)value;
   } else {
     last.mode   = Mode::TEMPERATURE;
@@ -126,10 +143,12 @@ void DisplayBus::beginCapture() {
   count         = 0;      // also drops any half-frame left by a detach
   have_edge     = false;  // and the stale timestamp that would have stamped it
   skip_first    = true;
-  blanks        = 0;
   last_blank_us = 0;
-  prev_blank_us = 0;
+  last_onset_us = 0;
+  have_onset    = false;
+  prev_blank    = false;
   adjust        = false;
+  target        = false;
   touched       = false;  // a fresh attach starts with a clean latch; we
                           // were not watching while it was detached.
   last          = Reading{};    // not just mode: printDisplay() shows

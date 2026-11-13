@@ -80,22 +80,33 @@ public:
   // SETPOINT is a number shown while the display is blinking: the value
   // being dialled in, not the boiler. Mode::TEMPERATURE used to cover
   // both, so a ramp to 120 looked like a boiler at 120.
-  enum class Mode : uint8_t { NONE, TEMPERATURE, TIMER, TEXT, BLANK, SETPOINT };
+  //
+  // TARGET is a number shown during the SLOW blink — steam (`165`) and the
+  // cooldown after it (` 95`): "a target it has not reached"
+  // (docs/machine-display-bus.md). Not the boiler either, and not an edit.
+  // Appended last so the existing values keep their numbers.
+  enum class Mode : uint8_t { NONE, TEMPERATURE, TIMER, TEXT, BLANK, SETPOINT, TARGET };
 
-  // While the setpoint is being adjusted the whole display blinks: runs of
-  // ~5 blank frames 41 ms apart, a value, then blank again ~250 ms later.
-  // Two blank frames this close together are TAKEN to mean a blink; a single
-  // one is not, which separates adjust mode from the lone blank a cold boot
-  // emits before the first reading. KNOWN DEFECT (2026-11-13): consecutive
-  // frames of ONE blank are ~41 ms apart, so any blank lasting two frames
-  // latches — every steam cycle does. The design measures the interval
-  // between blank onsets (docs/machine-display-bus.md); this does not.
-  static constexpr uint32_t BLINK_WINDOW_US = 600000;
+  // THE DISPLAY BLINKS FOR TWO REASONS AND ONLY THE PERIOD TELLS THEM APART.
+  // The period is measured between blank ONSETS — the first blank frame
+  // after a shown one — never between blank frames: one blank lasts several
+  // frames 41 ms apart, and counting frames latched every steam cycle until
+  // 2026-11-13. Measured (docs/machine-display-bus.md):
+  //   setpoint edit       onset-to-onset ~410 ms   -> adjusting, latches
+  //   steam / cooldown    onset-to-onset 1.021-1.101 s -> target, no latch
+  // One onset alone is nothing — which is what keeps a cold boot's single
+  // blank, and a hot-plug fragment followed by a blank, from latching.
+  static constexpr uint32_t BLINK_WINDOW_US     = 600000;   // < this: setpoint edit
+  static constexpr uint32_t TARGET_BLINK_MAX_US = 1600000;  // < this: steam-class blink
+  // A shown frame this long after the last blank ends a blink. The setpoint
+  // blink's shown phase is ~0.2 s; steam's can reach ~0.94 s (1.101 period
+  // less its 0.156 s shortest blank), so the slow blink needs the longer one.
+  static constexpr uint32_t TARGET_END_US       = 1500000;
 
   struct Reading {
     Mode     mode = Mode::NONE;
     char     text[4] = {0};      // as shown, e.g. " 95", "169", "PrG"
-    int16_t  temp_c = INT16_MIN; // Mode::TEMPERATURE only
+    int16_t  temp_c = INT16_MIN; // TEMPERATURE, SETPOINT and TARGET
     uint16_t timer_dl = 0;       // Mode::TIMER only — deciseconds
     uint32_t at_us = 0;          // timestamp of the frame that produced it
   };
@@ -135,6 +146,9 @@ public:
   // The display is blinking, i.e. a value is being edited. This is the
   // sustained signal `programming()` is not.
   bool adjusting() const { return adjust; }
+
+  // The slow steam/cooldown blink is on: shown numbers are targets.
+  bool targetBlinking() const { return target; }
 
   // Latched: someone has entered temperature programming or edited a value
   // since this was last cleared. THIS is what belongs on a shot record —
@@ -206,10 +220,12 @@ private:
   Reading  last;
   Buttons  btn;
 
-  uint32_t last_blank_us = 0;
-  uint32_t prev_blank_us = 0;
-  uint8_t  blanks = 0;          // saturates at 2
+  uint32_t last_blank_us = 0;    // latest blank FRAME
+  uint32_t last_onset_us = 0;    // latest blank ONSET
+  bool     have_onset = false;
+  bool     prev_blank = false;   // was the previous decoded digit frame blank?
   bool     adjust = false;
+  bool     target = false;
   bool     touched = false;
 
   static char glyph(const uint8_t* bits);          // 7 bits -> character, 0 if unknown

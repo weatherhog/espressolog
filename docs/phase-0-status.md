@@ -108,11 +108,22 @@ machine's display.)
   **Fixed in 0.9.9 — NOT YET FLASHED; the board runs 0.9.8, so the latch is
   still live.** 0.9.9 measures between blank onsets, so steam no longer
   latches, and the slow blink's numbers decode as `TARGET`. **It does not
-  make `boiler_temp_start_c` reliable after steam or an edit**: replayed,
-  ~5 s of steady `165` and the first cooldown cycles still decode as
-  TEMPERATURE, so a shot pulled in those seconds stores them; a later
+  make `boiler_temp_start_c` reliable after steam or an edit**: steam's
+  steady `165`, the first cooldown cycles and held-button ramps still decode
+  as TEMPERATURE for seconds, so a shot pulled then stores them; a later
   TARGET or SETPOINT frame invalidates the value, which only shortens the
-  window (CLAUDE.md, display-bus entry, has the table).
+  exposure (CLAUDE.md, display-bus entry).
+
+- **2026-11-14, first full test on the machine (0.9.8)**: shots 177 and
+  178, both 2Cup stopped by hand, no `E01`, display and PWA normal; doses
+  measured, boiler 95 °C, flow 288 / 371 pulses (7.46 / 7.56 per gram of
+  yield). **Steam was used after both shots** (08:38–08:42, from the server's
+  live journal): 0.9.8 decoded it as `setpoint 165` — the false latch, seen
+  live — then a steady `165` for ~2.7 min once at temperature, then
+  `setpoint 95` through the cooldown. No shot followed, so no record
+  carries it. The journal also shows **occasional single-frame digit
+  misreads one segment off** (`765`, `185` at 165; `99`, `85` at 95), a few
+  per hour — likely the same cause as the stray TIMER frame above.
 
 ### Firmware 0.9.7 — the machine display on the PWA
 

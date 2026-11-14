@@ -64,10 +64,13 @@ bool DisplayBus::readDigits(const uint8_t* bits, uint32_t t_us) {
           adjust  = true;
           touched = true;
           target  = false;                   // an edit, whatever came before
-        } else if (period < TARGET_BLINK_MAX_US && !adjust) {
-          // Not while an edit is live: a setpoint blink whose one shown frame
-          // was dropped measures ~820 ms here, and must not leave the steam
-          // state behind it when the edit ends.
+        } else if (period < TARGET_BLINK_MAX_US) {
+          // Set even while an edit is live (adjust wins the decode while it
+          // lasts). When in doubt, a value is NOT the boiler: if an edit's
+          // one shown frame was dropped this costs ~1 s of TARGET after the
+          // edit, and refusing it instead let steam values count as the
+          // boiler ~1 s early after an edit made during steam (review,
+          // 2026-11-14).
           target = true;
         }
       }
@@ -203,10 +206,13 @@ bool DisplayBus::feedEdge(uint32_t t_us, uint8_t data_bit) {
 }
 
 bool DisplayBus::poll(uint32_t t_us) {
-  // Finish the pending frame FIRST, at its own timestamp, then expire. The
-  // other order (review, 2026-11-13) let a loop() stall longer than
-  // TARGET_END_US wipe the blink state before the frame that arrived during
-  // the blink was decoded, so it came out as TEMPERATURE.
+  // Finish the pending frame FIRST, at its own timestamp, then expire — the
+  // pending frame belongs to the past, the expiry to now. Rarely matters in
+  // firmware: the ISR ring fills ~160 ms into a loop() stall and the frames
+  // it caught are finished by feedEdge() during the drain, so what is left
+  // pending is normally a fragment. It matters when the bus goes quiet
+  // straight after a complete frame (power-off mid-blink) and poll() is
+  // late.
   bool fresh = false;
   if (have_edge && count != 0 && (uint32_t)(t_us - last_edge_us) > FRAME_GAP_US)
     fresh = finishFrame(last_edge_us);

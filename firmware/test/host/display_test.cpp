@@ -569,21 +569,23 @@ int main() {
     // After the expiry the decoder must behave like a fresh one, even when
     // the boot blank lands within BLINK_WINDOW_US of the old onset modulo a
     // micros() wrap.
-    // Start ~1 s before micros() wraps, so the poll and the boot blank both
-    // land past the wrap. (Until 2026-11-13 this case added 2^32 to a
-    // uint32_t, which changes nothing, and fed the boot blank earlier than
-    // frames already decoded.)
+    // Start 100 ms before micros() wraps, so the shown frames, the poll and
+    // the boot blank all sit past the wrap and the onset arithmetic crosses
+    // it. (Until 2026-11-13 this case added 2^32 to a uint32_t, which
+    // changes nothing; for one commit after that its comment claimed a wrap
+    // the boot blank did not cross.)
     DisplayBus e;
-    const uint32_t base = 0xFFF00000u;              // 1 048 576 us before the wrap
+    const uint32_t base = 0xFFFE7960u;              // 100 000 us before the wrap
     uint32_t t = base;
     for (int i = 0; i < 4; i++) { decode(e, FRAME_BLANK, t); t += 41000; }
     for (int i = 0; i < 6; i++) { decode(e, FRAME_95, t); t += 41000; }
     e.poll(t + 1700000);                            // off, and past the wrap
     assert(!e.targetBlinking() && !e.adjusting());
-    // Power back on one full micros() period later: the boot blank's
-    // timestamp is 300 ms after the old onset modulo 2^32, and the value
-    // shown before it was on screen for >= MIN_SHOWN_US. Without the expiry
-    // in poll() this pairs into a 300 ms "blink" and latches.
+    // Power back on one full micros() period (71.6 min) later: the boot
+    // blank's timestamp is 300 ms after the old onset modulo 2^32 — so it is
+    // numerically EARLIER than the poll — and the value shown before it was
+    // on screen for >= MIN_SHOWN_US. Without the expiry in poll() this pairs
+    // into a 300 ms "blink" and latches.
     uint32_t boot = base + 300000;
     assert(decode(e, FRAME_BLANK, boot));
     assert(!e.setpointTouched());
@@ -612,8 +614,10 @@ int main() {
   }
 
   // 29. An edit whose one shown frame is dropped: the next onset is ~820 ms
-  //     after the last, in the steam band. With the edit live it must not
-  //     set the steam state, or the steady value after the edit reads TARGET.
+  //     after the last, in the steam band, and sets the steam state. The
+  //     steady value straight after the edit then reads TARGET, not
+  //     TEMPERATURE, for under a second — the safe side: when in doubt, a
+  //     value is not the boiler. (Asserted the opposite for one commit.)
   {
     DisplayBus d;
     uint32_t t = 1000;
@@ -628,10 +632,12 @@ int main() {
     for (int i = 0; i < 5; i++) { decode(d, FRAME_BLANK, t); t += 41000; }
     decode(d, FRAME_TEMP_100, onset + 615000);       // next cycle's value, shown
     assert(decode(d, FRAME_BLANK, onset + 820000));  // onset 820 ms after the last
-    assert(!d.targetBlinking());
+    assert(d.adjusting() && d.targetBlinking());     // adjust still wins the decode
     assert(decode(d, FRAME_95, onset + 820000 + 900000));  // edit over, steady
+    assert(d.reading().mode == DisplayBus::Mode::TARGET);  // not the boiler yet
+    assert(decode(d, FRAME_95, onset + 820000 + 1700000));
     assert(d.reading().mode == DisplayBus::Mode::TEMPERATURE);
-    printf("a dropped frame mid-edit does not start the steam state OK\n");
+    printf("a dropped frame mid-edit errs towards not-the-boiler OK\n");
   }
 
   // 27. An edit taking over from a steam blink clears the steam state, so
@@ -657,7 +663,7 @@ int main() {
   }
 
   // 24. A one-bit blip must NOT spend the guard. (Numbered 20 until
-  //     2026-11-13, when the new cases 20-23 and 25-28 were added; this one
+  //     2026-11-13, when the new cases 20-23 and 25-29 were added; this one
   //     stays last in the file.) Power-on carries 32-33
   //     single-bit frames (32 clock pulses, plus the rail rise on some boots;
   //     docs/machine-display-bus.md, power-on table), and decodeFrame() rejects

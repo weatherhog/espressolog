@@ -572,8 +572,9 @@ recognised at its SECOND onset, so the first blink cycle of an edit or a
 steam cycle still decodes as TEMPERATURE; a SETPOINT or TARGET frame then
 invalidates the boiler reading it left (`machine_context.h`).
 
-**THAT IS TRUE FROM FIRMWARE 0.9.9** (what the board runs:
-`docs/phase-0-status.md`; on anything older, steam still latches). **BEFORE
+**THAT IS TRUE FROM FIRMWARE 0.9.9. As of 2026-11-14 the board still runs
+0.9.8, on which steam latches** — seen live that morning, decoded as
+`setpoint 165` (`docs/phase-0-status.md` has what the board runs now). **BEFORE
 0.9.9 THE CODE DID NOT IMPLEMENT THE DESIGN — found 2026-11-13.** `display.cpp` latched on two blank FRAMES
 within 600 ms, and one blank lasts several frames 41 ms apart, so **every
 steam cycle latched `setpoint_touched`**. Replayed through both decoders,
@@ -595,25 +596,20 @@ verified temperature. Settling that needs a capture with the boiler pulled off
 setpoint and allowed to recover.
 
 **AND FOR A SHOT PULLED WITHIN SECONDS OF STEAM ENDING OR OF A SETPOINT
-CHANGE, `boiler_temp_start_c` IS UNRELIABLE ON ANY FIRMWARE** — measured
-by replaying `2026-10-05-display-bus-steam.sr` and
-`2026-10-03-display-bus-buttons.sr` through both decoders (2026-11-13):
-
-| window | what decodes as TEMPERATURE | 0.9.8 | 0.9.9 |
-|---|---|---|---|
-| the steady `165` between steam's two blink regimes | `165`, ~5 s (51.0–54.6 s) | yes | yes — the blink has expired |
-| the first cooldown blink cycles | ` 95`, 54.66–55.08 s | yes (9 frames) | yes (19 frames, to 56.06 s) |
-| a held-button ramp | the ramping value, 1–2 s each (107→120, 108→100) | yes | yes |
-
-0.9.9 invalidates the stored reading once a later SETPOINT or TARGET frame
-arrives (`machine_context.h`), which shortens those windows but does not
-close them: a pour that starts inside one stores the value. **Making the
-column reliable is a design of its own** — e.g. a "display not steady
-before the pour" flag on the record — and is not attempted.
-*(Until the 2026-11-13 decoder review this paragraph said a 0.9.9 cooldown
-shot records no boiler temperature, and that the old decoder only
-"possibly" stored a post-steam ` 95`. The replays say otherwise on both
-counts.)*
+CHANGE, `boiler_temp_start_c` IS UNRELIABLE ON ANY FIRMWARE.** Replaying the
+steam and button captures through both decoders shows non-boiler values
+decoding as TEMPERATURE for seconds at a time — steam's steady `165`, the
+first cooldown blink cycles, a held-button ramp — and on 0.9.8 nothing ever
+marks them stale. 0.9.9 invalidates the stored value at the next SETPOINT
+or TARGET frame (`machine_context.h`), which shortens the exposure and does
+not close it. **Exact windows are deliberately not stated**: they depend on
+firmware and on when the next blink frame arrives, and three successive
+reviews found each stated set wrong. Replay the captures if you need them.
+**Making the column reliable is a design of its own** — e.g. a "display not
+steady before the pour" flag on the record — and is not attempted.
+*(A measured-windows table stood here for one commit on 2026-11-13, and
+before it a claim that a 0.9.9 cooldown shot records no boiler temperature;
+both withdrawn.)*
 
 **The display does NOT run its shot timer during a hot-water draw**, so
 `machine_timer_dl` cannot pick up a tap draw and `machine_context.h` needs no

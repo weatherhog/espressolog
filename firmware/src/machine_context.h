@@ -62,8 +62,7 @@ public:
       // untrustworthy, so a pour after it records "the machine did not say".
       // THIS SHORTENS THE EXPOSURE; IT DOES NOT CLOSE IT: a pour that starts
       // inside one of those windows, before the next blink frame, still
-      // stores the value (CLAUDE.md, display-bus entry, has the measured
-      // windows).
+      // stores the value (CLAUDE.md, display-bus entry).
       have_boiler = false;
     }
     // A TIMER reading counts only when the frame before it was TIMER too.

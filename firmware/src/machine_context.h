@@ -49,10 +49,22 @@ public:
                               && prev_frame_mode == DisplayBus::Mode::TIMER;
     if (r.mode == DisplayBus::Mode::TEMPERATURE) {
       // Only Mode::TEMPERATURE is the boiler. SETPOINT is the number being
-      // dialled in, BLANK and TEXT are not temperatures at all.
+      // dialled in, TARGET is steam's 165 or the 95 it is cooling back to,
+      // BLANK and TEXT are not temperatures at all.
       last_boiler_dc = (int16_t)(r.temp_c * 10);
       last_boiler_us = r.at_us;
       have_boiler = true;
+    } else if (r.mode == DisplayBus::Mode::SETPOINT || r.mode == DisplayBus::Mode::TARGET) {
+      // AND THEY INVALIDATE the last one. Several non-boiler values decode
+      // as TEMPERATURE: a blink's first cycle (it is recognised at its
+      // second onset), steam's steady 165 for as long as steam holds
+      // temperature (minutes, live), and
+      // a held-button ramp. A later SETPOINT or TARGET frame marks them
+      // untrustworthy, so a pour after it records "the machine did not say".
+      // THIS SHORTENS THE EXPOSURE; IT DOES NOT CLOSE IT: a pour that starts
+      // inside one of those windows, before the next blink frame, still
+      // stores the value (CLAUDE.md, display-bus entry).
+      have_boiler = false;
     }
     // A TIMER reading counts only when the frame before it was TIMER too.
     // 2026-11-13: one idle frame decoded as TIMER with text " 95" between two

@@ -263,14 +263,14 @@ arriving and being discarded. `Disp-P4` can stay an unterminated test
 point.
 
 **THE DISPLAY BLINKS FOR TWO DIFFERENT REASONS, AT DIFFERENT RATES.** Only
-one of them is a setpoint edit, and the design distinguishes them by period
-alone — so the period is load-bearing. **The firmware does not yet implement
-that design**; see below the table:
+one of them is a setpoint edit, and the firmware distinguishes them by
+period alone — so the period is load-bearing. *(From 0.9.9; see below the
+table for what the code did before.)*
 
 | State | blank-to-blank | `display.cpp` |
 |---|---|---|
 | **Setpoint being adjusted** | **~410 ms** (2.44 Hz, 0.204–0.210 s per half-cycle) | latches `setpoint_touched` ✓ |
-| **Steam, and cooling afterwards** | **1.021–1.101 s** (measured over 100 intervals) | ~~does **not** latch ✓~~ **DOES latch — see below** |
+| **Steam, and cooling afterwards** | **1.021–1.101 s** (measured over 100 intervals) | does **not** latch ✓, shown value is `Mode::TARGET` *(from 0.9.9; latched before — see below)* |
 | `BLINK_WINDOW_US` | **600 ms**, sitting between them | |
 
 The guard band is **414 → 1020 ms**, and 600 ms sits inside it with
@@ -280,18 +280,48 @@ edit. **The threshold was chosen before anyone knew the steam blink
 existed**; this is the measurement that justifies it rather than luck.
 `2026-10-05-display-bus-steam.sr`, 102 blank onsets.
 
-**`display.cpp` DOES NOT MEASURE THAT INTERVAL — found 2026-11-13, when a
-short steam start/stop latched `SETPOINT-TOUCHED` with no button touched.**
-It latches when two BLANK FRAMES arrive within `BLINK_WINDOW_US`, and frames
-are ~41 ms apart, so any blank lasting two frames latches; steam's shortest
-blank (0.156 s) is about four. **Every steam cycle latches.** This table
-said "does not latch ✓" until then — the measurement above is right; what
-was wrong was the claim that the code used it. Consequences are in
-`docs/phase-0-status.md` (top section) and CLAUDE.md — the costly one is
-that `store.go` stops carrying brew temperature and pre-infusion forward
-from a latched shot. The fix — latch on the interval between blank ONSETS —
-is open, and rewrites `display_test.cpp` cases 15, 18 and 19, which assert the
-two-frame rule (19's attach-fragment guard included — keep what it guards).
+**UNTIL FIRMWARE 0.9.9 `display.cpp` DID NOT MEASURE THAT INTERVAL — found
+2026-11-13, when a short steam start/stop latched `SETPOINT-TOUCHED` with no
+button touched.** It latched when two BLANK FRAMES arrived within
+`BLINK_WINDOW_US`, and frames are ~41 ms apart, so any blank lasting two
+frames latched; steam's shortest blank (0.156 s) is about four. **Every steam
+cycle latched**, and this table said "does not latch ✓" all the same — the
+measurement was right; the claim that the code used it was not. The cost:
+`store.go` stops carrying brew temperature and pre-infusion forward from a
+latched shot, so shots from earlier firmware may have NULLs for that reason.
+
+**0.9.9 measures between blank ONSETS** (`display.h`, `BLINK_WINDOW_US`):
+an onset is the first blank after a value shown for at least 120 ms
+(`MIN_SHOWN_US`); under 600 ms between onsets is an edit (latch,
+`SETPOINT`); 600 ms to 1.6 s is the slow blink (`TARGET`, no latch); 1.6 s
+with no blank ends a blink — checked on every shown frame and in `poll()`,
+so a machine switched off mid-blink does not leave one armed.
+
+**The guard is in TIME because a setpoint blink can send ONE frame for the
+shown value**, then nothing until the next blank ~209 ms later
+(`2026-10-03-display-bus-buttons.sr`, 6.150 → 6.359 s). Not every shown
+phase is one frame: steam's carry 10–11 (48.795–49.271 s in the steam
+capture), and a held-button ramp shows unbroken for seconds. A guard counting two
+shown frames was tried first, and the replay showed it stopped real edits
+being recognised. A glitch frame inside one of steam's blanks is followed
+by the next blank 41 ms later, so it is rejected.
+
+**Replayed, all twelve display captures in `analysis/captures/`, through
+the old and new decoders:** the steam capture latches on the old and not
+the new, and its blinks decode as `TARGET`. In `buttons`, all four edits
+latch on both; **three are recognised ~0.4 s later than before** (6.359,
+15.820 and 18.440 s against 5.986, 15.447 and 18.020 s — the new decoder
+waits for the second onset, the old one fired on the second blank frame),
+and the fourth at the same moment on both (21.718 s), because a lone blank
+at 21.460 s gives the new decoder its first onset. `setup-menu`
+latches on both with one frame decoded differently; `buttons-separated`
+latches on both through `PrG` and decodes identically; the other eight
+decode identically with no latch. `display_test.cpp`: cases 15, 18 and 19
+were rewritten for onsets; 20–23 pin the long blank, the steam blink, an
+edit after steam and a stale onset; 25–29 the glitch frame, expiry with the
+bus silent across a `micros()` wrap, an edit clearing the steam blink, a
+`loop()` stall mid-blink, and a dropped frame mid-edit; and 24 (numbered 20
+until then) the attach guard against blips.
 
 **Use the interval, never the blank duration.** Steam blanks average longer
 (0.550 s against a setpoint edit's 0.204 s), which looks like a cleaner
@@ -305,8 +335,8 @@ blink regimes. Harmless (it is also > 600 ms) but it is why the quoted
 
 While adjusting, the display blanks **entirely** (all three fields zero)
 and comes back. The steam blink does the same thing more slowly, which is
-why period is the only discriminator available — and why the as-built
-two-frame rule cannot discriminate at all.
+why period is the only discriminator available — and why the pre-0.9.9
+two-frame rule could not discriminate at all.
 
 **What blinking means is "showing a target it has not reached":** during a
 steam cycle the display blinks **`165`**, and after steam is released it
@@ -735,11 +765,16 @@ does not**: it confirms the behaviour only in the range the column is never
 sampled in.
 
 What the column *does* reliably carry: a steady ` 95` means at setpoint; a
-blink or a different value means not. That is still worth storing. **Except
-after steam** (2026-11-13): `adjust` (not the `setpoint_touched` latch) clears
-between post-steam blinks, so some ` 95` frames there decode as TEMPERATURE
-and can be stored while the boiler is hotter — and the designed
-onset-interval fix would make every post-steam frame do so. Settling
+blink or a different value means not. That is still worth storing — **except
+for a shot pulled during steam, for seconds after it, or after a setpoint
+change, where it is unreliable on any firmware**: steam's steady `165`
+decodes as TEMPERATURE for as long as steam holds temperature (minutes,
+live), and the first cooldown blink cycles and held-button ramps for
+seconds; 0.9.9's invalidation at the next blink frame only shortens that.
+A single-frame misread can also be stored (CLAUDE.md). Exact windows are not stated, for the reason CLAUDE.md gives.
+*(Until 2026-11-13 this said a 0.9.9 cooldown shot records no boiler
+temperature and that the old decoder's post-steam ` 95` was "not seen in the
+steam capture"; it is, 9 frames.)* Settling
 whether it is ever a true boiler reading above 88 °C needs a capture with
 the boiler deliberately pulled off setpoint and allowed to recover. During a brew the
 machine takes the display over for a **shot timer in tenths of a second**

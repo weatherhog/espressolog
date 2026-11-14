@@ -334,18 +334,24 @@ int main() {
     printf("blank display is not 0 C OK\n");
   }
 
-  // 15. Two blanks close together are the blink, and a number shown while
-  //     blinking is the setpoint being dialled in — not the boiler. The
-  //     ramp that produced FRAME_TEMP_100 ran 95 -> 120; reporting that as
-  //     boiler temperature would put 120 C into the log.
+  // 15. Two blank ONSETS ~410 ms apart are the setpoint blink, and a number
+  //     shown while blinking is the setpoint being dialled in — not the
+  //     boiler. The ramp that produced FRAME_TEMP_100 ran 95 -> 120;
+  //     reporting that as boiler temperature would put 120 C into the log.
+  //     (Until 2026-11-13 this case latched on two blank FRAMES 41 ms apart
+  //     — one blank — which is the rule that latched every steam cycle.)
   {
     DisplayBus d;
     assert(decode(d, FRAME_BLANK, 1000));
+    assert(decode(d, FRAME_BLANK, 1000 + 41000));  // same blank, next frame
     assert(!d.adjusting());                        // one blank proves nothing
-    assert(decode(d, FRAME_BLANK, 1000 + 41000));  // 41 ms later: a blink
+    assert(decode(d, FRAME_TEMP_100, 1000 + 205000));
+    // ONE shown frame, as the real bus sends while blinking (buttons capture).
+    assert(decode(d, FRAME_BLANK, 1000 + 410000)); // second onset, 410 ms on
     assert(d.adjusting());
+    assert(d.setpointTouched());
 
-    assert(decode(d, FRAME_TEMP_100, 1000 + 250000));
+    assert(decode(d, FRAME_TEMP_100, 1000 + 615000));
     assert(d.reading().mode == DisplayBus::Mode::SETPOINT);
     assert(d.reading().temp_c == 100);
     printf("blink detected, value read as setpoint not boiler OK\n");
@@ -388,9 +394,10 @@ int main() {
   {
     DisplayBus d;
     assert(decode(d, FRAME_BLANK, 1000));
-    assert(decode(d, FRAME_BLANK, 1000 + 41000));    // 41 ms: a blink
+    assert(decode(d, FRAME_95, 1000 + 205000));
+    assert(decode(d, FRAME_BLANK, 1000 + 410000));   // second onset: a blink
     assert(d.adjusting());
-    assert(decode(d, FRAME_95, 1000 + 41000 + 2000000));  // 2 s of no blinking
+    assert(decode(d, FRAME_95, 1000 + 410000 + 2000000));  // 2 s of no blinking
     assert(!d.adjusting());
     assert(d.reading().mode == DisplayBus::Mode::TEMPERATURE);
     printf("blink expiry returns to temperature OK\n");
@@ -423,37 +430,241 @@ int main() {
     lone.poll(t + 50000);
     assert(!lone.setpointTouched());
 
-    // Fragment immediately followed by a real blank: without the guard the
-    // fragment counts as the first half of a blink that never happened.
+    // A fragment decoded as a blank is an ONSET. Followed by a shown value
+    // and a real blank inside BLINK_WINDOW_US, it pairs into a blink that
+    // never happened. (Until 2026-11-13 the sequence here was fragment +
+    // blank; under the onset rule that is one blank and latches nothing, so
+    // it stopped telling guarded from unguarded.)
     DisplayBus bug;
     t = 1000;
     for (int i = 0; i < 66; i++) { bug.feedEdge(t, 0); t += 101; }  // fragment
-    t += 50000;                                                     // frame gap
-    for (int i = 0; i < 66; i++) { bug.feedEdge(t, 0); t += 101; }  // real blank
     bug.poll(t + 50000);
-    assert(bug.setpointTouched());
+    assert(decode(bug, FRAME_95, t + 100000));
+    assert(decode(bug, FRAME_95, t + 141000));
+    assert(decode(bug, FRAME_BLANK, t + 400000));                    // real blank
+    assert(bug.setpointTouched());                                  // unguarded: latches
 
-    // Armed, the fragment is dropped and the same sequence is one blank.
+    // Armed, the fragment is dropped and the same sequence is one onset.
     DisplayBus d;
     d.beginCapture();
     t = 1000;
     for (int i = 0; i < 66; i++) { d.feedEdge(t, 0); t += 101; }
-    t += 50000;
-    for (int i = 0; i < 66; i++) { d.feedEdge(t, 0); t += 101; }
     d.poll(t + 50000);
+    assert(decode(d, FRAME_95, t + 100000));
+    assert(decode(d, FRAME_95, t + 141000));
+    assert(decode(d, FRAME_BLANK, t + 400000));
     assert(!d.setpointTouched());
     assert(!d.adjusting());
 
     // A genuine blink still latches — a "fix" that merely disabled the
-    // latch would pass everything above and fail here.
-    t += 50000;
-    for (int i = 0; i < 66; i++) { d.feedEdge(t, 0); t += 101; }
-    d.poll(t + 50000);
+    // latch would pass everything above and fail here. The real blank above
+    // was the first onset; show a value, then blank again ~410 ms later.
+    uint32_t onset1 = t + 400000;
+    assert(decode(d, FRAME_95, onset1 + 205000));
+    assert(decode(d, FRAME_95, onset1 + 246000));
+    assert(decode(d, FRAME_BLANK, onset1 + 410000));
     assert(d.setpointTouched());
     printf("attach fragment is discarded; a lone fragment never latched OK\n");
   }
 
-  // 20. A one-bit blip must NOT spend the guard. Power-on carries 32-33
+  // 20. ONE LONG BLANK IS NOT A BLINK. Steam's blanks average 0.55 s —
+  //     ~13 frames 41 ms apart. The rule before 2026-11-13 latched on any two
+  //     of them, which is how a short steam start/stop set SETPOINT-TOUCHED
+  //     with no button touched.
+  {
+    DisplayBus d;
+    assert(decode(d, FRAME_95, 1000));
+    uint32_t t = 100000;
+    for (int i = 0; i < 13; i++) { assert(decode(d, FRAME_BLANK, t)); t += 41000; }
+    assert(decode(d, FRAME_95, t));
+    assert(!d.setpointTouched());
+    assert(!d.adjusting());
+    assert(d.reading().mode == DisplayBus::Mode::TEMPERATURE);
+    printf("one long blank is not a blink OK\n");
+  }
+
+  // 21. The steam/cooldown blink: onsets ~1.06 s apart (measured 1.021-1.101 s
+  //     over 100 intervals). No latch, and the shown number is a TARGET —
+  //     the ` 95` it is cooling back to is not the boiler, which is hotter.
+  //     It ends once the display stops blinking for longer than TARGET_END_US.
+  {
+    DisplayBus d;
+    uint32_t t = 1000;
+    for (int cycle = 0; cycle < 6; cycle++) {
+      uint32_t onset = t;
+      for (int i = 0; i < 4; i++) { assert(decode(d, FRAME_BLANK, t)); t += 41000; }  // 0.156 s, the shortest
+      for (; t < onset + 1060000; t += 41000) assert(decode(d, FRAME_95, t));
+      if (cycle >= 1) {
+        assert(d.reading().mode == DisplayBus::Mode::TARGET);
+        assert(d.reading().temp_c == 95);
+      }
+    }
+    assert(!d.setpointTouched());
+    assert(!d.adjusting());
+    assert(d.targetBlinking());
+    assert(decode(d, FRAME_95, t + 2000000));       // steady again
+    assert(!d.targetBlinking());
+    assert(d.reading().mode == DisplayBus::Mode::TEMPERATURE);
+    printf("steam/cooldown blink is a target, not an edit OK\n");
+  }
+
+  // 22. A setpoint edit straight after a steam blink still latches, and its
+  //     value reads as SETPOINT, not TARGET.
+  {
+    DisplayBus d;
+    uint32_t t = 1000;
+    for (int cycle = 0; cycle < 3; cycle++) {
+      uint32_t onset = t;
+      for (int i = 0; i < 4; i++) { decode(d, FRAME_BLANK, t); t += 41000; }
+      for (; t < onset + 1060000; t += 41000) decode(d, FRAME_95, t);
+    }
+    assert(d.targetBlinking() && !d.setpointTouched());
+    uint32_t onset = t;
+    for (int i = 0; i < 5; i++) { decode(d, FRAME_BLANK, t); t += 41000; }
+    for (; t < onset + 410000; t += 41000) decode(d, FRAME_TEMP_100, t);
+    assert(decode(d, FRAME_BLANK, t));
+    assert(d.setpointTouched());
+    assert(decode(d, FRAME_TEMP_100, t + 205000));
+    assert(d.reading().mode == DisplayBus::Mode::SETPOINT);
+    printf("setpoint edit after steam still latches OK\n");
+  }
+
+  // 23. An onset is forgotten once the display has been steady: a blank an
+  //     hour later, or one micros() wrap (71.58 min) later, cannot pair with
+  //     a stale onset and latch.
+  {
+    DisplayBus d;
+    assert(decode(d, FRAME_BLANK, 1000));
+    assert(decode(d, FRAME_95, 1000 + 500000));
+    assert(decode(d, FRAME_95, 1000 + 3000000));    // steady: onset dropped
+    uint32_t wrap = 1000 + 300000;                  // = 1000 + 300 ms, mod 2^32,
+    wrap += 0xFFFFFFFFu;                            // one wrap later
+    wrap += 1;
+    assert(decode(d, FRAME_BLANK, wrap));
+    assert(!d.setpointTouched());
+    printf("a stale onset never pairs across a long gap OK\n");
+  }
+
+  // 25. A glitch frame inside one of steam's long blanks is not an onset.
+  //     One shown frame in the middle of a 0.55 s blank would otherwise make
+  //     a second onset ~41 ms later and latch exactly as the pre-0.9.9 rule
+  //     did.
+  {
+    DisplayBus d;
+    assert(decode(d, FRAME_95, 1000));
+    assert(decode(d, FRAME_95, 42000));
+    uint32_t t = 100000;
+    for (int i = 0; i < 6; i++) { decode(d, FRAME_BLANK, t); t += 41000; }
+    assert(decode(d, FRAME_95, t)); t += 41000;     // one glitch frame
+    for (int i = 0; i < 6; i++) { decode(d, FRAME_BLANK, t); t += 41000; }
+    assert(!d.setpointTouched());
+    assert(!d.adjusting());
+    printf("a lone shown frame inside a blank is not an onset OK\n");
+  }
+
+  // 26. Switched off mid-blink: no frames at all. poll() expires the blink,
+  //     so the cold-boot blank on power-up cannot pair with a pre-power-off
+  //     onset.
+  {
+    // After the expiry the decoder must behave like a fresh one, even when
+    // the boot blank lands within BLINK_WINDOW_US of the old onset modulo a
+    // micros() wrap.
+    // Start 100 ms before micros() wraps, so the shown frames, the poll and
+    // the boot blank all sit past the wrap and the onset arithmetic crosses
+    // it. (Until 2026-11-13 this case added 2^32 to a uint32_t, which
+    // changes nothing; for one commit after that its comment claimed a wrap
+    // the boot blank did not cross.)
+    DisplayBus e;
+    const uint32_t base = 0xFFFE7960u;              // 100 000 us before the wrap
+    uint32_t t = base;
+    for (int i = 0; i < 4; i++) { decode(e, FRAME_BLANK, t); t += 41000; }
+    for (int i = 0; i < 6; i++) { decode(e, FRAME_95, t); t += 41000; }
+    e.poll(t + 1700000);                            // off, and past the wrap
+    assert(!e.targetBlinking() && !e.adjusting());
+    // Power back on one full micros() period (71.6 min) later: the boot
+    // blank's timestamp is 300 ms after the old onset modulo 2^32 — so it is
+    // numerically EARLIER than the poll — and the value shown before it was
+    // on screen for >= MIN_SHOWN_US. Without the expiry in poll() this pairs
+    // into a 300 ms "blink" and latches.
+    uint32_t boot = base + 300000;
+    assert(decode(e, FRAME_BLANK, boot));
+    assert(!e.setpointTouched());
+    printf("a blink expires while the bus is silent OK\n");
+  }
+
+  // 28. A loop() stall in the middle of a steam blink: the frame that
+  //     arrived during the blink is still pending when poll() runs ~2 s
+  //     later. poll() must decode it (TARGET) before expiring the blink.
+  {
+    DisplayBus d;
+    uint32_t t = 1000;
+    for (int cycle = 0; cycle < 3; cycle++) {
+      uint32_t onset = t;
+      for (int i = 0; i < 4; i++) { decode(d, FRAME_BLANK, t); t += 41000; }
+      for (; t < onset + 1060000; t += 41000) decode(d, FRAME_95, t);
+    }
+    for (int i = 0; i < 4; i++) { decode(d, FRAME_BLANK, t); t += 41000; }
+    assert(d.targetBlinking());
+    size_t n = bits(FRAME_95);                     // the pending shown frame
+    for (size_t i = 0; i < n; i++) { d.feedEdge(t, scratch[i]); t += 101; }
+    d.poll(t + 2000000);                           // 2 s stall, then poll
+    assert(d.reading().mode == DisplayBus::Mode::TARGET);
+    assert(!d.targetBlinking());                   // and only then expired
+    printf("a stall mid-blink decodes the pending frame before expiring OK\n");
+  }
+
+  // 29. An edit whose one shown frame is dropped: the next onset is ~820 ms
+  //     after the last, in the steam band, and sets the steam state. The
+  //     steady value straight after the edit then reads TARGET, not
+  //     TEMPERATURE, for under a second — the safe side: when in doubt, a
+  //     value is not the boiler. (Asserted the opposite for one commit.)
+  {
+    DisplayBus d;
+    uint32_t t = 1000;
+    for (int cycle = 0; cycle < 3; cycle++) {        // a live edit
+      uint32_t onset = t;
+      for (int i = 0; i < 5; i++) { decode(d, FRAME_BLANK, t); t += 41000; }
+      decode(d, FRAME_TEMP_100, onset + 205000);
+      t = onset + 410000;
+    }
+    assert(d.adjusting());
+    uint32_t onset = t;                              // this cycle's value is lost
+    for (int i = 0; i < 5; i++) { decode(d, FRAME_BLANK, t); t += 41000; }
+    decode(d, FRAME_TEMP_100, onset + 615000);       // next cycle's value, shown
+    assert(decode(d, FRAME_BLANK, onset + 820000));  // onset 820 ms after the last
+    assert(d.adjusting() && d.targetBlinking());     // adjust still wins the decode
+    assert(decode(d, FRAME_95, onset + 820000 + 900000));  // edit over, steady
+    assert(d.reading().mode == DisplayBus::Mode::TARGET);  // not the boiler yet
+    assert(decode(d, FRAME_95, onset + 820000 + 1700000));
+    assert(d.reading().mode == DisplayBus::Mode::TEMPERATURE);
+    printf("a dropped frame mid-edit errs towards not-the-boiler OK\n");
+  }
+
+  // 27. An edit taking over from a steam blink clears the steam state, so
+  //     the new setpoint does not read as TARGET once the edit ends.
+  {
+    DisplayBus d;
+    uint32_t t = 1000;
+    for (int cycle = 0; cycle < 3; cycle++) {
+      uint32_t onset = t;
+      for (int i = 0; i < 4; i++) { decode(d, FRAME_BLANK, t); t += 41000; }
+      for (; t < onset + 1060000; t += 41000) decode(d, FRAME_95, t);
+    }
+    assert(d.targetBlinking());
+    for (int cycle = 0; cycle < 3; cycle++) {
+      uint32_t onset = t;
+      for (int i = 0; i < 5; i++) { decode(d, FRAME_BLANK, t); t += 41000; }
+      for (; t < onset + 410000; t += 41000) decode(d, FRAME_TEMP_100, t);
+    }
+    assert(d.adjusting() && !d.targetBlinking());
+    assert(decode(d, FRAME_95, t + 700000));        // edit over, steady
+    assert(d.reading().mode == DisplayBus::Mode::TEMPERATURE);
+    printf("an edit clears the steam blink OK\n");
+  }
+
+  // 24. A one-bit blip must NOT spend the guard. (Numbered 20 until
+  //     2026-11-13, when the new cases 20-23 and 25-29 were added; this one
+  //     stays last in the file.) Power-on carries 32-33
   //     single-bit frames (32 clock pulses, plus the rail rise on some boots;
   //     docs/machine-display-bus.md, power-on table), and decodeFrame() rejects
   //     those anyway — so if one consumed skip_first, the real misaligned
@@ -470,11 +681,12 @@ int main() {
 
     // Now the fragment that actually matters: 66 bits reading blank.
     for (int i = 0; i < 66; i++) { d.feedEdge(t, 0); t += 101; }
-    t += 50000;
-    // ...followed by a real blank, which together would latch if the
-    // fragment had been decoded.
-    for (int i = 0; i < 66; i++) { d.feedEdge(t, 0); t += 101; }
     d.poll(t + 50000);
+    // ...followed by a shown value and a real blank, which together would
+    // latch if the fragment had been decoded (case 19's sequence).
+    assert(decode(d, FRAME_95, t + 100000));
+    assert(decode(d, FRAME_95, t + 141000));
+    assert(decode(d, FRAME_BLANK, t + 400000));
 
     assert(!d.setpointTouched());
     printf("one-bit blips do not spend the attach guard OK\n");

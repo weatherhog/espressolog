@@ -22,10 +22,11 @@ observed while fitting. The mechanism is not measured, and nominal body
 widths leave only ~0.3 mm between them.
 The board doc is updated; nothing else depends on the position.
 
-**The board runs firmware 0.9.7**, flashed 2026-11-13 from the unmerged
-branch `claude/live-temperature`, and the server was deployed from the same
-branch the same day (below). The *What runs where* table's 0.9.4 row is
-marked superseded.
+**The board runs firmware 0.9.8**, flashed 2026-11-13 from `main` after
+PR #19 merged; the server was deployed from `claude/live-temperature`
+earlier the same day, before the merge (below). 0.9.9 carries the decoder
+blink fix and is not yet flashed. The *What runs where*
+table's 0.9.4 row is marked superseded.
 
 ### SECOND INVARIANT-1 INCIDENT ON J4 — `E01`, cause found and fixed
 
@@ -85,41 +86,59 @@ machine's display.)
   lower timer reading as a restart, so one such frame while SETTLING after a
   28 s shot sets `machine_timer_dl` to 95 and the record says 9.5 s. Before a
   shot the restart rule erases it; after one, nothing did. **Fixed in 0.9.7
-  (`claude/live-temperature`, flashed 2026-11-13, not yet merged)**: a TIMER
+  (PR #19, flashed and merged 2026-11-13)**: a TIMER
   reading counts only when the previous frame the loop observed was TIMER
   too. **Two glitch frames in a row would still pass**; the real fix is in
   the decoder.
 - **`SETPOINT-TOUCHED` latched during a short steam start/stop**, with no
-  button touched. **The decoder explains it**: `display.cpp` latches
-  `adjust`/`touched` when two blank frames arrive within `BLINK_WINDOW_US`
-  (600 ms) of each other, and consecutive frames are ~41 ms apart — so **any
-  blank lasting two frames latches**, and steam's shortest blank (0.156 s) is
-  about four. **The blink period is never measured**, despite CLAUDE.md's
-  "use the interval, never the blank duration … This is deliberate", so
-  every steam cycle latches. The same `adjust` relabels **some** of the
-  cooldown's ` 95` readings as SETPOINT — `adjust` clears once a shown frame
-  comes more than 600 ms after the last blank, and steam's shown phase can
-  reach ~0.9 s, so late frames still decode as TEMPERATURE.
-  **A steam cycle finished before the pour does not reach the record**: at
+  button touched. **The decoder explained it**: up to 0.9.8 `display.cpp`
+  latched `adjust`/`touched` when two blank FRAMES arrived within
+  `BLINK_WINDOW_US` (600 ms), and consecutive frames are ~41 ms apart — so
+  **any blank lasting two frames latched**, and every steam cycle did.
+  **A steam cycle finished before the pour did not reach the record**: at
   pour start `onPourStart()` resets the tracker's copy and `main.cpp` clears
-  the bus latch. **A shot pulled during the cooldown probably can** — a
-  prediction, not observed: if the blink resumes after the pump stops, it
-  re-latches after pump-off (POURING or SETTLING) and `machineContextPoll()` copies it into the
+  the bus latch. **A shot pulled during the cooldown probably could** — a
+  prediction, not observed: a blink resuming after pump-off re-latches
+  (POURING or SETTLING) and `machineContextPoll()` copies it into the
   record. **That costs recipe data, not just a flag**: `store.go` returns
   early on a latched shot, leaving `brew_temp_c` and `preinfusion_s` NULL,
   and the latch becomes the floor later shots carry from, so they stay NULL
   until typed (in ingest order — a backlog ingested out of order after a WiFi
-  outage can stamp a carried value first; `store.go`'s KNOWN GAP). The
-  decoder's tests (cases 15, 18 and 19) assert the two-frame
-  rule, so the fix rewrites them. A decoder fix is open; CLAUDE.md and
-  `docs/machine-display-bus.md` say the same.
+  outage can stamp a carried value first; `store.go`'s KNOWN GAP).
+  **Fixed in 0.9.9 — NOT YET FLASHED; the board runs 0.9.8, so the latch is
+  still live.** 0.9.9 measures between blank onsets, so steam no longer
+  latches, and the slow blink's numbers decode as `TARGET`. **It does not
+  make `boiler_temp_start_c` reliable during or after steam or after an
+  edit**: steam's steady `165` still decodes as TEMPERATURE for as long as
+  steam holds temperature (~2.7 min on 2026-11-14), and the first cooldown
+  cycles and held-button ramps for seconds, so a shot pulled then stores
+  them; a later
+  TARGET or SETPOINT frame invalidates the value, which only shortens the
+  exposure (CLAUDE.md, display-bus entry).
+
+### 2026-11-14 — the first full test on the machine
+
+- **First full test (firmware 0.9.8)**: shots 177 and
+  178, both 2Cup stopped by hand, no `E01`, display and PWA normal; doses
+  measured, boiler 95 °C, flow 288 / 371 pulses (7.46 / 7.56 per gram of
+  yield). **Steam was used after both shots** (08:38–08:42, from the server's
+  live journal): 0.9.8 decoded it as `setpoint 165` — the false latch, seen
+  live — then a steady `165` for ~2.7 min once at temperature, then
+  `setpoint 95` through the cooldown. No shot followed, so no record
+  carries it. The journal also shows **occasional single-frame digit
+  misreads one segment off** (`765`, `185` at 165; `99`, `85` at 95), a few
+  per hour — likely the same cause as the stray TIMER frame above. **Each
+  decodes as an ordinary TEMPERATURE**, and the tracker takes any one, so
+  a misread that is the last frame before a pour would be stored as
+  `boiler_temp_start_c` unflagged; none did today (both shots read 95). A
+  two-in-a-row rule like the TIMER path's is the guard, not yet built.
 
 ### Firmware 0.9.7 — the machine display on the PWA
 
-Flashed 2026-11-13 from branch `claude/live-temperature` (**not yet
-merged**), with the server deployed from it the same day: the ESP32 forwards the display reading on the live stream and the
+Flashed 2026-11-13 from branch `claude/live-temperature` (merged as PR #19
+the same day), with the server deployed from it the same day: the ESP32 forwards the display reading on the live stream and the
 Pull screen shows it. A screen, never a record; radio only, so invariant 2 is
-unaffected. 0.9.5 and 0.9.6 each ran briefly on 2026-11-13, and the production database has no shot from either (checked the same day); 0.9.8 on the branch carries the second review's fixes and is not yet flashed. `display on`,
+unaffected. 0.9.5 and 0.9.6 each ran briefly on 2026-11-13, and the production database has no shot from either (checked the same day); 0.9.8, with the later review fixes, was flashed from `main` after the merge. `display on`,
 `flow on` and `switches on` are all enabled on the board.
 
 
@@ -391,7 +410,7 @@ fails from anything that is not.
 
 | Piece | Where | State |
 |---|---|---|
-| ***Superseded 2026-11-13: the board runs 0.9.7 — see the top section.*** **Firmware 0.9.4 was what was ON THE BOARD (flashed 2026-10-13)**, detector 0a.6. 0.9.1 through 0.9.3 were built and never flashed, so no shot record will ever carry them. **Caveat: three different binaries shipped as "0.9.0"** — the `flowSetEnabled` behaviour change landed before the bump, so `shot.firmware_version` cannot separate them. Shots 110–112 are all excluded anyway. | ESP32-S3 on a USB charger by the machine | both Bookoos bound: yield `aa:bb:cc:dd:ee:01`, dose `aa:bb:cc:dd:ee:02`. **All three taps were fitted and live on 2026-10-08** — J5, J2 and J4 — and the breadboard was then disassembled; see the bench section. The display bus **drops ~1 % of edges** during a flush, cause open (an earlier reading of `dropped=0` was taken before the other taps existed). 0.8.0's parser, written blind against the 0e captures, **was validated against a real brew**: mode flipped `temp` → `timer`, counted `042/080/112/143/174/206` in tenths, returned to `temp 95 C`. **0.8.1 and 0.8.2 both add `beginCapture()`** — 0.8.1 was flashed, then `display.cpp` changed again, so the board briefly ran a 0.8.1 that no longer existed in the repo; bumped to 0.8.2 and reflashed rather than leave that ambiguity. No shot record carries either version. See 0e. |
+| ***Superseded 2026-11-13: the board runs 0.9.8 — see the top section.*** **Firmware 0.9.4 was what was ON THE BOARD (flashed 2026-10-13)**, detector 0a.6. 0.9.1 through 0.9.3 were built and never flashed, so no shot record will ever carry them. **Caveat: three different binaries shipped as "0.9.0"** — the `flowSetEnabled` behaviour change landed before the bump, so `shot.firmware_version` cannot separate them. Shots 110–112 are all excluded anyway. | ESP32-S3 on a USB charger by the machine | both Bookoos bound: yield `aa:bb:cc:dd:ee:01`, dose `aa:bb:cc:dd:ee:02`. **All three taps were fitted and live on 2026-10-08** — J5, J2 and J4 — and the breadboard was then disassembled; see the bench section. The display bus **drops ~1 % of edges** during a flush, cause open (an earlier reading of `dropped=0` was taken before the other taps existed). 0.8.0's parser, written blind against the 0e captures, **was validated against a real brew**: mode flipped `temp` → `timer`, counted `042/080/112/143/174/206` in tenths, returned to `temp 95 C`. **0.8.1 and 0.8.2 both add `beginCapture()`** — 0.8.1 was flashed, then `display.cpp` changed again, so the board briefly ran a 0.8.1 that no longer existed in the repo; bumped to 0.8.2 and reflashed rather than leave that ambiguity. No shot record carries either version. See 0e. |
 | Go server + SQLite + PWA | Proxmox LXC `espressolog`, Debian 13, `espressolog.lan` (DHCP-reserved) | systemd `espressolog.service`, db at `/var/lib/espressolog/espressolog.db` |
 | HTTPS | Caddy on the same LXC, `https://espresso.example.com` | Let's Encrypt via Cloudflare DNS-01; CF token in `/etc/caddy/env` |
 | DNS | AdGuard Home rewrite `espresso.example.com → espressolog.lan` | resolution is LAN-only; no public A record (challenge TXT only) |
@@ -554,7 +573,8 @@ is a defect to schedule, not a reason to stop.
 **Two candidate causes, and the session's own data disfavours the first.**
 
 - *The spool's flash write.* Each cycle closes a record and writes to
-  LittleFS, blocking tens of ms against a ring holding ~50 ms of bus. But
+  LittleFS, blocking tens of ms against a ring holding ~50 ms of a burst
+  (~158 ms of average traffic, as derived further down). But
   `pollSwitches` runs in the same `loop()` and measured a **worst poll gap of
   10 ms** across the whole session. A tens-of-ms stall would have shown
   there and did not.
@@ -694,9 +714,10 @@ flush with the yield scale disconnected so nothing is spooled, then read. Low
 
 Also seen: hot-plugging the J5 tap on a live bus can latch
 `setpoint_touched`. *(This said "because the garbage edges mimic the ~410 ms
-blink" until 2026-11-13; the decoder latches on ANY two blank frames within
-600 ms, so no rhythm is needed — see the top section.)* It clears at the
-next pour start.
+blink" until 2026-11-13; the decoder then latched on ANY two blank frames
+within 600 ms, so no rhythm was needed. From 0.9.9 it needs two blank
+onsets under 600 ms apart, each after a value shown for at least 120 ms,
+and whether a hot-plug can still produce that is untested.)* It clears at the next pour start.
 
 ## 0c and 0d firmware — written 2026-10-07, bench-testable without the machine
 
@@ -1741,7 +1762,9 @@ they sample *real* `ESD1` levels, so they land on non-decodable lengths or
 
 So the rule is not "do not unplug GPIO5". It is: **any disturbance that
 zeroes the data line while the clock keeps running will latch**, and two
-such frames inside `BLINK_WINDOW_US` are enough. On 2026-10-07 both
+such frames inside `BLINK_WINDOW_US` are enough. *(True up to 0.9.8. From
+0.9.9 a continuously zeroed data line is ONE blank, one onset, and cannot
+latch; it would need a value shown for 120 ms between two blank runs.)* On 2026-10-07 both
 jumpers were swapped with the reader **on**, which necessarily passed
 through exactly that state.
 
@@ -1752,7 +1775,7 @@ marginal data line is a standing risk, not only a rewiring one.
 **Two wrong diagnoses were published before that, and both are instructive.**
 First: an attach-time fragment decoding as blank. Refuted twice over — a
 clean attach yields exactly ONE fragment and the latch needs two blanks
-(now a test assertion), and 60000 simulated attach points against three
+(two onsets from 0.9.9; now a test assertion), and 60000 simulated attach points against three
 real captures produced **zero** blank-decoding fragments on a non-blinking
 display. There is a structural reason: digit offsets 106/115/124 sit
 exactly 67 bits — the button-frame length — above 39/48/57, so **the digit
@@ -1767,10 +1790,15 @@ disturbance only matters *during* a pour. Between shots it is irrelevant.
 breaks, but the record would be silently marked as having had its setpoint
 edited, which is the flag 0f uses to discard runs.
 
-**Still open, and only one of the obvious hardenings actually works.**
+**DONE IN 0.9.9 — the alternation rule below is what the onset decoder
+implements**: an onset needs a value shown for at least 120 ms before it.
+The rest of this paragraph is the reasoning that led there.
+
+**Was open, and only one of the obvious hardenings actually works.**
 Two blanks inside 600 ms is thin evidence. But **requiring three
 consecutive blanks buys nothing**: a real setpoint blink produces runs of
-~5 blank frames 41 ms apart (`display.h`), so it fires on both. The
+~5 blank frames 41 ms apart (the captures; `display.h` said so until
+2026-11-13), so it fires on both. The
 discriminator the captures support is **alternation** — a real blink
 *returns to a value* (204 ms blanks, 414 ms blank-to-blank, so a reading
 sits between every pair), whereas a zeroed data line decodes blank
@@ -2392,7 +2420,8 @@ state; closing it is the deliberate act, with the RC chosen first.
      mean a value is being **adjusted**, so a number shown then is the
      **setpoint being dialled in**, not the boiler — a ramp to 120 used to
      look like a boiler at 120. A lone blank, which is what a cold boot
-     emits, is not a blink.
+     emits, is not a blink. *(Superseded in 0.9.9: two blank ONSETS. One
+     blank lasts several frames, so the two-frame rule latched on steam.)*
    - Latches `setpointTouched()`. `PrG` is a transient banner — 2 frames in
      372 while an adjustment ran for seven seconds — so a consumer that
      samples a level misses the event entirely. The latch is what belongs

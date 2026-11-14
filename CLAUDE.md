@@ -33,7 +33,7 @@ the thing you do not know yet.
 | **write actuation or one-shot code** | `docs/machine-switches-j2.md` | a hold **> ~2 s REPROGRAMS** the stored duration; use a **74HC221**, never a '123; the pulse target is **~250 ms** (decided 2026-10-31), the RC is **330 K / 1 µF, measured 220 ms at 3.3 V** (2026-11-03), and failing short is **silent** |
 | **trust `BREW_GUARD_MS`** | `firmware/src/brew_guard.h`, then the **LEVER B LATCHES** bullet in *Machine: Ascaso Dream PID* | it is 75 s, it is too short for a lever-B draw, **and it can fail to ARM entirely** — an unguarded invariant-2 exposure |
 | **parse or re-capture the display bus** | `docs/machine-display-bus.md` | 67/66 pair, **not** 133-bit frames; GPIO4 clock, GPIO5 data, and a swap is **silent** (`frames=0`, levels perfect) |
-| **read `boiler_temp_start_c`** | `docs/machine-display-bus.md` | at ` 95` it is indistinguishable from the **setpoint**, and that is the only range it is ever sampled in |
+| **read `boiler_temp_start_c`** | `docs/machine-display-bus.md` | at ` 95` it is indistinguishable from the **setpoint**, and that is normally the only range it is sampled in; **during steam, for seconds after it, and after a setpoint change it is unreliable on any firmware**, and a single misread frame can be stored |
 | **believe a flowmeter pulse count** | `docs/flowmeter-j4.md` | counts are **~5× the datasheet and UNRESOLVED** — and the 5× itself divides by an **assumed** inlet |
 | **plan a flowmeter experiment** | `docs/flowmeter-j4.md` | **0d-i first** (weigh the split). And check whether the operator already does it every morning — three for three so far |
 | **compare flow data across sessions** | `docs/flowmeter-j4.md` | the **OPV is adjustable state and nothing records it** — invariant-5 class; and **bench and build glitch counts are not comparable**, since the build moved the 100 K off the cable (2026-11-05) |
@@ -305,11 +305,10 @@ either way; the grades are not interchangeable.
 
 - **Steam drives the boiler to ~165 °C**, ~70 °C off setpoint. That lands
   directly on `boiler_temp_start_dc` (spool v2) and silently invalidates an
-  0f run, exactly as `PrG` does. The blink signature was meant to catch only
-  a *user* editing the setpoint, not the machine moving its own target —
-  **but as built it fires on every steam cycle too** (2026-11-13, see the
-  blink paragraph in the display-bus entry), so `setpoint_touched` does not
-  mean "a user edited" today.
+  0f run, exactly as `PrG` does. The blink signature catches only a *user*
+  editing the setpoint, not the machine moving its own target. *(Until
+  firmware 0.9.9 it fired on every steam cycle too — the blink paragraph in
+  the display-bus entry says why.)*
 
   **The display DOES detect it** — it blinks `165` through the cycle then
   `95` while cooling, which is a better signal than a switch tap because it
@@ -565,39 +564,62 @@ LOAD-BEARING.** A setpoint edit blinks at **~410 ms**; steam and the cooldown
 after it blink at **1.021–1.101 s**. `BLINK_WINDOW_US` is **600 ms**, sitting
 in a 414→1020 ms guard band with 186 ms below and 420 ms above. **Use the
 interval, never the blank duration** — steam's shortest blank is 0.156 s,
-shorter than a setpoint blank, so duration would misfire. This is the design.
+shorter than a setpoint blank, so duration would misfire. **The interval is
+measured between blank ONSETS** — the first blank after a value shown for at
+least 120 ms — and a number shown during the slow blink decodes as
+`Mode::TARGET`, which is neither the boiler nor an edit. A blink is only
+recognised at its SECOND onset, so the first blink cycle of an edit or a
+steam cycle still decodes as TEMPERATURE; a SETPOINT or TARGET frame then
+invalidates the boiler reading it left (`machine_context.h`).
 
-**THE CODE DOES NOT IMPLEMENT IT — found 2026-11-13.** `display.cpp` latches
-`adjust`/`touched` when two BLANK FRAMES arrive within `BLINK_WINDOW_US`, and
-frames are ~41 ms apart, so **any blank lasting two frames latches — every
-steam cycle does**. The blink period is never measured. **The consequence
-that costs data:** `server/internal/store/store.go` stops carrying
-`brew_temp_c` and `preinfusion_s` forward from a shot whose
-`setpoint_touched` is set, and later shots carry only from that shot onward
-— so a shot that picks up a steam latch leaves those two columns NULL until
-typed. Whether a shot pulled during a post-steam cooldown actually picks it
-up is a **prediction** (the blink would have to resume after pump-off, while the
-detector is still in POURING or SETTLING); no
-capture shows it. The decoder's tests (`display_test.cpp` cases 15, 18 and 19 —
-19's attach-fragment guard included)
-assert the two-frame rule, so the fix — latch on the interval between blank
-ONSETS — rewrites them. Details in `docs/phase-0-status.md` (top section)
-and `docs/machine-display-bus.md`.
+**THAT IS TRUE FROM FIRMWARE 0.9.9. As of 2026-11-14 the board still runs
+0.9.8, on which steam latches** — seen live that morning, decoded as
+`setpoint 165` (`docs/phase-0-status.md` has what the board runs now). **BEFORE
+0.9.9 THE CODE DID NOT IMPLEMENT THE DESIGN — found 2026-11-13.** `display.cpp` latched on two blank FRAMES
+within 600 ms, and one blank lasts several frames 41 ms apart, so **every
+steam cycle latched `setpoint_touched`**. Replayed through both decoders,
+`2026-10-05-display-bus-steam.sr` latches on the old one and not the new;
+the setpoint captures latch identically on both. **Shots from earlier
+firmware may carry a steam-caused `setpoint_touched = 1`**, and
+`server/internal/store/store.go` stops carrying `brew_temp_c` and
+`preinfusion_s` forward from such a shot — and later shots carry only from
+it onward — so those columns can be NULL for that reason. Whether any shot
+actually picked one up is unchecked. Details in `docs/machine-display-bus.md`.
 
 **WHAT `boiler_temp_start_c` MEANS IS NARROWER THAN MIGRATION 008 CLAIMS.**
 Below ~88 °C the display tracks the real boiler and jitters ±1 °C. At ` 95` it
 is **indistinguishable from the setpoint** — it holds ±0 °C for 57 s, which no
 PID boiler does, and it blinks ` 95` post-steam while the boiler is
 demonstrably hotter. The column is sampled immediately before a pour, i.e.
-**always in the ambiguous range**, so today it means **"at setpoint"**, not a
-verified temperature. Settling that needs a capture with the boiler pulled off
-setpoint and allowed to recover. **And after steam it does not mean even
-that**: `adjust` (not the `setpoint_touched` latch, which holds until pour
-start) clears between post-steam blinks, so some ` 95` frames decode as
-TEMPERATURE and a shot pulled in the cooldown can store 95 while the boiler is
-hotter. **The designed onset-interval fix makes this worse, not better** — it
-would never set `adjust` on a ~1 s steam blink, so every post-steam frame
-would decode as TEMPERATURE.
+**normally in the ambiguous range**, so a ` 95` there means **"at setpoint"**,
+not a verified temperature — and the exceptions below can store other
+values (`165`, a misread `85`). Settling that needs a capture with the boiler pulled off
+setpoint and allowed to recover.
+
+**AND FOR A SHOT PULLED DURING STEAM, FOR SECONDS AFTER IT, OR AFTER A
+SETPOINT CHANGE, `boiler_temp_start_c` IS UNRELIABLE ON ANY FIRMWARE.**
+Replaying the steam and button captures through both decoders shows values
+that are not a brew temperature decoding as TEMPERATURE — the first cooldown
+blink cycles and a held-button ramp for seconds at a time, and steam's
+steady `165` for **as long as steam holds temperature** (one example, not a
+window: ~2.7 min on 0.9.8, live on 2026-11-14; probably the real boiler, but
+not a brew temperature) — and on 0.9.8 nothing ever marks them stale. 0.9.9 invalidates the stored value at the next SETPOINT
+or TARGET frame (`machine_context.h`), which shortens the exposure and does
+not close it. **Exact windows are deliberately not stated**: they depend on
+firmware and on when the next blink frame arrives, and three successive
+reviews found each stated set wrong. Replay the captures if you need them.
+**Making the column reliable is a design of its own** — e.g. a "display not
+steady before the pour" flag on the record — and is not attempted.
+*(A measured-windows table stood here for one commit on 2026-11-13, and
+before it a claim that a 0.9.9 cooldown shot records no boiler temperature;
+both withdrawn.)*
+
+**Single-frame misreads reach it too:** the 2026-11-14 live journal shows
+idle frames one segment off (`85` and `99` at 95, `185` and `765` at 165), a
+few per hour, and each decodes as an ordinary TEMPERATURE. The tracker takes
+any one TEMPERATURE frame, so a misread that is the last frame before a pour
+is stored unflagged. A two-frames-in-a-row rule, like the TIMER path's, is
+the obvious guard and is not built.
 
 **The display does NOT run its shot timer during a hot-water draw**, so
 `machine_timer_dl` cannot pick up a tap draw and `machine_context.h` needs no

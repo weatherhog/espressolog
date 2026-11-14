@@ -55,13 +55,15 @@ public:
       last_boiler_us = r.at_us;
       have_boiler = true;
     } else if (r.mode == DisplayBus::Mode::SETPOINT || r.mode == DisplayBus::Mode::TARGET) {
-      // AND THEY INVALIDATE the last one. A blink is only recognised on its
-      // second onset, so the first blink cycle of an edit or a steam cycle
-      // decodes as TEMPERATURE (the 120 being dialled, steam's 165), and a
-      // steady 165 sits between steam's two blink regimes. Without this, a
-      // shot pulled in the cooldown stored that value as its starting boiler
-      // temperature (review, 2026-11-13). Now it stores "the machine did not
-      // say" until the display settles and a real reading returns.
+      // AND THEY INVALIDATE the last one. Several non-boiler values decode
+      // as TEMPERATURE: a blink's first cycle (it is recognised at its
+      // second onset), steam's steady 165 between its two blink regimes, and
+      // a held-button ramp. A later SETPOINT or TARGET frame marks them
+      // untrustworthy, so a pour after it records "the machine did not say".
+      // THIS SHORTENS THE EXPOSURE; IT DOES NOT CLOSE IT: a pour that starts
+      // inside one of those windows, before the next blink frame, still
+      // stores the value (CLAUDE.md, display-bus entry, has the measured
+      // windows).
       have_boiler = false;
     }
     // A TIMER reading counts only when the frame before it was TIMER too.

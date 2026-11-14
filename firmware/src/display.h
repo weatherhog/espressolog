@@ -88,8 +88,9 @@ public:
   enum class Mode : uint8_t { NONE, TEMPERATURE, TIMER, TEXT, BLANK, SETPOINT, TARGET };
 
   // THE DISPLAY BLINKS FOR TWO REASONS AND ONLY THE PERIOD TELLS THEM APART.
-  // The period is measured between blank ONSETS — the first blank frame
-  // after a shown one — never between blank frames: one blank lasts several
+  // The period is measured between blank ONSETS — the first blank after a
+  // value shown for at least MIN_SHOWN_US (below) — never between blank
+  // frames: one blank lasts several
   // frames 41 ms apart, and counting frames latched every steam cycle until
   // 2026-11-13. Measured (docs/machine-display-bus.md):
   //   setpoint edit       onset-to-onset ~410 ms   -> adjusting, latches
@@ -101,10 +102,11 @@ public:
   // decodable non-blank frame inside one of steam's ~0.55 s blanks would
   // otherwise make a second onset 41 ms later and latch exactly as the
   // pre-0.9.9 rule did (review, 2026-11-13). Measured in TIME, not frames:
-  // while blinking the bus sends ONE frame for the shown value and then
-  // nothing until the next blank ~209 ms later
-  // (2026-10-03-display-bus-buttons.sr, 6.149 -> 6.358 s). A frame-count
-  // guard was tried first and stopped real edits from being recognised.
+  // a setpoint blink can send ONE frame for the shown value and then nothing
+  // until the next blank ~209 ms later (2026-10-03-display-bus-buttons.sr,
+  // 6.150 -> 6.359 s), while steam's shown phases carry 10-11 frames. A
+  // frame-count guard was tried first and stopped real edits being
+  // recognised.
   static constexpr uint32_t MIN_SHOWN_US        = 120000;
   static constexpr uint32_t BLINK_WINDOW_US     = 600000;   // < this: setpoint edit
   static constexpr uint32_t TARGET_BLINK_MAX_US = 1600000;  // < this: steam-class blink

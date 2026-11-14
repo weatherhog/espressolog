@@ -64,7 +64,10 @@ bool DisplayBus::readDigits(const uint8_t* bits, uint32_t t_us) {
           adjust  = true;
           touched = true;
           target  = false;                   // an edit, whatever came before
-        } else if (period < TARGET_BLINK_MAX_US) {
+        } else if (period < TARGET_BLINK_MAX_US && !adjust) {
+          // Not while an edit is live: a setpoint blink whose one shown frame
+          // was dropped measures ~820 ms here, and must not leave the steam
+          // state behind it when the edit ends.
           target = true;
         }
       }
@@ -121,8 +124,11 @@ bool DisplayBus::readDigits(const uint8_t* bits, uint32_t t_us) {
 // frame and from poll(), so a machine switched off mid-blink — no frames at
 // all — does not leave an onset armed to pair with the cold-boot blank. Once
 // neither blink is live the old onset is forgotten too, so an onset hours
-// later cannot pair with it (and micros() wrap cannot alias it). Signed, so a
-// poll() timestamp a little behind the last frame's does not read as huge.
+// later cannot pair with it (and micros() wrap cannot alias it). The compare
+// is signed so that a caller passing a time older than the last blank does
+// nothing rather than reading it as ~71 minutes; in firmware that cannot
+// happen — pollDisplay() drains the ISR ring before it reads micros() — so
+// this is a guard for the host tests and future callers, not a fix.
 void DisplayBus::expireBlinks(uint32_t t_us) {
   int32_t since_blank = (int32_t)(t_us - last_blank_us);
   if (adjust && since_blank > (int32_t)BLINK_WINDOW_US) adjust = false;
@@ -197,8 +203,13 @@ bool DisplayBus::feedEdge(uint32_t t_us, uint8_t data_bit) {
 }
 
 bool DisplayBus::poll(uint32_t t_us) {
+  // Finish the pending frame FIRST, at its own timestamp, then expire. The
+  // other order (review, 2026-11-13) let a loop() stall longer than
+  // TARGET_END_US wipe the blink state before the frame that arrived during
+  // the blink was decoded, so it came out as TEMPERATURE.
+  bool fresh = false;
+  if (have_edge && count != 0 && (uint32_t)(t_us - last_edge_us) > FRAME_GAP_US)
+    fresh = finishFrame(last_edge_us);
   if (have_onset || adjust || target) expireBlinks(t_us);
-  if (!have_edge || count == 0) return false;
-  if ((uint32_t)(t_us - last_edge_us) <= FRAME_GAP_US) return false;
-  return finishFrame(last_edge_us);
+  return fresh;
 }

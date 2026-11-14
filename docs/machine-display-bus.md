@@ -297,26 +297,30 @@ an onset is the first blank after a value shown for at least 120 ms
 with no blank ends a blink — checked on every shown frame and in `poll()`,
 so a machine switched off mid-blink does not leave one armed.
 
-**The guard is in TIME because the bus sends ONE frame for the shown value
-while blinking**, then nothing until the next blank ~209 ms later
-(`2026-10-03-display-bus-buttons.sr`, 6.149 → 6.358 s). A guard counting two
+**The guard is in TIME because a setpoint blink can send ONE frame for the
+shown value**, then nothing until the next blank ~209 ms later
+(`2026-10-03-display-bus-buttons.sr`, 6.150 → 6.359 s). Not every shown
+phase is one frame: an edit's first is 5 (16.027–16.292 s), and steam's
+carry 10–11 (48.795–49.271 s in the steam capture). A guard counting two
 shown frames was tried first, and the replay showed it stopped real edits
 being recognised. A glitch frame inside one of steam's blanks is followed
 by the next blank 41 ms later, so it is rejected.
 
 **Replayed, all twelve display captures in `analysis/captures/`, through
 the old and new decoders:** the steam capture latches on the old and not
-the new, and its blinks decode as `TARGET`; the four edits in `buttons` and
-the one in `setup-menu` latch on both, **each recognised one blink cycle
-later than before** (the second onset, ~0.41 s after the first), so the
-first value of an edit — `120` in `buttons` — decodes as TEMPERATURE and is
-then invalidated by `MachineContextTracker`; `buttons-separated` latches on
-both through `PrG`; the other eight decode identically with no latch.
-`display_test.cpp`: cases 15, 18 and 19 were rewritten for onsets, 20–23
-pin the long blank, the steam blink, an edit after steam and a stale onset,
-25–27 the glitch frame, expiry with the bus silent and an edit clearing the
-steam blink, and 24 (numbered 20 until then) the attach guard against
-blips.
+the new, and its blinks decode as `TARGET`. In `buttons`, all four edits
+latch on both; **three are recognised one blink cycle later than before**
+(6.359, 15.820 and 18.440 s against 5.946, 15.406 and 17.979 s — the second
+onset), and the fourth at the same moment on both (21.718 s), because a
+lone blank at 21.460 s gives the new decoder its first onset. `setup-menu`
+latches on both with one frame decoded differently; `buttons-separated`
+latches on both through `PrG` and decodes identically; the other eight
+decode identically with no latch. `display_test.cpp`: cases 15, 18 and 19
+were rewritten for onsets; 20–23 pin the long blank, the steam blink, an
+edit after steam and a stale onset; 25–29 the glitch frame, expiry with the
+bus silent across a `micros()` wrap, an edit clearing the steam blink, a
+`loop()` stall mid-blink, and a dropped frame mid-edit; and 24 (numbered 20
+until then) the attach guard against blips.
 
 **Use the interval, never the blank duration.** Steam blanks average longer
 (0.550 s against a setpoint edit's 0.204 s), which looks like a cleaner
@@ -760,13 +764,18 @@ does not**: it confirms the behaviour only in the range the column is never
 sampled in.
 
 What the column *does* reliably carry: a steady ` 95` means at setpoint; a
-blink or a different value means not. That is still worth storing. **After
-steam**, from 0.9.9 a cooldown shot records no boiler temperature at all:
-the blinking ` 95` decodes as `TARGET`, and a TARGET or SETPOINT frame
-invalidates the last TEMPERATURE reading, including steam's first-cycle and
-steady `165`. Before 0.9.9 a stale `165` could be stored; a post-steam ` 95`
-is predicted from the period arithmetic but not seen in the steam capture.
-Settling
+blink or a different value means not. That is still worth storing — **except
+for a shot pulled within seconds of steam ending or of a setpoint change,
+where it is unreliable on any firmware.** Replayed (2026-11-13): the steady
+`165` between steam's blink regimes decodes as TEMPERATURE for ~5 s
+(51.0–54.6 s) on both decoders; the first cooldown blink cycles decode as
+TEMPERATURE ` 95` (54.66–55.08 s on 0.9.8, to 56.06 s on 0.9.9); and a
+held-button ramp decodes as TEMPERATURE for 1–2 s on both. 0.9.9 invalidates
+the stored value once a later SETPOINT or TARGET frame arrives, which
+shortens these windows and does not close them. CLAUDE.md carries the
+table. *(Until then this said a 0.9.9 cooldown shot records no boiler
+temperature and that the old decoder's post-steam ` 95` was "not seen in
+the steam capture"; it is, 9 frames.)* Settling
 whether it is ever a true boiler reading above 88 °C needs a capture with
 the boiler deliberately pulled off setpoint and allowed to recover. During a brew the
 machine takes the display over for a **shot timer in tenths of a second**

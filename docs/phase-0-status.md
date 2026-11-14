@@ -107,10 +107,12 @@ machine's display.)
   outage can stamp a carried value first; `store.go`'s KNOWN GAP).
   **Fixed in 0.9.9 — NOT YET FLASHED; the board runs 0.9.8, so the latch is
   still live.** 0.9.9 measures between blank onsets, so steam no longer
-  latches; the slow blink's numbers decode as `TARGET`; and a TARGET or
-  SETPOINT frame invalidates the last boiler reading, so a cooldown shot
-  records no boiler temperature rather than a stale `165`
-  (`docs/machine-display-bus.md`).
+  latches, and the slow blink's numbers decode as `TARGET`. **It does not
+  make `boiler_temp_start_c` reliable after steam or an edit**: replayed,
+  ~5 s of steady `165` and the first cooldown cycles still decode as
+  TEMPERATURE, so a shot pulled in those seconds stores them; a later
+  TARGET or SETPOINT frame invalidates the value, which only shortens the
+  window (CLAUDE.md, display-bus entry, has the table).
 
 ### Firmware 0.9.7 — the machine display on the PWA
 
@@ -694,8 +696,8 @@ Also seen: hot-plugging the J5 tap on a live bus can latch
 `setpoint_touched`. *(This said "because the garbage edges mimic the ~410 ms
 blink" until 2026-11-13; the decoder then latched on ANY two blank frames
 within 600 ms, so no rhythm was needed. From 0.9.9 it needs two blank
-onsets under 600 ms apart, and whether a hot-plug can still produce that is
-untested.)* It clears at the next pour start.
+onsets under 600 ms apart, each after a value shown for at least 120 ms,
+and whether a hot-plug can still produce that is untested.)* It clears at the next pour start.
 
 ## 0c and 0d firmware — written 2026-10-07, bench-testable without the machine
 
@@ -1775,7 +1777,8 @@ The rest of this paragraph is the reasoning that led there.
 **Was open, and only one of the obvious hardenings actually works.**
 Two blanks inside 600 ms is thin evidence. But **requiring three
 consecutive blanks buys nothing**: a real setpoint blink produces runs of
-~5 blank frames 41 ms apart (`display.h`), so it fires on both. The
+~5 blank frames 41 ms apart (the captures; `display.h` said so until
+2026-11-13), so it fires on both. The
 discriminator the captures support is **alternation** — a real blink
 *returns to a value* (204 ms blanks, 414 ms blank-to-blank, so a reading
 sits between every pair), whereas a zeroed data line decodes blank
@@ -2394,11 +2397,11 @@ state; closing it is the deliberate act, with the RC chosen first.
      0 °C — 99 times in one 30 s capture, because the display blanks
      constantly while a value is being edited.
    - Reads that blink as the signal it is. Two blank frames inside 600 ms
-     mean a value is being **adjusted** *(superseded in 0.9.9: two blank
-     ONSETS — one blank lasts several frames, so this rule latched on steam)*, so a number shown then is the
+     mean a value is being **adjusted**, so a number shown then is the
      **setpoint being dialled in**, not the boiler — a ramp to 120 used to
      look like a boiler at 120. A lone blank, which is what a cold boot
-     emits, is not a blink.
+     emits, is not a blink. *(Superseded in 0.9.9: two blank ONSETS. One
+     blank lasts several frames, so the two-frame rule latched on steam.)*
    - Latches `setpointTouched()`. `PrG` is a transient banner — 2 frames in
      372 while an adjustment ran for seven seconds — so a consumer that
      samples a level misses the event entirely. The latch is what belongs

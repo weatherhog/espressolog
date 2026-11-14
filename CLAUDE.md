@@ -764,7 +764,7 @@ firmware/          PlatformIO, Arduino framework
 server/            Go
   cmd/espressolog/
   internal/{api,live,record,store,web}/
-                   record = on-flash wire format (v1 + v2 decode)
+                   record = on-flash wire format (v1, v2 and v3 decode)
                    web    = embed.FS for the built PWA
   migrations/0*.sql         10 migrations; 001_init.sql is the base
 web/               Vite + React PWA
@@ -1592,15 +1592,22 @@ from 5 g out to 80 % of final, skipping the first-drop lag.
 `first_drip_ms` was **null until firmware 0.10.0** — without switch sensing
 there was no pump-start reference. **From 0.10.0 (spool v3) it is the lead
 of the lever press that started the pump over the detector's t=0**, and
-`switch_direction` records lever A's direction ('up' = 1Cup, 'down' = 2Cup).
+`switch_direction` records lever A's direction ('up' = 1Cup, 'down' = 2Cup;
+NULL for a hot-water draw), with the raw byte in `pump_line`. The press is
+chosen **at pour start** — the latest witnessed pump press at or before
+t=0, within 60 s — so presses during the shot cannot displace it.
 **`stop_ms` still counts from first drip, not from pump-on**, so in
-`v_shot` (migration 010) `pour_s` = `total_s` = `stop_ms`, and the new
-`pump_to_stop_s` = `first_drip_ms + stop_ms`. *(001 and 005 defined `pour_s`
-as `stop_ms - first_drip_ms`, which assumed a pump-on time base that never
-existed and was harmless only while `first_drip_ms` was always NULL.)*
-**Known limit:** if a shot's start press is missed by the poller's
-debounce, an earlier flush's stop press within 60 s is attributed instead
-(`machine_context.h`, `resolvePump()`).
+`v_shot` (migration 010) `pour_s` = `stop_ms` where the press was seen
+(NULL otherwise, so `pour_s IS NOT NULL` still means "switch-sensed"),
+`total_s` is unchanged, and the new `pump_to_stop_s` = `first_drip_ms +
+stop_ms`. *(001 and 005 defined `pour_s` as `stop_ms - first_drip_ms`,
+which assumed a pump-on time base that never existed and was harmless only
+while `first_drip_ms` was always NULL.)* **Known limits**
+(`machine_context.h`, `resolvePump()`): a start press missed by the
+poller's debounce gets an earlier flush's stop press within 60 s instead; a
+manual stop-and-restart before first drip attributes the restart; and t=0
+is the scale sample's BLE arrival, so the lead includes an unmeasured
+~100–200 ms of link delay.
 
 `settle_offset_g` matters more than it looks: today you stop the shot by
 hand when the scale reads target, so the overshoot distribution *is* the
@@ -1633,7 +1640,11 @@ invariant 6. An older record reports the newer fields as "the machine did
 not say", which is the same thing a current record written with the display
 bus or the switches off reports, so nothing downstream needs a version
 check. **Deploy the server before flashing a format bump**: an older server
-cannot decode a v3 record.
+cannot decode a newer record. **From this change on, breaking that rule no
+longer loses shots**: a server answers a well-formed record of a newer
+format with a retryable 503 instead of the 422 the device quarantines, so
+the board keeps it until the server is deployed. A server older than that
+still answers 422 — the rule stands.
 
 **`shot_sample.temp_dc` will be NULL for most of a shot and that is
 correct.** The machine takes the display over for its timer the moment the
@@ -1672,7 +1683,9 @@ which is not what the code does:
 
 The second dwarfs the first, which is why neither is fixed in code yet —
 closing 300 ms while seconds go uncounted is polish on the wrong axis. Both
-close together when **0c** supplies the pump-start edge.
+close together when the window opens at the pump-start edge — which **0c
+now supplies (firmware 0.10.0, as `first_drip_ms`) but the pulse window does
+not use yet**; pre-infusion pulses are still uncounted.
 
 350 samples ≈ 3.5 KB per shot. One file per shot, header + samples.
 Config (WiFi, endpoint, flow calibration, current bean, grind epoch) in

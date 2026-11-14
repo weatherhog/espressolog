@@ -11,8 +11,10 @@
 -- minus the pump lead, which is nothing.
 --
 -- So, from here:
---   pour_s          first drip -> stop. stop_ms alone. Equal to total_s;
---                   kept because the name is what a reader looks for.
+--   pour_s          first drip -> stop, stop_ms alone — but only where the
+--                   press was seen (first_drip_ms NOT NULL), so "pour_s IS
+--                   NOT NULL" still means "switch-sensed", as it did while
+--                   pour_s was always NULL.
 --   total_s         unchanged (stop_ms / 1000), so analysis built on it
 --                   (0f's noise floor) keeps its meaning.
 --   pump_to_stop_s  NEW: pump-on -> stop, first_drip_ms + stop_ms. NULL
@@ -24,7 +26,11 @@
 --
 -- switch_direction is filled for lever A only: 'up' = 1Cup, 'down' = 2Cup.
 -- A hot-water draw into the cup leaves it NULL but still gets
--- first_drip_ms.
+-- first_drip_ms. pump_line keeps the raw byte the record carried (0 none,
+-- 1 1Cup, 2 2Cup, 3 hot water) for every v3 record, NULL before v3, so a
+-- hot-water draw and a value no firmware writes are not the same NULL.
+ALTER TABLE shot ADD COLUMN pump_line INTEGER;
+
 DROP VIEW v_shot;
 CREATE VIEW v_shot AS
 SELECT
@@ -35,12 +41,18 @@ SELECT
   s.yield_final_g / NULLIF(s.dose_ground_g, 0)                  AS ratio,
   COALESCE(s.dose_in_g, b.portion_target_g) - s.dose_ground_g   AS retention_g,
   CASE WHEN s.dose_in_g IS NULL THEN 'estimated' ELSE 'measured' END AS retention_basis,
+  -- All three inherit stop_ms's path-dependence: ~2 s backdated on a normal
+  -- stop, NOT backdated when truncated = 1, and the lift instant -- up to
+  -- STOP_WINDOW_MS + SETTLE_MS (~7 s) late -- when the cup was lifted.
+  -- Those cases are NOT exclusive: a truncated shot can also be a lift.
+  -- fact:stop-ms-lift-bound STOP_WINDOW_MS + SETTLE_MS|~7 s
   -- The sub-5 g abort assigns no stop_ms at all, so it lands here as
-  -- total_s = 0.0. NEITHER v_shot definition filters excluded (v_dialin
-  -- does), so filter it yourself, as analysis/overshoot.py does.
+  -- total_s = 0.0. NO v_shot definition filters excluded (v_dialin does),
+  -- so filter it yourself, as analysis/overshoot.py does.
   -- machine_timer_s is the machine's own pump-on to pump-off time and
   -- carries none of stop_ms's path-dependence.
-  s.stop_ms / 1000.0                                            AS pour_s,
+  CASE WHEN s.first_drip_ms IS NOT NULL
+       THEN s.stop_ms / 1000.0 END                              AS pour_s,
   s.stop_ms / 1000.0                                            AS total_s,
   (s.first_drip_ms + s.stop_ms) / 1000.0                        AS pump_to_stop_s,
   t.id AS tasting_id, t.overall, t.balance, t.notes AS taste_notes

@@ -6,9 +6,23 @@ package record
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"hash/crc32"
 )
+
+// ErrNewerFormat marks a record that looks well-formed but was written in a
+// format version this server does not know yet — firmware flashed before the
+// server was deployed. It is NOT a verdict on the record: the ingest handler
+// answers it with a retryable status, so the device keeps the shot until the
+// server catches up, instead of quarantining it (invariant 6). Until
+// 2026-11-14 this was a plain error and became a 422, which the device
+// treats as a one-way door into /spool/bad.
+var ErrNewerFormat = errors.New("record format newer than this server")
+
+// maxPlausibleFormat bounds what counts as "newer" rather than garbage: a
+// corrupt version byte of 200 is not a future firmware.
+const maxPlausibleFormat = 16
 
 const (
 	Magic = 0x4C505345 // 'ESPL'
@@ -213,12 +227,18 @@ func (h *Header) BoilerTempStartC() (int, bool) {
 }
 func (h *Header) Reject() bool { return h.Flags&FlagReject != 0 }
 
+// PumpLeadMaxMs mirrors the firmware's PUMP_LEAD_MAX_MS window: a lead
+// beyond it is not a press the firmware would have attributed.
+const PumpLeadMaxMs = 60000
+
 // PumpStart returns the lever press that started the pump for this shot and
 // its lead, in ms, over the detector's t=0 (first drip) — and false when the
 // record does not know: switches off, no press within the firmware's
-// window, or a pre-v3 record.
+// window, a pre-v3 record, or values no firmware writes (a line outside
+// 1-3, a lead beyond the window). The CRC makes those a firmware bug rather
+// than corruption; they are refused rather than stored.
 func (h *Header) PumpStart() (line uint8, leadMs uint32, ok bool) {
-	if h.PumpLine == PumpNone || h.PumpLeadMs == PumpLeadNone {
+	if h.PumpLine < Pump1Cup || h.PumpLine > PumpWater || h.PumpLeadMs > PumpLeadMaxMs {
 		return PumpNone, 0, false
 	}
 	return h.PumpLine, h.PumpLeadMs, true
@@ -238,6 +258,12 @@ func Decode(raw []byte) (*Record, error) {
 	version := raw[4]
 	hLen, ok := headerLens[version]
 	if !ok {
+		if version > FormatVersion && version <= maxPlausibleFormat && len(raw) >= 8 {
+			declared := int(binary.LittleEndian.Uint16(raw[6:8]))
+			if declared >= headerLenV1 && len(raw) >= declared {
+				return nil, fmt.Errorf("%w: version %d", ErrNewerFormat, version)
+			}
+		}
 		return nil, fmt.Errorf("unsupported format version %d", version)
 	}
 	if len(raw) < hLen {

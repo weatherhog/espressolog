@@ -145,6 +145,7 @@ String Spool::writeWeighing(uint8_t role, const WeighingDetector::Event& ev, con
   }
   spool_header_t h = {};
   fillCommon(h, 2, ev.started_at_ms, role, scale_mac);
+  h.pump_lead_ms = PUMP_LEAD_NONE;   // a weighing has no pump start; never "0 ms"
   h.grams_mg = ev.grams_mg;
   h.stable_ms = ev.stable_ms;
   h.sample_count = 0;
@@ -238,7 +239,7 @@ bool Spool::dump(const String& name, Stream& out) {
              (long)h.settle_offset_mg, (long)h.peak_flow_mgps, (long)h.mean_flow_mgps,
              h.sample_count);
   if (h.record_type == 1) {
-    if (h.pump_lead_ms == 0xFFFFFFFF)
+    if (h.pump_lead_ms == PUMP_LEAD_NONE)
       out.printf("# pump_line=%u pump_lead=unknown\n", (unsigned)h.pump_line);
     else
       out.printf("# pump_line=%u pump_lead_ms=%lu\n", (unsigned)h.pump_line,

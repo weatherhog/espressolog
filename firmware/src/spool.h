@@ -15,10 +15,11 @@
 //
 // FORMAT VERSION 2 (2026-10-03) added the two machine-sourced fields below
 // and one flag bit. FORMAT VERSION 3 (2026-11-14) added the lever press that
-// started the pump (0c): pump_line and pump_lead_ms. Version 1 records still exist, both spooled and as
-// fixtures, so the server decodes BOTH — see server/internal/record. The
-// original intent was that this struct would never change; it changed
-// because 0e produced facts the machine knows and the logger did not.
+// started the pump (0c): pump_line and pump_lead_ms. Older records still
+// exist, both spooled and as fixtures, so the server decodes EVERY version —
+// see server/internal/record. The original intent was that this struct would
+// never change; it changed because 0e and 0c produced facts the machine knows
+// and the logger did not.
 typedef struct __attribute__((packed)) {
   uint32_t magic;              // 'ESPL' = 0x4C505345
   uint8_t  format_version;     // 3 — see the version note above

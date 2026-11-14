@@ -2,6 +2,8 @@ package api
 
 import (
 	"bytes"
+	"encoding/binary"
+	"espressolog/internal/record"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -153,6 +155,29 @@ func TestUndecodableRecordIs422AndMarked(t *testing.T) {
 	if w.Header().Get(IngestMarker) == "" {
 		t.Errorf("422 did not carry %s; the device requires it before quarantining, "+
 			"so a 422 from any other service would bin a good shot", IngestMarker)
+	}
+}
+
+// Firmware flashed before the server is deployed sends a well-formed record
+// in a format this server does not know. That is not a verdict on the
+// record: answering 422 binned every such shot into /spool/bad. It must be a
+// retryable status, so the device keeps it until the server catches up.
+func TestNewerFormatRecordIsRetryable(t *testing.T) {
+	h := newTestHandler(t)
+	raw := make([]byte, 200)
+	binary.LittleEndian.PutUint32(raw[0:4], record.Magic)
+	raw[4] = record.FormatVersion + 1 // one version ahead
+	raw[5] = record.TypeShot
+	binary.LittleEndian.PutUint16(raw[6:8], 130) // a plausible longer header
+	w := do(t, h, "POST", "/api/v1/ingest", raw)
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("newer-format record returned %d, want 503", w.Code)
+	}
+
+	// A garbage version byte is still corruption, still a verdict.
+	raw[4] = 200
+	if w := do(t, h, "POST", "/api/v1/ingest", raw); w.Code != http.StatusUnprocessableEntity {
+		t.Errorf("version 200 returned %d, want 422", w.Code)
 	}
 }
 

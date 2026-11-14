@@ -232,6 +232,46 @@ int main() {
     printf("pump start: latest press before first drip, within the window OK\n");
   }
 
+  // 11. Resolved AT POUR START: presses during the shot — the stop press, a
+  //     restart, a flush begun while it settles — cannot crowd the start
+  //     press out of the 4-entry ring, because the choice is already made.
+  {
+    MachineContextTracker m;
+    m.onPumpPress(PUMP_2CUP, 100000);              // start
+    m.onPourStart(1);
+    m.resolvePump(108000);                         // pour start: t=0 known
+    for (uint32_t i = 0; i < 6; i++) m.onPumpPress(PUMP_1CUP, 130000 + i * 3000);
+    assert(m.context().pump_line == PUMP_2CUP && m.context().pump_lead_ms == 8000);
+    printf("pump start fixed at pour start survives later presses OK\n");
+  }
+
+  // 12. The line mapping: lever A's two directions and hot water; steam and
+  //     anything unknown are PUMP_NONE and are not remembered at all.
+  {
+    assert(pumpLineForSwitch(SwitchBank::ONE_CUP) == PUMP_1CUP);
+    assert(pumpLineForSwitch(SwitchBank::TWO_CUP) == PUMP_2CUP);
+    assert(pumpLineForSwitch(SwitchBank::HOT_WATER) == PUMP_WATER);
+    assert(pumpLineForSwitch(SwitchBank::STEAM) == PUMP_NONE);
+    assert(pumpLineForSwitch(SwitchBank::N_LINES) == PUMP_NONE);
+    MachineContextTracker m;
+    m.onPumpPress(pumpLineForSwitch(SwitchBank::STEAM), 100000);
+    m.resolvePump(105000);
+    assert(m.context().pump_line == PUMP_NONE);
+    printf("switch line mapping, steam and unknown ignored OK\n");
+  }
+
+  // 13. Switch sensing toggled: remembered presses are forgotten, so a
+  //     press from before `switches off` cannot be attributed after it.
+  {
+    MachineContextTracker m;
+    m.onPumpPress(PUMP_1CUP, 100000);
+    m.clearPresses();
+    m.resolvePump(105000);
+    assert(m.context().pump_line == PUMP_NONE);
+    assert(m.context().pump_lead_ms == PUMP_LEAD_NONE);
+    printf("clearPresses forgets earlier presses OK\n");
+  }
+
   // 7. Display bus never on: everything stays "the machine did not say".
   {
     MachineContextTracker m;

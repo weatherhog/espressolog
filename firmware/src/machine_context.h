@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include "display.h"
+#include "machine_io.h"
 
 // What the machine itself contributed to a shot record (spool format v2).
 //
@@ -13,6 +14,18 @@
 // format does not move if the poller's enum is ever reordered.
 enum PumpLine : uint8_t { PUMP_NONE = 0, PUMP_1CUP = 1, PUMP_2CUP = 2, PUMP_WATER = 3 };
 static constexpr uint32_t PUMP_LEAD_NONE = 0xFFFFFFFF;
+
+// The poller's line -> the spool's encoding. Steam never runs the pump, and
+// an unknown line is not guessed at: both are PUMP_NONE, so a line added to
+// SwitchBank later cannot be silently recorded as hot water.
+inline uint8_t pumpLineForSwitch(uint8_t sw_line) {
+  switch (sw_line) {
+    case SwitchBank::ONE_CUP:   return PUMP_1CUP;
+    case SwitchBank::TWO_CUP:   return PUMP_2CUP;
+    case SwitchBank::HOT_WATER: return PUMP_WATER;
+    default:                    return PUMP_NONE;
+  }
+}
 
 struct MachineContext {
   int16_t  boiler_temp_start_dc = INT16_MIN;   // INT16_MIN = machine did not say
@@ -118,21 +131,28 @@ public:
   // board latches, so the poller cannot tell the two apart. resolvePump()
   // sorts that out from the shot's own timing.
   void onPumpPress(uint8_t line, uint32_t pressed_at_ms) {
+    if (line == PUMP_NONE) return;
     presses[press_head] = { line, pressed_at_ms };
     press_head = (uint8_t)((press_head + 1) % N_PRESSES);
     if (press_count < N_PRESSES) press_count++;
   }
 
-  // Call when the shot completes, with the detector's t=0 (millis(), the
-  // backdated first-drip crossing). Attributes the LATEST remembered press
-  // at or before t=0 and no more than PUMP_LEAD_MAX_MS before it. A stop
-  // press comes after first drip, so it is never chosen; a press for an
-  // earlier flush is usually superseded by this shot's own start press.
+  // Call AT POUR START, right after onPourStart(), with the detector's t=0
+  // (millis(), the backdated first-drip crossing — known from the moment
+  // the detector enters POURING). Attributes the LATEST remembered press at
+  // or before t=0 and no more than PUMP_LEAD_MAX_MS before it. Resolving
+  // here rather than at completion means presses made during the shot (the
+  // stop press, a flush started while it settles) cannot push the start
+  // press out of the ring (review, 2026-11-14).
   //
-  // KNOWN LIMIT: if this shot's start press was never confirmed (the
+  // KNOWN LIMITS. (1) If this shot's start press was never confirmed (the
   // poller's two-poll debounce can miss a very fast press), an earlier
   // flush's stop press within the window is attributed instead — wrong
-  // lever possible, lead too long. Nothing here can see that.
+  // lever possible, lead too long. Nothing here can see that. (2) A
+  // stop-and-restart before first drip (a manual pre-infusion) attributes
+  // the restart, so the lead leaves out the first pump run. (3) t=0 is the
+  // scale sample's ARRIVAL time, so the lead includes the BLE delay (~10 Hz
+  // plus link latency, unmeasured, roughly 100-200 ms).
   static constexpr uint32_t PUMP_LEAD_MAX_MS = 60000;
   void resolvePump(uint32_t t0_ms) {
     mc.pump_line = PUMP_NONE;
@@ -151,6 +171,10 @@ public:
       }
     }
   }
+
+  // Switch sensing turned off or back on: remembered presses describe a
+  // tap state that may no longer hold, so forget them.
+  void clearPresses() { press_head = press_count = 0; }
 
   const MachineContext& context() const { return mc; }
 

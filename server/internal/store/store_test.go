@@ -847,6 +847,9 @@ func TestIngestPumpStart(t *testing.T) {
 		{"1Cup", record.Pump1Cup, 6100, "up", int64(6100)},
 		{"hot water", record.PumpWater, 4000, nil, int64(4000)},
 		{"no press", record.PumpNone, record.PumpLeadNone, nil, nil},
+		// No firmware writes these; refused, but the raw byte is kept.
+		{"unknown line", 7, 5000, nil, nil},
+		{"lead beyond the window", record.Pump2Cup, 600000, nil, nil},
 	}
 	st := openTestStore(t)
 	for i, c := range cases {
@@ -856,12 +859,12 @@ func TestIngestPumpStart(t *testing.T) {
 			t.Fatalf("%s: %v", c.name, err)
 		}
 		var dir sql.NullString
-		var drip sql.NullInt64
+		var drip, rawLine sql.NullInt64
 		var pour, total sql.NullFloat64
 		var pump sql.NullFloat64
 		if err := st.db.QueryRow(
-			`SELECT switch_direction, first_drip_ms, pour_s, total_s, pump_to_stop_s FROM v_shot WHERE id = ?`,
-			res.ShotID).Scan(&dir, &drip, &pour, &total, &pump); err != nil {
+			`SELECT switch_direction, first_drip_ms, pour_s, total_s, pump_to_stop_s, pump_line FROM v_shot WHERE id = ?`,
+			res.ShotID).Scan(&dir, &drip, &pour, &total, &pump, &rawLine); err != nil {
 			t.Fatalf("%s: %v", c.name, err)
 		}
 		if (c.direction == nil) != !dir.Valid || (dir.Valid && dir.String != c.direction) {
@@ -870,8 +873,20 @@ func TestIngestPumpStart(t *testing.T) {
 		if (c.firstDrip == nil) != !drip.Valid || (drip.Valid && drip.Int64 != c.firstDrip) {
 			t.Errorf("%s: first_drip_ms = %v, want %v", c.name, drip, c.firstDrip)
 		}
-		if !pour.Valid || pour.Float64 != 21.0 || !total.Valid || total.Float64 != 21.0 {
-			t.Errorf("%s: pour_s = %v, total_s = %v, want 21.0 both", c.name, pour, total)
+		if !rawLine.Valid || rawLine.Int64 != int64(c.line) {
+			t.Errorf("%s: pump_line = %v, want raw %d", c.name, rawLine, c.line)
+		}
+		if !total.Valid || total.Float64 != 21.0 {
+			t.Errorf("%s: total_s = %v, want 21.0", c.name, total)
+		}
+		// pour_s is first drip -> stop, and NULL where the press was not seen,
+		// so "pour_s IS NOT NULL" keeps meaning "switch-sensed".
+		if c.firstDrip == nil {
+			if pour.Valid {
+				t.Errorf("%s: pour_s = %v, want NULL", c.name, pour.Float64)
+			}
+		} else if !pour.Valid || pour.Float64 != 21.0 {
+			t.Errorf("%s: pour_s = %v, want 21.0", c.name, pour)
 		}
 		if c.firstDrip == nil {
 			if pump.Valid {
@@ -880,5 +895,89 @@ func TestIngestPumpStart(t *testing.T) {
 		} else if want := (float64(c.firstDrip.(int64)) + 21000) / 1000; !pump.Valid || pump.Float64 != want {
 			t.Errorf("%s: pump_to_stop_s = %v, want %v", c.name, pump, want)
 		}
+	}
+}
+
+// v2 records are what is spooled on the board when 0.10.0 is flashed, so the
+// whole ingest path — not just the decoder — must still take them, with the
+// v3 columns left NULL. Built in v2's own byte layout, by hand: record's
+// headerV2 is unexported on purpose.
+func TestIngestV2RecordStillWorks(t *testing.T) {
+	v2 := struct {
+		Magic             uint32
+		FormatVersion     uint8
+		RecordType        uint8
+		HeaderLen         uint16
+		BootID            uint32
+		Seq               uint32
+		StartedAtUnixMs   uint64
+		StartedAtMillis   uint32
+		TzOffsetMin       int16
+		TimeValid         uint8
+		ScaleRole         uint8
+		ScaleMac          [6]byte
+		Flags             uint8
+		DetectorVersion   [8]byte
+		FirmwareVersion   [16]byte
+		StopMs            uint32
+		YieldAtStopMg     int32
+		YieldFinalMg      int32
+		SettleOffsetMg    int32
+		PeakFlowMgps      int32
+		MeanFlowMgps      int32
+		FlowWinStartMs    uint32
+		FlowWinEndMs      uint32
+		BoilerTempStartDc int16
+		MachineTimerDl    uint16
+		GramsMg           int32
+		StableMs          uint32
+		SampleCount       uint16
+		Crc32             uint32
+	}{
+		Magic: record.Magic, FormatVersion: 2, RecordType: record.TypeShot,
+		HeaderLen: 113, BootID: 0xfeed0004, Seq: 1,
+		StartedAtUnixMs: uint64(time.Now().UnixMilli()), TimeValid: 1,
+		StopMs: 21000, YieldAtStopMg: 35800, YieldFinalMg: 36000,
+		BoilerTempStartDc: 950, MachineTimerDl: 210, SampleCount: 1,
+	}
+	copy(v2.DetectorVersion[:], "0a.6")
+	copy(v2.FirmwareVersion[:], "0.9.9")
+	var buf bytes.Buffer
+	if err := binary.Write(&buf, binary.LittleEndian, &v2); err != nil {
+		t.Fatal(err)
+	}
+	if err := binary.Write(&buf, binary.LittleEndian, []record.Sample{
+		{TMs: 0, WeightMg: 0, InletPulses: 0, TempDc: record.TempNone},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	raw := buf.Bytes()
+	if len(raw) != 113+10 {
+		t.Fatalf("built %d bytes, want 123", len(raw))
+	}
+	binary.LittleEndian.PutUint32(raw[113-4:], crc32.ChecksumIEEE(raw))
+	rec, err := record.Decode(raw)
+	if err != nil {
+		t.Fatalf("v2 record does not decode: %v", err)
+	}
+	st := openTestStore(t)
+	res, err := st.Ingest("aa:bb:cc:dd:ee:03", rec, raw, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var timer sql.NullFloat64
+	var dir sql.NullString
+	var drip, line sql.NullInt64
+	var pour sql.NullFloat64
+	if err := st.db.QueryRow(
+		`SELECT machine_timer_s, switch_direction, first_drip_ms, pump_line, pour_s FROM v_shot WHERE id = ?`,
+		res.ShotID).Scan(&timer, &dir, &drip, &line, &pour); err != nil {
+		t.Fatal(err)
+	}
+	if !timer.Valid || timer.Float64 != 21.0 {
+		t.Errorf("v2 machine_timer_s = %v, want 21.0", timer)
+	}
+	if dir.Valid || drip.Valid || line.Valid || pour.Valid {
+		t.Errorf("v2 record filled v3 columns: dir=%v drip=%v line=%v pour=%v", dir, drip, line, pour)
 	}
 }

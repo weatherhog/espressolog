@@ -445,7 +445,13 @@ func insertShot(tx *sql.Tx, h *record.Header, samples []record.Sample, scaleID a
 	// lead over the detector's t=0, which IS the first drip. NOT on stop_ms's
 	// time base — stop_ms counts from first drip — which is why v_shot's
 	// pour_s is stop_ms alone from migration 010 on.
-	var switchDirection, firstDripMs any
+	// pump_line keeps the RAW byte for every v3 record (invariant 3), so a
+	// hot-water draw and a value no firmware writes stay distinguishable even
+	// though both leave switch_direction NULL.
+	var switchDirection, firstDripMs, pumpLine any
+	if h.FormatVersion >= 3 {
+		pumpLine = int(h.PumpLine)
+	}
 	if line, lead, ok := h.PumpStart(); ok {
 		switch line {
 		case record.Pump1Cup:
@@ -465,10 +471,10 @@ func insertShot(tx *sql.Tx, h *record.Header, samples []record.Sample, scaleID a
 			yield_at_stop_g, yield_final_g, settle_offset_g,
 			peak_flow_gps, mean_flow_gps, flow_win_start_ms, flow_win_end_ms,
 			boiler_temp_start_c, machine_timer_s, setpoint_touched,
-			switch_direction, first_drip_ms,
+			switch_direction, first_drip_ms, pump_line,
 			detector_version, firmware_version,
 			excluded, exclude_reason, created_at
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		// .UTC() to match every READ site. Equivalent today only because
 		// Ingest hands this an already-UTC time; the moment anything passes a
 		// zoned one, stored strings gain "+02:00" and MAX(started_at) — which
@@ -481,7 +487,7 @@ func insertShot(tx *sql.Tx, h *record.Header, samples []record.Sample, scaleID a
 		mg(h.YieldAtStopMg), mg(h.YieldFinalMg), mg(h.SettleOffsetMg),
 		mg(h.PeakFlowMgps), mg(h.MeanFlowMgps), h.FlowWinStartMs, h.FlowWinEndMs,
 		boilerTempC, machineTimerS, setpointTouched,
-		switchDirection, firstDripMs,
+		switchDirection, firstDripMs, pumpLine,
 		h.Detector(), h.Firmware(),
 		excluded, excludeReason, now)
 	if err != nil {

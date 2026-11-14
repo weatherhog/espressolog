@@ -33,7 +33,7 @@ the thing you do not know yet.
 | **write actuation or one-shot code** | `docs/machine-switches-j2.md` | a hold **> ~2 s REPROGRAMS** the stored duration; use a **74HC221**, never a '123; the pulse target is **~250 ms** (decided 2026-10-31), the RC is **330 K / 1 µF, measured 220 ms at 3.3 V** (2026-11-03), and failing short is **silent** |
 | **trust `BREW_GUARD_MS`** | `firmware/src/brew_guard.h`, then the **LEVER B LATCHES** bullet in *Machine: Ascaso Dream PID* | it is 75 s, it is too short for a lever-B draw, **and it can fail to ARM entirely** — an unguarded invariant-2 exposure |
 | **parse or re-capture the display bus** | `docs/machine-display-bus.md` | 67/66 pair, **not** 133-bit frames; GPIO4 clock, GPIO5 data, and a swap is **silent** (`frames=0`, levels perfect) |
-| **read `boiler_temp_start_c`** | `docs/machine-display-bus.md` | at ` 95` it is indistinguishable from the **setpoint**, and that is the only range it is ever sampled in; **during steam, for seconds after it, and after a setpoint change it is unreliable on any firmware**, and a single misread frame can be stored |
+| **read `boiler_temp_start_c`** | `docs/machine-display-bus.md` | at ` 95` it is indistinguishable from the **setpoint**, and that is normally the only range it is sampled in; **during steam, for seconds after it, and after a setpoint change it is unreliable on any firmware**, and a single misread frame can be stored |
 | **believe a flowmeter pulse count** | `docs/flowmeter-j4.md` | counts are **~5× the datasheet and UNRESOLVED** — and the 5× itself divides by an **assumed** inlet |
 | **plan a flowmeter experiment** | `docs/flowmeter-j4.md` | **0d-i first** (weigh the split). And check whether the operator already does it every morning — three for three so far |
 | **compare flow data across sessions** | `docs/flowmeter-j4.md` | the **OPV is adjustable state and nothing records it** — invariant-5 class; and **bench and build glitch counts are not comparable**, since the build moved the 100 K off the cable (2026-11-05) |
@@ -591,8 +591,9 @@ Below ~88 °C the display tracks the real boiler and jitters ±1 °C. At ` 95` i
 is **indistinguishable from the setpoint** — it holds ±0 °C for 57 s, which no
 PID boiler does, and it blinks ` 95` post-steam while the boiler is
 demonstrably hotter. The column is sampled immediately before a pour, i.e.
-**always in the ambiguous range**, so today it means **"at setpoint"**, not a
-verified temperature. Settling that needs a capture with the boiler pulled off
+**normally in the ambiguous range**, so a ` 95` there means **"at setpoint"**,
+not a verified temperature — and the exceptions below can store other
+values (`165`, a misread `85`). Settling that needs a capture with the boiler pulled off
 setpoint and allowed to recover.
 
 **AND FOR A SHOT PULLED DURING STEAM, FOR SECONDS AFTER IT, OR AFTER A
@@ -600,9 +601,9 @@ SETPOINT CHANGE, `boiler_temp_start_c` IS UNRELIABLE ON ANY FIRMWARE.**
 Replaying the steam and button captures through both decoders shows values
 that are not a brew temperature decoding as TEMPERATURE — the first cooldown
 blink cycles and a held-button ramp for seconds at a time, and steam's
-steady `165` for **as long as steam holds temperature: seconds in the
-capture, ~2.7 min live on 2026-11-14** (probably the real boiler, but not a
-brew temperature) — and on 0.9.8 nothing ever marks them stale. 0.9.9 invalidates the stored value at the next SETPOINT
+steady `165` for **as long as steam holds temperature** (one example, not a
+window: ~2.7 min on 0.9.8, live on 2026-11-14; probably the real boiler, but
+not a brew temperature) — and on 0.9.8 nothing ever marks them stale. 0.9.9 invalidates the stored value at the next SETPOINT
 or TARGET frame (`machine_context.h`), which shortens the exposure and does
 not close it. **Exact windows are deliberately not stated**: they depend on
 firmware and on when the next blink frame arrives, and three successive

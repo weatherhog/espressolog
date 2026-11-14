@@ -90,8 +90,9 @@ static bool display_on = false;
 // the logic that ships is the logic the host tests exercise, and so no flash
 // read can ever happen inside the ISR.
 struct DbusEdge { uint32_t t_us; uint8_t bit; };
-static constexpr uint16_t DBUS_RING = 512;      // ~170 ms of edges: the steam capture averages ~3.0 k edges/s
-                                                 // ("~50 ms at 9.9 kHz" until 2026-11-14 took the clock rate as the edge rate)
+static constexpr uint16_t DBUS_RING = 512;      // 511 usable slots: ~50 ms of a burst at 9.9 kHz, but the bus
+                                                 // averages 3244 edges/s (133 per 41 ms), so a loop() stall must
+                                                 // exceed ~158 ms to drop edges (docs/phase-0-status.md)
 static volatile DbusEdge dbus_ring[DBUS_RING];
 static volatile uint16_t dbus_head = 0, dbus_tail = 0;
 static volatile uint32_t dbus_dropped = 0;
@@ -1160,7 +1161,8 @@ void loop() {
   // call net.tick(), whose HTTP path is synchronous with a 3 s connect and
   // 5 s response timeout. With the server unreachable and a record pending,
   // loop() stalls seconds at a time; the 64-entry sample queue holds ~3-6 s,
-  // the 512-entry display ring ~50 ms, and a switch press (80-295 ms,
+  // the 512-entry display ring ~158 ms of average traffic (~50 ms of a
+  // continuous burst), and a switch press (80-295 ms,
   // 2026-10-19) is missed outright. (Cited "345-480 ms" until 2026-10-27:
   // the superseded 2026-10-08 range. A SHORTER press makes the stall worse,
   // not better, so the point stands a fortiori.) It is a candidate explanation for the one burst of

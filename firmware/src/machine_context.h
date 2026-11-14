@@ -57,7 +57,8 @@ public:
     } else if (r.mode == DisplayBus::Mode::SETPOINT || r.mode == DisplayBus::Mode::TARGET) {
       // AND THEY INVALIDATE the last one. Several non-boiler values decode
       // as TEMPERATURE: a blink's first cycle (it is recognised at its
-      // second onset), steam's steady 165 between its two blink regimes, and
+      // second onset), steam's steady 165 for as long as steam holds
+      // temperature (minutes, live), and
       // a held-button ramp. A later SETPOINT or TARGET frame marks them
       // untrustworthy, so a pour after it records "the machine did not say".
       // THIS SHORTENS THE EXPOSURE; IT DOES NOT CLOSE IT: a pour that starts

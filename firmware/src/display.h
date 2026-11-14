@@ -164,9 +164,12 @@ public:
   // A slow (steam/cooldown-class) onset period was seen and has not expired.
   // Also set during a live edit whose onset fell in that band (a dropped
   // frame); the edit still wins the decode while it lasts.
-  // KNOWN, NOT FIXED: an edit made during steam leaves adjust set for the
-  // whole steam blink (its shown phases are under 600 ms), so steam's values
-  // read SETPOINT, not TARGET — still not the boiler. No test covers it.
+  // KNOWN, NOT FIXED: an edit made during steam typically leaves adjust set
+  // for the rest of the steam blink, since its shown phases are mostly under
+  // 600 ms, so steam's values read SETPOINT, not TARGET — still not the
+  // boiler. After one of steam's shortest blanks (0.156 s) the shown phase
+  // runs ~0.9 s, adjust expires mid-phase and the rest reads TARGET. No test
+  // covers it.
   bool targetBlinking() const { return target; }
 
   // Latched: someone has entered temperature programming or edited a value

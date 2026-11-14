@@ -573,7 +573,8 @@ is a defect to schedule, not a reason to stop.
 **Two candidate causes, and the session's own data disfavours the first.**
 
 - *The spool's flash write.* Each cycle closes a record and writes to
-  LittleFS, blocking tens of ms against a ring holding ~50 ms of bus. But
+  LittleFS, blocking tens of ms against a ring holding ~50 ms of a burst
+  (~158 ms of average traffic, as derived further down). But
   `pollSwitches` runs in the same `loop()` and measured a **worst poll gap of
   10 ms** across the whole session. A tens-of-ms stall would have shown
   there and did not.

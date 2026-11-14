@@ -33,7 +33,7 @@ the thing you do not know yet.
 | **write actuation or one-shot code** | `docs/machine-switches-j2.md` | a hold **> ~2 s REPROGRAMS** the stored duration; use a **74HC221**, never a '123; the pulse target is **~250 ms** (decided 2026-10-31), the RC is **330 K / 1 µF, measured 220 ms at 3.3 V** (2026-11-03), and failing short is **silent** |
 | **trust `BREW_GUARD_MS`** | `firmware/src/brew_guard.h`, then the **LEVER B LATCHES** bullet in *Machine: Ascaso Dream PID* | it is 75 s, it is too short for a lever-B draw, **and it can fail to ARM entirely** — an unguarded invariant-2 exposure |
 | **parse or re-capture the display bus** | `docs/machine-display-bus.md` | 67/66 pair, **not** 133-bit frames; GPIO4 clock, GPIO5 data, and a swap is **silent** (`frames=0`, levels perfect) |
-| **read `boiler_temp_start_c`** | `docs/machine-display-bus.md` | at ` 95` it is indistinguishable from the **setpoint**, and that is the only range it is ever sampled in; **within seconds of steam ending or a setpoint change it is unreliable on any firmware** |
+| **read `boiler_temp_start_c`** | `docs/machine-display-bus.md` | at ` 95` it is indistinguishable from the **setpoint**, and that is the only range it is ever sampled in; **during steam, for seconds after it, and after a setpoint change it is unreliable on any firmware**, and a single misread frame can be stored |
 | **believe a flowmeter pulse count** | `docs/flowmeter-j4.md` | counts are **~5× the datasheet and UNRESOLVED** — and the 5× itself divides by an **assumed** inlet |
 | **plan a flowmeter experiment** | `docs/flowmeter-j4.md` | **0d-i first** (weigh the split). And check whether the operator already does it every morning — three for three so far |
 | **compare flow data across sessions** | `docs/flowmeter-j4.md` | the **OPV is adjustable state and nothing records it** — invariant-5 class; and **bench and build glitch counts are not comparable**, since the build moved the 100 K off the cable (2026-11-05) |
@@ -595,12 +595,14 @@ demonstrably hotter. The column is sampled immediately before a pour, i.e.
 verified temperature. Settling that needs a capture with the boiler pulled off
 setpoint and allowed to recover.
 
-**AND FOR A SHOT PULLED WITHIN SECONDS OF STEAM ENDING OR OF A SETPOINT
-CHANGE, `boiler_temp_start_c` IS UNRELIABLE ON ANY FIRMWARE.** Replaying the
-steam and button captures through both decoders shows non-boiler values
-decoding as TEMPERATURE for seconds at a time — steam's steady `165`, the
-first cooldown blink cycles, a held-button ramp — and on 0.9.8 nothing ever
-marks them stale. 0.9.9 invalidates the stored value at the next SETPOINT
+**AND FOR A SHOT PULLED DURING STEAM, FOR SECONDS AFTER IT, OR AFTER A
+SETPOINT CHANGE, `boiler_temp_start_c` IS UNRELIABLE ON ANY FIRMWARE.**
+Replaying the steam and button captures through both decoders shows values
+that are not a brew temperature decoding as TEMPERATURE — the first cooldown
+blink cycles and a held-button ramp for seconds at a time, and steam's
+steady `165` for **as long as steam holds temperature: seconds in the
+capture, ~2.7 min live on 2026-11-14** (probably the real boiler, but not a
+brew temperature) — and on 0.9.8 nothing ever marks them stale. 0.9.9 invalidates the stored value at the next SETPOINT
 or TARGET frame (`machine_context.h`), which shortens the exposure and does
 not close it. **Exact windows are deliberately not stated**: they depend on
 firmware and on when the next blink frame arrives, and three successive
@@ -610,6 +612,13 @@ steady before the pour" flag on the record — and is not attempted.
 *(A measured-windows table stood here for one commit on 2026-11-13, and
 before it a claim that a 0.9.9 cooldown shot records no boiler temperature;
 both withdrawn.)*
+
+**Single-frame misreads reach it too:** the 2026-11-14 live journal shows
+idle frames one segment off (`85` and `99` at 95, `185` and `765` at 165), a
+few per hour, and each decodes as an ordinary TEMPERATURE. The tracker takes
+any one TEMPERATURE frame, so a misread that is the last frame before a pour
+is stored unflagged. A two-frames-in-a-row rule, like the TIMER path's, is
+the obvious guard and is not built.
 
 **The display does NOT run its shot timer during a hot-water draw**, so
 `machine_timer_dl` cannot pick up a tap draw and `machine_context.h` needs no

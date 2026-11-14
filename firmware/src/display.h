@@ -161,7 +161,12 @@ public:
   // sustained signal `programming()` is not.
   bool adjusting() const { return adjust; }
 
-  // The slow steam/cooldown blink is on: shown numbers are targets.
+  // A slow (steam/cooldown-class) onset period was seen and has not expired.
+  // Also set during a live edit whose onset fell in that band (a dropped
+  // frame); the edit still wins the decode while it lasts.
+  // KNOWN, NOT FIXED: an edit made during steam leaves adjust set for the
+  // whole steam blink (its shown phases are under 600 ms), so steam's values
+  // read SETPOINT, not TARGET — still not the boiler. No test covers it.
   bool targetBlinking() const { return target; }
 
   // Latched: someone has entered temperature programming or edited a value

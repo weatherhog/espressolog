@@ -766,11 +766,12 @@ sampled in.
 
 What the column *does* reliably carry: a steady ` 95` means at setpoint; a
 blink or a different value means not. That is still worth storing — **except
-for a shot pulled within seconds of steam ending or of a setpoint change,
-where it is unreliable on any firmware**: steam's steady `165`, the first
-cooldown blink cycles and held-button ramps all decode as TEMPERATURE for
-seconds, and 0.9.9's invalidation at the next blink frame only shortens
-that. Exact windows are not stated, for the reason CLAUDE.md gives.
+for a shot pulled during steam, for seconds after it, or after a setpoint
+change, where it is unreliable on any firmware**: steam's steady `165`
+decodes as TEMPERATURE for as long as steam holds temperature (minutes,
+live), and the first cooldown blink cycles and held-button ramps for
+seconds; 0.9.9's invalidation at the next blink frame only shortens that.
+A single-frame misread can also be stored (CLAUDE.md). Exact windows are not stated, for the reason CLAUDE.md gives.
 *(Until 2026-11-13 this said a 0.9.9 cooldown shot records no boiler
 temperature and that the old decoder's post-steam ` 95` was "not seen in the
 steam capture"; it is, 9 frames.)* Settling

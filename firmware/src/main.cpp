@@ -90,7 +90,8 @@ static bool display_on = false;
 // the logic that ships is the logic the host tests exercise, and so no flash
 // read can ever happen inside the ISR.
 struct DbusEdge { uint32_t t_us; uint8_t bit; };
-static constexpr uint16_t DBUS_RING = 512;      // ~50 ms of edges at 9.9 kHz
+static constexpr uint16_t DBUS_RING = 512;      // ~170 ms of edges: the steam capture averages ~3.0 k edges/s
+                                                 // ("~50 ms at 9.9 kHz" until 2026-11-14 took the clock rate as the edge rate)
 static volatile DbusEdge dbus_ring[DBUS_RING];
 static volatile uint16_t dbus_head = 0, dbus_tail = 0;
 static volatile uint32_t dbus_dropped = 0;

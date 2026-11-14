@@ -528,14 +528,18 @@ func TestIngestDoesNotInheritFromTheFuture(t *testing.T) {
 	}
 }
 
-// v2BuildRecord assembles a format-2 record the way the firmware does.
-// Deliberately not a fixture file: the point is to exercise the machine
-// fields, and a hand-built record makes it obvious what is being claimed.
+// v2BuildRecord assembles a record the way the firmware does, carrying the
+// v2 machine fields. Deliberately not a fixture file: the point is to
+// exercise the machine fields, and a hand-built record makes it obvious what
+// is being claimed. Since 2026-11-14 it is written as format v3 — the
+// in-memory Header is the v3 layout — with "no press seen" in the v3 fields;
+// v2's own byte layout is covered by internal/record's tests.
 func v2BuildRecord(t *testing.T, boilerDc int16, timerDl uint16, touched bool) ([]byte, *record.Record) {
 	t.Helper()
 	h := record.Header{
-		Magic: record.Magic, FormatVersion: 2, RecordType: record.TypeShot,
-		HeaderLen: 113, BootID: 0xfeed0001, Seq: 1,
+		Magic: record.Magic, FormatVersion: 3, RecordType: record.TypeShot,
+		HeaderLen: 118, BootID: 0xfeed0001, Seq: 1,
+		PumpLine: record.PumpNone, PumpLeadMs: record.PumpLeadNone,
 		StartedAtUnixMs: uint64(time.Now().UnixMilli()), TimeValid: 1,
 		StopMs: 21000, YieldAtStopMg: 35800, YieldFinalMg: 36000,
 		PeakFlowMgps: 2100, MeanFlowMgps: 1710,
@@ -559,10 +563,10 @@ func v2BuildRecord(t *testing.T, boilerDc int16, timerDl uint16, touched bool) (
 		t.Fatal(err)
 	}
 	raw := buf.Bytes()
-	for i := 113 - 4; i < 113; i++ {
+	for i := 118 - 4; i < 118; i++ {
 		raw[i] = 0
 	}
-	binary.LittleEndian.PutUint32(raw[113-4:], crc32.ChecksumIEEE(raw))
+	binary.LittleEndian.PutUint32(raw[118-4:], crc32.ChecksumIEEE(raw))
 
 	rec, err := record.Decode(raw)
 	if err != nil {
@@ -662,8 +666,9 @@ func TestIngestLeavesMachineSignalsNullWhenUnavailable(t *testing.T) {
 func v2BuildFlowRecord(t *testing.T, seq uint32, flowTap bool, n int) ([]byte, *record.Record) {
 	t.Helper()
 	h := record.Header{
-		Magic: record.Magic, FormatVersion: 2, RecordType: record.TypeShot,
-		HeaderLen: 113, BootID: 0xfeed0002, Seq: seq,
+		Magic: record.Magic, FormatVersion: 3, RecordType: record.TypeShot,
+		HeaderLen: 118, BootID: 0xfeed0002, Seq: seq,
+		PumpLine: record.PumpNone, PumpLeadMs: record.PumpLeadNone,
 		StartedAtUnixMs: uint64(time.Now().UnixMilli()), TimeValid: 1,
 		StopMs: 21000, YieldAtStopMg: 35800, YieldFinalMg: 36000,
 		PeakFlowMgps: 2100, MeanFlowMgps: 1710,
@@ -701,10 +706,10 @@ func v2BuildFlowRecord(t *testing.T, seq uint32, flowTap bool, n int) ([]byte, *
 		t.Fatal(err)
 	}
 	raw := buf.Bytes()
-	for i := 113 - 4; i < 113; i++ {
+	for i := 118 - 4; i < 118; i++ {
 		raw[i] = 0
 	}
-	binary.LittleEndian.PutUint32(raw[113-4:], crc32.ChecksumIEEE(raw))
+	binary.LittleEndian.PutUint32(raw[118-4:], crc32.ChecksumIEEE(raw))
 
 	rec, err := record.Decode(raw)
 	if err != nil {
@@ -787,5 +792,93 @@ func TestIngestFlowPulsesRejectsV1Flag(t *testing.T) {
 	}
 	if samples[0]["inlet_pulses"] != nil {
 		t.Errorf("v1 record honoured a v2 flag: %v", samples[0]["inlet_pulses"])
+	}
+}
+
+// pumpRecord builds a v3 shot record carrying a lever press (0c).
+func pumpRecord(t *testing.T, seq uint32, line uint8, leadMs uint32) ([]byte, *record.Record) {
+	t.Helper()
+	h := record.Header{
+		Magic: record.Magic, FormatVersion: 3, RecordType: record.TypeShot,
+		HeaderLen: 118, BootID: 0xfeed0003, Seq: seq,
+		StartedAtUnixMs: uint64(time.Now().UnixMilli()) + uint64(seq), TimeValid: 1,
+		StopMs: 21000, YieldAtStopMg: 35800, YieldFinalMg: 36000,
+		PeakFlowMgps: 2100, MeanFlowMgps: 1710,
+		FlowWinStartMs: 3000, FlowWinEndMs: 18000,
+		BoilerTempStartDc: 950, MachineTimerDl: 288,
+		PumpLine: line, PumpLeadMs: leadMs,
+		SampleCount: 1,
+	}
+	copy(h.DetectorVersion[:], "0a.6")
+	copy(h.FirmwareVersion[:], "0.10.0")
+	var buf bytes.Buffer
+	if err := binary.Write(&buf, binary.LittleEndian, &h); err != nil {
+		t.Fatal(err)
+	}
+	if err := binary.Write(&buf, binary.LittleEndian, []record.Sample{
+		{TMs: 0, WeightMg: 0, InletPulses: 0, TempDc: record.TempNone},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	raw := buf.Bytes()
+	binary.LittleEndian.PutUint32(raw[118-4:], crc32.ChecksumIEEE(raw))
+	rec, err := record.Decode(raw)
+	if err != nil {
+		t.Fatalf("built record does not decode: %v", err)
+	}
+	return raw, rec
+}
+
+// The lever press that started the pump reaches the shot row: lever A's
+// direction as switch_direction, the press's lead over first drip as
+// first_drip_ms. And v_shot's timing stays on stop_ms's own time base:
+// pour_s is first drip -> stop, pump_to_stop_s adds the lead. Before
+// migration 010, pour_s subtracted the lead from a time that already
+// counted from first drip.
+func TestIngestPumpStart(t *testing.T) {
+	cases := []struct {
+		name      string
+		line      uint8
+		lead      uint32
+		direction any // string or nil
+		firstDrip any // int64 or nil
+	}{
+		{"2Cup", record.Pump2Cup, 8200, "down", int64(8200)},
+		{"1Cup", record.Pump1Cup, 6100, "up", int64(6100)},
+		{"hot water", record.PumpWater, 4000, nil, int64(4000)},
+		{"no press", record.PumpNone, record.PumpLeadNone, nil, nil},
+	}
+	st := openTestStore(t)
+	for i, c := range cases {
+		raw, rec := pumpRecord(t, uint32(i+1), c.line, c.lead)
+		res, err := st.Ingest("aa:bb:cc:dd:ee:03", rec, raw, time.Now())
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		var dir sql.NullString
+		var drip sql.NullInt64
+		var pour, total sql.NullFloat64
+		var pump sql.NullFloat64
+		if err := st.db.QueryRow(
+			`SELECT switch_direction, first_drip_ms, pour_s, total_s, pump_to_stop_s FROM v_shot WHERE id = ?`,
+			res.ShotID).Scan(&dir, &drip, &pour, &total, &pump); err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if (c.direction == nil) != !dir.Valid || (dir.Valid && dir.String != c.direction) {
+			t.Errorf("%s: switch_direction = %v, want %v", c.name, dir, c.direction)
+		}
+		if (c.firstDrip == nil) != !drip.Valid || (drip.Valid && drip.Int64 != c.firstDrip) {
+			t.Errorf("%s: first_drip_ms = %v, want %v", c.name, drip, c.firstDrip)
+		}
+		if !pour.Valid || pour.Float64 != 21.0 || !total.Valid || total.Float64 != 21.0 {
+			t.Errorf("%s: pour_s = %v, total_s = %v, want 21.0 both", c.name, pour, total)
+		}
+		if c.firstDrip == nil {
+			if pump.Valid {
+				t.Errorf("%s: pump_to_stop_s = %v, want NULL", c.name, pump.Float64)
+			}
+		} else if want := (float64(c.firstDrip.(int64)) + 21000) / 1000; !pump.Valid || pump.Float64 != want {
+			t.Errorf("%s: pump_to_stop_s = %v, want %v", c.name, pump, want)
+		}
 	}
 }

@@ -182,6 +182,56 @@ int main() {
     printf("SETPOINT and TARGET invalidate the last boiler reading OK\n");
   }
 
+  // 10. Pump start (0c, spool v3): which lever started the pump for this
+  //     shot, and how long before first drip.
+  {
+    // The ordinary shot: 2Cup pressed, first drip 8.2 s later, stopped by a
+    // second press 25 s after that. The stop press must not be chosen.
+    MachineContextTracker m;
+    m.onPumpPress(PUMP_2CUP, 100000);
+    m.onPourStart(1);
+    m.onPumpPress(PUMP_2CUP, 133200);              // the stop press, after t=0
+    m.resolvePump(108200);                         // t=0 = first drip
+    assert(m.context().pump_line == PUMP_2CUP);
+    assert(m.context().pump_lead_ms == 8200);
+
+    // A flush before the shot: 1Cup started and stopped, then 2Cup for the
+    // shot. The shot's own start press is the latest before t=0.
+    MachineContextTracker f;
+    f.onPumpPress(PUMP_1CUP, 10000);
+    f.onPumpPress(PUMP_1CUP, 15000);
+    f.onPumpPress(PUMP_2CUP, 40000);
+    f.resolvePump(47000);
+    assert(f.context().pump_line == PUMP_2CUP && f.context().pump_lead_ms == 7000);
+
+    // A press more than PUMP_LEAD_MAX_MS before t=0 is not this shot's.
+    MachineContextTracker o;
+    o.onPumpPress(PUMP_1CUP, 1000);
+    o.resolvePump(1000 + MachineContextTracker::PUMP_LEAD_MAX_MS + 1);
+    assert(o.context().pump_line == PUMP_NONE);
+    assert(o.context().pump_lead_ms == PUMP_LEAD_NONE);
+
+    // No switch tap, no presses: "not known", not zero.
+    MachineContextTracker n;
+    n.resolvePump(50000);
+    assert(n.context().pump_line == PUMP_NONE && n.context().pump_lead_ms == PUMP_LEAD_NONE);
+
+    // Across a millis() wrap (49.7 days): press just before, drip just after.
+    MachineContextTracker w;
+    w.onPumpPress(PUMP_1CUP, 0xFFFFF000u);         // 4096 ms before the wrap
+    w.resolvePump(0x00000800u);                    // 2048 ms after it
+    assert(w.context().pump_line == PUMP_1CUP && w.context().pump_lead_ms == 6144);
+
+    // More presses than the ring holds: the oldest are forgotten, and the
+    // newest before t=0 still wins.
+    MachineContextTracker r;
+    for (uint32_t i = 0; i < 10; i++) r.onPumpPress(PUMP_1CUP, 1000 + i * 1000);
+    r.onPumpPress(PUMP_2CUP, 20000);
+    r.resolvePump(26000);
+    assert(r.context().pump_line == PUMP_2CUP && r.context().pump_lead_ms == 6000);
+    printf("pump start: latest press before first drip, within the window OK\n");
+  }
+
   // 7. Display bus never on: everything stays "the machine did not say".
   {
     MachineContextTracker m;

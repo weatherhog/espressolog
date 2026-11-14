@@ -14,13 +14,14 @@
 // without re-running a detector on day one.
 //
 // FORMAT VERSION 2 (2026-10-03) added the two machine-sourced fields below
-// and one flag bit. Version 1 records still exist, both spooled and as
+// and one flag bit. FORMAT VERSION 3 (2026-11-14) added the lever press that
+// started the pump (0c): pump_line and pump_lead_ms. Version 1 records still exist, both spooled and as
 // fixtures, so the server decodes BOTH — see server/internal/record. The
 // original intent was that this struct would never change; it changed
 // because 0e produced facts the machine knows and the logger did not.
 typedef struct __attribute__((packed)) {
   uint32_t magic;              // 'ESPL' = 0x4C505345
-  uint8_t  format_version;     // 2 — see the version note above
+  uint8_t  format_version;     // 3 — see the version note above
   uint8_t  record_type;        // 1 = shot, 2 = weighing
   uint16_t header_len;         // sizeof(spool_header_t); forward-compat skip
   uint32_t boot_id;            // + seq = idempotency key
@@ -59,6 +60,15 @@ typedef struct __attribute__((packed)) {
   // available. Note it does NOT say which switch direction ran: 1Cup and
   // 2Cup are byte-identical on the display bus, so that still needs 0c.
   uint16_t machine_timer_dl;
+  // --- format v3: the lever press that started the pump (0c) ---
+  // Which direction: PumpLine in machine_context.h — 0 not known, 1 1Cup,
+  // 2 2Cup, 3 hot water. Steam never runs the pump and is never recorded.
+  uint8_t  pump_line;
+  // Milliseconds from that press to the detector's t=0 (the backdated first
+  // drip): the pump-on to first-liquid time the schema calls first_drip_ms.
+  // Raw: the difference of two millis() stamps. 0xFFFFFFFF = not known —
+  // switches off, no press within 60 s before t=0, or a pre-v3 record.
+  uint32_t pump_lead_ms;
   // weighing-only (zero for shots):
   int32_t  grams_mg;
   uint32_t stable_ms;
@@ -83,7 +93,10 @@ typedef struct __attribute__((packed)) {
 
 #define SPOOL_MAGIC          0x4C505345
 #define SPOOL_HEADER_LEN_V1  109
-#define SPOOL_HEADER_LEN_V2  113   // == sizeof(spool_header_t)
+#define SPOOL_HEADER_LEN_V2  113
+#define SPOOL_HEADER_LEN_V3  118   // == sizeof(spool_header_t)
+static_assert(sizeof(spool_header_t) == SPOOL_HEADER_LEN_V3,
+              "spool_header_t drifted from the v3 wire length the server decodes");
 
 #define SPOOL_FLAG_FAULT     0x01
 #define SPOOL_FLAG_TRUNCATED 0x02

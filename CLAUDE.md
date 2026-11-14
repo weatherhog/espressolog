@@ -572,9 +572,10 @@ recognised at its SECOND onset, so the first blink cycle of an edit or a
 steam cycle still decodes as TEMPERATURE; a SETPOINT or TARGET frame then
 invalidates the boiler reading it left (`machine_context.h`).
 
-**THAT IS TRUE FROM FIRMWARE 0.9.9. As of 2026-11-14 the board still runs
-0.9.8, on which steam latches** — seen live that morning, decoded as
-`setpoint 165` (`docs/phase-0-status.md` has what the board runs now). **BEFORE
+**THAT IS TRUE FROM FIRMWARE 0.9.9, flashed 2026-11-14.** Shots logged on
+0.9.8 or earlier can carry a steam-caused latch — seen live that morning on
+0.9.8, decoded as `setpoint 165` (`docs/phase-0-status.md` has what the
+board runs now). **BEFORE
 0.9.9 THE CODE DID NOT IMPLEMENT THE DESIGN — found 2026-11-13.** `display.cpp` latched on two blank FRAMES
 within 600 ms, and one blank lasts several frames 41 ms apart, so **every
 steam cycle latched `setpoint_touched`**. Replayed through both decoders,
@@ -765,7 +766,7 @@ server/            Go
   internal/{api,live,record,store,web}/
                    record = on-flash wire format (v1 + v2 decode)
                    web    = embed.FS for the built PWA
-  migrations/00*.sql        9 migrations; 001_init.sql is the base
+  migrations/0*.sql         10 migrations; 001_init.sql is the base
 web/               Vite + React PWA
   src/ · prototype/
 analysis/          Jupyter notebooks, reads the SQLite file
@@ -1588,8 +1589,18 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
 Flow rate: central difference over a 700 ms window. `mean_flow_gps` over
 from 5 g out to 80 % of final, skipping the first-drop lag.
 
-`first_drip_ms` is **null in 0a** — without switch sensing there's no
-pump-start reference. It becomes real in 0c.
+`first_drip_ms` was **null until firmware 0.10.0** — without switch sensing
+there was no pump-start reference. **From 0.10.0 (spool v3) it is the lead
+of the lever press that started the pump over the detector's t=0**, and
+`switch_direction` records lever A's direction ('up' = 1Cup, 'down' = 2Cup).
+**`stop_ms` still counts from first drip, not from pump-on**, so in
+`v_shot` (migration 010) `pour_s` = `total_s` = `stop_ms`, and the new
+`pump_to_stop_s` = `first_drip_ms + stop_ms`. *(001 and 005 defined `pour_s`
+as `stop_ms - first_drip_ms`, which assumed a pump-on time base that never
+existed and was harmless only while `first_drip_ms` was always NULL.)*
+**Known limit:** if a shot's start press is missed by the poller's
+debounce, an earlier flush's stop press within 60 s is attributed instead
+(`machine_context.h`, `resolvePump()`).
 
 `settle_offset_g` matters more than it looks: today you stop the shot by
 hand when the scale reads target, so the overshoot distribution *is* the
@@ -1614,11 +1625,15 @@ typedef struct __attribute__((packed)) {
 **Header format v2** (2026-10-03) added three machine-sourced facts, the
 first data in this system that neither a scale measured nor a human typed:
 `boiler_temp_start_dc`, `machine_timer_dl`, and a `SETPOINT_TOUCHED` flag
-bit. Header 109 → 113 bytes. **The server decodes v1 and v2 both** — v1
-records exist spooled and as fixtures, and losing one to a format bump
-would violate invariant 6. A v1 record reports the new fields as "the
-machine did not say", which is the same thing a v2 record written with the
-display bus off reports, so nothing downstream needs a version check.
+bit. Header 109 → 113 bytes. **Header format v3** (firmware 0.10.0,
+2026-11-14) added `pump_line` and `pump_lead_ms` after `machine_timer_dl`,
+113 → 118 bytes. **The server decodes v1, v2 and v3** — older records
+exist spooled and as fixtures, and losing one to a format bump would violate
+invariant 6. An older record reports the newer fields as "the machine did
+not say", which is the same thing a current record written with the display
+bus or the switches off reports, so nothing downstream needs a version
+check. **Deploy the server before flashing a format bump**: an older server
+cannot decode a v3 record.
 
 **`shot_sample.temp_dc` will be NULL for most of a shot and that is
 correct.** The machine takes the display over for its timer the moment the

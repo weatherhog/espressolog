@@ -15,7 +15,7 @@
 #include "brew_guard.h"
 #include <driver/gpio.h>
 
-const char* FIRMWARE_VERSION = "0.9.9";
+const char* FIRMWARE_VERSION = "0.10.0";
 const char* DETECTOR_VERSION = "0a.6";
 
 static ScaleManager scales;
@@ -481,8 +481,15 @@ static void pollSwitches() {
     // evidence everywhere else (it forces `reprogram` false and prints
     // `high?` rather than `PRESSED`). A floating line settling must not arm
     // a 75 s upload block.
-    if (!e.synthetic && e.line < SwitchBank::N_LINES && e.line != SwitchBank::STEAM)
+    if (!e.synthetic && e.line < SwitchBank::N_LINES && e.line != SwitchBank::STEAM) {
       brew_guard.onRelease(e.line, e.pressed_at_ms);
+      // And remember it for the shot record (spool v3): which lever started
+      // the pump, and when. Same filter, same reason.
+      machine_ctx.onPumpPress(e.line == SwitchBank::ONE_CUP ? PUMP_1CUP
+                            : e.line == SwitchBank::TWO_CUP ? PUMP_2CUP
+                            :                                 PUMP_WATER,
+                              e.pressed_at_ms);
+    }
     reportSwitch(e);
   }
 }
@@ -704,6 +711,9 @@ static void handleShotComplete(const ShotResult& r) {
   if (!spool_ok) {
     Serial.println("# spool unavailable — record NOT persisted");
   } else {
+    // Which press started the pump for THIS shot is only decidable now:
+    // the stop press, if any, came after t=0 and must not be picked.
+    machine_ctx.resolvePump(r.started_at_ms);
     String path = spool.writeShot(r, scales.slotMac(ScaleRole::YIELD),
                                   machine_ctx.context(), flow_tap_shot);
     if (path.length()) Serial.printf("# spooled %s%s\n", path.c_str(), r.valid ? "" : " (reject)");

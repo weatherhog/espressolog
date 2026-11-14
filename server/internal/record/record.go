@@ -16,7 +16,7 @@ const (
 	// version in headerLens, because v1 records exist both spooled on
 	// devices and as fixtures, and a format bump must never strand a shot
 	// (invariant 6).
-	FormatVersion = 2
+	FormatVersion = 3
 
 	TypeShot     = 1
 	TypeWeighing = 2
@@ -37,14 +37,25 @@ const (
 
 	headerLenV1 = 109
 	headerLenV2 = 113 // v1 + boiler_temp_start_dc (int16) + machine_timer_dl (uint16)
+	headerLenV3 = 118 // v2 + pump_line (uint8) + pump_lead_ms (uint32)
 	sampleLen   = 10
+
+	// PumpLeadNone is pump_lead_ms's "not known": switches off, no press in
+	// the window, or a pre-v3 record.
+	PumpLeadNone = 0xFFFFFFFF
+
+	// PumpLine values, as spool.h writes them (machine_context.h PumpLine).
+	PumpNone  = 0
+	Pump1Cup  = 1
+	Pump2Cup  = 2
+	PumpWater = 3
 
 	// TempNone is INT16_MIN in the firmware: "no reading".
 	TempNone = -32768
 )
 
 // headerLens maps a format version to its on-wire header size.
-var headerLens = map[uint8]int{1: headerLenV1, 2: headerLenV2}
+var headerLens = map[uint8]int{1: headerLenV1, 2: headerLenV2, 3: headerLenV3}
 
 // headerV1 is the v1 layout, kept verbatim so old records still decode.
 // v2 inserted two fields in the middle, so the two cannot share a struct.
@@ -78,9 +89,44 @@ type headerV1 struct {
 	Crc32           uint32
 }
 
+// headerV2 is the v2 layout, kept verbatim so v2 records still decode. v3
+// inserted two fields after machine_timer_dl, so the two cannot share a
+// struct.
+type headerV2 struct {
+	Magic             uint32
+	FormatVersion     uint8
+	RecordType        uint8
+	HeaderLen         uint16
+	BootID            uint32
+	Seq               uint32
+	StartedAtUnixMs   uint64
+	StartedAtMillis   uint32
+	TzOffsetMin       int16
+	TimeValid         uint8
+	ScaleRole         uint8
+	ScaleMac          [6]byte
+	Flags             uint8
+	DetectorVersion   [8]byte
+	FirmwareVersion   [16]byte
+	StopMs            uint32
+	YieldAtStopMg     int32
+	YieldFinalMg      int32
+	SettleOffsetMg    int32
+	PeakFlowMgps      int32
+	MeanFlowMgps      int32
+	FlowWinStartMs    uint32
+	FlowWinEndMs      uint32
+	BoilerTempStartDc int16
+	MachineTimerDl    uint16
+	GramsMg           int32
+	StableMs          uint32
+	SampleCount       uint16
+	Crc32             uint32
+}
+
 // Header mirrors the CURRENT spool_header_t field-for-field, and is also the
-// canonical in-memory form: a v1 record decodes into it with the v2-only
-// fields left at their "not available" values. binary.Read consumes it
+// canonical in-memory form: an older record decodes into it with the fields
+// it predates left at their "not available" values. binary.Read consumes it
 // sequentially, so Go struct alignment never enters into it.
 type Header struct {
 	Magic           uint32
@@ -111,10 +157,14 @@ type Header struct {
 	// off, so a consumer needs no version check of its own.
 	BoilerTempStartDc int16
 	MachineTimerDl    uint16
-	GramsMg           int32
-	StableMs          uint32
-	SampleCount       uint16
-	Crc32             uint32
+	// v3. PumpLine is PumpNone and PumpLeadMs is PumpLeadNone on a v1 or v2
+	// record — the same values the firmware writes when it saw no press.
+	PumpLine    uint8
+	PumpLeadMs  uint32
+	GramsMg     int32
+	StableMs    uint32
+	SampleCount uint16
+	Crc32       uint32
 }
 
 // Sample mirrors sample_t.
@@ -163,6 +213,17 @@ func (h *Header) BoilerTempStartC() (int, bool) {
 }
 func (h *Header) Reject() bool { return h.Flags&FlagReject != 0 }
 
+// PumpStart returns the lever press that started the pump for this shot and
+// its lead, in ms, over the detector's t=0 (first drip) — and false when the
+// record does not know: switches off, no press within the firmware's
+// window, or a pre-v3 record.
+func (h *Header) PumpStart() (line uint8, leadMs uint32, ok bool) {
+	if h.PumpLine == PumpNone || h.PumpLeadMs == PumpLeadNone {
+		return PumpNone, 0, false
+	}
+	return h.PumpLine, h.PumpLeadMs, true
+}
+
 // Decode parses and validates one complete record, in any format version
 // the firmware has ever written. The CRC is computed the way the firmware
 // does: header with the crc field zeroed, then the samples.
@@ -206,12 +267,37 @@ func Decode(raw []byte) (*Record, error) {
 			// downstream needs to know which version it is reading.
 			BoilerTempStartDc: TempNone,
 			MachineTimerDl:    0,
+			PumpLine:          PumpNone,
+			PumpLeadMs:        PumpLeadNone,
 			GramsMg:           v1.GramsMg, StableMs: v1.StableMs,
 			SampleCount: v1.SampleCount, Crc32: v1.Crc32,
 		}
 	case 2:
-		if err := binary.Read(bytes.NewReader(raw), binary.LittleEndian, &h); err != nil {
+		var v2 headerV2
+		if err := binary.Read(bytes.NewReader(raw), binary.LittleEndian, &v2); err != nil {
 			return nil, fmt.Errorf("header v2: %w", err)
+		}
+		h = Header{
+			Magic: v2.Magic, FormatVersion: v2.FormatVersion, RecordType: v2.RecordType,
+			HeaderLen: v2.HeaderLen, BootID: v2.BootID, Seq: v2.Seq,
+			StartedAtUnixMs: v2.StartedAtUnixMs, StartedAtMillis: v2.StartedAtMillis,
+			TzOffsetMin: v2.TzOffsetMin, TimeValid: v2.TimeValid, ScaleRole: v2.ScaleRole,
+			ScaleMac: v2.ScaleMac, Flags: v2.Flags,
+			DetectorVersion: v2.DetectorVersion, FirmwareVersion: v2.FirmwareVersion,
+			StopMs: v2.StopMs, YieldAtStopMg: v2.YieldAtStopMg, YieldFinalMg: v2.YieldFinalMg,
+			SettleOffsetMg: v2.SettleOffsetMg, PeakFlowMgps: v2.PeakFlowMgps,
+			MeanFlowMgps: v2.MeanFlowMgps, FlowWinStartMs: v2.FlowWinStartMs,
+			FlowWinEndMs:      v2.FlowWinEndMs,
+			BoilerTempStartDc: v2.BoilerTempStartDc, MachineTimerDl: v2.MachineTimerDl,
+			// v2 predates 0c's pump-start fields: "the machine did not say".
+			PumpLine:   PumpNone,
+			PumpLeadMs: PumpLeadNone,
+			GramsMg:    v2.GramsMg, StableMs: v2.StableMs,
+			SampleCount: v2.SampleCount, Crc32: v2.Crc32,
+		}
+	case 3:
+		if err := binary.Read(bytes.NewReader(raw), binary.LittleEndian, &h); err != nil {
+			return nil, fmt.Errorf("header v3: %w", err)
 		}
 	}
 

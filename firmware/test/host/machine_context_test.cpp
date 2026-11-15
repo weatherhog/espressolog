@@ -269,6 +269,76 @@ int main() {
     printf("completion fallback fills a late press, keeps a found one OK\n");
   }
 
+  // 15. Pre-drip pulses (v4) — numbered 15, placed here beside the other
+  //     pump-start cases: captured for the press's window only, and
+  //     "not captured" — not zero — when there was no press.
+  {
+    PulseLog log;
+    for (uint32_t t = 95000; t < 99000; t += 50) log.push(t);   // an earlier flush
+    for (uint32_t t = 100200; t <= 102000; t += 100) log.push(t); // pre-infusion
+    for (uint32_t t = 105000; t <= 108000; t += 50) log.push(t);  // after the pause
+    MachineContextTracker m;
+    m.onPumpPress(PUMP_2CUP, 100000);
+    m.onPourStart(1);
+    m.resolvePump(108000);
+    m.notePourConfirmed(108000);
+    m.capturePrePulses(log, 108000);
+    const MachineContext& c = m.context();
+    assert(m.prePulsesCaptured());
+    assert(c.pre_pulse_total == 19 + 61 && c.pre_pulse_count == c.pre_pulse_total);
+    assert(c.pre_pulse_flags & PRE_PULSES_COMPLETE);
+    assert(c.pre_pulse_ms[0] == 200 && c.pre_pulse_ms[18] == 2000 && c.pre_pulse_ms[19] == 5000);
+
+    MachineContextTracker n;                       // no press: not captured
+    n.onPourStart(1);
+    n.resolvePump(108000);
+    n.notePourConfirmed(108000);
+    n.capturePrePulses(log, 108000);
+    assert(!n.prePulsesCaptured() && n.context().pre_pulse_count == 0);
+
+    // The window ends where inlet_pulses starts (pour confirmation, ~300 ms
+    // after the backdated t=0), so pulses in between are not in neither.
+    log.push(108100);
+    log.push(108250);
+    MachineContextTracker e;
+    e.onPumpPress(PUMP_2CUP, 100000);
+    e.onPourStart(1);
+    e.resolvePump(108000);
+    e.notePourConfirmed(108300);                   // confirmed at 108300
+    e.capturePrePulses(log, 108000);
+    assert(e.context().pre_pulse_total == 19 + 61 + 2);
+
+    // The completion fallback (press confirmed late) ends at the same
+    // confirmation, not at t=0, so it meets inlet_pulses too.
+    MachineContextTracker f;
+    f.onPourStart(1);
+    f.resolvePump(108000);                         // no press yet
+    f.notePourConfirmed(108300);
+    f.capturePrePulses(log, 108000);               // does nothing: no press
+    assert(!f.prePulsesCaptured());
+    f.onPumpPress(PUMP_2CUP, 100000);              // confirmed late
+    f.resolvePumpIfUnknown(108000);
+    f.capturePrePulses(log, 108000);
+    assert(f.context().pre_pulse_total == 19 + 61 + 2);
+
+    // A confirmation absurdly late (a stall) is clamped so offsets fit: a
+    // pulse 70 s after the press would otherwise be stored as 0xFFFF.
+    log.push(100000 + 70000);
+    MachineContextTracker g;
+    g.onPumpPress(PUMP_2CUP, 100000);
+    g.onPourStart(1);
+    g.resolvePump(108000);
+    g.notePourConfirmed(100000 + 200000);
+    g.capturePrePulses(log, 108000);
+    for (uint16_t i = 0; i < g.context().pre_pulse_count; i++)
+      assert(g.context().pre_pulse_ms[i] < 0xFFFF);
+
+    m.onPourStart(1);                              // the next shot starts clean
+    assert(!m.prePulsesCaptured() && m.context().pre_pulse_count == 0);
+    assert(m.context().pump_line == PUMP_NONE && m.context().boiler_temp_start_dc == INT16_MIN);
+    printf("pre-drip pulses: the press's window, or 'not captured' OK\n");
+  }
+
   // 12. The line mapping: lever A's two directions and hot water; steam and
   //     anything unknown are PUMP_NONE and are not remembered at all.
   {

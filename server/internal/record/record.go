@@ -55,7 +55,7 @@ const (
 	// version in headerLens, because v1 records exist both spooled on
 	// devices and as fixtures, and a format bump must never strand a shot
 	// (invariant 6).
-	FormatVersion = 3
+	FormatVersion = 4
 
 	TypeShot     = 1
 	TypeWeighing = 2
@@ -77,7 +77,16 @@ const (
 	headerLenV1 = 109
 	headerLenV2 = 113 // v1 + boiler_temp_start_dc (int16) + machine_timer_dl (uint16)
 	headerLenV3 = 118 // v2 + pump_line (uint8) + pump_lead_ms (uint32)
-	sampleLen   = 10
+	headerLenV4 = 123 // v3 + pre_pulse_total (u16) + flags (u8) + count (u16); offsets in a tail
+
+	// PrePulsesNone is pre_pulse_total's "not captured".
+	PrePulsesNone = 0xFFFF
+	// PrePulsesComplete (pre_pulse_flags bit 0): the firmware's pulse log
+	// lost none of the press-to-confirmation window, so the total is exact.
+	PrePulsesComplete = 0x01
+	// PrePulsesMax is the most offsets a v4 tail carries.
+	PrePulsesMax = 256
+	sampleLen    = 10
 
 	// PumpLeadNone is pump_lead_ms's "not known": switches off, no press in
 	// the window, or a pre-v3 record.
@@ -94,7 +103,7 @@ const (
 )
 
 // headerLens maps a format version to its on-wire header size.
-var headerLens = map[uint8]int{1: headerLenV1, 2: headerLenV2, 3: headerLenV3}
+var headerLens = map[uint8]int{1: headerLenV1, 2: headerLenV2, 3: headerLenV3, 4: headerLenV4}
 
 // headerV1 is the v1 layout, kept verbatim so old records still decode.
 // v2 inserted two fields in the middle, so the two cannot share a struct.
@@ -163,11 +172,9 @@ type headerV2 struct {
 	Crc32             uint32
 }
 
-// Header mirrors the CURRENT spool_header_t field-for-field, and is also the
-// canonical in-memory form: an older record decodes into it with the fields
-// it predates left at their "not available" values. binary.Read consumes it
-// sequentially, so Go struct alignment never enters into it.
-type Header struct {
+// headerV3 is the v3 layout, kept verbatim so v3 records still decode. v4
+// inserted the pre-drip pulse block after pump_lead_ms.
+type headerV3 struct {
 	Magic           uint32
 	FormatVersion   uint8
 	RecordType      uint8
@@ -206,6 +213,55 @@ type Header struct {
 	Crc32       uint32
 }
 
+// Header mirrors the CURRENT spool_header_t field-for-field, and is also the
+// canonical in-memory form: an older record decodes into it with the fields
+// it predates left at their "not available" values. binary.Read consumes it
+// sequentially, so Go struct alignment never enters into it.
+type Header struct {
+	Magic           uint32
+	FormatVersion   uint8
+	RecordType      uint8
+	HeaderLen       uint16
+	BootID          uint32
+	Seq             uint32
+	StartedAtUnixMs uint64
+	StartedAtMillis uint32
+	TzOffsetMin     int16
+	TimeValid       uint8
+	ScaleRole       uint8
+	ScaleMac        [6]byte
+	Flags           uint8
+	DetectorVersion [8]byte
+	FirmwareVersion [16]byte
+	StopMs          uint32
+	YieldAtStopMg   int32
+	YieldFinalMg    int32
+	SettleOffsetMg  int32
+	PeakFlowMgps    int32
+	MeanFlowMgps    int32
+	FlowWinStartMs  uint32
+	FlowWinEndMs    uint32
+	// v2. BoilerTempStartDc is TempNone and MachineTimerDl is 0 on a v1
+	// record — the same values the firmware writes when the display bus is
+	// off, so a consumer needs no version check of its own.
+	BoilerTempStartDc int16
+	MachineTimerDl    uint16
+	// v3. PumpLine is PumpNone and PumpLeadMs is PumpLeadNone on a v1 or v2
+	// record — the same values the firmware writes when it saw no press.
+	PumpLine   uint8
+	PumpLeadMs uint32
+	// v4. PrePulseTotal is PrePulsesNone on an older record — "not
+	// captured", the same thing a v4 record says with no press or the flow
+	// tap off.
+	PrePulseTotal uint16
+	PrePulseFlags uint8
+	PrePulseCount uint16 // offsets in the record's tail, after the samples
+	GramsMg       int32
+	StableMs      uint32
+	SampleCount   uint16
+	Crc32         uint32
+}
+
 // Sample mirrors sample_t.
 type Sample struct {
 	TMs         uint16
@@ -217,7 +273,15 @@ type Sample struct {
 type Record struct {
 	Header  Header
 	Samples []Sample
+	// v4: the pulse offsets from the record's tail (ms after the press),
+	// PrePulseCount of them, padding dropped. Empty for older records.
+	PrePulseMs []uint16
 }
+
+// preTailBytes is the v4 tail's size for count offsets: whole groups of 5
+// uint16 (10 bytes), padded with 0xFFFF — so a record still ends on a
+// 10-byte boundary after its header, as every format's does.
+func preTailBytes(count int) int { return (count + 4) / 5 * 10 }
 
 func cstr(b []byte) string {
 	if i := bytes.IndexByte(b, 0); i >= 0 {
@@ -251,6 +315,23 @@ func (h *Header) BoilerTempStartC() (int, bool) {
 	return int(h.BoilerTempStartDc) / 10, true
 }
 func (h *Header) Reject() bool { return h.Flags&FlagReject != 0 }
+
+// PrePulses returns the flowmeter pulse train from the lever press to pour
+// confirmation — ms after the press, oldest first — with how many pulses
+// lay in that window in all (more than len(ms) if the firmware's 256-entry
+// array filled) and whether none of them was lost. ok is false when not
+// captured (no press, flow tap off, a pre-v4 record), when the record does
+// not claim a live flow tap, or when the fields are inconsistent — none of
+// which any firmware writes as a measurement.
+func (r *Record) PrePulses() (ms []uint16, total int, complete bool, ok bool) {
+	h := &r.Header
+	if h.PrePulseTotal == PrePulsesNone || !h.FlowTap() ||
+		int(h.PrePulseCount) > PrePulsesMax || h.PrePulseCount > h.PrePulseTotal ||
+		len(r.PrePulseMs) != int(h.PrePulseCount) {
+		return nil, 0, false, false
+	}
+	return r.PrePulseMs, int(h.PrePulseTotal), h.PrePulseFlags&PrePulsesComplete != 0, true
+}
 
 // PumpLeadMaxMs mirrors the firmware's PUMP_LEAD_MAX_MS window: a lead
 // beyond it is not a press the firmware would have attributed.
@@ -317,6 +398,7 @@ func Decode(raw []byte) (*Record, error) {
 			MachineTimerDl:    0,
 			PumpLine:          PumpNone,
 			PumpLeadMs:        PumpLeadNone,
+			PrePulseTotal:     PrePulsesNone,
 			GramsMg:           v1.GramsMg, StableMs: v1.StableMs,
 			SampleCount: v1.SampleCount, Crc32: v1.Crc32,
 		}
@@ -338,23 +420,55 @@ func Decode(raw []byte) (*Record, error) {
 			FlowWinEndMs:      v2.FlowWinEndMs,
 			BoilerTempStartDc: v2.BoilerTempStartDc, MachineTimerDl: v2.MachineTimerDl,
 			// v2 predates 0c's pump-start fields: "the machine did not say".
-			PumpLine:   PumpNone,
-			PumpLeadMs: PumpLeadNone,
-			GramsMg:    v2.GramsMg, StableMs: v2.StableMs,
+			PumpLine:      PumpNone,
+			PumpLeadMs:    PumpLeadNone,
+			PrePulseTotal: PrePulsesNone,
+			GramsMg:       v2.GramsMg, StableMs: v2.StableMs,
 			SampleCount: v2.SampleCount, Crc32: v2.Crc32,
 		}
 	case 3:
-		if err := binary.Read(bytes.NewReader(raw), binary.LittleEndian, &h); err != nil {
+		var v3 headerV3
+		if err := binary.Read(bytes.NewReader(raw), binary.LittleEndian, &v3); err != nil {
 			return nil, fmt.Errorf("header v3: %w", err)
+		}
+		h = Header{
+			Magic: v3.Magic, FormatVersion: v3.FormatVersion, RecordType: v3.RecordType,
+			HeaderLen: v3.HeaderLen, BootID: v3.BootID, Seq: v3.Seq,
+			StartedAtUnixMs: v3.StartedAtUnixMs, StartedAtMillis: v3.StartedAtMillis,
+			TzOffsetMin: v3.TzOffsetMin, TimeValid: v3.TimeValid, ScaleRole: v3.ScaleRole,
+			ScaleMac: v3.ScaleMac, Flags: v3.Flags,
+			DetectorVersion: v3.DetectorVersion, FirmwareVersion: v3.FirmwareVersion,
+			StopMs: v3.StopMs, YieldAtStopMg: v3.YieldAtStopMg, YieldFinalMg: v3.YieldFinalMg,
+			SettleOffsetMg: v3.SettleOffsetMg, PeakFlowMgps: v3.PeakFlowMgps,
+			MeanFlowMgps: v3.MeanFlowMgps, FlowWinStartMs: v3.FlowWinStartMs,
+			FlowWinEndMs:      v3.FlowWinEndMs,
+			BoilerTempStartDc: v3.BoilerTempStartDc, MachineTimerDl: v3.MachineTimerDl,
+			PumpLine: v3.PumpLine, PumpLeadMs: v3.PumpLeadMs,
+			// v3 predates the pre-drip pulse train: "not captured".
+			PrePulseTotal: PrePulsesNone,
+			GramsMg:       v3.GramsMg, StableMs: v3.StableMs,
+			SampleCount: v3.SampleCount, Crc32: v3.Crc32,
+		}
+	case 4:
+		if err := binary.Read(bytes.NewReader(raw), binary.LittleEndian, &h); err != nil {
+			return nil, fmt.Errorf("header v4: %w", err)
 		}
 	}
 
 	if int(h.HeaderLen) != hLen {
 		return nil, fmt.Errorf("unexpected header length %d for v%d", h.HeaderLen, version)
 	}
-	want := hLen + int(h.SampleCount)*sampleLen
+	tail := 0
+	if version >= 4 {
+		if int(h.PrePulseCount) > PrePulsesMax {
+			return nil, fmt.Errorf("pre_pulse_count %d exceeds %d", h.PrePulseCount, PrePulsesMax)
+		}
+		tail = preTailBytes(int(h.PrePulseCount))
+	}
+	want := hLen + int(h.SampleCount)*sampleLen + tail
 	if len(raw) != want {
-		return nil, fmt.Errorf("length mismatch: %d bytes for %d samples (want %d)", len(raw), h.SampleCount, want)
+		return nil, fmt.Errorf("length mismatch: %d bytes for %d samples and %d pulse offsets (want %d)",
+			len(raw), h.SampleCount, h.PrePulseCount, want)
 	}
 
 	crcInput := make([]byte, len(raw))
@@ -371,6 +485,13 @@ func Decode(raw []byte) (*Record, error) {
 	if h.SampleCount > 0 {
 		if err := binary.Read(bytes.NewReader(raw[hLen:]), binary.LittleEndian, &r.Samples); err != nil {
 			return nil, fmt.Errorf("samples: %w", err)
+		}
+	}
+	if tail > 0 {
+		off := hLen + int(h.SampleCount)*sampleLen
+		r.PrePulseMs = make([]uint16, h.PrePulseCount)
+		for i := range r.PrePulseMs {
+			r.PrePulseMs[i] = binary.LittleEndian.Uint16(raw[off+2*i:])
 		}
 	}
 	return r, nil

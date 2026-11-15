@@ -15,14 +15,17 @@
 //
 // FORMAT VERSION 2 (2026-10-03) added the two machine-sourced fields below
 // and one flag bit. FORMAT VERSION 3 (2026-11-14) added the lever press that
-// started the pump (0c): pump_line and pump_lead_ms. Older records still
+// started the pump (0c): pump_line and pump_lead_ms. FORMAT VERSION 4
+// (2026-11-15) added the flowmeter pulse train from that press to pour
+// confirmation: three header fields, and the pulse offsets as a TAIL after
+// the samples (see SPOOL_PRE_TAIL_BYTES). Older records still
 // exist, both spooled and as fixtures, so the server decodes EVERY version —
 // see server/internal/record. The original intent was that this struct would
 // never change; it changed because 0e and 0c produced facts the machine knows
 // and the logger did not.
 typedef struct __attribute__((packed)) {
   uint32_t magic;              // 'ESPL' = 0x4C505345
-  uint8_t  format_version;     // 3 — see the version note above
+  uint8_t  format_version;     // 4 — see the version note above
   uint8_t  record_type;        // 1 = shot, 2 = weighing
   uint16_t header_len;         // sizeof(spool_header_t); forward-compat skip
   uint32_t boot_id;            // + seq = idempotency key
@@ -70,11 +73,27 @@ typedef struct __attribute__((packed)) {
   // Raw: the difference of two millis() stamps. 0xFFFFFFFF = not known —
   // switches off, no press within 60 s before t=0, or a pre-v3 record.
   uint32_t pump_lead_ms;
+  // --- format v4: the pulse train from that press to pour confirmation ---
+  // Every counted flowmeter pulse from the press until inlet_pulses' window
+  // opens, as ms after the press, oldest first: the pre-infusion phase the
+  // per-sample window never sees. Raw — analysis derives pump-on, pause and
+  // resume from the gaps. pre_pulse_total is how many lay in the window,
+  // 0xFFFF = not captured (no press, flow tap off, weighing record); the
+  // first pre_pulse_count of them (at most 256) follow the samples as a
+  // TAIL of uint16 offsets, padded with 0xFFFF to a multiple of 5 entries so
+  // the record still ends on a 10-byte boundary after the header — which,
+  // with the crc as the header's last field, is all a server needs to
+  // recognise a newer format as intact. In the header it would have been a
+  // fixed 512 bytes on every record, weighings included, and pushed them out
+  // of LittleFS's inline storage (review, 2026-11-15).
+  uint16_t pre_pulse_total;
+  uint8_t  pre_pulse_flags;    // bit0 COMPLETE: no pulse in the window was lost
+  uint16_t pre_pulse_count;    // offsets in the tail
   // weighing-only (zero for shots):
   int32_t  grams_mg;
   uint32_t stable_ms;
   uint16_t sample_count;       // sample_t records following (0 for weighing)
-  uint32_t crc32;              // over header (this field zeroed) + samples
+  uint32_t crc32;              // over header (this field zeroed) + samples + v4 tail
 } spool_header_t;
 
 // The first 8 bytes are identical in every format version, by design —
@@ -95,9 +114,18 @@ typedef struct __attribute__((packed)) {
 #define SPOOL_MAGIC          0x4C505345
 #define SPOOL_HEADER_LEN_V1  109
 #define SPOOL_HEADER_LEN_V2  113
-#define SPOOL_HEADER_LEN_V3  118   // == sizeof(spool_header_t)
-static_assert(sizeof(spool_header_t) == SPOOL_HEADER_LEN_V3,
-              "spool_header_t drifted from the v3 wire length the server decodes");
+#define SPOOL_HEADER_LEN_V3  118
+#define SPOOL_HEADER_LEN_V4  123   // == sizeof(spool_header_t)
+static_assert(sizeof(spool_header_t) == SPOOL_HEADER_LEN_V4,
+              "spool_header_t drifted from the v4 wire length the server decodes");
+// The v4 tail's size in bytes for `count` offsets: rounded up to whole
+// groups of 5 (10 bytes), padding entries 0xFFFF.
+static inline size_t SPOOL_PRE_TAIL_BYTES(uint16_t count) {
+  return (size_t)((count + 4) / 5) * 10;
+}
+// The server refuses a tail longer than 256 offsets (record.PrePulsesMax):
+// raising this without it would have every such shot quarantined.
+static_assert(PRE_PULSES_MAX == 256, "the server's PrePulsesMax is 256");
 
 #define SPOOL_FLAG_FAULT     0x01
 #define SPOOL_FLAG_TRUNCATED 0x02
@@ -150,5 +178,6 @@ private:
   bool macToBytes(const String& mac, uint8_t out[6]);
   void fillCommon(spool_header_t& h, uint8_t record_type, uint32_t started_at_ms,
                   uint8_t role, const String& scale_mac);
-  String writeFile(char kind, const spool_header_t& h, const sample_t* samples);
+  String writeFile(char kind, const spool_header_t& h, const sample_t* samples,
+                   const uint8_t* tail = nullptr, size_t tail_len = 0);
 };

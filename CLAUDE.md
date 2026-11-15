@@ -757,6 +757,7 @@ firmware/          PlatformIO, Arduino framework
     net.{h,cpp}             WiFi, WebSocket, HTTP POST
     display.{h,cpp}         J5 bus decode, blink discrimination
     live_display.h          when the display goes out on the live stream (PWA only)
+    pulse_log.h             recent flowmeter pulse times, for the pre-infusion pulse train
     machine_io.{h,cpp}      switch poller, debounce, event queue
     machine_context.h       per-shot machine facts for the spool header
     brew_guard.{h,cpp}      invariant 2 — is the pump running?
@@ -764,9 +765,9 @@ firmware/          PlatformIO, Arduino framework
 server/            Go
   cmd/espressolog/
   internal/{api,live,record,store,web}/
-                   record = on-flash wire format (v1, v2 and v3 decode)
+                   record = on-flash wire format (v1-v4 decode)
                    web    = embed.FS for the built PWA
-  migrations/0*.sql         10 migrations; 001_init.sql is the base
+  migrations/0*.sql         11 migrations; 001_init.sql is the base
 web/               Vite + React PWA
   src/ · prototype/
 analysis/          Jupyter notebooks, reads the SQLite file
@@ -1636,7 +1637,17 @@ first data in this system that neither a scale measured nor a human typed:
 `boiler_temp_start_dc`, `machine_timer_dl`, and a `SETPOINT_TOUCHED` flag
 bit. Header 109 → 113 bytes. **Header format v3** (firmware 0.10.0,
 2026-11-14) added `pump_line` and `pump_lead_ms` after `machine_timer_dl`,
-113 → 118 bytes. **The server decodes v1, v2 and v3** — older records
+113 → 118 bytes. **Header format v4** (firmware 0.11.0, 2026-11-15) added
+the flowmeter pulse train from that press to pour confirmation (where
+`inlet_pulses` starts, so the two meet): `pre_pulse_total`, a completeness
+flag and a count in the header (118 → 123 bytes), and up to 256 offsets in
+ms after the press as a **tail after the samples**, padded with 0xFFFF to a
+multiple of 10 bytes so every format still ends on a 10-byte boundary after
+its header. *(A fixed 512-byte array in the header was tried first; it
+would have pushed every weighing record out of LittleFS's inline storage.)*
+The server stores the offsets raw in `shot_pre_pulse` (migration 011), with
+`shot.pre_pulse_total` NULL for "not captured" — only for a record that
+claims a live flow tap. **The server decodes v1 to v4** — older records
 exist spooled and as fixtures, and losing one to a format bump would violate
 invariant 6. An older record reports the newer fields as "the machine did
 not say", which is the same thing a current record written with the display
@@ -1685,13 +1696,18 @@ which is not what the code does:
 | `t0` → confirmation | ~300 ms (`POUR_HOLD_MS`) | `t0` is backdated to the flow crossing, but `pulse_base` is captured in `beginPour()`, which runs after the hold |
 | pump-on → first drip | seconds | the window opens at first drip; every pre-infusion pulse is outside it |
 
-The second dwarfs the first, which is why neither is fixed in code yet —
-closing 300 ms while seconds go uncounted is polish on the wrong axis. Both
-close together when the window opens at the pump-start edge — which **0c
-now supplies (firmware 0.10.0, as `first_drip_ms`) but the pulse window does
-not use yet**; pre-infusion pulses are still uncounted.
+**Both gaps are covered from firmware 0.11.0, separately** — the
+per-sample window itself is unchanged and still opens at pour confirmation.
+The shot carries every counted pulse from the press (the pump-start edge 0c
+supplies, `first_drip_ms`) to pour confirmation, as ms after the press
+(`shot_pre_pulse`, `shot.pre_pulse_total`), so the two windows meet:
+`pre_pulse_total` plus the last `inlet_pulses` counts every pulse from the
+press to the stop, and pump-on, pause and resume can be derived in
+analysis. Before 0.11.0 neither gap was covered — closing 300 ms while
+seconds went uncounted was polish on the wrong axis.
 
-350 samples ≈ 3.5 KB per shot. One file per shot, header + samples.
+350 samples ≈ 3.5 KB per shot. One file per shot: header + samples, and
+from v4 the pre-infusion pulse tail (10 bytes per 5 pulses).
 Config (WiFi, endpoint, flow calibration, current bean, grind epoch) in
 NVS, not the filesystem.
 

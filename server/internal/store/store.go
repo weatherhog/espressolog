@@ -128,7 +128,7 @@ func (s *Store) Ingest(deviceID string, r *record.Record, raw []byte, receivedAt
 
 	switch h.RecordType {
 	case record.TypeShot:
-		res.ShotID, err = insertShot(tx, h, r.Samples, scaleID, startedAt, now)
+		res.ShotID, err = insertShot(tx, r, scaleID, startedAt, now)
 		if err == nil {
 			err = attributeDoseToShot(tx, res.ShotID, startedAt)
 		}
@@ -401,7 +401,8 @@ func staleFloor(startedAt time.Time) string {
 	return startedAt.UTC().Add(-recipeMaxAge).Format(time.RFC3339)
 }
 
-func insertShot(tx *sql.Tx, h *record.Header, samples []record.Sample, scaleID any, startedAt time.Time, now string) (int64, error) {
+func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time, now string) (int64, error) {
+	h, samples := &rec.Header, rec.Samples
 	var stoppedBy, excludeReason any
 	excluded := 0
 	if h.Fault() {
@@ -448,6 +449,17 @@ func insertShot(tx *sql.Tx, h *record.Header, samples []record.Sample, scaleID a
 	// pump_line keeps the RAW byte for every v3 record (invariant 3), so a
 	// hot-water draw and a value no firmware writes stay distinguishable even
 	// though both leave switch_direction NULL.
+	// Format v4: the pulse train from the press to pour confirmation. NULL
+	// total means "not captured", which is not the same fact as 0 pulses;
+	// PrePulses() also refuses it unless the record claims a live flow tap,
+	// the same gate inlet_pulses has below.
+	var prePulseTotal, prePulseComplete any
+	preMs, preTotal, preComplete, preOK := rec.PrePulses()
+	if preOK {
+		prePulseTotal = preTotal
+		prePulseComplete = boolToInt(preComplete)
+	}
+
 	var switchDirection, firstDripMs, pumpLine any
 	if h.FormatVersion >= 3 {
 		pumpLine = int(h.PumpLine)
@@ -472,9 +484,10 @@ func insertShot(tx *sql.Tx, h *record.Header, samples []record.Sample, scaleID a
 			peak_flow_gps, mean_flow_gps, flow_win_start_ms, flow_win_end_ms,
 			boiler_temp_start_c, machine_timer_s, setpoint_touched,
 			switch_direction, first_drip_ms, pump_line,
+			pre_pulse_total, pre_pulse_complete,
 			detector_version, firmware_version,
 			excluded, exclude_reason, created_at
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		// .UTC() to match every READ site. Equivalent today only because
 		// Ingest hands this an already-UTC time; the moment anything passes a
 		// zoned one, stored strings gain "+02:00" and MAX(started_at) — which
@@ -488,6 +501,7 @@ func insertShot(tx *sql.Tx, h *record.Header, samples []record.Sample, scaleID a
 		mg(h.PeakFlowMgps), mg(h.MeanFlowMgps), h.FlowWinStartMs, h.FlowWinEndMs,
 		boilerTempC, machineTimerS, setpointTouched,
 		switchDirection, firstDripMs, pumpLine,
+		prePulseTotal, prePulseComplete,
 		h.Detector(), h.Firmware(),
 		excluded, excludeReason, now)
 	if err != nil {
@@ -496,6 +510,20 @@ func insertShot(tx *sql.Tx, h *record.Header, samples []record.Sample, scaleID a
 	shotID, err := r.LastInsertId()
 	if err != nil {
 		return 0, err
+	}
+
+	if len(preMs) > 0 {
+		pst, err := tx.Prepare(`INSERT INTO shot_pre_pulse (shot_id, n, ms_after_press) VALUES (?,?,?)`)
+		if err != nil {
+			return 0, err
+		}
+		for n, ms := range preMs {
+			if _, err := pst.Exec(shotID, n, ms); err != nil {
+				pst.Close()
+				return 0, err
+			}
+		}
+		pst.Close()
 	}
 
 	// inlet_pulses is a placeholder 0 in every record written before the 0d

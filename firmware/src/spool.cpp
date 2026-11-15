@@ -57,7 +57,7 @@ bool Spool::macToBytes(const String& mac, uint8_t out[6]) {
 void Spool::fillCommon(spool_header_t& h, uint8_t record_type, uint32_t started_at_ms,
                        uint8_t role, const String& scale_mac) {
   h.magic = 0x4C505345;
-  h.format_version = 2;
+  h.format_version = 3;
   h.record_type = record_type;
   h.header_len = sizeof(h);
   h.boot_id = boot_id;
@@ -118,6 +118,8 @@ String Spool::writeShot(const ShotResult& r, const String& scale_mac,
           | (flow_tap ? SPOOL_FLAG_FLOW_TAP : 0);
   h.boiler_temp_start_dc = mc.boiler_temp_start_dc;
   h.machine_timer_dl     = mc.machine_timer_dl;
+  h.pump_line            = mc.pump_line;
+  h.pump_lead_ms         = mc.pump_lead_ms;
   h.stop_ms = r.stop_ms;
   h.yield_at_stop_mg = r.yield_at_stop_mg;
   h.yield_final_mg = r.yield_final_mg;
@@ -143,6 +145,7 @@ String Spool::writeWeighing(uint8_t role, const WeighingDetector::Event& ev, con
   }
   spool_header_t h = {};
   fillCommon(h, 2, ev.started_at_ms, role, scale_mac);
+  h.pump_lead_ms = PUMP_LEAD_NONE;   // a weighing has no pump start; never "0 ms"
   h.grams_mg = ev.grams_mg;
   h.stable_ms = ev.stable_ms;
   h.sample_count = 0;
@@ -208,14 +211,15 @@ bool Spool::dump(const String& name, Stream& out) {
     out.printf("# %s: not a record\n", path.c_str());
     f.close(); return false;
   }
-  if (p.header_len != SPOOL_HEADER_LEN_V2) {
-    // Refuse rather than misread. Parsing a v1 file with the v2 struct
-    // shifts every field past offset 95 and reports a CRC mismatch, which
-    // looks like corruption instead of a version difference — in exactly
-    // the tool you reach for when a record looks wrong.
+  if (p.header_len != SPOOL_HEADER_LEN_V3) {
+    // Refuse rather than misread. Parsing an older file with the current
+    // struct shifts every field past the first one that moved and reports a
+    // CRC mismatch, which looks like corruption instead of a version
+    // difference — in exactly the tool you reach for when a record looks
+    // wrong.
     out.printf("# %s: format v%u, header %u bytes — this firmware dumps v%u only.\n",
                path.c_str(), (unsigned)p.format_version, (unsigned)p.header_len,
-               (unsigned)2);
+               (unsigned)3);
     out.println("# The record is intact and will upload; the server decodes every version.");
     f.close(); return false;
   }
@@ -234,6 +238,13 @@ bool Spool::dump(const String& name, Stream& out) {
              (unsigned long)h.stop_ms, (long)h.yield_at_stop_mg, (long)h.yield_final_mg,
              (long)h.settle_offset_mg, (long)h.peak_flow_mgps, (long)h.mean_flow_mgps,
              h.sample_count);
+  if (h.record_type == 1) {
+    if (h.pump_lead_ms == PUMP_LEAD_NONE)
+      out.printf("# pump_line=%u pump_lead=unknown\n", (unsigned)h.pump_line);
+    else
+      out.printf("# pump_line=%u pump_lead_ms=%lu\n", (unsigned)h.pump_line,
+                 (unsigned long)h.pump_lead_ms);
+  }
   out.println("# t_ms,weight_mg");
   uint32_t crc = 0;
   { spool_header_t hz = h; hz.crc32 = 0; crc = esp_rom_crc32_le(0, (const uint8_t*)&hz, sizeof(hz)); }

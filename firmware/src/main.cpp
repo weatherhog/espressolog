@@ -15,7 +15,7 @@
 #include "brew_guard.h"
 #include <driver/gpio.h>
 
-const char* FIRMWARE_VERSION = "0.9.9";
+const char* FIRMWARE_VERSION = "0.10.0";
 const char* DETECTOR_VERSION = "0a.6";
 
 static ScaleManager scales;
@@ -355,6 +355,7 @@ static void switchesSetEnabled(bool on) {
     // rewire made the first poll afterwards emit a release whose duration was
     // the hours in between — see SwitchBank::reset().
     switches.reset();
+    machine_ctx.clearPresses();
     // Both, not just the first: sw_max_gap is only ever raised, so leaving it
     // made `switches on` reset the debounce state but not the diagnostic the
     // reset exists to give a clean slate for. 0.9.0 cleared only sw_last_poll
@@ -481,8 +482,12 @@ static void pollSwitches() {
     // evidence everywhere else (it forces `reprogram` false and prints
     // `high?` rather than `PRESSED`). A floating line settling must not arm
     // a 75 s upload block.
-    if (!e.synthetic && e.line < SwitchBank::N_LINES && e.line != SwitchBank::STEAM)
+    if (!e.synthetic && e.line < SwitchBank::N_LINES && e.line != SwitchBank::STEAM) {
       brew_guard.onRelease(e.line, e.pressed_at_ms);
+      // And remember it for the shot record (spool v3): which lever started
+      // the pump, and when. Same filter, same reason.
+      machine_ctx.onPumpPress(pumpLineForSwitch(e.line), e.pressed_at_ms);
+    }
     reportSwitch(e);
   }
 }
@@ -704,6 +709,9 @@ static void handleShotComplete(const ShotResult& r) {
   if (!spool_ok) {
     Serial.println("# spool unavailable — record NOT persisted");
   } else {
+    // Pour start already picked the press; this only fills it in if the
+    // press was confirmed after the POURING transition.
+    machine_ctx.resolvePumpIfUnknown(r.started_at_ms);
     String path = spool.writeShot(r, scales.slotMac(ScaleRole::YIELD),
                                   machine_ctx.context(), flow_tap_shot);
     if (path.length()) Serial.printf("# spooled %s%s\n", path.c_str(), r.valid ? "" : " (reject)");
@@ -1095,6 +1103,9 @@ void loop() {
       bool complete = detector.feed(smp.t_ms, smp.weight_mg, flow.total());
       if (before != ShotState::POURING && detector.state() == ShotState::POURING) {
         machine_ctx.onPourStart(micros());
+        // Which press started the pump: decided now, while t=0 is fresh and
+        // before the stop press or a later flush can crowd it out.
+        machine_ctx.resolvePump(detector.result().started_at_ms);
         // Latch the tap state for THIS shot. See flow_tap_shot.
         flow_tap_shot = flow_on;
         // The bus latch is per-boot; a new shot starts with a clean slate,

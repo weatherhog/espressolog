@@ -182,6 +182,120 @@ int main() {
     printf("SETPOINT and TARGET invalidate the last boiler reading OK\n");
   }
 
+  // 10. Pump start (0c, spool v3): which lever started the pump for this
+  //     shot, and how long before first drip.
+  {
+    // The ordinary shot: 2Cup pressed, first drip 8.2 s later, stopped by a
+    // second press 25 s after that. The stop press must not be chosen.
+    MachineContextTracker m;
+    m.onPumpPress(PUMP_2CUP, 100000);
+    m.onPourStart(1);
+    m.onPumpPress(PUMP_2CUP, 133200);              // the stop press, after t=0
+    m.resolvePump(108200);                         // t=0 = first drip
+    assert(m.context().pump_line == PUMP_2CUP);
+    assert(m.context().pump_lead_ms == 8200);
+
+    // A flush before the shot: 1Cup started and stopped, then 2Cup for the
+    // shot. The shot's own start press is the latest before t=0.
+    MachineContextTracker f;
+    f.onPumpPress(PUMP_1CUP, 10000);
+    f.onPumpPress(PUMP_1CUP, 15000);
+    f.onPumpPress(PUMP_2CUP, 40000);
+    f.resolvePump(47000);
+    assert(f.context().pump_line == PUMP_2CUP && f.context().pump_lead_ms == 7000);
+
+    // A press more than PUMP_LEAD_MAX_MS before t=0 is not this shot's.
+    MachineContextTracker o;
+    o.onPumpPress(PUMP_1CUP, 1000);
+    o.resolvePump(1000 + MachineContextTracker::PUMP_LEAD_MAX_MS + 1);
+    assert(o.context().pump_line == PUMP_NONE);
+    assert(o.context().pump_lead_ms == PUMP_LEAD_NONE);
+
+    // No switch tap, no presses: "not known", not zero.
+    MachineContextTracker n;
+    n.resolvePump(50000);
+    assert(n.context().pump_line == PUMP_NONE && n.context().pump_lead_ms == PUMP_LEAD_NONE);
+
+    // Across a millis() wrap (49.7 days): press just before, drip just after.
+    MachineContextTracker w;
+    w.onPumpPress(PUMP_1CUP, 0xFFFFF000u);         // 4096 ms before the wrap
+    w.resolvePump(0x00000800u);                    // 2048 ms after it
+    assert(w.context().pump_line == PUMP_1CUP && w.context().pump_lead_ms == 6144);
+
+    // More presses than the ring holds: the oldest are forgotten, and the
+    // newest before t=0 still wins.
+    MachineContextTracker r;
+    for (uint32_t i = 0; i < 10; i++) r.onPumpPress(PUMP_1CUP, 1000 + i * 1000);
+    r.onPumpPress(PUMP_2CUP, 20000);
+    r.resolvePump(26000);
+    assert(r.context().pump_line == PUMP_2CUP && r.context().pump_lead_ms == 6000);
+    printf("pump start: latest press before first drip, within the window OK\n");
+  }
+
+  // 11. Resolved AT POUR START: presses during the shot — the stop press, a
+  //     restart, a flush begun while it settles — cannot crowd the start
+  //     press out of the 4-entry ring, because the choice is already made.
+  {
+    MachineContextTracker m;
+    m.onPumpPress(PUMP_2CUP, 100000);              // start
+    m.onPourStart(1);
+    m.resolvePump(108000);                         // pour start: t=0 known
+    for (uint32_t i = 0; i < 6; i++) m.onPumpPress(PUMP_1CUP, 130000 + i * 3000);
+    assert(m.context().pump_line == PUMP_2CUP && m.context().pump_lead_ms == 8000);
+    printf("pump start fixed at pour start survives later presses OK\n");
+  }
+
+  // 14. A press confirmed only AFTER the POURING transition (first drip
+  //     within ~300 ms of it, or a slow loop): pour start finds nothing, and
+  //     the completion-time fallback picks it up. A press already found at
+  //     pour start is not replaced by the fallback.
+  {
+    MachineContextTracker m;
+    m.onPourStart(1);
+    m.resolvePump(100200);                         // pour start: no press yet
+    assert(m.context().pump_line == PUMP_NONE);
+    m.onPumpPress(PUMP_1CUP, 100000);              // confirmed late, backdated
+    m.onPumpPress(PUMP_1CUP, 125000);              // and the stop press
+    m.resolvePumpIfUnknown(100200);                // at completion
+    assert(m.context().pump_line == PUMP_1CUP && m.context().pump_lead_ms == 200);
+
+    MachineContextTracker k;
+    k.onPumpPress(PUMP_2CUP, 100000);
+    k.onPourStart(1);
+    k.resolvePump(108000);                         // found at pour start
+    k.onPumpPress(PUMP_1CUP, 107000);              // a late-confirmed other press
+    k.resolvePumpIfUnknown(108000);
+    assert(k.context().pump_line == PUMP_2CUP && k.context().pump_lead_ms == 8000);
+    printf("completion fallback fills a late press, keeps a found one OK\n");
+  }
+
+  // 12. The line mapping: lever A's two directions and hot water; steam and
+  //     anything unknown are PUMP_NONE and are not remembered at all.
+  {
+    assert(pumpLineForSwitch(SwitchBank::ONE_CUP) == PUMP_1CUP);
+    assert(pumpLineForSwitch(SwitchBank::TWO_CUP) == PUMP_2CUP);
+    assert(pumpLineForSwitch(SwitchBank::HOT_WATER) == PUMP_WATER);
+    assert(pumpLineForSwitch(SwitchBank::STEAM) == PUMP_NONE);
+    assert(pumpLineForSwitch(SwitchBank::N_LINES) == PUMP_NONE);
+    MachineContextTracker m;
+    m.onPumpPress(pumpLineForSwitch(SwitchBank::STEAM), 100000);
+    m.resolvePump(105000);
+    assert(m.context().pump_line == PUMP_NONE);
+    printf("switch line mapping, steam and unknown ignored OK\n");
+  }
+
+  // 13. Switch sensing toggled: remembered presses are forgotten, so a
+  //     press from before `switches off` cannot be attributed after it.
+  {
+    MachineContextTracker m;
+    m.onPumpPress(PUMP_1CUP, 100000);
+    m.clearPresses();
+    m.resolvePump(105000);
+    assert(m.context().pump_line == PUMP_NONE);
+    assert(m.context().pump_lead_ms == PUMP_LEAD_NONE);
+    printf("clearPresses forgets earlier presses OK\n");
+  }
+
   // 7. Display bus never on: everything stays "the machine did not say".
   {
     MachineContextTracker m;

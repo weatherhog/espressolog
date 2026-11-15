@@ -2,6 +2,9 @@ package api
 
 import (
 	"bytes"
+	"encoding/binary"
+	"espressolog/internal/record"
+	"hash/crc32"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -153,6 +156,44 @@ func TestUndecodableRecordIs422AndMarked(t *testing.T) {
 	if w.Header().Get(IngestMarker) == "" {
 		t.Errorf("422 did not carry %s; the device requires it before quarantining, "+
 			"so a 422 from any other service would bin a good shot", IngestMarker)
+	}
+}
+
+// Firmware flashed before the server is deployed sends a well-formed record
+// in a format this server does not know. That is not a verdict on the
+// record: answering 422 binned every such shot into /spool/bad. It must be a
+// retryable status, so the device keeps it until the server catches up.
+func TestNewerFormatRecordIsRetryable(t *testing.T) {
+	h := newTestHandler(t)
+	// A well-formed record one version ahead: a 130-byte header ending in a
+	// crc32 over the record, then two 10-byte samples.
+	const hl = 130
+	newer := func(version uint8) []byte {
+		raw := make([]byte, hl+2*10)
+		binary.LittleEndian.PutUint32(raw[0:4], record.Magic)
+		raw[4] = version
+		raw[5] = record.TypeShot
+		binary.LittleEndian.PutUint16(raw[6:8], hl)
+		binary.LittleEndian.PutUint32(raw[hl-4:hl], crc32.ChecksumIEEE(raw))
+		return raw
+	}
+	w := do(t, h, "POST", "/api/v1/ingest", newer(record.FormatVersion+1))
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("newer-format record returned %d, want 503", w.Code)
+	}
+
+	// The same record with its CRC broken is corruption, not a newer
+	// firmware: it must get the 422 the device quarantines, or a single
+	// flipped version bit (3 -> 7) would stall the upload queue for ever.
+	bad := newer(record.FormatVersion + 4)
+	bad[hl+3] ^= 0x01
+	if w := do(t, h, "POST", "/api/v1/ingest", bad); w.Code != http.StatusUnprocessableEntity {
+		t.Errorf("newer version with a bad CRC returned %d, want 422", w.Code)
+	}
+
+	// A garbage version byte is still corruption, still a verdict.
+	if w := do(t, h, "POST", "/api/v1/ingest", newer(200)); w.Code != http.StatusUnprocessableEntity {
+		t.Errorf("version 200 returned %d, want 422", w.Code)
 	}
 }
 

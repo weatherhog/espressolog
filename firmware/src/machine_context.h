@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include "display.h"
+#include "machine_io.h"
 
 // What the machine itself contributed to a shot record (spool format v2).
 //
@@ -8,10 +9,33 @@
 // must stay host-testable without a display bus. Kept out of main.cpp for
 // the same reason — the first version of this lived there, had no tests,
 // and shipped two bugs that a green suite could not see.
+// Which lever direction started the pump for a shot, in the spool's own
+// encoding (format v3). Kept separate from SwitchBank::Line so the wire
+// format does not move if the poller's enum is ever reordered.
+enum PumpLine : uint8_t { PUMP_NONE = 0, PUMP_1CUP = 1, PUMP_2CUP = 2, PUMP_WATER = 3 };
+static constexpr uint32_t PUMP_LEAD_NONE = 0xFFFFFFFF;
+
+// The poller's line -> the spool's encoding. Steam never runs the pump, and
+// an unknown line is not guessed at: both are PUMP_NONE, so a line added to
+// SwitchBank later cannot be silently recorded as hot water.
+inline uint8_t pumpLineForSwitch(uint8_t sw_line) {
+  switch (sw_line) {
+    case SwitchBank::ONE_CUP:   return PUMP_1CUP;
+    case SwitchBank::TWO_CUP:   return PUMP_2CUP;
+    case SwitchBank::HOT_WATER: return PUMP_WATER;
+    default:                    return PUMP_NONE;
+  }
+}
+
 struct MachineContext {
   int16_t  boiler_temp_start_dc = INT16_MIN;   // INT16_MIN = machine did not say
   uint16_t machine_timer_dl     = 0;           // 0 = no timer seen
   bool     setpoint_touched     = false;
+  // v3 (0c): the lever press that started the pump for this shot, and how
+  // long before the detector's t=0 (first drip) it was. Both from raw
+  // millis() timestamps; PUMP_NONE / PUMP_LEAD_NONE = not known.
+  uint8_t  pump_line            = PUMP_NONE;
+  uint32_t pump_lead_ms         = PUMP_LEAD_NONE;
 };
 
 // Gathers MachineContext across a shot. None of it is available at the
@@ -101,9 +125,76 @@ public:
     }
   }
 
+  // A lever press that runs the pump (1Cup, 2Cup, hot water — never steam),
+  // backdated to the press edge, from a witnessed (non-synthetic) event.
+  // Each press is remembered whether it STARTED the pump or stopped it: the
+  // board latches, so the poller cannot tell the two apart. resolvePump()
+  // sorts that out from the shot's own timing.
+  void onPumpPress(uint8_t line, uint32_t pressed_at_ms) {
+    if (line == PUMP_NONE) return;
+    presses[press_head] = { line, pressed_at_ms };
+    press_head = (uint8_t)((press_head + 1) % N_PRESSES);
+    if (press_count < N_PRESSES) press_count++;
+  }
+
+  // Call AT POUR START, right after onPourStart(), with the detector's t=0
+  // (millis(), the backdated first-drip crossing — known from the moment
+  // the detector enters POURING). Attributes the LATEST remembered press at
+  // or before t=0 and no more than PUMP_LEAD_MAX_MS before it. Resolving
+  // here rather than at completion means presses made during the shot (the
+  // stop press, a flush started while it settles) cannot push the start
+  // press out of the ring (review, 2026-11-14).
+  //
+  // KNOWN LIMITS. (1) If this shot's start press was never confirmed (the
+  // poller's two-poll debounce can miss a very fast press), an earlier
+  // flush's stop press within the window is attributed instead — wrong
+  // lever possible, lead too long. Nothing here can see that. (2) A
+  // stop-and-restart before first drip (a manual pre-infusion) attributes
+  // the restart, so the lead leaves out the first pump run. (3) t=0 is the
+  // scale sample's ARRIVAL time, so the lead includes the BLE delay (~10 Hz
+  // plus link latency, unmeasured, roughly 100-200 ms).
+  static constexpr uint32_t PUMP_LEAD_MAX_MS = 60000;
+  void resolvePump(uint32_t t0_ms) {
+    mc.pump_line = PUMP_NONE;
+    mc.pump_lead_ms = PUMP_LEAD_NONE;
+    bool found = false;
+    uint32_t best_lead = 0;
+    for (uint8_t i = 0; i < press_count; i++) {
+      const Press& p = presses[i];
+      uint32_t lead = t0_ms - p.at_ms;
+      if ((int32_t)lead < 0 || lead > PUMP_LEAD_MAX_MS) continue;  // after t=0, or too old
+      if (!found || lead < best_lead) {
+        found = true;
+        best_lead = lead;
+        mc.pump_line = p.line;
+        mc.pump_lead_ms = lead;
+      }
+    }
+  }
+
+  // Call when the shot completes. If pour start found no press, look again:
+  // the poller drains after the scale samples in loop(), so a press whose
+  // first drip came within ~300 ms (or during a slow loop) is confirmed —
+  // backdated to its edge, before t=0 — only after the POURING transition.
+  // A press already found at pour start is kept; this only fills a gap.
+  // (Resolving solely at pour start lost that case: review, 2026-11-15.)
+  void resolvePumpIfUnknown(uint32_t t0_ms) {
+    if (mc.pump_line == PUMP_NONE) resolvePump(t0_ms);
+  }
+
+  // Switch sensing turned off or back on: remembered presses describe a
+  // tap state that may no longer hold, so forget them.
+  void clearPresses() { press_head = press_count = 0; }
+
   const MachineContext& context() const { return mc; }
 
 private:
+  struct Press { uint8_t line; uint32_t at_ms; };
+  static constexpr uint8_t N_PRESSES = 4;
+  Press   presses[N_PRESSES] = {};
+  uint8_t press_head = 0;
+  uint8_t press_count = 0;
+
   MachineContext mc;
   int16_t  last_boiler_dc = INT16_MIN;
   uint32_t last_boiler_us = 0;

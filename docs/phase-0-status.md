@@ -22,10 +22,11 @@ observed while fitting. The mechanism is not measured, and nominal body
 widths leave only ~0.3 mm between them.
 The board doc is updated; nothing else depends on the position.
 
-**The board runs firmware 0.9.8**, flashed 2026-11-13 from `main` after
-PR #19 merged; the server was deployed from `claude/live-temperature`
-earlier the same day, before the merge (below). 0.9.9 carries the decoder
-blink fix and is not yet flashed. The *What runs where*
+**The board runs firmware 0.9.9**, flashed 2026-11-14 from `main` after
+PR #21 merged, with the server deployed from `main` just before. *(0.9.8
+from 2026-11-13, after PR #19; the server was deployed from
+`claude/live-temperature` before that merge.)* 0.10.0, which records the
+lever and `first_drip_ms` (spool format v3), is on its branch. The *What runs where*
 table's 0.9.4 row is marked superseded.
 
 ### SECOND INVARIANT-1 INCIDENT ON J4 — `E01`, cause found and fixed
@@ -105,8 +106,8 @@ machine's display.)
   and the latch becomes the floor later shots carry from, so they stay NULL
   until typed (in ingest order — a backlog ingested out of order after a WiFi
   outage can stamp a carried value first; `store.go`'s KNOWN GAP).
-  **Fixed in 0.9.9 — NOT YET FLASHED; the board runs 0.9.8, so the latch is
-  still live.** 0.9.9 measures between blank onsets, so steam no longer
+  **Fixed in 0.9.9, flashed 2026-11-14** — shots logged before that can
+  carry the latch. 0.9.9 measures between blank onsets, so steam no longer
   latches, and the slow blink's numbers decode as `TARGET`. **It does not
   make `boiler_temp_start_c` reliable during or after steam or after an
   edit**: steam's steady `165` still decodes as TEMPERATURE for as long as
@@ -410,7 +411,7 @@ fails from anything that is not.
 
 | Piece | Where | State |
 |---|---|---|
-| ***Superseded 2026-11-13: the board runs 0.9.8 — see the top section.*** **Firmware 0.9.4 was what was ON THE BOARD (flashed 2026-10-13)**, detector 0a.6. 0.9.1 through 0.9.3 were built and never flashed, so no shot record will ever carry them. **Caveat: three different binaries shipped as "0.9.0"** — the `flowSetEnabled` behaviour change landed before the bump, so `shot.firmware_version` cannot separate them. Shots 110–112 are all excluded anyway. | ESP32-S3 on a USB charger by the machine | both Bookoos bound: yield `aa:bb:cc:dd:ee:01`, dose `aa:bb:cc:dd:ee:02`. **All three taps were fitted and live on 2026-10-08** — J5, J2 and J4 — and the breadboard was then disassembled; see the bench section. The display bus **drops ~1 % of edges** during a flush, cause open (an earlier reading of `dropped=0` was taken before the other taps existed). 0.8.0's parser, written blind against the 0e captures, **was validated against a real brew**: mode flipped `temp` → `timer`, counted `042/080/112/143/174/206` in tenths, returned to `temp 95 C`. **0.8.1 and 0.8.2 both add `beginCapture()`** — 0.8.1 was flashed, then `display.cpp` changed again, so the board briefly ran a 0.8.1 that no longer existed in the repo; bumped to 0.8.2 and reflashed rather than leave that ambiguity. No shot record carries either version. See 0e. |
+| ***Superseded 2026-11-13: see the top section for what the board runs.*** **Firmware 0.9.4 was what was ON THE BOARD (flashed 2026-10-13)**, detector 0a.6. 0.9.1 through 0.9.3 were built and never flashed, so no shot record will ever carry them. **Caveat: three different binaries shipped as "0.9.0"** — the `flowSetEnabled` behaviour change landed before the bump, so `shot.firmware_version` cannot separate them. Shots 110–112 are all excluded anyway. | ESP32-S3 on a USB charger by the machine | both Bookoos bound: yield `aa:bb:cc:dd:ee:01`, dose `aa:bb:cc:dd:ee:02`. **All three taps were fitted and live on 2026-10-08** — J5, J2 and J4 — and the breadboard was then disassembled; see the bench section. The display bus **drops ~1 % of edges** during a flush, cause open (an earlier reading of `dropped=0` was taken before the other taps existed). 0.8.0's parser, written blind against the 0e captures, **was validated against a real brew**: mode flipped `temp` → `timer`, counted `042/080/112/143/174/206` in tenths, returned to `temp 95 C`. **0.8.1 and 0.8.2 both add `beginCapture()`** — 0.8.1 was flashed, then `display.cpp` changed again, so the board briefly ran a 0.8.1 that no longer existed in the repo; bumped to 0.8.2 and reflashed rather than leave that ambiguity. No shot record carries either version. See 0e. |
 | Go server + SQLite + PWA | Proxmox LXC `espressolog`, Debian 13, `espressolog.lan` (DHCP-reserved) | systemd `espressolog.service`, db at `/var/lib/espressolog/espressolog.db` |
 | HTTPS | Caddy on the same LXC, `https://espresso.example.com` | Let's Encrypt via Cloudflare DNS-01; CF token in `/etc/caddy/env` |
 | DNS | AdGuard Home rewrite `espresso.example.com → espressolog.lan` | resolution is LAN-only; no public A record (challenge TXT only) |

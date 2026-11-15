@@ -99,6 +99,16 @@ func ingest(st *store.Store, hub *live.Hub) http.HandlerFunc {
 		}
 
 		rec, err := record.Decode(raw)
+		if errors.Is(err, record.ErrNewerFormat) {
+			// The firmware is ahead of this server. Retryable on purpose: the
+			// device keeps the record and re-sends it once the server is
+			// deployed, rather than quarantining a good shot (invariant 6).
+			// "Deploy the server before flashing a format bump" stays the
+			// rule; this is what stops breaking it from losing shots.
+			log.Printf("ingest: %s sent a newer record format: %v — deploy the server", r.Header.Get("X-Device-Id"), err)
+			http.Error(w, "decode: "+err.Error()+" — deploy the server", http.StatusServiceUnavailable)
+			return
+		}
 		if err != nil {
 			// 4xx on purpose: the firmware quarantines the file instead of
 			// retrying a record the server will never accept.

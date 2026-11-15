@@ -89,9 +89,9 @@ func TestDecodeRejectsCorruption(t *testing.T) {
 
 // buildV2 assembles a format-2 record the way the firmware does: header
 // with crc zeroed, CRC over header+samples, crc written back.
-func buildV2(t *testing.T, mutate func(*Header)) []byte {
+func buildV2(t *testing.T, mutate func(*headerV2)) []byte {
 	t.Helper()
-	h := Header{
+	h := headerV2{
 		Magic: Magic, FormatVersion: 2, RecordType: TypeShot, HeaderLen: headerLenV2,
 		BootID: 0x11223344, Seq: 7, StartedAtMillis: 1000, TimeValid: 0,
 		StopMs: 21000, YieldFinalMg: 36000, SampleCount: 2,
@@ -126,11 +126,15 @@ func buildV2(t *testing.T, mutate func(*Header)) []byte {
 }
 
 // The v2 header is 113 bytes: v1's 109 plus boiler_temp_start_dc and
-// machine_timer_dl. If this drifts from spool.h the device and the server
-// disagree about every field after flow_win_end_ms.
-func TestV2HeaderLength(t *testing.T) {
-	if got := binary.Size(Header{}); got != headerLenV2 {
-		t.Fatalf("binary.Size(Header) = %d, want %d", got, headerLenV2)
+// machine_timer_dl; v3 is 118, adding pump_line and pump_lead_ms. If any of
+// these drifts from spool.h the device and the server disagree about every
+// field after the first one that moved.
+func TestHeaderLengths(t *testing.T) {
+	if got := binary.Size(Header{}); got != headerLenV3 {
+		t.Fatalf("binary.Size(Header) = %d, want %d", got, headerLenV3)
+	}
+	if got := binary.Size(headerV2{}); got != headerLenV2 {
+		t.Fatalf("binary.Size(headerV2) = %d, want %d", got, headerLenV2)
 	}
 	if got := binary.Size(headerV1{}); got != headerLenV1 {
 		t.Fatalf("binary.Size(headerV1) = %d, want %d", got, headerLenV1)
@@ -160,6 +164,89 @@ func TestDecodeV2MachineFields(t *testing.T) {
 	}
 }
 
+// buildV3 assembles a format-3 record — what firmware 0.10.0 writes.
+func buildV3(t *testing.T, mutate func(*Header)) []byte {
+	t.Helper()
+	h := Header{
+		Magic: Magic, FormatVersion: 3, RecordType: TypeShot, HeaderLen: headerLenV3,
+		BootID: 0x11223344, Seq: 8, StartedAtMillis: 1000,
+		StopMs: 21000, YieldFinalMg: 36000, SampleCount: 2,
+		BoilerTempStartDc: 950, MachineTimerDl: 288,
+		PumpLine: Pump2Cup, PumpLeadMs: 8200,
+		Flags: FlagFlowTap,
+	}
+	copy(h.DetectorVersion[:], "0a.6")
+	copy(h.FirmwareVersion[:], "0.10.0")
+	if mutate != nil {
+		mutate(&h)
+	}
+	samples := []Sample{
+		{TMs: 0, WeightMg: 0, InletPulses: 0, TempDc: TempNone},
+		{TMs: 100, WeightMg: 1500, InletPulses: 3, TempDc: TempNone},
+	}
+	var buf bytes.Buffer
+	if err := binary.Write(&buf, binary.LittleEndian, &h); err != nil {
+		t.Fatal(err)
+	}
+	if err := binary.Write(&buf, binary.LittleEndian, samples); err != nil {
+		t.Fatal(err)
+	}
+	raw := buf.Bytes()
+	if len(raw) != headerLenV3+2*sampleLen {
+		t.Fatalf("built %d bytes, want %d", len(raw), headerLenV3+2*sampleLen)
+	}
+	binary.LittleEndian.PutUint32(raw[headerLenV3-4:], crc32.ChecksumIEEE(raw))
+	return raw
+}
+
+func TestDecodeV3PumpStart(t *testing.T) {
+	r, err := Decode(buildV3(t, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := &r.Header
+	if line, lead, ok := h.PumpStart(); !ok || line != Pump2Cup || lead != 8200 {
+		t.Errorf("pump start = %d %d %v, want 2Cup 8200 true", line, lead, ok)
+	}
+	// The v2 fields survive the insertion, and so do the fields after it.
+	if h.MachineTimerDl != 288 || h.YieldFinalMg != 36000 || h.SampleCount != 2 {
+		t.Errorf("fields around the insertion moved: timer=%d yield=%d samples=%d",
+			h.MachineTimerDl, h.YieldFinalMg, h.SampleCount)
+	}
+	if r.Samples[1].InletPulses != 3 {
+		t.Errorf("sample pulses = %d, want 3", r.Samples[1].InletPulses)
+	}
+
+	// No press seen: "not known", whichever field says so.
+	for _, m := range []func(*Header){
+		func(h *Header) { h.PumpLine = PumpNone },
+		func(h *Header) { h.PumpLeadMs = PumpLeadNone },
+	} {
+		r, err := Decode(buildV3(t, m))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, _, ok := r.Header.PumpStart(); ok {
+			t.Error("a record with no press claims a pump start")
+		}
+	}
+}
+
+// A v2 record must still decode, its v2 fields intact and the v3 ones "not
+// known" — v2 records exist spooled on the board (invariant 6).
+func TestDecodeV2ReportsNoPumpStart(t *testing.T) {
+	r, err := Decode(buildV2(t, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, ok := r.Header.PumpStart(); ok {
+		t.Error("v2 record claims a pump start")
+	}
+	if r.Header.PumpLeadMs != PumpLeadNone {
+		t.Errorf("v2 record's pump lead = %d, want PumpLeadNone", r.Header.PumpLeadMs)
+	}
+}
+
 // A v1 record must still decode, and must report the v2 fields as "the
 // machine did not say" rather than as zero degrees. Losing an old shot to
 // a format bump would violate invariant 6.
@@ -181,6 +268,9 @@ func TestDecodeV1StillWorksAndReportsNoMachineData(t *testing.T) {
 		if r.Header.SetpointTouched() {
 			t.Errorf("%s: v1 record claims the setpoint was touched", name)
 		}
+		if _, _, ok := r.Header.PumpStart(); ok {
+			t.Errorf("%s: v1 record claims a pump start", name)
+		}
 	}
 }
 
@@ -195,7 +285,7 @@ func TestDecodeRejectsUnknownVersion(t *testing.T) {
 
 // A v2 header claiming v1's length is corrupt, not a v1 record.
 func TestDecodeRejectsVersionLengthMismatch(t *testing.T) {
-	raw := buildV2(t, func(h *Header) { h.HeaderLen = headerLenV1 })
+	raw := buildV2(t, func(h *headerV2) { h.HeaderLen = headerLenV1 })
 	if _, err := Decode(raw); err == nil {
 		t.Fatal("accepted v2 record declaring a v1 header length")
 	}

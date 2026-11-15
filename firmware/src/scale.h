@@ -97,7 +97,8 @@ private:
   // few seconds" rather than a growing backoff is INFERRED, not observed: a
   // scale that accepts the connection and then sends nothing went stale in
   // 3 s, and dropConnection() reset the backoff to 1 s each time. It now
-  // grows across consecutive links that delivered no weight (dropConnection). (A draft of
+  // grows to 30 s across links that delivered no weight, and only to 4 s
+  // across links that did (dropConnection has both). (A draft of
   // this comment blamed the scanner for never forgetting a scale; it does —
   // every scan restart clears its list.)
   QueueHandle_t connect_queue = nullptr;

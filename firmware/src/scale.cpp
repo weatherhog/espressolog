@@ -154,10 +154,13 @@ void ScaleManager::dropConnection(Slot& s, uint32_t now, const char* why) {
                 s.role == ScaleRole::YIELD ? "yield" : "dose", why);
   s.dev.reset();   // destroys the NimBLE client; no sample lands after this
   s.state = SlotState::LOST;
-  // Did this link deliver a real sample? Decided here, from the stamps, so a
-  // loop() stall cannot hide a delivery (a flag set on a later CONNECTED
-  // tick could miss one — review 3, 2026-11-15). See CONNECT_OK on why the
-  // lib's injected 0 g does not count.
+  // Did this link deliver a real sample? Decided here, from the stamps,
+  // rather than by a flag set on a later CONNECTED tick, which a loop()
+  // stall could skip (review 3, 2026-11-15). One gap remains: samples that
+  // arrive between connect() returning and loop() seeing CONNECT_OK are
+  // overwritten there with the injected 0 g's stamp, so a link that
+  // delivers only in that window and then drops reads as silent. See
+  // CONNECT_OK on why the lib's injected 0 g does not count.
   const bool delivered = (int32_t)(s.last_sample_ms - s.connected_at_ms) > 0;
   // Two drop backoffs (reviews 2026-11-15):
   //  - silent links (connect, then nothing — what an asleep scale is

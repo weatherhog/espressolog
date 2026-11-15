@@ -683,8 +683,9 @@ three.
   needs them, went blind with them (invariant 2). Why every few seconds is
   inferred: a scale that connects and goes straight silent reset the
   backoff to 1 s; it now grows to 30 s across links that delivered no
-  weight, and only to 4 s across links that sent a real sample, so a
-  hiccup after a wake never waits a whole pour.
+  weight, and only to 4 s across links that sent a real sample, so the
+  retry after a hiccup just after a wake is at most 4 s away — though if
+  that retry fails, failed connects still back off to 30 s.
 - The scale sleeps after **~9 min idle — MEASURED**. Reconnect logic is
   mandatory. *(This said ~15 min until 2026-10-27, as did `scale.h`; the
   source of that figure was never recorded, and `docs/phase-0-status.md`

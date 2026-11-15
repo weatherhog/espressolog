@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include "display.h"
 #include "machine_io.h"
+#include "pulse_log.h"
 
 // What the machine itself contributed to a shot record (spool format v2).
 //
@@ -14,6 +15,11 @@
 // format does not move if the poller's enum is ever reordered.
 enum PumpLine : uint8_t { PUMP_NONE = 0, PUMP_1CUP = 1, PUMP_2CUP = 2, PUMP_WATER = 3 };
 static constexpr uint32_t PUMP_LEAD_NONE = 0xFFFFFFFF;
+
+// v4: the flowmeter pulses between the lever press and first drip.
+static constexpr uint16_t PRE_PULSES_MAX    = 256;
+static constexpr uint16_t PRE_PULSES_NONE   = 0xFFFF;   // pre_pulse_total: not captured
+static constexpr uint8_t  PRE_PULSES_COMPLETE = 0x01;   // pre_pulse_flags: no pulse lost
 
 // The poller's line -> the spool's encoding. Steam never runs the pump, and
 // an unknown line is not guessed at: both are PUMP_NONE, so a line added to
@@ -36,6 +42,16 @@ struct MachineContext {
   // millis() timestamps; PUMP_NONE / PUMP_LEAD_NONE = not known.
   uint8_t  pump_line            = PUMP_NONE;
   uint32_t pump_lead_ms         = PUMP_LEAD_NONE;
+  // v4: every counted flowmeter pulse from that press to t=0, as ms after
+  // the press — the pre-infusion phase the per-sample inlet_pulses window
+  // (opened at first drip) never sees. Raw: analysis derives pump-on, pause
+  // and resume from the gaps. pre_pulse_total is how many lay in the window
+  // (PRE_PULSES_NONE = not captured: no press, flow tap off); at most
+  // PRE_PULSES_MAX are kept in pre_pulse_ms, the first ones.
+  uint16_t pre_pulse_total      = PRE_PULSES_NONE;
+  uint8_t  pre_pulse_flags      = 0;
+  uint16_t pre_pulse_count      = 0;
+  uint16_t pre_pulse_ms[PRE_PULSES_MAX] = {};
 };
 
 // Gathers MachineContext across a shot. None of it is available at the
@@ -181,6 +197,24 @@ public:
   void resolvePumpIfUnknown(uint32_t t0_ms) {
     if (mc.pump_line == PUMP_NONE) resolvePump(t0_ms);
   }
+
+  // Copy the pulses between this shot's press and t=0 out of the log. Call
+  // at pour start after resolvePump() — the log holds ~22 s, so this is when
+  // they are surely still there — and again at completion only if pour start
+  // found no press (resolvePumpIfUnknown()), when they may already be gone:
+  // then the COMPLETE flag says so. Does nothing without a press, so the
+  // record says "not captured" rather than "no pulses".
+  void capturePrePulses(const PulseLog& log, uint32_t t0_ms) {
+    if (mc.pump_line == PUMP_NONE || mc.pump_lead_ms == PUMP_LEAD_NONE) return;
+    bool complete = false;
+    uint16_t copied = 0;
+    uint16_t total = log.extract(t0_ms - mc.pump_lead_ms, t0_ms, mc.pre_pulse_ms,
+                                 PRE_PULSES_MAX, &copied, &complete);
+    mc.pre_pulse_total = total >= PRE_PULSES_NONE ? (uint16_t)(PRE_PULSES_NONE - 1) : total;
+    mc.pre_pulse_count = copied;
+    mc.pre_pulse_flags = complete ? PRE_PULSES_COMPLETE : 0;
+  }
+  bool prePulsesCaptured() const { return mc.pre_pulse_total != PRE_PULSES_NONE; }
 
   // Switch sensing turned off or back on: remembered presses describe a
   // tap state that may no longer hold, so forget them.

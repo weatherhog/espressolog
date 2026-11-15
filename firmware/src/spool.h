@@ -15,14 +15,16 @@
 //
 // FORMAT VERSION 2 (2026-10-03) added the two machine-sourced fields below
 // and one flag bit. FORMAT VERSION 3 (2026-11-14) added the lever press that
-// started the pump (0c): pump_line and pump_lead_ms. Older records still
+// started the pump (0c): pump_line and pump_lead_ms. FORMAT VERSION 4
+// (2026-11-15) added the flowmeter pulse train from that press to first drip
+// (pre_pulse_*), a fixed 517-byte block. Older records still
 // exist, both spooled and as fixtures, so the server decodes EVERY version —
 // see server/internal/record. The original intent was that this struct would
 // never change; it changed because 0e and 0c produced facts the machine knows
 // and the logger did not.
 typedef struct __attribute__((packed)) {
   uint32_t magic;              // 'ESPL' = 0x4C505345
-  uint8_t  format_version;     // 3 — see the version note above
+  uint8_t  format_version;     // 4 — see the version note above
   uint8_t  record_type;        // 1 = shot, 2 = weighing
   uint16_t header_len;         // sizeof(spool_header_t); forward-compat skip
   uint32_t boot_id;            // + seq = idempotency key
@@ -70,6 +72,19 @@ typedef struct __attribute__((packed)) {
   // Raw: the difference of two millis() stamps. 0xFFFFFFFF = not known —
   // switches off, no press within 60 s before t=0, or a pre-v3 record.
   uint32_t pump_lead_ms;
+  // --- format v4: the pulse train from that press to first drip ---
+  // Every counted flowmeter pulse in [press, t=0], as ms after the press,
+  // oldest first: the pre-infusion phase the per-sample inlet_pulses window
+  // (opened at first drip) never sees. Raw — analysis derives pump-on, pause
+  // and resume from the gaps. pre_pulse_total is how many lay in the window,
+  // 0xFFFF = not captured (no press, flow tap off, weighing record); the
+  // first min(total, 256) are in pre_pulse_ms, the rest unused. FIXED size so
+  // the header keeps ending in the crc at header_len - 4, which is all a
+  // server needs to recognise a newer format as intact.
+  uint16_t pre_pulse_total;
+  uint8_t  pre_pulse_flags;    // bit0 COMPLETE: the pulse log lost none of the window
+  uint16_t pre_pulse_count;    // entries used in pre_pulse_ms
+  uint16_t pre_pulse_ms[256];
   // weighing-only (zero for shots):
   int32_t  grams_mg;
   uint32_t stable_ms;
@@ -95,9 +110,11 @@ typedef struct __attribute__((packed)) {
 #define SPOOL_MAGIC          0x4C505345
 #define SPOOL_HEADER_LEN_V1  109
 #define SPOOL_HEADER_LEN_V2  113
-#define SPOOL_HEADER_LEN_V3  118   // == sizeof(spool_header_t)
-static_assert(sizeof(spool_header_t) == SPOOL_HEADER_LEN_V3,
-              "spool_header_t drifted from the v3 wire length the server decodes");
+#define SPOOL_HEADER_LEN_V3  118
+#define SPOOL_HEADER_LEN_V4  635   // == sizeof(spool_header_t)
+static_assert(sizeof(spool_header_t) == SPOOL_HEADER_LEN_V4,
+              "spool_header_t drifted from the v4 wire length the server decodes");
+static_assert(PRE_PULSES_MAX == 256, "pre_pulse_ms[] is sized for PRE_PULSES_MAX");
 
 #define SPOOL_FLAG_FAULT     0x01
 #define SPOOL_FLAG_TRUNCATED 0x02

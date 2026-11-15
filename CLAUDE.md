@@ -757,6 +757,7 @@ firmware/          PlatformIO, Arduino framework
     net.{h,cpp}             WiFi, WebSocket, HTTP POST
     display.{h,cpp}         J5 bus decode, blink discrimination
     live_display.h          when the display goes out on the live stream (PWA only)
+    pulse_log.h             recent flowmeter pulse times, for the press-to-drip train
     machine_io.{h,cpp}      switch poller, debounce, event queue
     machine_context.h       per-shot machine facts for the spool header
     brew_guard.{h,cpp}      invariant 2 — is the pump running?
@@ -764,9 +765,9 @@ firmware/          PlatformIO, Arduino framework
 server/            Go
   cmd/espressolog/
   internal/{api,live,record,store,web}/
-                   record = on-flash wire format (v1, v2 and v3 decode)
+                   record = on-flash wire format (v1-v4 decode)
                    web    = embed.FS for the built PWA
-  migrations/0*.sql         10 migrations; 001_init.sql is the base
+  migrations/0*.sql         11 migrations; 001_init.sql is the base
 web/               Vite + React PWA
   src/ · prototype/
 analysis/          Jupyter notebooks, reads the SQLite file
@@ -1636,7 +1637,12 @@ first data in this system that neither a scale measured nor a human typed:
 `boiler_temp_start_dc`, `machine_timer_dl`, and a `SETPOINT_TOUCHED` flag
 bit. Header 109 → 113 bytes. **Header format v3** (firmware 0.10.0,
 2026-11-14) added `pump_line` and `pump_lead_ms` after `machine_timer_dl`,
-113 → 118 bytes. **The server decodes v1, v2 and v3** — older records
+113 → 118 bytes. **Header format v4** (firmware 0.11.0, 2026-11-15) added
+the flowmeter pulse train from that press to first drip — up to 256 pulse
+times in ms after the press, plus the total and a completeness flag — as a
+FIXED 517-byte block before the crc, 118 → 635 bytes; the server stores it
+raw in `shot_pre_pulse` (migration 011), with `shot.pre_pulse_total` NULL
+for "not captured". **The server decodes v1 to v4** — older records
 exist spooled and as fixtures, and losing one to a format bump would violate
 invariant 6. An older record reports the newer fields as "the machine did
 not say", which is the same thing a current record written with the display
@@ -1688,8 +1694,12 @@ which is not what the code does:
 The second dwarfs the first, which is why neither is fixed in code yet —
 closing 300 ms while seconds go uncounted is polish on the wrong axis. Both
 close together when the window opens at the pump-start edge — which **0c
-now supplies (firmware 0.10.0, as `first_drip_ms`) but the pulse window does
-not use yet**; pre-infusion pulses are still uncounted.
+now supplies (firmware 0.10.0, as `first_drip_ms`) but the per-sample window
+does not use**. **From 0.11.0 the pre-infusion pulses are recorded anyway,
+separately**: the shot carries every counted pulse from the press to first
+drip (`shot_pre_pulse`, ms after the press), so pump-on, pause and resume
+can be derived in analysis. `inlet_pulses` itself is unchanged and still
+starts at pour confirmation.
 
 350 samples ≈ 3.5 KB per shot. One file per shot, header + samples.
 Config (WiFi, endpoint, flow calibration, current bean, grind epoch) in

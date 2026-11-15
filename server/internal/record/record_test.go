@@ -130,8 +130,11 @@ func buildV2(t *testing.T, mutate func(*headerV2)) []byte {
 // these drifts from spool.h the device and the server disagree about every
 // field after the first one that moved.
 func TestHeaderLengths(t *testing.T) {
-	if got := binary.Size(Header{}); got != headerLenV3 {
-		t.Fatalf("binary.Size(Header) = %d, want %d", got, headerLenV3)
+	if got := binary.Size(Header{}); got != headerLenV4 {
+		t.Fatalf("binary.Size(Header) = %d, want %d", got, headerLenV4)
+	}
+	if got := binary.Size(headerV3{}); got != headerLenV3 {
+		t.Fatalf("binary.Size(headerV3) = %d, want %d", got, headerLenV3)
 	}
 	if got := binary.Size(headerV2{}); got != headerLenV2 {
 		t.Fatalf("binary.Size(headerV2) = %d, want %d", got, headerLenV2)
@@ -165,9 +168,9 @@ func TestDecodeV2MachineFields(t *testing.T) {
 }
 
 // buildV3 assembles a format-3 record — what firmware 0.10.0 writes.
-func buildV3(t *testing.T, mutate func(*Header)) []byte {
+func buildV3(t *testing.T, mutate func(*headerV3)) []byte {
 	t.Helper()
-	h := Header{
+	h := headerV3{
 		Magic: Magic, FormatVersion: 3, RecordType: TypeShot, HeaderLen: headerLenV3,
 		BootID: 0x11223344, Seq: 8, StartedAtMillis: 1000,
 		StopMs: 21000, YieldFinalMg: 36000, SampleCount: 2,
@@ -218,9 +221,9 @@ func TestDecodeV3PumpStart(t *testing.T) {
 	}
 
 	// No press seen: "not known", whichever field says so.
-	for _, m := range []func(*Header){
-		func(h *Header) { h.PumpLine = PumpNone },
-		func(h *Header) { h.PumpLeadMs = PumpLeadNone },
+	for _, m := range []func(*headerV3){
+		func(h *headerV3) { h.PumpLine = PumpNone },
+		func(h *headerV3) { h.PumpLeadMs = PumpLeadNone },
 	} {
 		r, err := Decode(buildV3(t, m))
 		if err != nil {
@@ -228,6 +231,79 @@ func TestDecodeV3PumpStart(t *testing.T) {
 		}
 		if _, _, ok := r.Header.PumpStart(); ok {
 			t.Error("a record with no press claims a pump start")
+		}
+	}
+	// v3 predates the pulse train.
+	if _, _, _, ok := r.Header.PrePulses(); ok {
+		t.Error("v3 record claims pre-drip pulses")
+	}
+}
+
+// buildV4 assembles a format-4 record — what firmware 0.11.0 writes.
+func buildV4(t *testing.T, mutate func(*Header)) []byte {
+	t.Helper()
+	h := Header{
+		Magic: Magic, FormatVersion: 4, RecordType: TypeShot, HeaderLen: headerLenV4,
+		BootID: 0x11223344, Seq: 9, StartedAtMillis: 1000,
+		StopMs: 21000, YieldFinalMg: 36000, SampleCount: 2,
+		BoilerTempStartDc: 950, MachineTimerDl: 288,
+		PumpLine: Pump2Cup, PumpLeadMs: 8200,
+		PrePulseTotal: 3, PrePulseFlags: PrePulsesComplete, PrePulseCount: 3,
+		Flags: FlagFlowTap,
+	}
+	h.PrePulseMs[0], h.PrePulseMs[1], h.PrePulseMs[2] = 200, 300, 5000
+	copy(h.DetectorVersion[:], "0a.6")
+	copy(h.FirmwareVersion[:], "0.11.0")
+	if mutate != nil {
+		mutate(&h)
+	}
+	samples := []Sample{
+		{TMs: 0, WeightMg: 0, InletPulses: 0, TempDc: TempNone},
+		{TMs: 100, WeightMg: 1500, InletPulses: 3, TempDc: TempNone},
+	}
+	var buf bytes.Buffer
+	if err := binary.Write(&buf, binary.LittleEndian, &h); err != nil {
+		t.Fatal(err)
+	}
+	if err := binary.Write(&buf, binary.LittleEndian, samples); err != nil {
+		t.Fatal(err)
+	}
+	raw := buf.Bytes()
+	if len(raw) != headerLenV4+2*sampleLen {
+		t.Fatalf("built %d bytes, want %d", len(raw), headerLenV4+2*sampleLen)
+	}
+	binary.LittleEndian.PutUint32(raw[headerLenV4-4:], crc32.ChecksumIEEE(raw))
+	return raw
+}
+
+func TestDecodeV4PrePulses(t *testing.T) {
+	r, err := Decode(buildV4(t, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ms, total, complete, ok := r.Header.PrePulses()
+	if !ok || total != 3 || !complete || len(ms) != 3 || ms[2] != 5000 {
+		t.Errorf("pre pulses = %v %d %v %v, want [200 300 5000] 3 true true", ms, total, complete, ok)
+	}
+	// The fields on both sides of the 517-byte block survive it.
+	if line, lead, ok := r.Header.PumpStart(); !ok || line != Pump2Cup || lead != 8200 {
+		t.Errorf("pump start moved: %d %d %v", line, lead, ok)
+	}
+	if r.Header.YieldFinalMg != 36000 || r.Header.SampleCount != 2 || r.Samples[1].InletPulses != 3 {
+		t.Error("fields after the pulse block moved")
+	}
+	// Not captured, and inconsistent fields, both read as "not known".
+	for _, m := range []func(*Header){
+		func(h *Header) { h.PrePulseTotal = PrePulsesNone },
+		func(h *Header) { h.PrePulseCount = 300 },
+		func(h *Header) { h.PrePulseCount = 5 }, // more stored than in the window
+	} {
+		r, err := Decode(buildV4(t, m))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, _, _, ok := r.Header.PrePulses(); ok {
+			t.Error("an uncaptured or inconsistent record claims pre-drip pulses")
 		}
 	}
 }

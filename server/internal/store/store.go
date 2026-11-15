@@ -128,13 +128,16 @@ func (s *Store) Ingest(deviceID string, r *record.Record, raw []byte, receivedAt
 
 	switch h.RecordType {
 	case record.TypeShot:
-		res.ShotID, err = insertShot(tx, r, scaleID, startedAt, now)
-		// A cup placement is not the shot a weighing was for. Giving it the
-		// dose took it from the real shot pulled seconds later: set the cup
-		// back after weighing and the placement record claimed the 18 g
-		// (review, 2026-11-15). A reject or a fault keeps its dose — a shot
-		// that choked under 5 g still used the coffee.
-		if err == nil && ingestVerdict(h).reason != placementReason {
+		var excluded bool
+		res.ShotID, excluded, err = insertShot(tx, r, scaleID, startedAt, now)
+		// A record excluded at ingest — a placement, a reject, a fault — is
+		// not the shot a weighing was for. Giving it the dose took it from
+		// the real shot pulled seconds later: set the cup back after weighing
+		// and the placement claimed the 18 g (review, 2026-11-15). Rejects
+		// too: almost every one is a knock or a drip, not a shot that choked
+		// (a second review, the same day, reversed a draft that let them keep
+		// it). The late-weighing path skips the same rows by `excluded = 0`.
+		if err == nil && !excluded {
 			err = attributeDoseToShot(tx, res.ShotID, startedAt)
 		}
 	case record.TypeWeighing:
@@ -406,16 +409,15 @@ func staleFloor(startedAt time.Time) string {
 	return startedAt.UTC().Add(-recipeMaxAge).Format(time.RFC3339)
 }
 
-func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time, now string) (int64, error) {
+func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time, now string) (int64, bool, error) {
 	h, samples := &rec.Header, rec.Samples
-	v := ingestVerdict(h)
 	var stoppedBy, excludeReason any
 	excluded := 0
-	if v.reason != "" {
+	if reason := excludeReasonAtIngest(h); reason != "" {
 		excluded = 1
-		excludeReason = v.reason
+		excludeReason = reason
 	}
-	if v.fault {
+	if h.Fault() {
 		stoppedBy = "fault"
 	}
 	machineID, grinderID, epochID := defaultContext(tx, startedAt)
@@ -510,22 +512,22 @@ func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time
 		h.Detector(), h.Firmware(),
 		excluded, excludeReason, now)
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
 	shotID, err := r.LastInsertId()
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
 
 	if len(preMs) > 0 {
 		pst, err := tx.Prepare(`INSERT INTO shot_pre_pulse (shot_id, n, ms_after_press) VALUES (?,?,?)`)
 		if err != nil {
-			return 0, err
+			return 0, false, err
 		}
 		for n, ms := range preMs {
 			if _, err := pst.Exec(shotID, n, ms); err != nil {
 				pst.Close()
-				return 0, err
+				return 0, false, err
 			}
 		}
 		pst.Close()
@@ -542,7 +544,7 @@ func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time
 	// than failing the whole ingest (the raw record keeps both regardless).
 	stmt, err := tx.Prepare(`INSERT OR REPLACE INTO shot_sample (shot_id, t_ms, weight_mg, inlet_pulses, temp_dc) VALUES (?,?,?,?,?)`)
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
 	defer stmt.Close()
 	for _, smp := range samples {
@@ -561,10 +563,10 @@ func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time
 			pulses = smp.InletPulses
 		}
 		if _, err := stmt.Exec(shotID, smp.TMs, smp.WeightMg, pulses, temp); err != nil {
-			return 0, err
+			return 0, false, err
 		}
 	}
-	return shotID, nil
+	return shotID, excluded == 1, nil
 }
 
 func insertWeighing(tx *sql.Tx, h *record.Header, scaleID any, observedAt time.Time) (int64, error) {
@@ -592,33 +594,20 @@ const (
 	doseMaxG   = 24.0
 )
 
-// placementReason is the exclude_reason a cup placement is stored with. Both
-// dose-attribution paths key on it — the arrival path through ingestVerdict,
-// the late-weighing path through the stored column — so they judge the same
-// thing: a record whose verdict was "placement" never takes a dose. (Until
-// review 2026-11-15 one path read the header flags and the other the
-// editable `excluded` column, and they disagreed on rejects, faults and
-// manual exclusions.)
-const placementReason = "cup placement: the detector judged it a cup set down, not a pour"
-
-type verdict struct {
-	reason string // "" = not excluded at ingest
-	fault  bool
-}
-
-// ingestVerdict is the one place a record's ingest-time exclusion is decided;
-// insertShot stores it and attribution reads it. First match wins, so a
-// faulted placement is a fault.
-func ingestVerdict(h *record.Header) verdict {
+// excludeReasonAtIngest is the one place a record's ingest-time exclusion
+// is decided ("" = not excluded). insertShot stores it and reports it, and
+// the arrival path's dose attribution reads that report rather than
+// re-deriving it. First match wins, so a faulted placement is a fault.
+func excludeReasonAtIngest(h *record.Header) string {
 	switch {
 	case h.Fault():
-		return verdict{reason: "fault: cup removed mid-pour", fault: true}
+		return "fault: cup removed mid-pour"
 	case h.Reject():
-		return verdict{reason: "reject: under 5 g"}
+		return "reject: under 5 g"
 	case h.Placement():
-		return verdict{reason: placementReason}
+		return "cup placement: the detector judged it a cup set down, not a pour"
 	}
-	return verdict{}
+	return ""
 }
 
 func attributeDoseToShot(tx *sql.Tx, shotID int64, startedAt time.Time) error {
@@ -656,10 +645,10 @@ func attributeWeighingToLaterShot(tx *sql.Tx, weighingID int64, grams float64, o
 	var shotID int64
 	err := tx.QueryRow(`
 		SELECT id FROM shot
-		WHERE dose_ground_g IS NULL AND exclude_reason IS NOT ?
+		WHERE dose_ground_g IS NULL AND excluded = 0
 		  AND started_at >= ? AND started_at < ?
 		ORDER BY started_at ASC LIMIT 1`,
-		placementReason, observed, horizon).Scan(&shotID)
+		observed, horizon).Scan(&shotID)
 	if err == sql.ErrNoRows {
 		return nil
 	}

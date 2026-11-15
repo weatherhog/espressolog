@@ -95,6 +95,11 @@ void ScaleManager::tickSlot(Slot& s, uint32_t now) {
         break;
       }
       s.dev->update();   // lib heartbeat, self-throttled to 2 s
+      // A sample stamped after connected_at_ms is a real notification: the
+      // lib's injected setWeight(0) runs inside connect(), in connectTask,
+      // before loop() sees CONNECT_OK and stamps connected_at_ms.
+      if (!s.link_delivered && (int32_t)(s.last_sample_ms - s.connected_at_ms) > 0)
+        s.link_delivered = true;
       break;
     }
     case SlotState::UNBOUND:
@@ -129,6 +134,7 @@ void ScaleManager::tickSlot(Slot& s, uint32_t now) {
         // a DROP backs off is link_backoff_ms's business (dropConnection).
         s.backoff_ms = BACKOFF_MIN_MS;
         s.connected_at_ms = now;
+        s.link_delivered = false;
         s.last_sample_ms = now;
         Serial.printf("# scale[%s] connected: %s (%lu ms, off the loop)\n",
                       s.role == ScaleRole::YIELD ? "yield" : "dose",
@@ -150,21 +156,22 @@ void ScaleManager::dropConnection(Slot& s, uint32_t now, const char* why) {
                 s.role == ScaleRole::YIELD ? "yield" : "dose", why);
   s.dev.reset();   // destroys the NimBLE client
   s.state = SlotState::LOST;
-  // Two backoffs, kept apart (review 2026-11-15). link_backoff_ms grows
-  // only across CONSECUTIVE short-lived links, so a scale that connects and
-  // goes straight silent no longer retries every second. A link that lasted
-  // HEALTHY_MS — the scale fell asleep after use — retries after 1 s, and so
-  // does the FIRST short link after a wake: the backoff_ms that sleeping
-  // grew to 30 s restarted on CONNECT_OK, and is not what a drop uses (a
-  // draft did, and a link that hiccuped just after a wake waited 30 s, a
-  // whole pour). Failed connects after the drop grow from the drop's delay.
+  // Two backoffs, kept apart (reviews 2026-11-15). link_backoff_ms grows
+  // only across consecutive links that never delivered a weight — a scale
+  // that accepts the connection and sends nothing — so those no longer
+  // retry every second. A link that delivered even one real sample retries
+  // after 1 s however short it was: that is a scale awake, and a hiccup
+  // just after a wake must not wait 30 s, a whole pour. (Drafts keyed this
+  // on the backoff_ms that sleeping grows, then on the link lasting 10 s;
+  // under both, silent links before the wake left the first real hiccup
+  // waiting 30 s.) Failed connects after the drop grow from its delay.
   uint32_t delay;
-  if (now - s.connected_at_ms < HEALTHY_MS) {
-    delay = s.link_backoff_ms;
-    s.link_backoff_ms = min(s.link_backoff_ms * 2, BACKOFF_MAX_MS);
-  } else {
+  if (s.link_delivered) {
     delay = BACKOFF_MIN_MS;
     s.link_backoff_ms = BACKOFF_MIN_MS;
+  } else {
+    delay = s.link_backoff_ms;
+    s.link_backoff_ms = min(s.link_backoff_ms * 2, BACKOFF_MAX_MS);
   }
   s.next_retry_ms = now + delay;
   s.backoff_ms = min(delay * 2, BACKOFF_MAX_MS);

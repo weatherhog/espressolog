@@ -57,7 +57,7 @@ private:
     volatile uint32_t last_sample_ms = 0;   // written from the BLE task
     uint32_t next_retry_ms = 0;
     uint32_t backoff_ms = 1000;        // between failed connects
-    uint32_t link_backoff_ms = 1000;   // after a link dropped within HEALTHY_MS
+    uint32_t link_backoff_ms = 1000;   // after a link that delivered no weight
     // CONNECTING runs in connectTask, not loop(): `dev` belongs to that task
     // until `connect_result` leaves PENDING (release/acquire), and loop()
     // must not touch it before.
@@ -65,15 +65,13 @@ private:
     uint32_t connect_started_ms = 0;
     bool     connect_slow_logged = false;
     uint32_t connected_at_ms = 0;
+    bool     link_delivered = false;   // this link sent a real sample
   };
   enum ConnectResult : uint8_t { CONNECT_IDLE = 0, CONNECT_PENDING, CONNECT_OK, CONNECT_FAIL };
 
   static constexpr uint32_t STALE_MS      = 3000;
   static constexpr uint32_t BACKOFF_MIN_MS = 1000;
   static constexpr uint32_t BACKOFF_MAX_MS = 30000;
-  // A link that lasted this long is not "short-lived": its drop retries after
-  // BACKOFF_MIN_MS and resets link_backoff_ms.
-  static constexpr uint32_t HEALTHY_MS     = 10000;
   // NimBLE's own connect timeout is 30 s and its service discovery waits
   // without one; past this, say so — a hung connect blocks the other slot.
   static constexpr uint32_t CONNECT_SLOW_MS = 45000;
@@ -97,7 +95,7 @@ private:
   // few seconds" rather than a growing backoff is INFERRED, not observed: a
   // scale that accepts the connection and then sends nothing went stale in
   // 3 s, and dropConnection() reset the backoff to 1 s each time. It now
-  // grows across consecutive links shorter than HEALTHY_MS (dropConnection). (A draft of
+  // grows across consecutive links that delivered no weight (dropConnection). (A draft of
   // this comment blamed the scanner for never forgetting a scale; it does —
   // every scan restart clears its list.)
   QueueHandle_t connect_queue = nullptr;

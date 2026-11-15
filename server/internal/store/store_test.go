@@ -1110,7 +1110,7 @@ func TestIngestPlacementIsExcluded(t *testing.T) {
 // Weigh the dose, set the cup back on the yield scale (a placement record),
 // pull the shot: the dose belongs to the shot, not to the placement. In
 // arrival order and out of it.
-func TestDoseSkipsExcludedShots(t *testing.T) {
+func TestDoseSkipsPlacements(t *testing.T) {
 	dev := "aa:bb:cc:dd:ee:03"
 	base := time.Now().Add(-time.Hour).Truncate(time.Second)
 	at := func(d time.Duration) func(*record.Header) {
@@ -1160,26 +1160,40 @@ func TestDoseSkipsExcludedShots(t *testing.T) {
 	}
 }
 
-// Only a cup placement loses the dose. A shot that choked under 5 g
-// (reject) still used the coffee, and keeps the weighing before it, in
-// either arrival order (review, 2026-11-15: both were denied it).
-func TestRejectKeepsItsDose(t *testing.T) {
+// A knock — the cup nudged after weighing, a flat abort under 5 g, a
+// reject — must not take the dose from the real shot pulled after it, in
+// either arrival order (review 2, 2026-11-15: a draft let rejects keep a
+// dose, and the knock took the real shot's 18 g).
+func TestKnockBeforeShotLeavesTheDose(t *testing.T) {
 	dev := "aa:bb:cc:dd:ee:03"
 	base := time.Now().Add(-time.Hour).Truncate(time.Second)
-	reject := func(h *record.Header) {
-		h.StartedAtUnixMs = uint64(base.UnixMilli())
+	knock := func(h *record.Header) {
+		h.StartedAtUnixMs = uint64(base.Add(-30 * time.Second).UnixMilli())
 		h.Flags |= record.FlagReject
+	}
+	shot := func(h *record.Header) { h.StartedAtUnixMs = uint64(base.UnixMilli()) }
+	doseOf := func(st *Store, id int64) sql.NullFloat64 {
+		var g sql.NullFloat64
+		if err := st.db.QueryRow(`SELECT dose_ground_g FROM shot WHERE id = ?`, id).Scan(&g); err != nil {
+			t.Fatal(err)
+		}
+		return g
 	}
 	for _, order := range []string{"weighing first", "weighing last"} {
 		st := openTestStore(t)
 		w := weighingRecord(1, 18000, base.Add(-time.Minute))
-		raw, rec := pumpRecordWith(t, 300, record.Pump2Cup, 8200, reject, nil)
+		kraw, krec := pumpRecordWith(t, 300, record.Pump2Cup, 8200, knock, nil)
+		sraw, srec := pumpRecordWith(t, 301, record.Pump2Cup, 8200, shot, nil)
 		if order == "weighing first" {
 			if _, err := st.Ingest(dev, w, []byte{2}, base); err != nil {
 				t.Fatal(err)
 			}
 		}
-		res, err := st.Ingest(dev, rec, raw, base)
+		kres, err := st.Ingest(dev, krec, kraw, base)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sres, err := st.Ingest(dev, srec, sraw, base)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1188,16 +1202,11 @@ func TestRejectKeepsItsDose(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		var g sql.NullFloat64
-		var excl int
-		if err := st.db.QueryRow(`SELECT dose_ground_g, excluded FROM shot WHERE id = ?`, res.ShotID).Scan(&g, &excl); err != nil {
-			t.Fatal(err)
+		if g := doseOf(st, kres.ShotID); g.Valid {
+			t.Errorf("%s: the knock took the dose (%v g)", order, g.Float64)
 		}
-		if excl != 1 {
-			t.Fatalf("%s: reject not excluded", order)
-		}
-		if !g.Valid || g.Float64 != 18.0 {
-			t.Errorf("%s: the reject's dose = %v, want 18", order, g)
+		if g := doseOf(st, sres.ShotID); !g.Valid || g.Float64 != 18.0 {
+			t.Errorf("%s: the real shot's dose = %v, want 18", order, g)
 		}
 	}
 }

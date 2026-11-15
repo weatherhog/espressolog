@@ -58,8 +58,9 @@ struct MachineContext {
   // confirmed — then setpoint_pending is set — or the display not
   // decoding at pour start). See MachineContextTracker::noteSetpoint.
   int16_t  setpoint_dc          = INT16_MIN;
-  // v5: a brew-temperature edit was under way, not yet confirmed, at pour
-  // start — so this shot's setpoint is unknown, not "the last one".
+  // v5: a brew-temperature edit had begun and not confirmed before this
+  // pour — still blinking, or cut off by the pump's timer — so this shot's
+  // setpoint is unknown, not "the last one".
   bool     setpoint_pending     = false;
 };
 
@@ -179,7 +180,7 @@ public:
     // The setpoint as it stood when the pour began: an edit DURING the shot
     // applies to the next one. Kept across shots, unlike everything above.
     mc.setpoint_dc = display_live ? last_setpoint_dc : INT16_MIN;
-    // An edit under way at pour start: this shot's setpoint is unknown and
+    // An edit begun and not confirmed before this pour: this shot's setpoint is unknown and
     // the server must not carry one onto it, or across it (noteSetpoint).
     // Its OWN flag (v5 SETPOINT_PENDING), not setpoint_touched: a pending
     // brew-temperature edit says nothing about pre-infusion, and touched
@@ -301,7 +302,7 @@ private:
   MachineContext mc;
   int16_t  last_boiler_dc = INT16_MIN;
   int16_t  last_setpoint_dc = INT16_MIN;
-  bool     setpoint_pending = false;         // a new value blinked, not yet confirmed
+  bool     setpoint_pending = false;         // an edit begun, not confirmed (see noteSetpoint)
   int16_t  shown_setpoint_c = INT16_MIN;     // SETPOINT value now shown, not yet blinked
   int16_t  blinked_setpoint_c = INT16_MIN;   // the last value that blinked
 
@@ -311,7 +312,7 @@ private:
   // as SETPOINT and then blanked, TWICE IN A ROW with the same value. That
   // keeps out a ramp's passing values (no blank between them), the steady
   // frames after the blink stops — which still decode as SETPOINT for
-  // ~0.4 s and could be the boiler after a large edit — and a single
+  // ~0.6 s and could be the boiler after a large edit — and a single
   // misread frame (review, 2026-11-15: the first version took whatever
   // SETPOINT frame came last). The range check keeps out anything that is
   // not a brew temperature; the SET UP menu's values never decoded as
@@ -368,8 +369,13 @@ private:
     // SETPOINT blink, and the old value went out as 'display' on every shot
     // until the next edit). A TEMPERATURE frame ending the run — the normal
     // end of an edit — leaves a lone different blink ignored: a misread.
-    // KNOWN LIMIT: a lever pressed before the new value has shown as
-    // SETPOINT even once (~1 s after the press) is not seen.
+    // KNOWN LIMITS: a lever pressed before the new value has shown as
+    // SETPOINT even once (~1 s after the press) is not seen; nor is one
+    // pressed while a re-edit's first new value shows during the confirmed
+    // value's own blinking, before it blanks (the blinked value decides);
+    // and one decoded non-TIMER frame between the first two TIMER frames
+    // resets the run (review, 2026-11-15 — the decoded button bits would
+    // settle both, and are not used yet).
     //
     // TWO TIMER frames in a row, like timer_confirmed above: a stray TIMER
     // frame was seen live, so the first one leaves the run as it is. And the

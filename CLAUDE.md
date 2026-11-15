@@ -1690,7 +1690,10 @@ temperature frame is ignored (it is how a misread looks); a lever pressed
 before the new value has shown as `SETPOINT` once (~1 s after the last
 press — an edit's first two blinks decode as TEMPERATURE) still gets the
 old value stamped as `'display'`, on that shot and later ones until the
-next edit; pending survives a tap switch but not a reboot; an edit made
+next edit, and so does one pressed while a re-edit's first new value
+shows during the confirmed value's own blinking, or with one misdecoded
+frame between the pump's first two TIMER frames (the decoded button bits
+would settle both); pending survives a tap switch but not a reboot; an edit made
 while the bus was unplugged but `display` stayed on is not seen (forgetting on a quiet bus would also
 forget at every machine power-off); a re-derived run does not reach shots
 that already carried the old value; and a run no `Pr` matches empties

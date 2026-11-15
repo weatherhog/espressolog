@@ -397,7 +397,7 @@ int main() {
     m.onPourStart(t + 100);
     assert(m.context().setpoint_dc == INT16_MIN);         // no edit seen yet
     // An edit: ramp 95 -> 106 (no blanks), the blink settles on 93 — with
-    // one misread blink of 99 in it — then ~0.4 s of steady SETPOINT frames
+    // one misread blink of 99 in it — then ~0.6 s of steady SETPOINT frames
     // showing something else (the boiler, after a large edit), then normal.
     for (int16_t c = 95; c <= 106; c++) m.onReading(setpoint(c, t += 41000), true);
     m.onPourStart(t);

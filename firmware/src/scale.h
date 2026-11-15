@@ -3,6 +3,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <memory>
+#include <atomic>
 
 class RemoteScales;
 class RemoteScalesScanner;
@@ -56,7 +57,13 @@ private:
     volatile uint32_t last_sample_ms = 0;   // written from the BLE task
     uint32_t next_retry_ms = 0;
     uint32_t backoff_ms = 1000;
+    // CONNECTING runs in connectTask, not loop(): `dev` belongs to that task
+    // until `connect_result` leaves PENDING (release/acquire), and loop()
+    // must not touch it before.
+    std::atomic<uint8_t> connect_result{0};   // ConnectResult
+    uint32_t connect_started_ms = 0;
   };
+  enum ConnectResult : uint8_t { CONNECT_IDLE = 0, CONNECT_PENDING, CONNECT_OK, CONNECT_FAIL };
 
   static constexpr uint32_t STALE_MS      = 3000;
   static constexpr uint32_t BACKOFF_MIN_MS = 1000;
@@ -69,8 +76,18 @@ private:
 
   void tickSlot(Slot& s, uint32_t now);
   void dropConnection(Slot& s, uint32_t now, const char* why);
-  bool tryConnect(Slot& s, uint32_t now);
+  bool startConnect(Slot& s, uint32_t now);
   void updateScanState();
+  bool anyConnecting() const;
+
+  // The blocking BLE connect, off loop(). Until 2026-11-15 tryConnect() ran
+  // dev->connect() inline, and the scanner never forgets a scale it has
+  // seen, so with the grinder scale asleep loop() stalled ~1.8 s every few
+  // seconds retrying it: switch presses fell inside the stalls and were
+  // missed outright (shot 181), and the brew guard — which needs those
+  // presses — went blind with them (invariant 2).
+  QueueHandle_t connect_queue = nullptr;
+  static void connectTask(void* arg);
 
   static ScaleManager* self;                // for the C-style lib callbacks
   static void onWeightYield(float grams);

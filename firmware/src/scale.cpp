@@ -54,6 +54,9 @@ void ScaleManager::begin(QueueHandle_t out_queue) {
   }
 #endif
 
+  connect_queue = xQueueCreate(2, sizeof(Slot*));
+  xTaskCreatePinnedToCore(&ScaleManager::connectTask, "scale_connect", 6144, this, 1, nullptr, 0);
+
   NimBLEDevice::init("espressolog");
   BookooScalesPlugin::apply();
 
@@ -89,22 +92,35 @@ void ScaleManager::tickSlot(Slot& s, uint32_t now) {
     case SlotState::SCANNING:
     case SlotState::LOST: {
       if ((int32_t)(now - s.next_retry_ms) < 0) break;
-      if (tryConnect(s, now)) {
+      if (anyConnecting()) break;          // one radio, one connect at a time
+      if (!startConnect(s, now)) {
+        s.next_retry_ms = now + s.backoff_ms;
+        s.backoff_ms = min(s.backoff_ms * 2, BACKOFF_MAX_MS);
+        updateScanState();
+      }
+      break;
+    }
+    case SlotState::CONNECTING: {
+      // Polled, never waited on: connectTask owns `dev` until this changes.
+      uint8_t r = s.connect_result.load(std::memory_order_acquire);
+      if (r == CONNECT_PENDING) break;
+      s.connect_result.store(CONNECT_IDLE, std::memory_order_relaxed);
+      if (r == CONNECT_OK) {
         s.state = SlotState::CONNECTED;
         s.backoff_ms = BACKOFF_MIN_MS;
         s.last_sample_ms = now;
-        Serial.printf("# scale[%s] connected: %s\n",
+        Serial.printf("# scale[%s] connected: %s (%lu ms, off the loop)\n",
                       s.role == ScaleRole::YIELD ? "yield" : "dose",
-                      s.bound_mac.c_str());
+                      s.bound_mac.c_str(), (unsigned long)(now - s.connect_started_ms));
       } else {
+        s.dev.reset();
+        s.state = SlotState::LOST;
         s.next_retry_ms = now + s.backoff_ms;
         s.backoff_ms = min(s.backoff_ms * 2, BACKOFF_MAX_MS);
       }
       updateScanState();
       break;
     }
-    case SlotState::CONNECTING:
-      break;   // tryConnect is synchronous; never observed here
   }
 }
 
@@ -118,7 +134,28 @@ void ScaleManager::dropConnection(Slot& s, uint32_t now, const char* why) {
   updateScanState();
 }
 
-bool ScaleManager::tryConnect(Slot& s, uint32_t now) {
+bool ScaleManager::anyConnecting() const {
+  for (const Slot& s : slots)
+    if (s.state == SlotState::CONNECTING) return true;
+  return false;
+}
+
+// Runs on its own task. Waits for a slot whose `dev` loop() has built and
+// handed over, makes the blocking connect, and publishes the outcome.
+void ScaleManager::connectTask(void* arg) {
+  ScaleManager* self = static_cast<ScaleManager*>(arg);
+  Slot* s = nullptr;
+  for (;;) {
+    if (xQueueReceive(self->connect_queue, &s, portMAX_DELAY) != pdTRUE || !s) continue;
+    bool ok = s->dev && s->dev->connect();
+    s->connect_result.store(ok ? CONNECT_OK : CONNECT_FAIL, std::memory_order_release);
+  }
+}
+
+// Picks a candidate and hands the blocking connect to connectTask. Returns
+// false if there is nothing to connect to, or it could not be handed over;
+// true means CONNECTING, and tickSlot() collects the result.
+bool ScaleManager::startConnect(Slot& s, uint32_t now) {
   // Pick a candidate from the scanner: the bound MAC if we have one,
   // otherwise (bootstrap) the first Bookoo seen, which is then persisted.
   DiscoveredDevice const* match = nullptr;
@@ -142,7 +179,6 @@ bool ScaleManager::tryConnect(Slot& s, uint32_t now) {
   // Scan and connect don't coexist reliably on one radio.
   scanner->stopAsyncScan();
 
-  s.state = SlotState::CONNECTING;
   s.dev = RemoteScalesFactory::getInstance()->create(*match);
   if (!s.dev) { s.state = SlotState::LOST; return false; }
   s.dev->setLogCallback(&ScaleManager::onLog);
@@ -150,15 +186,23 @@ bool ScaleManager::tryConnect(Slot& s, uint32_t now) {
       s.role == ScaleRole::YIELD ? &ScaleManager::onWeightYield
                                  : &ScaleManager::onWeightDose,
       false);
-  if (!s.dev->connect()) {
+  s.connect_result.store(CONNECT_PENDING, std::memory_order_relaxed);
+  s.connect_started_ms = now;
+  Slot* p = &s;
+  if (xQueueSend(connect_queue, &p, 0) != pdTRUE) {
+    s.connect_result.store(CONNECT_IDLE, std::memory_order_relaxed);
     s.dev.reset();
     s.state = SlotState::LOST;
     return false;
   }
+  s.state = SlotState::CONNECTING;
   return true;
 }
 
 void ScaleManager::updateScanState() {
+  // Scan and connect don't coexist on one radio: leave the scan alone while
+  // connectTask is connecting; the CONNECTING case calls this again after.
+  if (anyConnecting()) return;
   bool need_scan = false;
   for (Slot& s : slots) {
     if (s.enabled && s.state != SlotState::CONNECTED) need_scan = true;
@@ -213,6 +257,12 @@ bool ScaleManager::assign(ScaleRole role, const String& mac_or_last, Stream& out
     return false;
   }
   Slot& s = slots[(uint8_t)role];
+  // connectTask owns `dev` while CONNECTING; destroying it now would pull
+  // the client out from under a connect in progress.
+  if (s.state == SlotState::CONNECTING) {
+    out.println("# that scale is mid-connect — try again in a few seconds");
+    return false;
+  }
   if (s.dev) dropConnection(s, millis(), "reassigned");
   s.bound_mac = mac;
   s.enabled = true;

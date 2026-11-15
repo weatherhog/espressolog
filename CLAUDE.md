@@ -676,6 +676,12 @@ three.
 - `esp-arduino-ble-scales` lists Bookoo Themis as tested — use it rather
   than writing the protocol
 - Bookoo publish their protocol at `github.com/BooKooCode/OpenSource`
+- **The BLE connect runs off `loop()`, in its own task (0.11.1).** It
+  blocked `loop()` until then, and the scanner never forgets a scale it
+  has seen, so with one scale asleep the board froze ~1.8 s every few
+  seconds retrying it: on 2026-11-15 both lever presses of a shot fell
+  inside freezes and were missed, and the brew guard, which needs them,
+  went blind with them (invariant 2).
 - The scale sleeps after **~9 min idle — MEASURED**. Reconnect logic is
   mandatory. *(This said ~15 min until 2026-10-27, as did `scale.h`; the
   source of that figure was never recorded, and `docs/phase-0-status.md`
@@ -1585,6 +1591,12 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
 - **SETTLING** — keep sampling 5 s more → `yield_final_g`.
   `settle_offset_g = final − at_stop`.
 - **reject** — final yield < 5 g (a drip or a knock, not a shot)
+- **placement** — the curve rose >20 g within 1 s somewhere: a cup set
+  down, not espresso (the steepest of 75 real shots rose 7.7 g in 1 s).
+  Kept, flagged (`SPOOL_FLAG_PLACEMENT`, firmware 0.11.1) and excluded at
+  ingest. Added after shot 180 (2026-11-15): a cup put back on an un-tared
+  scale landed slowly enough, 3–4 g per sample, to pass the per-sample
+  step guard into POURING.
 - **fault** — weight drops > 5 g mid-pour (cup removed)
 
 Flow rate: central difference over a 700 ms window. `mean_flow_gps` over

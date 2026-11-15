@@ -117,7 +117,8 @@ String Spool::writeShot(const ShotResult& r, const String& scale_mac,
   h.flags = (r.fault ? SPOOL_FLAG_FAULT : 0) | (r.truncated ? SPOOL_FLAG_TRUNCATED : 0)
           | ((!r.valid && !r.fault) ? SPOOL_FLAG_REJECT : 0)
           | (mc.setpoint_touched ? SPOOL_FLAG_SETPOINT_TOUCHED : 0)
-          | (flow_tap ? SPOOL_FLAG_FLOW_TAP : 0);
+          | (flow_tap ? SPOOL_FLAG_FLOW_TAP : 0)
+          | (r.placement ? SPOOL_FLAG_PLACEMENT : 0);
   h.boiler_temp_start_dc = mc.boiler_temp_start_dc;
   h.machine_timer_dl     = mc.machine_timer_dl;
   h.pump_line            = mc.pump_line;

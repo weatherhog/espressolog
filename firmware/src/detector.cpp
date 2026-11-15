@@ -207,9 +207,24 @@ bool ShotDetector::finishShot() {
   res.valid = res.yield_final_mg >= REJECT_MIN_MG;
   res.sample_count = buf_count;
   res.samples = buf;
+  res.placement = risesLikeAPlacement();
   computeFlowWindow();
   resetToIdle();
   return true;
+}
+
+// Did the recorded curve ever climb PLACEMENT_RISE_MG within
+// PLACEMENT_RISE_MS? Two pointers over the (time-ordered) samples: for each
+// end sample, the minimum weight in the trailing window. O(n) amortised is
+// not needed at <=2048 samples; this is O(n * samples-per-second).
+bool ShotDetector::risesLikeAPlacement() const {
+  for (uint16_t j = 1; j < buf_count; j++) {
+    for (uint16_t i = j; i-- > 0;) {
+      if ((uint32_t)(buf[j].t_ms - buf[i].t_ms) > PLACEMENT_RISE_MS) break;
+      if (buf[j].weight_mg - buf[i].weight_mg > PLACEMENT_RISE_MG) return true;
+    }
+  }
+  return false;
 }
 
 // The cup was lifted (sustained drop below the peak). Lifting after a pour
@@ -226,6 +241,7 @@ bool ShotDetector::finalizeLifted() {
   res.valid = running_max >= REJECT_MIN_MG;
   res.sample_count = buf_count;
   res.samples = buf;
+  res.placement = risesLikeAPlacement();
   computeFlowWindow();
   resetToIdle();
   return true;

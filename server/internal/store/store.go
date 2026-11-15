@@ -412,6 +412,9 @@ func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time
 	} else if h.Reject() {
 		excluded = 1
 		excludeReason = "reject: under 5 g"
+	} else if h.Placement() {
+		excluded = 1
+		excludeReason = "cup placement: rose >20 g within 1 s, not a pour"
 	}
 	machineID, grinderID, epochID := defaultContext(tx, startedAt)
 	beanID, grindDial, brewTemp, preinfusion := defaultRecipe(tx, epochID, startedAt, h.SetpointTouched())

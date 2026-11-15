@@ -15,7 +15,7 @@
 #include "brew_guard.h"
 #include <driver/gpio.h>
 
-const char* FIRMWARE_VERSION = "0.11.0";
+const char* FIRMWARE_VERSION = "0.11.1";
 const char* DETECTOR_VERSION = "0a.6";
 
 static ScaleManager scales;

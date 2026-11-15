@@ -7,6 +7,7 @@ import (
 	"hash/crc32"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -1075,5 +1076,33 @@ func TestIngestPrePulses(t *testing.T) {
 				t.Errorf("%s: pulse %d = %d ms, want %d", c.name, j, got[j], c.ms[j])
 			}
 		}
+	}
+}
+
+// A record the firmware flagged as a cup placement is stored — never lost —
+// but excluded, with a reason that says why.
+func TestIngestPlacementIsExcluded(t *testing.T) {
+	st := openTestStore(t)
+	raw, rec := pumpRecordWith(t, 200, record.Pump2Cup, 8200, func(h *record.Header) {
+		h.Flags |= record.FlagPlacement
+	}, nil)
+	res, err := st.Ingest("aa:bb:cc:dd:ee:03", rec, raw, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var excluded int
+	var reason sql.NullString
+	if err := st.db.QueryRow(`SELECT excluded, exclude_reason FROM shot WHERE id = ?`, res.ShotID).
+		Scan(&excluded, &reason); err != nil {
+		t.Fatal(err)
+	}
+	if excluded != 1 || !strings.Contains(reason.String, "placement") {
+		t.Errorf("placement shot: excluded=%d reason=%q, want 1 and a placement reason", excluded, reason.String)
+	}
+
+	// The same bit on a record that predates it means nothing.
+	old := record.Header{FormatVersion: 3, Flags: record.FlagPlacement}
+	if old.Placement() {
+		t.Error("a v3 header claims a placement")
 	}
 }

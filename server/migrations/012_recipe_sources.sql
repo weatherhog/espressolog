@@ -33,8 +33,9 @@ ALTER TABLE shot ADD COLUMN preinfusion_source TEXT
   CHECK (preinfusion_source IN ('flow', 'carried', 'user'));
 ALTER TABLE shot ADD COLUMN preinfusion_run_s REAL;
 
--- 1 = a brew-temperature edit was blinking, unconfirmed, at pour start
--- (spool v5 flag SETPOINT_PENDING): brew_temp_c is unknown on this shot, and
--- no brew temperature is carried across it. Deliberately NOT
+-- 1 = a brew-temperature edit had begun and not confirmed before this pour —
+-- still blinking, or cut off by the pump's timer (spool v5 flag
+-- SETPOINT_PENDING; one shot per such edit): brew_temp_c is unknown on this
+-- shot, and no brew temperature is carried across it. Deliberately NOT
 -- setpoint_touched, which also stops the pre-infusion carry. NULL before v5.
 ALTER TABLE shot ADD COLUMN setpoint_pending INTEGER;

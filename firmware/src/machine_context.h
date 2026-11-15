@@ -336,8 +336,8 @@ private:
       // agree: an edit is passing through values. One alone is ignored — a
       // misread frame on an edit's last blink set this for the rest of the
       // boot (review, 2026-11-15); a real new value confirms on its second
-      // blink anyway. KNOWN LIMIT: a shot pulled within ~0.4 s of the new
-      // value's first blink still gets the old value carried.
+      // blink anyway, and a lever pressed before that is caught by the
+      // TIMER rule below.
       else if (deviant(v) && prev_deviant)
         // A DIFFERENT value blinked: an edit is under way (or a misread),
         // so the remembered setpoint is no longer known to be the machine's
@@ -368,10 +368,18 @@ private:
     // SETPOINT blink, and the old value went out as 'display' on every shot
     // until the next edit). A TEMPERATURE frame ending the run — the normal
     // end of an edit — leaves a lone different blink ignored: a misread.
-    // KNOWN LIMIT: a lever pressed before the new value has blinked as
+    // KNOWN LIMIT: a lever pressed before the new value has shown as
     // SETPOINT even once (~1 s after the press) is not seen.
+    //
+    // TWO TIMER frames in a row, like timer_confirmed above: a stray TIMER
+    // frame was seen live, so the first one leaves the run as it is. And the
+    // value that BLINKED decides, the shown one only if nothing has blinked
+    // yet in this run: after an edit confirms, the display can keep showing
+    // a different number for ~0.6 s (the steady tail), and a lever pressed
+    // then threw the confirmed edit away (review, 2026-11-15).
     if (r.mode == DisplayBus::Mode::TIMER) {
-      const int16_t latest = shown_setpoint_c != INT16_MIN ? shown_setpoint_c : blinked_setpoint_c;
+      if (prev_frame_mode != DisplayBus::Mode::TIMER) return;
+      const int16_t latest = blinked_setpoint_c != INT16_MIN ? blinked_setpoint_c : shown_setpoint_c;
       if (deviant(latest)) {
         last_setpoint_dc = INT16_MIN;
         setpoint_pending = true;

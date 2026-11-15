@@ -80,9 +80,10 @@ const (
 	// v4 and never sets it, so on a v4 record a CLEAR bit means "not a
 	// placement" only if firmware_version is 0.11.1 or later.
 	FlagPlacement = 0x20
-	// FlagSetpointPending (v5): a brew-temperature edit was blinking,
-	// unconfirmed, at pour start. The setpoint is unknown, and nothing may
-	// be carried onto the shot or across it.
+	// FlagSetpointPending (v5): a brew-temperature edit had begun and not
+	// confirmed before this pour — still blinking, or cut off by the pump's
+	// timer. The setpoint is unknown, and nothing may be carried onto the
+	// shot or across it. Set on one shot per unconfirmed edit.
 	FlagSetpointPending = 0x40
 
 	headerLenV1 = 109
@@ -373,8 +374,8 @@ func (h *Header) BoilerTempStartC() (int, bool) {
 }
 func (h *Header) Reject() bool { return h.Flags&FlagReject != 0 }
 
-// SetpointPending reports a brew-temperature edit under way, unconfirmed,
-// at pour start (v5).
+// SetpointPending reports a brew-temperature edit begun and not confirmed
+// before this pour (v5); see FlagSetpointPending.
 func (h *Header) SetpointPending() bool {
 	return h.FormatVersion >= 5 && h.Flags&FlagSetpointPending != 0
 }

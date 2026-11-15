@@ -478,8 +478,40 @@ int main() {
       assert(e.context().setpoint_dc == 960);
       eb(97);
       e.onReading(timer(1, u += 41000), false);
+      e.onReading(timer(2, u += 41000), false);           // two in a row
       e.onPourStart(u);
       assert(e.context().setpoint_dc == INT16_MIN && e.context().setpoint_pending);
+      // The lever pressed DURING the new value's first shown phase, before
+      // any blank: nothing has blinked, so the shown value decides.
+      eb(96); eb(96);
+      e.onPourStart(u);
+      e.onReading(temp(97, u += 41000), false);           // an edit's first cycles
+      e.onReading(setpoint(97, u += 204000), true);
+      e.onReading(timer(1, u += 41000), false);
+      e.onReading(timer(2, u += 41000), false);
+      e.onPourStart(u);
+      assert(e.context().setpoint_dc == INT16_MIN && e.context().setpoint_pending);
+      // An ordinary shot straight after a confirmed edit: nothing — also
+      // when the steady tail shows a different number when the lever goes.
+      eb(96); eb(96);
+      e.onPourStart(u);
+      e.onReading(timer(1, u += 41000), false);
+      e.onReading(timer(2, u += 41000), false);
+      e.onPourStart(u);
+      assert(e.context().setpoint_dc == 960 && !e.context().setpoint_pending);
+      eb(96); eb(96);
+      e.onReading(setpoint(93, u += 204000), true);       // the tail
+      e.onReading(timer(1, u += 41000), false);
+      e.onReading(timer(2, u += 41000), false);
+      e.onPourStart(u);
+      assert(e.context().setpoint_dc == 960 && !e.context().setpoint_pending);
+      // A single stray TIMER frame after a misread blink: nothing.
+      eb(96); eb(96);
+      eb(99);
+      e.onReading(timer(1, u += 41000), false);
+      e.onReading(temp(96, u += 41000), false);
+      e.onPourStart(u);
+      assert(e.context().setpoint_dc == 960 && !e.context().setpoint_pending);
       // The same lone blink ended by TEMPERATURE instead (the normal end of
       // an edit) is a misread: ignored. And TIMER after a confirmed value
       // (an ordinary shot) is nothing.

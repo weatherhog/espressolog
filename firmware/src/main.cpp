@@ -749,9 +749,9 @@ static void handleShotComplete(const ShotResult& r) {
       Serial.printf("# setpoint %d C (last dialled on the display)\n",
                     machine_ctx.context().setpoint_dc / 10);
     else if (machine_ctx.context().setpoint_pending)
-      Serial.println("# setpoint being edited at pour start (not yet confirmed) — recorded as unknown, not carried");
+      Serial.println("# setpoint edit not confirmed before this pour — recorded as unknown; nothing carried onto or across this shot");
     else
-      Serial.println("# setpoint not known (no confirmed edit seen, or the display was not decoding) — the server carries the last one");
+      Serial.println("# setpoint not known (no confirmed edit seen, or the display was not decoding) — the server may carry an earlier one");
   }
   Serial.println("# ---- end shot ----");
 }

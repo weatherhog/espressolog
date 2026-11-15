@@ -165,9 +165,11 @@ static_assert(PRE_PULSES_MAX == 256, "the server's PrePulsesMax is 256");
 // placement): its curve rose >20 g within 1 s, which espresso cannot. Kept,
 // so a misjudged real shot is not lost; the server excludes it.
 #define SPOOL_FLAG_PLACEMENT 0x20
-// v5 (0.12.0). A brew-temperature edit was blinking, unconfirmed, at pour
-// start (MachineContext::setpoint_pending): the setpoint is unknown, and the
-// server must neither carry one onto this shot nor across it. Separate from
+// v5 (0.12.0). A brew-temperature edit had begun and not confirmed before
+// this pour — still blinking at pour start, or cut off earlier by the pump's
+// timer (MachineContext::setpoint_pending; it marks one shot): the setpoint
+// is unknown, and the server must neither carry one onto this shot nor
+// across it. Separate from
 // SETPOINT_TOUCHED on purpose, which also stops the pre-infusion carry.
 #define SPOOL_FLAG_SETPOINT_PENDING 0x40
 

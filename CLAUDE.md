@@ -1682,14 +1682,16 @@ makes the setpoint unknown until the next confirmed edit, and marks the
 NEXT shot with `SETPOINT_PENDING` (bit 6, its own — not `SETPOINT_TOUCHED`,
 which would also stop the pre-infusion carry). The server stores no brew
 temperature on that shot and carries none across it
-(`shot.setpoint_pending`), so later shots get what was typed on it, or
-nothing. **Known limits:** a lone different blink ended by an ordinary
+(`shot.setpoint_pending`), so later shots get what was typed on it or on
+a later shot, or nothing. The timer rule needs two TIMER frames in a row
+and judges the value that blinked, not the steady tail after a confirmed
+edit. **Known limits:** a lone different blink ended by an ordinary
 temperature frame is ignored (it is how a misread looks); a lever pressed
-before the new value has blinked as `SETPOINT` once (~1 s after the last
+before the new value has shown as `SETPOINT` once (~1 s after the last
 press — an edit's first two blinks decode as TEMPERATURE) still gets the
 old value stamped as `'display'`, on that shot and later ones until the
-next edit; pending survives a tap switch but not a reboot; an edit made while the bus was unplugged but
-`display` stayed on is not seen (forgetting on a quiet bus would also
+next edit; pending survives a tap switch but not a reboot; an edit made
+while the bus was unplugged but `display` stayed on is not seen (forgetting on a quiet bus would also
 forget at every machine power-off); a re-derived run does not reach shots
 that already carried the old value; and a run no `Pr` matches empties
 pre-infusion on that shot only, so the next shot carries the earlier value

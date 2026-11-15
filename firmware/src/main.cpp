@@ -107,6 +107,13 @@ static void IRAM_ATTR dbusIsr() {
   dbus_head = nxt;
 }
 
+// What the machine contributes to a shot record (format v2). The logic
+// lives in machine_context.h so it can be host-tested — the first version
+// of this sat inline here, had no tests, and shipped two bugs a green
+// suite could not see: a previous shot's timer leaking into the next, and
+// setpoint_touched staying true for the whole boot.
+static MachineContextTracker machine_ctx;
+
 // Idempotent, like flowSetEnabled and switchesSetEnabled. `display on` while
 // already on zeroes the frame and drop counters, which is the only way to get
 // a per-event figure out of them: both are free-running since boot and nothing
@@ -128,6 +135,9 @@ static void displaySetEnabled(bool on) {
     attachInterrupt(digitalPinToInterrupt(DISPLAY_CLK_PIN), dbusIsr, RISING);
   }
   display_on = on;
+  // Off, on or re-attached: the machine may have been edited while nothing
+  // watched, so a remembered setpoint is no longer the machine's.
+  machine_ctx.forgetSetpoint();
 }
 
 static void pollDisplay() {
@@ -140,12 +150,6 @@ static void pollDisplay() {
   if (display_bus.poll(micros())) dbus_frames++;   // bus went quiet mid-frame
 }
 
-// What the machine contributes to a shot record (format v2). The logic
-// lives in machine_context.h so it can be host-tested — the first version
-// of this sat inline here, had no tests, and shipped two bugs a green
-// suite could not see: a previous shot's timer leaking into the next, and
-// setpoint_touched staying true for the whole boot.
-static MachineContextTracker machine_ctx;
 
 static void machineContextPoll() {
   if (!display_on) return;
@@ -1133,7 +1137,8 @@ void loop() {
       ShotState before = detector.state();
       bool complete = detector.feed(smp.t_ms, smp.weight_mg, flow.total());
       if (before != ShotState::POURING && detector.state() == ShotState::POURING) {
-        machine_ctx.onPourStart(micros());
+        machine_ctx.onPourStart(micros(),
+                                display_on && !display_bus.stale(micros(), DISPLAY_FRESH_US));
         // Which press started the pump: decided now, while t=0 is fresh and
         // before the stop press or a later flush can crowd it out.
         machine_ctx.resolvePump(detector.result().started_at_ms);

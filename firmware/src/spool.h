@@ -18,7 +18,9 @@
 // started the pump (0c): pump_line and pump_lead_ms. FORMAT VERSION 4
 // (2026-11-15) added the flowmeter pulse train from that press to pour
 // confirmation: three header fields, and the pulse offsets as a TAIL after
-// the samples (see SPOOL_PRE_TAIL_BYTES). Older records still
+// the samples (see SPOOL_PRE_TAIL_BYTES). FORMAT VERSION 5 (firmware
+// 0.12.0) added setpoint_dc, the brew setpoint dialled on the front panel.
+// Older records still
 // exist, both spooled and as fixtures, so the server decodes EVERY version —
 // see server/internal/record. The original intent was that this struct would
 // never change; it changed because 0e and 0c produced facts the machine knows

@@ -1672,15 +1672,19 @@ The server stores the offsets raw in `shot_pre_pulse` (migration 011), with
 `shot.pre_pulse_total` NULL for "not captured" — only for a record that
 claims a live flow tap. **Header format v5** (firmware 0.12.0) added
 `setpoint_dc` after the pulse block (123 → 125 bytes): the brew setpoint
-last dialled in on the front panel — the last `SETPOINT` frame between 80
-and 130 °C, as it stood at pour start, kept across shots but not across a
-reboot (`machine_context.h`). The server stores it as `brew_temp_c` with
-`brew_temp_source = 'display'`, and measures `preinfusion_s` from the
-pulse train (`preinfusion_source = 'flow'`, `server/internal/store/
-preinfusion.go`: the dense pump-on run before the first ≥ 1 s pause, its
-coasting tail stripped — shot 179 at Pr = 5 s measures 5.1 s); anything
-copied from an earlier shot is `'carried'`, anything typed `'user'`
-(migration 012). **The server decodes v1 to v5** — older records
+last dialled in on the front panel — a value that BLINKED as `SETPOINT`
+twice in a row, 80–130 °C, as it stood at pour start; kept across shots,
+forgotten on a reboot or when the display tap is switched, and not stamped
+while the display is not decoding (`machine_context.h`). The server stores
+it as `brew_temp_c` with `brew_temp_source = 'display'`, and measures the
+pump-on run from the pulse train into `preinfusion_run_s`
+(`server/internal/store/preinfusion.go`: the dense run before the first
+≥ 1 s pause, its coasting tail stripped — shot 179 at Pr = 5 s measures
+5.1 s), with `preinfusion_s` the whole-second `Pr` it corresponds to
+(`'flow'`). Anything copied from an earlier shot is `'carried'`, anything
+typed or cleared `'user'` (migration 012). **A shot that recorded an edit
+is not a carry source** unless a human typed its value: its display value
+and run predate the edit. The run is re-derived at every server start. **The server decodes v1 to v5** — older records
 exist spooled and as fixtures, and losing one to a format bump would violate
 invariant 6. An older record reports the newer fields as "the machine did
 not say", which is the same thing a current record written with the display

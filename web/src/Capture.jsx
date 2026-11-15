@@ -239,7 +239,9 @@ export default function Capture({ shots, beans, justSaved, onSaved }) {
               inference rendered here with no badge, indistinguishable from a
               typed value. 012 added brew_temp_source / preinfusion_source:
               'display' (the setpoint dialled on the machine), 'flow' (the
-              pump-on run measured from the pulses), 'carried', 'user'. The
+              whole-second Pr the measured pump-on run corresponds to — Pr
+              only comes in whole seconds, hence the stepper's step of 1),
+              'carried', 'user'. The
               badge below says which, so a carried guess no longer reads as a
               confirmed setting. Rows from before 012 have no source and get
               no badge. */}
@@ -253,7 +255,7 @@ export default function Capture({ shots, beans, justSaved, onSaved }) {
           {[
             { k: "grind",  label: "Grind",       v: grind,  set: setGrind,  col: pending.grind_dial,    step: 0.1, unit: undefined },
             { k: "dose",   label: "Dose",        v: dose,   set: setDose,   col: pending.dose_ground_g, step: 0.1, unit: "g" },
-            { k: "preinf", label: "Preinfusion", v: preinf, set: setPreinf, col: pending.preinfusion_s, step: 0.5, unit: "s" },
+            { k: "preinf", label: "Preinfusion", v: preinf, set: setPreinf, col: pending.preinfusion_s, step: 1,   unit: "s" },
             { k: "temp",   label: "Brew temp",   v: temp,   set: setTemp,   col: pending.brew_temp_c,   step: 0.5, unit: "\u00b0C" },
           ].map(({ k, label, v, set, col, step, unit }) => {
             const shown = touched[k] ? v : (col ?? v);

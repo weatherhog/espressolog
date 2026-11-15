@@ -1192,12 +1192,13 @@ func TestUserExcludedShotKeepsLateDose(t *testing.T) {
 	}
 }
 
-// The brew setpoint and the pre-infusion run reach the row as measurements
-// with their provenance (firmware 0.12.0, migration 012): the setpoint the
-// display showed being dialled as 'display', the pump-on run measured from
-// the pre-drip pulses as 'flow' — and the next shot without either carries
-// them as 'carried'. A hot-water draw is not measured, and a typed value
-// becomes 'user'.
+// The brew setpoint and the pre-infusion reach the row as measurements with
+// their provenance (firmware 0.12.0, migration 012): the setpoint the display
+// showed being dialled as 'display'; the pump-on run measured from the
+// pre-drip pulses as preinfusion_run_s, and the whole-second Pr it
+// corresponds to as preinfusion_s 'flow' — and the next shot without either
+// carries them as 'carried'. A hot-water draw is not measured, and a typed
+// or cleared value becomes 'user'.
 func TestIngestMeasuredRecipe(t *testing.T) {
 	st := openTestStore(t)
 	dev := "aa:bb:cc:dd:ee:03"
@@ -1216,13 +1217,18 @@ func TestIngestMeasuredRecipe(t *testing.T) {
 		h.Flags |= record.FlagFlowTap
 		h.PrePulseTotal, h.PrePulseCount, h.PrePulseFlags = uint16(len(train)), uint16(len(train)), record.PrePulsesComplete
 	}
-	row := func(id int64) (temp sql.NullFloat64, tsrc sql.NullString, pre sql.NullFloat64, psrc sql.NullString) {
+	type rowT struct {
+		temp, pre, run sql.NullFloat64
+		tsrc, psrc     sql.NullString
+	}
+	row := func(id int64) rowT {
 		t.Helper()
-		if err := st.db.QueryRow(`SELECT brew_temp_c, brew_temp_source, preinfusion_s, preinfusion_source FROM shot WHERE id = ?`, id).
-			Scan(&temp, &tsrc, &pre, &psrc); err != nil {
+		var r rowT
+		if err := st.db.QueryRow(`SELECT brew_temp_c, brew_temp_source, preinfusion_s, preinfusion_source, preinfusion_run_s FROM shot WHERE id = ?`, id).
+			Scan(&r.temp, &r.tsrc, &r.pre, &r.psrc, &r.run); err != nil {
 			t.Fatal(err)
 		}
-		return
+		return r
 	}
 	ingest := func(seq uint32, line uint8, mut func(*record.Header), offsets []uint16) int64 {
 		t.Helper()
@@ -1235,35 +1241,47 @@ func TestIngestMeasuredRecipe(t *testing.T) {
 	}
 
 	a := ingest(1, record.Pump2Cup, at(0, measured), train)
-	if temp, tsrc, pre, psrc := row(a); temp.Float64 != 93 || tsrc.String != "display" || pre.Float64 != 5.1 || psrc.String != "flow" {
-		t.Errorf("measured shot: temp %v (%v), pre %v (%v); want 93 display, 5.1 flow", temp, tsrc, pre, psrc)
+	if r := row(a); r.temp.Float64 != 93 || r.tsrc.String != "display" || r.pre.Float64 != 5 || r.psrc.String != "flow" || r.run.Float64 != 5.1 {
+		t.Errorf("measured shot: %+v; want 93 display, Pr 5 flow, run 5.1", r)
 	}
 	// Next shot: no setpoint seen (a reboot), no pulse train.
 	b := ingest(2, record.Pump2Cup, at(time.Minute, nil), nil)
-	if temp, tsrc, pre, psrc := row(b); temp.Float64 != 93 || tsrc.String != "carried" || pre.Float64 != 5.1 || psrc.String != "carried" {
-		t.Errorf("following shot: temp %v (%v), pre %v (%v); want 93 carried, 5.1 carried", temp, tsrc, pre, psrc)
+	if r := row(b); r.temp.Float64 != 93 || r.tsrc.String != "carried" || r.pre.Float64 != 5 || r.psrc.String != "carried" || r.run.Valid {
+		t.Errorf("following shot: %+v; want 93 carried, 5 carried, no run", r)
 	}
-	// A shot that recorded an edit gets no carry — but the display's value
-	// still stands, and a hot-water draw's pulses are not a pre-infusion.
-	c := ingest(3, record.PumpWater, at(2*time.Minute, func(h *record.Header) {
+	// A hot-water draw's pulses are not a pre-infusion.
+	w := ingest(3, record.PumpWater, at(2*time.Minute, measured), train)
+	if r := row(w); r.run.Valid || r.psrc.String == "flow" {
+		t.Errorf("hot-water draw measured: %+v", r)
+	}
+	// A shot that recorded an edit DURING it: the firmware stamped the
+	// setpoint as at pour start — the pre-edit 93 — and it measured its own
+	// run. It stores those, but must not pass them on: the next shot without
+	// a measurement carries nothing (review, 2026-11-15: it carried 93).
+	c := ingest(4, record.Pump2Cup, at(3*time.Minute, func(h *record.Header) {
 		measured(h)
-		h.SetpointDc = 960
 		h.Flags |= record.FlagSetpointTouched
 	}), train)
-	if temp, tsrc, pre, psrc := row(c); temp.Float64 != 96 || tsrc.String != "display" || pre.Valid || psrc.Valid {
-		t.Errorf("edited hot-water shot: temp %v (%v), pre %v (%v); want 96 display, no pre-infusion", temp, tsrc, pre, psrc)
+	if r := row(c); r.temp.Float64 != 93 || r.tsrc.String != "display" {
+		t.Errorf("edited shot: %+v; want its own 93 display", r)
 	}
-	// Typed values are the user's, and clearing one clears its source.
+	d := ingest(5, record.Pump2Cup, at(4*time.Minute, nil), nil)
+	if r := row(d); r.temp.Valid || r.pre.Valid {
+		t.Errorf("shot after an edit carried the pre-edit values: %+v", r)
+	}
+	// Typed values are the user's, and so is clearing one.
 	if err := st.UpdateShot(b, map[string]any{"brew_temp_c": 94.0, "preinfusion_s": nil}); err != nil {
 		t.Fatal(err)
 	}
-	if temp, tsrc, pre, psrc := row(b); temp.Float64 != 94 || tsrc.String != "user" || pre.Valid || psrc.Valid {
-		t.Errorf("after PATCH: temp %v (%v), pre %v (%v); want 94 user, cleared", temp, tsrc, pre, psrc)
+	if r := row(b); r.temp.Float64 != 94 || r.tsrc.String != "user" || r.pre.Valid || r.psrc.String != "user" {
+		t.Errorf("after PATCH: %+v; want 94 user, cleared by the user", r)
 	}
 }
 
-// Shots ingested before pre-infusion was measured at ingest (0.11.0's v4
-// records, e.g. shot 179) are measured from their stored pulses at Open.
+// Pre-infusion is (re-)measured from the stored pulses at every Open: a v4
+// shot ingested before measuring existed gets it, a 'flow' row follows the
+// current thresholds, and a value the USER cleared stays cleared (review,
+// 2026-11-15: the backfill refilled it on every restart).
 func TestBackfillPreinfusion(t *testing.T) {
 	st := openTestStore(t)
 	train := shot179()
@@ -1275,22 +1293,39 @@ func TestBackfillPreinfusion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.db.Exec(`UPDATE shot SET preinfusion_s = NULL, preinfusion_source = NULL WHERE id = ?`, res.ShotID); err != nil {
+	read := func() (pre, run sql.NullFloat64, src sql.NullString) {
+		t.Helper()
+		if err := st.db.QueryRow(`SELECT preinfusion_s, preinfusion_run_s, preinfusion_source FROM shot WHERE id = ?`, res.ShotID).Scan(&pre, &run, &src); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	// As 0.11.0's shots stand on production: no value, no source, no run.
+	if _, err := st.db.Exec(`UPDATE shot SET preinfusion_s = NULL, preinfusion_source = NULL, preinfusion_run_s = NULL WHERE id = ?`, res.ShotID); err != nil {
 		t.Fatal(err)
 	}
-	n, err := st.backfillPreinfusion()
-	if err != nil || n != 1 {
+	if n, err := st.backfillPreinfusion(); err != nil || n != 1 {
 		t.Fatalf("backfill = %d, %v; want 1", n, err)
 	}
-	var pre float64
-	var src string
-	if err := st.db.QueryRow(`SELECT preinfusion_s, preinfusion_source FROM shot WHERE id = ?`, res.ShotID).Scan(&pre, &src); err != nil {
-		t.Fatal(err)
-	}
-	if pre != 5.1 || src != "flow" {
-		t.Errorf("backfilled %v (%s), want 5.1 flow", pre, src)
+	if pre, run, src := read(); pre.Float64 != 5 || run.Float64 != 5.1 || src.String != "flow" {
+		t.Errorf("backfilled %v / %v (%v), want Pr 5, run 5.1, flow", pre, run, src)
 	}
 	if n, _ := st.backfillPreinfusion(); n != 0 {
 		t.Errorf("second backfill touched %d rows", n)
+	}
+	// A stale 'flow' value is re-derived.
+	if _, err := st.db.Exec(`UPDATE shot SET preinfusion_s = 3, preinfusion_run_s = 2.9 WHERE id = ?`, res.ShotID); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := st.backfillPreinfusion(); n != 1 {
+		t.Errorf("stale flow row not re-derived (%d)", n)
+	}
+	// Cleared by the user: stays cleared, though the run is still measured.
+	if err := st.UpdateShot(res.ShotID, map[string]any{"preinfusion_s": nil}); err != nil {
+		t.Fatal(err)
+	}
+	st.backfillPreinfusion()
+	if pre, run, src := read(); pre.Valid || src.String != "user" || run.Float64 != 5.1 {
+		t.Errorf("after a user clear and a restart: %v / %v (%v), want empty, user, run 5.1", pre, run, src)
 	}
 }

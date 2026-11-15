@@ -376,42 +376,75 @@ int main() {
     printf("no display bus yields no claims OK\n");
   }
 
-  // Setpoint from the display (v5): the LAST SETPOINT frame of an edit is
-  // the new setpoint, it survives across shots, a ramp's passing values are
-  // overwritten, an edit during a shot applies to the next one, and nothing
-  // that is not a dialled brew temperature is taken.
+  // Setpoint from the display (v5): a value counts once it has BLINKED —
+  // shown as SETPOINT, then blanked — twice in a row with the same value.
+  // It survives across shots, an edit during a shot applies to the next one,
+  // and nothing else is taken: a ramp's passing values, the steady frames
+  // after the blink stops, a single misread blink, steam's TARGET, SET UP
+  // values, TEMPERATURE. Not stamped while the display is not live, and
+  // forgotten when the tap is switched.
   {
     MachineContextTracker m;
     uint32_t t = 1000000;
+    auto blank = [&](uint32_t at) {
+      DisplayBus::Reading r; r.mode = DisplayBus::Mode::BLANK; r.at_us = at; return r;
+    };
+    auto blink = [&](int16_t c) {               // one shown phase, then its blank
+      m.onReading(setpoint(c, t += 204000), true);
+      m.onReading(blank(t += 210000), true);
+    };
     m.onReading(temp(95, t), false);
     m.onPourStart(t + 100);
     assert(m.context().setpoint_dc == INT16_MIN);         // no edit seen yet
-    // An edit: ramp 95 -> 106, then the blink settles on 93.
+    // An edit: ramp 95 -> 106 (no blanks), the blink settles on 93 — with
+    // one misread blink of 99 in it — then ~0.4 s of steady SETPOINT frames
+    // showing something else (the boiler, after a large edit), then normal.
     for (int16_t c = 95; c <= 106; c++) m.onReading(setpoint(c, t += 41000), true);
-    m.onReading(setpoint(93, t += 400000), true);
-    m.onReading(setpoint(93, t += 400000), true);
-    m.onReading(temp(93, t += 3000000), false);
+    m.onPourStart(t);
+    assert(m.context().setpoint_dc == INT16_MIN);         // a ramp is not a setpoint
+    blink(93);
+    m.onPourStart(t);
+    assert(m.context().setpoint_dc == INT16_MIN);         // one blink is not enough
+    blink(99);                                            // misread
+    blink(93);
+    m.onPourStart(t);
+    assert(m.context().setpoint_dc == INT16_MIN);         // 93, 99, 93: no two agree
+    blink(93);
+    blink(93);
+    m.onReading(setpoint(88, t += 204000), true);         // steady tail, never blanked
+    m.onReading(setpoint(88, t += 41000), true);
+    m.onReading(temp(88, t += 41000), false);
     m.onPourStart(t);
     assert(m.context().setpoint_dc == 930);
     // Survives the next shot with no edit in between.
     m.onPourStart(t += 60000000);
     assert(m.context().setpoint_dc == 930);
-    // Not taken: a TARGET (steam's 165 / 95), a SETPOINT outside 80-130,
-    // a TEMPERATURE.
-    DisplayBus::Reading tg = setpoint(165, t += 41000);
-    tg.mode = DisplayBus::Mode::TARGET;
-    m.onReading(tg, false);
-    m.onReading(setpoint(5, t += 41000), true);           // a SET UP value
-    m.onReading(setpoint(165, t += 41000), true);
-    m.onReading(temp(97, t += 41000), false);
+    // Not taken: steam's TARGET blinking, SET UP values, out of range.
+    for (int i = 0; i < 3; i++) {
+      DisplayBus::Reading tg = setpoint(165, t += 500000);
+      tg.mode = DisplayBus::Mode::TARGET;
+      m.onReading(tg, false);
+      m.onReading(blank(t += 500000), false);
+    }
+    blink(5); blink(5);
+    blink(165); blink(165);
     m.onPourStart(t);
     assert(m.context().setpoint_dc == 930);
     // An edit during the shot: this shot keeps 93, the next one gets 96.
-    m.onReading(setpoint(96, t += 41000), true);
+    blink(96); blink(96);
     assert(m.context().setpoint_dc == 930);
     m.onPourStart(t += 60000000);
     assert(m.context().setpoint_dc == 960);
-    printf("the dialled setpoint is remembered, last value wins, steam and SET UP are not taken OK\n");
+    // The display not live at pour start: nothing stamped, still remembered.
+    m.onPourStart(t += 1000, false);
+    assert(m.context().setpoint_dc == INT16_MIN);
+    m.onPourStart(t += 1000, true);
+    assert(m.context().setpoint_dc == 960);
+    // The tap switched: forgotten.
+    m.forgetSetpoint();
+    m.onPourStart(t += 1000);
+    assert(m.context().setpoint_dc == INT16_MIN);
+    printf("the dialled setpoint is the value that blinked twice; ramps, tails, misreads, steam and SET UP are not taken OK\n");
   }
 
   printf("\nall machine context tests passed\n");

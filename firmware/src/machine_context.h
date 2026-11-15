@@ -87,7 +87,8 @@ public:
   void onReading(const DisplayBus::Reading& r, bool touched_latch) {
     // main.cpp calls this every loop with the CURRENT reading, so the same
     // frame arrives many times; `at_us` is what says a new frame decoded.
-    if (!have_frame || r.at_us != last_frame_us) {
+    const bool fresh = !have_frame || r.at_us != last_frame_us;
+    if (fresh) {
       prev_frame_mode = have_frame ? last_frame_mode : DisplayBus::Mode::NONE;
       last_frame_mode = r.mode;
       last_frame_us = r.at_us;
@@ -103,21 +104,8 @@ public:
       last_boiler_us = r.at_us;
       have_boiler = true;
     } else if (r.mode == DisplayBus::Mode::SETPOINT || r.mode == DisplayBus::Mode::TARGET) {
-      // A SETPOINT frame is the number being dialled in. An edit ends with
-      // the display blinking the new value for ~3 s, so the LAST one seen is
-      // the setpoint the machine now holds — every edit in the captures
-      // does (2026-10-03 buttons and setup-menu). A ramp's passing values
-      // are overwritten by the frames after it. The range check keeps out
-      // anything that is not a brew temperature: the SET UP menu's values
-      // (pre-infusion 0-5 s, offsets, stand-by hours) never decoded as
-      // SETPOINT in the setup-menu capture, and this keeps it that way.
-      // TARGET (steam's 165, the 95 it cools back to) is the machine moving
-      // its own target, not the brew setpoint, and is not taken.
-      // NOT persisted: after a reboot it is unknown until the next edit, and
-      // the server carries the last value forward meanwhile.
-      if (r.mode == DisplayBus::Mode::SETPOINT &&
-          r.temp_c >= SETPOINT_MIN_C && r.temp_c <= SETPOINT_MAX_C)
-        last_setpoint_dc = (int16_t)(r.temp_c * 10);
+      // A SETPOINT frame is the number being dialled in; see noteSetpoint().
+      if (r.mode == DisplayBus::Mode::SETPOINT) shown_setpoint_c = r.temp_c;
       // AND THEY INVALIDATE the last one. Several non-boiler values decode
       // as TEMPERATURE: a blink's first cycle (it is recognised at its
       // second onset), steam's steady 165 for as long as steam holds
@@ -144,7 +132,16 @@ public:
       if (r.timer_dl < mc.machine_timer_dl) mc.machine_timer_dl = 0;
       if (r.timer_dl > mc.machine_timer_dl) mc.machine_timer_dl = r.timer_dl;
     }
+    if (fresh) noteSetpoint(r);
     if (touched_latch) mc.setpoint_touched = true;
+  }
+
+  // The display tap was switched off or on, or re-attached: a setpoint seen
+  // before it may no longer be the machine's — it could have been edited
+  // while nothing watched (review, 2026-11-15).
+  void forgetSetpoint() {
+    last_setpoint_dc = INT16_MIN;
+    shown_setpoint_c = blinked_setpoint_c = INT16_MIN;
   }
 
   // Call when the detector reaches POURING. Takes the temperature from
@@ -155,7 +152,9 @@ public:
   // everything, and the timer restart detection above handles a flush
   // between shots. Unexercised defensive code is where the last two bugs
   // in this file hid.
-  void onPourStart(uint32_t now_us) {
+  // display_live: the display bus is on and decoding now. Without it the
+  // remembered setpoint is not stamped — an edit could be going unseen.
+  void onPourStart(uint32_t now_us, bool display_live = true) {
     uint16_t timer_carry = mc.machine_timer_dl;
     // Field by field, not `mc = MachineContext{}`: that builds a ~530-byte
     // temporary on the loop task's 8 KB stack in the middle of the sample
@@ -171,7 +170,7 @@ public:
     mc.machine_timer_dl = timer_carry;
     // The setpoint as it stood when the pour began: an edit DURING the shot
     // applies to the next one. Kept across shots, unlike everything above.
-    mc.setpoint_dc = last_setpoint_dc;
+    mc.setpoint_dc = display_live ? last_setpoint_dc : INT16_MIN;
     if (have_boiler && (uint32_t)(now_us - last_boiler_us) < BOILER_MAX_AGE_US) {
       mc.boiler_temp_start_dc = last_boiler_dc;
     }
@@ -282,6 +281,36 @@ private:
   MachineContext mc;
   int16_t  last_boiler_dc = INT16_MIN;
   int16_t  last_setpoint_dc = INT16_MIN;
+  int16_t  shown_setpoint_c = INT16_MIN;     // SETPOINT value now shown, not yet blinked
+  int16_t  blinked_setpoint_c = INT16_MIN;   // the last value that blinked
+
+  // The setpoint is the value that BLINKS. An edit ends with the display
+  // blinking the new value for ~3 s (2026-10-03 buttons and setup-menu
+  // captures: six or more blinks), so a value counts once it has been shown
+  // as SETPOINT and then blanked, TWICE IN A ROW with the same value. That
+  // keeps out a ramp's passing values (no blank between them), the steady
+  // frames after the blink stops — which still decode as SETPOINT for
+  // ~0.4 s and could be the boiler after a large edit — and a single
+  // misread frame (review, 2026-11-15: the first version took whatever
+  // SETPOINT frame came last). The range check keeps out anything that is
+  // not a brew temperature; the SET UP menu's values never decoded as
+  // SETPOINT. TARGET (steam's 165, the 95 it cools back to) is the machine
+  // moving its own target and is never taken. NOT persisted: after a
+  // reboot it is unknown until the next edit, and the server carries the
+  // last value meanwhile.
+  void noteSetpoint(const DisplayBus::Reading& r) {
+    if (r.mode == DisplayBus::Mode::SETPOINT) return;          // shown; see onReading
+    if (r.mode == DisplayBus::Mode::BLANK) {
+      if (shown_setpoint_c == INT16_MIN) return;               // still the same blank
+      const int16_t v = shown_setpoint_c;
+      shown_setpoint_c = INT16_MIN;
+      if (v == blinked_setpoint_c && v >= SETPOINT_MIN_C && v <= SETPOINT_MAX_C)
+        last_setpoint_dc = (int16_t)(v * 10);
+      blinked_setpoint_c = v;
+      return;
+    }
+    shown_setpoint_c = blinked_setpoint_c = INT16_MIN;         // anything else breaks the run
+  }
   uint32_t last_boiler_us = 0;
   bool     have_boiler = false;
   DisplayBus::Mode last_frame_mode = DisplayBus::Mode::NONE;

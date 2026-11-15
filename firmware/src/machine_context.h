@@ -185,6 +185,12 @@ public:
     // brew-temperature edit says nothing about pre-infusion, and touched
     // also stops that carry and condemns a 0f run (review 2026-11-15).
     mc.setpoint_pending = setpoint_pending;
+    // It marks ONE shot. The server carries nothing across that shot, so
+    // later ones get what was typed on it, or nothing — while a pending
+    // that waited for a confirmation stuck for the rest of the boot when
+    // the pump's timer ended the blinking (review, 2026-11-15). The
+    // setpoint itself stays unknown until the next confirmed edit.
+    setpoint_pending = false;
     if (have_boiler && (uint32_t)(now_us - last_boiler_us) < BOILER_MAX_AGE_US) {
       mc.boiler_temp_start_dc = last_boiler_dc;
     }
@@ -319,10 +325,9 @@ private:
       if (shown_setpoint_c == INT16_MIN) return;               // still the same blank
       const int16_t v = shown_setpoint_c;
       shown_setpoint_c = INT16_MIN;
-      const bool in_range = v >= SETPOINT_MIN_C && v <= SETPOINT_MAX_C;
+      const bool in_range = inSetpointRange(v);
       const int16_t prev = blinked_setpoint_c;
-      const bool prev_deviant = prev >= SETPOINT_MIN_C && prev <= SETPOINT_MAX_C &&
-                                (int32_t)prev * 10 != last_setpoint_dc;
+      const bool prev_deviant = deviant(prev);
       if (v == prev && in_range) {
         last_setpoint_dc = (int16_t)(v * 10);
         setpoint_pending = false;
@@ -333,7 +338,7 @@ private:
       // boot (review, 2026-11-15); a real new value confirms on its second
       // blink anyway. KNOWN LIMIT: a shot pulled within ~0.4 s of the new
       // value's first blink still gets the old value carried.
-      else if (in_range && (int32_t)v * 10 != last_setpoint_dc && prev_deviant)
+      else if (deviant(v) && prev_deviant)
         // A DIFFERENT value blinked: an edit is under way (or a misread),
         // so the remembered setpoint is no longer known to be the machine's
         // until the new one confirms. Without this a shot pulled in the
@@ -355,8 +360,28 @@ private:
       blinked_setpoint_c = v;
       return;
     }
+    // The pump's TIMER cutting off a run whose latest value was a different
+    // one: the lever was pressed mid-edit, and the new value will never get
+    // to confirm. Pending, so the old value is not stamped as the machine's
+    // (review, 2026-11-15: an edit's first two blinks decode as
+    // TEMPERATURE, so a one-degree edit could reach the lever with a single
+    // SETPOINT blink, and the old value went out as 'display' on every shot
+    // until the next edit). A TEMPERATURE frame ending the run — the normal
+    // end of an edit — leaves a lone different blink ignored: a misread.
+    // KNOWN LIMIT: a lever pressed before the new value has blinked as
+    // SETPOINT even once (~1 s after the press) is not seen.
+    if (r.mode == DisplayBus::Mode::TIMER) {
+      const int16_t latest = shown_setpoint_c != INT16_MIN ? shown_setpoint_c : blinked_setpoint_c;
+      if (deviant(latest)) {
+        last_setpoint_dc = INT16_MIN;
+        setpoint_pending = true;
+      }
+    }
     shown_setpoint_c = blinked_setpoint_c = INT16_MIN;         // anything else breaks the run
   }
+  static bool inSetpointRange(int16_t c) { return c >= SETPOINT_MIN_C && c <= SETPOINT_MAX_C; }
+  // A dialled brew temperature that is not the remembered setpoint.
+  bool deviant(int16_t c) const { return inSetpointRange(c) && (int32_t)c * 10 != last_setpoint_dc; }
   uint32_t last_boiler_us = 0;
   bool     have_boiler = false;
   DisplayBus::Mode last_frame_mode = DisplayBus::Mode::NONE;

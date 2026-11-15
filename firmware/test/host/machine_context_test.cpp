@@ -433,8 +433,10 @@ int main() {
     // An edit during the shot: this shot keeps 93, the next one gets 96.
     blink(96); blink(96);
     assert(m.context().setpoint_dc == 930);
-    // An edit that has not confirmed yet is UNKNOWN, not the old value: one
-    // blink of a different value clears it, the second confirms the new one.
+    // An edit that has not confirmed yet is UNKNOWN, not the old value: two
+    // different blinks that disagree, or the pump's timer cutting off a
+    // different blink, make it pending — for ONE shot — and two equal
+    // blinks confirm the new value. A lone different blink is ignored.
     {
       MachineContextTracker e;
       uint32_t u = 1000000;
@@ -462,10 +464,32 @@ int main() {
       assert(e.context().setpoint_pending);               // not carried onto
       assert(!e.context().setpoint_touched);              // its own flag, not touched
       e.onPourStart(u);
-      assert(e.context().setpoint_pending);               // still pending next shot
-      e.forgetSetpoint();                                 // the tap switched mid-edit
+      assert(!e.context().setpoint_pending);              // one shot only...
+      assert(e.context().setpoint_dc == INT16_MIN);       // ...the setpoint stays unknown
+      // The tap switched mid-edit: still pending.
+      eb(97); eb(98);
+      e.forgetSetpoint();
       e.onPourStart(u);
-      assert(e.context().setpoint_pending);               // stays pending
+      assert(e.context().setpoint_pending);
+      // A one-degree edit: a single SETPOINT blink of the new value, then
+      // the lever — the pump's TIMER cuts the run. Pending, not the old value.
+      eb(96); eb(96);
+      e.onPourStart(u);
+      assert(e.context().setpoint_dc == 960);
+      eb(97);
+      e.onReading(timer(1, u += 41000), false);
+      e.onPourStart(u);
+      assert(e.context().setpoint_dc == INT16_MIN && e.context().setpoint_pending);
+      // The same lone blink ended by TEMPERATURE instead (the normal end of
+      // an edit) is a misread: ignored. And TIMER after a confirmed value
+      // (an ordinary shot) is nothing.
+      eb(96); eb(96);
+      e.onPourStart(u);
+      eb(91);
+      e.onReading(temp(96, u += 41000), false);
+      e.onReading(timer(1, u += 41000), false);
+      e.onPourStart(u);
+      assert(e.context().setpoint_dc == 960 && !e.context().setpoint_pending);
       eb(96); eb(96);
       e.onPourStart(u);
       assert(e.context().setpoint_dc == 960 && !e.context().setpoint_pending);

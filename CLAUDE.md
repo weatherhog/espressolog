@@ -1675,16 +1675,20 @@ claims a live flow tap. **Header format v5** (firmware 0.12.0) added
 last dialled in on the front panel — a value that BLINKED as `SETPOINT`
 twice in a row, 80–130 °C, as it stood at pour start; kept across shots,
 forgotten on a reboot or when the display tap is switched, and not stamped
-while the display is not decoding (`machine_context.h`). Two blinks in a
-row that differ from it and from each other mean an edit is under way: the
-setpoint goes unknown and the record carries the flag `SETPOINT_PENDING`
-(bit 6, its own — not `SETPOINT_TOUCHED`, which would also stop the
-pre-infusion carry), and the server stores no brew temperature on that shot
-and carries none across it (`shot.setpoint_pending`) until a value is
-confirmed or typed. **Known limits:** a single different blink is ignored
-(it is how a misread looks), so a shot pulled within ~0.4 s of a new
-value's first blink still gets the old one carried; pending survives a tap
-switch but not a reboot; an edit made while the bus was unplugged but
+while the display is not decoding (`machine_context.h`). An edit under
+way — two blinks in a row that differ from it and from each other, or the
+pump's timer cutting off a different blink (the lever pressed mid-edit) —
+makes the setpoint unknown until the next confirmed edit, and marks the
+NEXT shot with `SETPOINT_PENDING` (bit 6, its own — not `SETPOINT_TOUCHED`,
+which would also stop the pre-infusion carry). The server stores no brew
+temperature on that shot and carries none across it
+(`shot.setpoint_pending`), so later shots get what was typed on it, or
+nothing. **Known limits:** a lone different blink ended by an ordinary
+temperature frame is ignored (it is how a misread looks); a lever pressed
+before the new value has blinked as `SETPOINT` once (~1 s after the last
+press — an edit's first two blinks decode as TEMPERATURE) still gets the
+old value stamped as `'display'`, on that shot and later ones until the
+next edit; pending survives a tap switch but not a reboot; an edit made while the bus was unplugged but
 `display` stayed on is not seen (forgetting on a quiet bus would also
 forget at every machine power-off); a re-derived run does not reach shots
 that already carried the old value; and a run no `Pr` matches empties

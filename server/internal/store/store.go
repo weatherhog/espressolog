@@ -315,7 +315,9 @@ func defaultRecipe(tx *sql.Tx, epochID any, startedAt time.Time, thisShotEditedA
 	//
 	// Both are schema changes and neither belongs in a deploy that is already
 	// running an irreversible migration. TestRecipeCarryKnownGapOnReversedArrival
-	// documents the case and will start failing the moment it is fixed.
+	// documents the case and will start failing the moment it is fixed. The
+	// same gap applies to setpoint_pending (v5): a pending shot that arrives
+	// after a later one does not unwrite that one's carried temperature.
 	//
 	// STOP AT A RECORDED PARAMETER EDIT, for BOTH values.
 	//

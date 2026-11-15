@@ -1,7 +1,9 @@
--- The flowmeter pulse train from the lever press to first drip (firmware
--- 0.11.0, spool format v4): the pre-infusion phase. shot_sample's
--- inlet_pulses window opens at first drip, so until now every pulse before
--- it — the pump's first run, the pause, the resume — was uncounted.
+-- The flowmeter pulse train from the lever press to pour confirmation
+-- (firmware 0.11.0, spool format v4): the pre-infusion phase. shot_sample's
+-- inlet_pulses window opens at pour confirmation, so until now every pulse
+-- before it — the pump's first run, the pause, the resume — was uncounted.
+-- The two windows meet: pre_pulse_total plus the shot's last inlet_pulses
+-- counts every pulse from the press to the stop.
 --
 -- Stored RAW (invariant 3): one row per pulse, its time in ms after the
 -- press. Pump-on duration, pause length and resume are derived in analysis

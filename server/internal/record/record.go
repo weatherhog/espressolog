@@ -77,14 +77,14 @@ const (
 	headerLenV1 = 109
 	headerLenV2 = 113 // v1 + boiler_temp_start_dc (int16) + machine_timer_dl (uint16)
 	headerLenV3 = 118 // v2 + pump_line (uint8) + pump_lead_ms (uint32)
-	headerLenV4 = 635 // v3 + pre_pulse_total (u16) + flags (u8) + count (u16) + [256]u16
+	headerLenV4 = 123 // v3 + pre_pulse_total (u16) + flags (u8) + count (u16); offsets in a tail
 
 	// PrePulsesNone is pre_pulse_total's "not captured".
 	PrePulsesNone = 0xFFFF
 	// PrePulsesComplete (pre_pulse_flags bit 0): the firmware's pulse log
 	// lost none of the press-to-drip window, so the total is exact.
 	PrePulsesComplete = 0x01
-	// PrePulsesMax is the size of the pre_pulse_ms array on the wire.
+	// PrePulsesMax is the most offsets a v4 tail carries.
 	PrePulsesMax = 256
 	sampleLen    = 10
 
@@ -255,8 +255,7 @@ type Header struct {
 	// tap off.
 	PrePulseTotal uint16
 	PrePulseFlags uint8
-	PrePulseCount uint16
-	PrePulseMs    [PrePulsesMax]uint16
+	PrePulseCount uint16 // offsets in the record's tail, after the samples
 	GramsMg       int32
 	StableMs      uint32
 	SampleCount   uint16
@@ -274,7 +273,15 @@ type Sample struct {
 type Record struct {
 	Header  Header
 	Samples []Sample
+	// v4: the pulse offsets from the record's tail (ms after the press),
+	// PrePulseCount of them, padding dropped. Empty for older records.
+	PrePulseMs []uint16
 }
+
+// preTailBytes is the v4 tail's size for count offsets: whole groups of 5
+// uint16 (10 bytes), padded with 0xFFFF — so a record still ends on a
+// 10-byte boundary after its header, as every format's does.
+func preTailBytes(count int) int { return (count + 4) / 5 * 10 }
 
 func cstr(b []byte) string {
 	if i := bytes.IndexByte(b, 0); i >= 0 {
@@ -309,19 +316,21 @@ func (h *Header) BoilerTempStartC() (int, bool) {
 }
 func (h *Header) Reject() bool { return h.Flags&FlagReject != 0 }
 
-// PrePulses returns the flowmeter pulse train from the lever press to first
-// drip — ms after the press, oldest first — with how many pulses lay in that
-// window in all (more than len(ms) if the firmware's 256-entry array was
-// full) and whether the firmware's pulse log lost none of them. ok is false
-// when not captured (no press, flow tap off, a pre-v4 record) or when the
-// fields are inconsistent, which no firmware writes.
-func (h *Header) PrePulses() (ms []uint16, total int, complete bool, ok bool) {
-	if h.PrePulseTotal == PrePulsesNone || int(h.PrePulseCount) > PrePulsesMax ||
-		h.PrePulseCount > h.PrePulseTotal {
+// PrePulses returns the flowmeter pulse train from the lever press to pour
+// confirmation — ms after the press, oldest first — with how many pulses
+// lay in that window in all (more than len(ms) if the firmware's 256-entry
+// array filled) and whether none of them was lost. ok is false when not
+// captured (no press, flow tap off, a pre-v4 record), when the record does
+// not claim a live flow tap, or when the fields are inconsistent — none of
+// which any firmware writes as a measurement.
+func (r *Record) PrePulses() (ms []uint16, total int, complete bool, ok bool) {
+	h := &r.Header
+	if h.PrePulseTotal == PrePulsesNone || !h.FlowTap() ||
+		int(h.PrePulseCount) > PrePulsesMax || h.PrePulseCount > h.PrePulseTotal ||
+		len(r.PrePulseMs) != int(h.PrePulseCount) {
 		return nil, 0, false, false
 	}
-	return h.PrePulseMs[:h.PrePulseCount], int(h.PrePulseTotal),
-		h.PrePulseFlags&PrePulsesComplete != 0, true
+	return r.PrePulseMs, int(h.PrePulseTotal), h.PrePulseFlags&PrePulsesComplete != 0, true
 }
 
 // PumpLeadMaxMs mirrors the firmware's PUMP_LEAD_MAX_MS window: a lead
@@ -449,9 +458,17 @@ func Decode(raw []byte) (*Record, error) {
 	if int(h.HeaderLen) != hLen {
 		return nil, fmt.Errorf("unexpected header length %d for v%d", h.HeaderLen, version)
 	}
-	want := hLen + int(h.SampleCount)*sampleLen
+	tail := 0
+	if version >= 4 {
+		if int(h.PrePulseCount) > PrePulsesMax {
+			return nil, fmt.Errorf("pre_pulse_count %d exceeds %d", h.PrePulseCount, PrePulsesMax)
+		}
+		tail = preTailBytes(int(h.PrePulseCount))
+	}
+	want := hLen + int(h.SampleCount)*sampleLen + tail
 	if len(raw) != want {
-		return nil, fmt.Errorf("length mismatch: %d bytes for %d samples (want %d)", len(raw), h.SampleCount, want)
+		return nil, fmt.Errorf("length mismatch: %d bytes for %d samples and %d pulse offsets (want %d)",
+			len(raw), h.SampleCount, h.PrePulseCount, want)
 	}
 
 	crcInput := make([]byte, len(raw))
@@ -468,6 +485,13 @@ func Decode(raw []byte) (*Record, error) {
 	if h.SampleCount > 0 {
 		if err := binary.Read(bytes.NewReader(raw[hLen:]), binary.LittleEndian, &r.Samples); err != nil {
 			return nil, fmt.Errorf("samples: %w", err)
+		}
+	}
+	if tail > 0 {
+		off := hLen + int(h.SampleCount)*sampleLen
+		r.PrePulseMs = make([]uint16, h.PrePulseCount)
+		for i := range r.PrePulseMs {
+			r.PrePulseMs[i] = binary.LittleEndian.Uint16(raw[off+2*i:])
 		}
 	}
 	return r, nil

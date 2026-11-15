@@ -134,7 +134,17 @@ public:
   // in this file hid.
   void onPourStart(uint32_t now_us) {
     uint16_t timer_carry = mc.machine_timer_dl;
-    mc = MachineContext{};
+    // Field by field, not `mc = MachineContext{}`: that builds a ~530-byte
+    // temporary on the loop task's 8 KB stack in the middle of the sample
+    // drain (review, 2026-11-15). pre_pulse_ms needs no clearing — only
+    // pre_pulse_count entries of it are ever read.
+    mc.boiler_temp_start_dc = INT16_MIN;
+    mc.setpoint_touched     = false;
+    mc.pump_line            = PUMP_NONE;
+    mc.pump_lead_ms         = PUMP_LEAD_NONE;
+    mc.pre_pulse_total      = PRE_PULSES_NONE;
+    mc.pre_pulse_flags      = 0;
+    mc.pre_pulse_count      = 0;
     mc.machine_timer_dl = timer_carry;
     if (have_boiler && (uint32_t)(now_us - last_boiler_us) < BOILER_MAX_AGE_US) {
       mc.boiler_temp_start_dc = last_boiler_dc;
@@ -198,17 +208,22 @@ public:
     if (mc.pump_line == PUMP_NONE) resolvePump(t0_ms);
   }
 
-  // Copy the pulses between this shot's press and t=0 out of the log. Call
-  // at pour start after resolvePump() — the log holds ~22 s, so this is when
-  // they are surely still there — and again at completion only if pour start
-  // found no press (resolvePumpIfUnknown()), when they may already be gone:
-  // then the COMPLETE flag says so. Does nothing without a press, so the
+  // Copy the pulses from this shot's press to end_ms out of the log, as ms
+  // after the press. Call at pour start after resolvePump(), with end_ms =
+  // millis() then: that is when beginPour() takes inlet_pulses' base, so the
+  // two windows meet and pre_pulse_total + the last inlet_pulses counts the
+  // press to stop with no pulse in neither (until review 2026-11-15 this
+  // window ended at the backdated t=0, ~300 ms earlier, and ~7 pulses fell
+  // between). The log holds ~22 s, so the pulses are surely still there.
+  // Called again at completion only if pour start found no press
+  // (resolvePumpIfUnknown()), with end_ms = t=0: they may be gone by then,
+  // and the COMPLETE flag says so. Does nothing without a press, so the
   // record says "not captured" rather than "no pulses".
-  void capturePrePulses(const PulseLog& log, uint32_t t0_ms) {
+  void capturePrePulses(const PulseLog& log, uint32_t t0_ms, uint32_t end_ms) {
     if (mc.pump_line == PUMP_NONE || mc.pump_lead_ms == PUMP_LEAD_NONE) return;
     bool complete = false;
     uint16_t copied = 0;
-    uint16_t total = log.extract(t0_ms - mc.pump_lead_ms, t0_ms, mc.pre_pulse_ms,
+    uint16_t total = log.extract(t0_ms - mc.pump_lead_ms, end_ms, mc.pre_pulse_ms,
                                  PRE_PULSES_MAX, &copied, &complete);
     mc.pre_pulse_total = total >= PRE_PULSES_NONE ? (uint16_t)(PRE_PULSES_NONE - 1) : total;
     mc.pre_pulse_count = copied;

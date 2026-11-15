@@ -23,14 +23,28 @@ public:
     if (count < N) count++;
   }
 
-  void clear() { head = count = 0; }
+  // The log was emptied at now_ms (flow re-enabled): pulses before it are
+  // gone, and a window reaching back past it is incomplete.
+  void clear(uint32_t now_ms) {
+    head = count = 0;
+    markGap(now_ms);
+  }
+
+  // Pulses were lost upstream (the ISR's ring overflowed) and noticed at
+  // now_ms. Any window that has not ended by then may be missing some.
+  void markGap(uint32_t now_ms) {
+    gap_ms = now_ms;
+    have_gap = true;
+  }
 
   // Copies the pulses in [from_ms, to_ms] into out[] as offsets from from_ms,
   // oldest first, at most max_out of them. Returns how many pulses lay in the
-  // window in all — more than were copied if max_out was too small. If the
-  // ring may have lost pulses from the start of the window (it is full and
-  // its oldest entry is already inside it), `complete` is set false: the
-  // total is then a lower bound. Offsets saturate at 65535 ms; callers keep
+  // window in all — more than were copied if max_out was too small.
+  // `complete` is false when pulses in the window may be missing, so the
+  // total is only a lower bound: the ring is full and its oldest entry is
+  // not before the window (it has overwritten the start of it — or all of
+  // it, review 2026-11-15), or a gap (clear(), markGap()) was recorded at or
+  // after the window opened. Offsets saturate at 65535 ms; callers keep
   // windows shorter than that.
   uint16_t extract(uint32_t from_ms, uint32_t to_ms, uint16_t* out, uint16_t max_out,
                    uint16_t* copied, bool* complete) const {
@@ -45,9 +59,13 @@ public:
       if (n < max_out) out[n++] = off > 0xFFFF ? 0xFFFF : (uint16_t)off;
     }
     *copied = n;
-    // Full ring whose oldest pulse is already inside the window: anything
-    // older than that, also inside the window, has been overwritten.
-    *complete = !(count == N && (uint32_t)(ring[oldest] - from_ms) <= span);
+    // A full ring whose oldest entry is at or after from_ms has overwritten
+    // whatever lay between from_ms and it. (Until 2026-11-15 this only
+    // caught an oldest entry INSIDE the window, so a window overwritten
+    // entirely read "complete, 0 pulses".)
+    const bool overwritten = count == N && (int32_t)(ring[oldest] - from_ms) >= 0;
+    const bool gapped = have_gap && (int32_t)(gap_ms - from_ms) >= 0;
+    *complete = !overwritten && !gapped;
     return total;
   }
 
@@ -55,4 +73,6 @@ private:
   uint32_t ring[N] = {};
   uint16_t head = 0;
   uint16_t count = 0;
+  uint32_t gap_ms = 0;
+  bool     have_gap = false;
 };

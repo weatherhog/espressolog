@@ -269,7 +269,8 @@ int main() {
     printf("completion fallback fills a late press, keeps a found one OK\n");
   }
 
-  // 15. Pre-drip pulses (v4): captured for the press's window only, and
+  // 15. Pre-drip pulses (v4) — numbered 15, placed here beside the other
+  //     pump-start cases: captured for the press's window only, and
   //     "not captured" — not zero — when there was no press.
   {
     PulseLog log;
@@ -280,7 +281,7 @@ int main() {
     m.onPumpPress(PUMP_2CUP, 100000);
     m.onPourStart(1);
     m.resolvePump(108000);
-    m.capturePrePulses(log, 108000);
+    m.capturePrePulses(log, 108000, 108000);
     const MachineContext& c = m.context();
     assert(m.prePulsesCaptured());
     assert(c.pre_pulse_total == 19 + 61 && c.pre_pulse_count == c.pre_pulse_total);
@@ -290,11 +291,23 @@ int main() {
     MachineContextTracker n;                       // no press: not captured
     n.onPourStart(1);
     n.resolvePump(108000);
-    n.capturePrePulses(log, 108000);
+    n.capturePrePulses(log, 108000, 108000);
     assert(!n.prePulsesCaptured() && n.context().pre_pulse_count == 0);
+
+    // The window ends where inlet_pulses starts (pour confirmation, ~300 ms
+    // after the backdated t=0), so pulses in between are not in neither.
+    log.push(108100);
+    log.push(108250);
+    MachineContextTracker e;
+    e.onPumpPress(PUMP_2CUP, 100000);
+    e.onPourStart(1);
+    e.resolvePump(108000);
+    e.capturePrePulses(log, 108000, 108300);       // confirmed at 108300
+    assert(e.context().pre_pulse_total == 19 + 61 + 2);
 
     m.onPourStart(1);                              // the next shot starts clean
     assert(!m.prePulsesCaptured() && m.context().pre_pulse_count == 0);
+    assert(m.context().pump_line == PUMP_NONE && m.context().boiler_temp_start_dc == INT16_MIN);
     printf("pre-drip pulses: the press's window, or 'not captured' OK\n");
   }
 

@@ -83,15 +83,17 @@ void Spool::fillCommon(spool_header_t& h, uint8_t record_type, uint32_t started_
   strlcpy(h.firmware_version, FIRMWARE_VERSION, sizeof(h.firmware_version));
 }
 
-String Spool::writeFile(char kind, const spool_header_t& h, const sample_t* samples) {
+String Spool::writeFile(char kind, const spool_header_t& h, const sample_t* samples,
+                        const uint8_t* tail, size_t tail_len) {
   char name[48];
   snprintf(name, sizeof(name), "%s/%c-%08lx-%04lu.bin", DIR, kind,
            (unsigned long)h.boot_id, (unsigned long)h.seq);
   File f = LittleFS.open(name, "w");
   if (!f) { Serial.printf("# spool: open failed: %s\n", name); return ""; }
-  size_t want = sizeof(h) + (size_t)h.sample_count * sizeof(sample_t);
+  size_t want = sizeof(h) + (size_t)h.sample_count * sizeof(sample_t) + tail_len;
   size_t ok = f.write((const uint8_t*)&h, sizeof(h));
   if (h.sample_count) ok += f.write((const uint8_t*)samples, (size_t)h.sample_count * sizeof(sample_t));
+  if (tail_len) ok += f.write(tail, tail_len);
   f.close();
   if (ok != want) {
     Serial.printf("# spool: short write, removing %s\n", name);
@@ -122,8 +124,13 @@ String Spool::writeShot(const ShotResult& r, const String& scale_mac,
   h.pump_lead_ms         = mc.pump_lead_ms;
   h.pre_pulse_total      = mc.pre_pulse_total;
   h.pre_pulse_flags      = mc.pre_pulse_flags;
-  h.pre_pulse_count      = mc.pre_pulse_count;
-  memcpy(h.pre_pulse_ms, mc.pre_pulse_ms, sizeof(h.pre_pulse_ms));
+  h.pre_pulse_count      = mc.pre_pulse_count > PRE_PULSES_MAX ? PRE_PULSES_MAX : mc.pre_pulse_count;
+  // The tail: the offsets, then 0xFFFF padding to a whole 10 bytes. Static,
+  // not on the loop task's stack. Little-endian, like every other field.
+  static uint16_t tail[PRE_PULSES_MAX + 4];
+  size_t tail_len = SPOOL_PRE_TAIL_BYTES(h.pre_pulse_count);
+  for (size_t i = 0; i < tail_len / 2; i++)
+    tail[i] = i < h.pre_pulse_count ? mc.pre_pulse_ms[i] : 0xFFFF;
   h.stop_ms = r.stop_ms;
   h.yield_at_stop_mg = r.yield_at_stop_mg;
   h.yield_final_mg = r.yield_final_mg;
@@ -137,9 +144,10 @@ String Spool::writeShot(const ShotResult& r, const String& scale_mac,
   h.crc32 = 0;
   uint32_t crc = esp_rom_crc32_le(0, (const uint8_t*)&h, sizeof(h));
   crc = esp_rom_crc32_le(crc, (const uint8_t*)r.samples, (size_t)r.sample_count * sizeof(sample_t));
+  crc = esp_rom_crc32_le(crc, (const uint8_t*)tail, tail_len);
   h.crc32 = crc;
 
-  return writeFile('s', h, r.samples);
+  return writeFile('s', h, r.samples, (const uint8_t*)tail, tail_len);
 }
 
 String Spool::writeWeighing(uint8_t role, const WeighingDetector::Event& ev, const String& scale_mac) {
@@ -264,6 +272,15 @@ bool Spool::dump(const String& name, Stream& out) {
     if (f.read((uint8_t*)&s, sizeof(s)) != sizeof(s)) { out.println("# TRUNCATED FILE"); break; }
     crc = esp_rom_crc32_le(crc, (const uint8_t*)&s, sizeof(s));
     out.printf("%u,%ld\n", s.t_ms, (long)s.weight_mg);
+  }
+  // v4's pulse tail, after the samples: covered by the crc, listed here.
+  size_t tail_len = SPOOL_PRE_TAIL_BYTES(h.pre_pulse_count);
+  if (tail_len) out.println("# pre_pulse_ms");
+  for (size_t i = 0; i < tail_len / 2; i++) {
+    uint16_t ms;
+    if (f.read((uint8_t*)&ms, sizeof(ms)) != sizeof(ms)) { out.println("# TRUNCATED TAIL"); break; }
+    crc = esp_rom_crc32_le(crc, (const uint8_t*)&ms, sizeof(ms));
+    if (i < h.pre_pulse_count) out.printf("%u\n", ms);
   }
   f.close();
   out.printf("# crc %s\n", crc == h.crc32 ? "ok" : "MISMATCH");

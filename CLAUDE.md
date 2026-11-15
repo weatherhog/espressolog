@@ -1638,11 +1638,16 @@ first data in this system that neither a scale measured nor a human typed:
 bit. Header 109 → 113 bytes. **Header format v3** (firmware 0.10.0,
 2026-11-14) added `pump_line` and `pump_lead_ms` after `machine_timer_dl`,
 113 → 118 bytes. **Header format v4** (firmware 0.11.0, 2026-11-15) added
-the flowmeter pulse train from that press to first drip — up to 256 pulse
-times in ms after the press, plus the total and a completeness flag — as a
-FIXED 517-byte block before the crc, 118 → 635 bytes; the server stores it
-raw in `shot_pre_pulse` (migration 011), with `shot.pre_pulse_total` NULL
-for "not captured". **The server decodes v1 to v4** — older records
+the flowmeter pulse train from that press to pour confirmation (where
+`inlet_pulses` starts, so the two meet): `pre_pulse_total`, a completeness
+flag and a count in the header (118 → 123 bytes), and up to 256 offsets in
+ms after the press as a **tail after the samples**, padded with 0xFFFF to a
+multiple of 10 bytes so every format still ends on a 10-byte boundary after
+its header. *(A fixed 512-byte array in the header was tried first; it
+would have pushed every weighing record out of LittleFS's inline storage.)*
+The server stores the offsets raw in `shot_pre_pulse` (migration 011), with
+`shot.pre_pulse_total` NULL for "not captured" — only for a record that
+claims a live flow tap. **The server decodes v1 to v4** — older records
 exist spooled and as fixtures, and losing one to a format bump would violate
 invariant 6. An older record reports the newer fields as "the machine did
 not say", which is the same thing a current record written with the display

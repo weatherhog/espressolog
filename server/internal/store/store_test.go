@@ -538,7 +538,7 @@ func v2BuildRecord(t *testing.T, boilerDc int16, timerDl uint16, touched bool) (
 	t.Helper()
 	h := record.Header{
 		Magic: record.Magic, FormatVersion: 4, RecordType: record.TypeShot,
-		HeaderLen: 635, BootID: 0xfeed0001, Seq: 1,
+		HeaderLen: 123, BootID: 0xfeed0001, Seq: 1,
 		PumpLine: record.PumpNone, PumpLeadMs: record.PumpLeadNone,
 		PrePulseTotal:   record.PrePulsesNone,
 		StartedAtUnixMs: uint64(time.Now().UnixMilli()), TimeValid: 1,
@@ -564,10 +564,10 @@ func v2BuildRecord(t *testing.T, boilerDc int16, timerDl uint16, touched bool) (
 		t.Fatal(err)
 	}
 	raw := buf.Bytes()
-	for i := 635 - 4; i < 635; i++ {
+	for i := 123 - 4; i < 123; i++ {
 		raw[i] = 0
 	}
-	binary.LittleEndian.PutUint32(raw[635-4:], crc32.ChecksumIEEE(raw))
+	binary.LittleEndian.PutUint32(raw[123-4:], crc32.ChecksumIEEE(raw))
 
 	rec, err := record.Decode(raw)
 	if err != nil {
@@ -668,7 +668,7 @@ func v2BuildFlowRecord(t *testing.T, seq uint32, flowTap bool, n int) ([]byte, *
 	t.Helper()
 	h := record.Header{
 		Magic: record.Magic, FormatVersion: 4, RecordType: record.TypeShot,
-		HeaderLen: 635, BootID: 0xfeed0002, Seq: seq,
+		HeaderLen: 123, BootID: 0xfeed0002, Seq: seq,
 		PumpLine: record.PumpNone, PumpLeadMs: record.PumpLeadNone,
 		PrePulseTotal:   record.PrePulsesNone,
 		StartedAtUnixMs: uint64(time.Now().UnixMilli()), TimeValid: 1,
@@ -708,10 +708,10 @@ func v2BuildFlowRecord(t *testing.T, seq uint32, flowTap bool, n int) ([]byte, *
 		t.Fatal(err)
 	}
 	raw := buf.Bytes()
-	for i := 635 - 4; i < 635; i++ {
+	for i := 123 - 4; i < 123; i++ {
 		raw[i] = 0
 	}
-	binary.LittleEndian.PutUint32(raw[635-4:], crc32.ChecksumIEEE(raw))
+	binary.LittleEndian.PutUint32(raw[123-4:], crc32.ChecksumIEEE(raw))
 
 	rec, err := record.Decode(raw)
 	if err != nil {
@@ -800,15 +800,16 @@ func TestIngestFlowPulsesRejectsV1Flag(t *testing.T) {
 // pumpRecord builds a v3 shot record carrying a lever press (0c).
 func pumpRecord(t *testing.T, seq uint32, line uint8, leadMs uint32) ([]byte, *record.Record) {
 	t.Helper()
-	return pumpRecordWith(t, seq, line, leadMs, nil)
+	return pumpRecordWith(t, seq, line, leadMs, nil, nil)
 }
 
-// pumpRecordWith is pumpRecord with a hook on the header before encoding.
-func pumpRecordWith(t *testing.T, seq uint32, line uint8, leadMs uint32, mutate func(*record.Header)) ([]byte, *record.Record) {
+// pumpRecordWith is pumpRecord with a hook on the header before encoding
+// and the v4 pulse offsets to put in the record's tail.
+func pumpRecordWith(t *testing.T, seq uint32, line uint8, leadMs uint32, mutate func(*record.Header), offsets []uint16) ([]byte, *record.Record) {
 	t.Helper()
 	h := record.Header{
 		Magic: record.Magic, FormatVersion: 4, RecordType: record.TypeShot,
-		HeaderLen: 635, BootID: 0xfeed0003, Seq: seq,
+		HeaderLen: 123, BootID: 0xfeed0003, Seq: seq,
 		StartedAtUnixMs: uint64(time.Now().UnixMilli()) + uint64(seq), TimeValid: 1,
 		StopMs: 21000, YieldAtStopMg: 35800, YieldFinalMg: 36000,
 		PeakFlowMgps: 2100, MeanFlowMgps: 1710,
@@ -819,7 +820,7 @@ func pumpRecordWith(t *testing.T, seq uint32, line uint8, leadMs uint32, mutate 
 		SampleCount:   1,
 	}
 	copy(h.DetectorVersion[:], "0a.6")
-	copy(h.FirmwareVersion[:], "0.10.0")
+	copy(h.FirmwareVersion[:], "0.11.0")
 	if mutate != nil {
 		mutate(&h)
 	}
@@ -832,8 +833,18 @@ func pumpRecordWith(t *testing.T, seq uint32, line uint8, leadMs uint32, mutate 
 	}); err != nil {
 		t.Fatal(err)
 	}
+	if len(offsets) > 0 {
+		tail := make([]uint16, (len(offsets)+4)/5*5)
+		for k := range tail {
+			tail[k] = 0xFFFF
+		}
+		copy(tail, offsets)
+		if err := binary.Write(&buf, binary.LittleEndian, tail); err != nil {
+			t.Fatal(err)
+		}
+	}
 	raw := buf.Bytes()
-	binary.LittleEndian.PutUint32(raw[635-4:], crc32.ChecksumIEEE(raw))
+	binary.LittleEndian.PutUint32(raw[123-4:], crc32.ChecksumIEEE(raw))
 	rec, err := record.Decode(raw)
 	if err != nil {
 		t.Fatalf("built record does not decode: %v", err)
@@ -979,12 +990,15 @@ func TestIngestV2RecordStillWorks(t *testing.T) {
 	}
 	var timer sql.NullFloat64
 	var dir sql.NullString
-	var drip, line sql.NullInt64
+	var drip, line, preTotal sql.NullInt64
 	var pour sql.NullFloat64
 	if err := st.db.QueryRow(
-		`SELECT machine_timer_s, switch_direction, first_drip_ms, pump_line, pour_s FROM v_shot WHERE id = ?`,
-		res.ShotID).Scan(&timer, &dir, &drip, &line, &pour); err != nil {
+		`SELECT machine_timer_s, switch_direction, first_drip_ms, pump_line, pour_s, pre_pulse_total FROM v_shot WHERE id = ?`,
+		res.ShotID).Scan(&timer, &dir, &drip, &line, &pour, &preTotal); err != nil {
 		t.Fatal(err)
+	}
+	if preTotal.Valid {
+		t.Errorf("v2 record stored pre_pulse_total = %d, want NULL (not captured, not zero)", preTotal.Int64)
 	}
 	if !timer.Valid || timer.Float64 != 21.0 {
 		t.Errorf("v2 machine_timer_s = %v, want 21.0", timer)
@@ -1015,11 +1029,11 @@ func TestIngestPrePulses(t *testing.T) {
 		raw, rec := pumpRecordWith(t, uint32(100+i), record.Pump2Cup, 8200, func(h *record.Header) {
 			h.PrePulseTotal = c.total
 			h.PrePulseCount = uint16(len(c.ms))
-			copy(h.PrePulseMs[:], c.ms)
+			h.Flags |= record.FlagFlowTap
 			if c.complete {
 				h.PrePulseFlags = record.PrePulsesComplete
 			}
-		})
+		}, c.ms)
 		res, err := st.Ingest("aa:bb:cc:dd:ee:03", rec, raw, time.Now())
 		if err != nil {
 			t.Fatalf("%s: %v", c.name, err)

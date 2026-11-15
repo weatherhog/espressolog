@@ -67,9 +67,37 @@ int main() {
     uint16_t out[8], copied; bool complete;
     assert(p.extract(1000, 2000, out, 8, &copied, &complete) == 0 && copied == 0 && complete);
     p.push(1500);
-    p.clear();
+    p.clear(1600);
     assert(p.extract(1000, 2000, out, 8, &copied, &complete) == 0);
+    assert(!complete);                   // the clear fell inside the window
     printf("5. empty window and clear OK\n");
+  }
+
+  // 6. The whole window overwritten — the ring's oldest entry is AFTER the
+  //    window (a capture made long after first drip). Reproduced by review
+  //    2026-11-15: it read "complete, 0 pulses".
+  {
+    PulseLog p;
+    for (uint32_t i = 0; i < 600; i++) p.push(114700 + i * 40);
+    uint16_t out[8], copied; bool complete;
+    uint16_t total = p.extract(100000, 100250, out, 8, &copied, &complete);
+    assert(total == 0 && !complete);
+    printf("6. a window overwritten entirely is incomplete OK\n");
+  }
+
+  // 7. Pulses lost upstream (ISR ring overflow) after the window opened make
+  //    it incomplete; a gap before the window does not.
+  {
+    PulseLog p;
+    for (uint32_t t = 1000; t < 2000; t += 50) p.push(t);
+    p.markGap(900);
+    uint16_t out[64], copied; bool complete;
+    p.extract(1000, 2000, out, 64, &copied, &complete);
+    assert(complete);
+    p.markGap(1500);
+    p.extract(1000, 2000, out, 64, &copied, &complete);
+    assert(!complete);
+    printf("7. an upstream gap inside the window is incomplete OK\n");
   }
 
   printf("\nall pulse log tests passed\n");

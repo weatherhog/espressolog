@@ -338,7 +338,7 @@ static void flowSetEnabled(bool on) {
     // "NEVER" again — the one message that identifies a dead, freshly-refitted
     // J4. flow_dropped is cleared for the same reason.
     flow.resetDiagnostics();
-    pulse_log.clear();   // pulses from before a re-enable describe another tap state
+    pulse_log.clear(millis());   // pulses before a re-enable describe another tap state
     flow_dropped = 0;
     flow_ever = false;
     attachInterrupt(digitalPinToInterrupt(FLOW_PIN), flowIsr, FALLING);
@@ -381,6 +381,14 @@ static void switchesSetEnabled(bool on) {
 // claimed the staircase was the thing being fixed, which overstated it.
 static void pollFlow() {
   if (!flow_on) return;
+  // The ISR's ring overflowed since the last drain: pulses were lost before
+  // they could reach the log, so a pre-drip window open now is incomplete.
+  static uint32_t dropped_seen = 0;
+  uint32_t dropped_now = flow_dropped;
+  if (dropped_now != dropped_seen) {
+    dropped_seen = dropped_now;
+    if (dropped_now != 0) pulse_log.markGap(millis());
+  }
   while (flow_tail != flow_head) {
     uint32_t t_us = flow_ring[flow_tail];
     flow_tail = (uint16_t)((flow_tail + 1) % FLOW_RING);
@@ -724,7 +732,7 @@ static void handleShotComplete(const ShotResult& r) {
     // press was confirmed after the POURING transition.
     machine_ctx.resolvePumpIfUnknown(r.started_at_ms);
     if (flow_tap_shot && !machine_ctx.prePulsesCaptured())
-      machine_ctx.capturePrePulses(pulse_log, r.started_at_ms);
+      machine_ctx.capturePrePulses(pulse_log, r.started_at_ms, r.started_at_ms);
     String path = spool.writeShot(r, scales.slotMac(ScaleRole::YIELD),
                                   machine_ctx.context(), flow_tap_shot);
     if (path.length()) Serial.printf("# spooled %s%s\n", path.c_str(), r.valid ? "" : " (reject)");
@@ -1123,7 +1131,8 @@ void loop() {
         flow_tap_shot = flow_on;
         // And the pulses between the press and first drip, while the log
         // surely still holds them (spool v4).
-        if (flow_tap_shot) machine_ctx.capturePrePulses(pulse_log, detector.result().started_at_ms);
+        if (flow_tap_shot)
+          machine_ctx.capturePrePulses(pulse_log, detector.result().started_at_ms, millis());
         // The bus latch is per-boot; a new shot starts with a clean slate,
         // otherwise one tweak at the start of a session condemns every
         // shot after it.

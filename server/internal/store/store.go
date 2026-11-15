@@ -128,7 +128,7 @@ func (s *Store) Ingest(deviceID string, r *record.Record, raw []byte, receivedAt
 
 	switch h.RecordType {
 	case record.TypeShot:
-		res.ShotID, err = insertShot(tx, h, r.Samples, scaleID, startedAt, now)
+		res.ShotID, err = insertShot(tx, r, scaleID, startedAt, now)
 		if err == nil {
 			err = attributeDoseToShot(tx, res.ShotID, startedAt)
 		}
@@ -401,7 +401,8 @@ func staleFloor(startedAt time.Time) string {
 	return startedAt.UTC().Add(-recipeMaxAge).Format(time.RFC3339)
 }
 
-func insertShot(tx *sql.Tx, h *record.Header, samples []record.Sample, scaleID any, startedAt time.Time, now string) (int64, error) {
+func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time, now string) (int64, error) {
+	h, samples := &rec.Header, rec.Samples
 	var stoppedBy, excludeReason any
 	excluded := 0
 	if h.Fault() {
@@ -448,10 +449,12 @@ func insertShot(tx *sql.Tx, h *record.Header, samples []record.Sample, scaleID a
 	// pump_line keeps the RAW byte for every v3 record (invariant 3), so a
 	// hot-water draw and a value no firmware writes stay distinguishable even
 	// though both leave switch_direction NULL.
-	// Format v4: the pulse train from the press to first drip. NULL total
-	// means "not captured", which is not the same fact as 0 pulses.
+	// Format v4: the pulse train from the press to pour confirmation. NULL
+	// total means "not captured", which is not the same fact as 0 pulses;
+	// PrePulses() also refuses it unless the record claims a live flow tap,
+	// the same gate inlet_pulses has below.
 	var prePulseTotal, prePulseComplete any
-	preMs, preTotal, preComplete, preOK := h.PrePulses()
+	preMs, preTotal, preComplete, preOK := rec.PrePulses()
 	if preOK {
 		prePulseTotal = preTotal
 		prePulseComplete = boolToInt(preComplete)

@@ -172,6 +172,16 @@ public:
     }
   }
 
+  // Call when the shot completes. If pour start found no press, look again:
+  // the poller drains after the scale samples in loop(), so a press whose
+  // first drip came within ~300 ms (or during a slow loop) is confirmed —
+  // backdated to its edge, before t=0 — only after the POURING transition.
+  // A press already found at pour start is kept; this only fills a gap.
+  // (Resolving solely at pour start lost that case: review, 2026-11-15.)
+  void resolvePumpIfUnknown(uint32_t t0_ms) {
+    if (mc.pump_line == PUMP_NONE) resolvePump(t0_ms);
+  }
+
   // Switch sensing turned off or back on: remembered presses describe a
   // tap state that may no longer hold, so forget them.
   void clearPresses() { press_head = press_count = 0; }

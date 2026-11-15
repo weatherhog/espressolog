@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"espressolog/internal/record"
+	"hash/crc32"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -164,19 +165,34 @@ func TestUndecodableRecordIs422AndMarked(t *testing.T) {
 // retryable status, so the device keeps it until the server catches up.
 func TestNewerFormatRecordIsRetryable(t *testing.T) {
 	h := newTestHandler(t)
-	raw := make([]byte, 200)
-	binary.LittleEndian.PutUint32(raw[0:4], record.Magic)
-	raw[4] = record.FormatVersion + 1 // one version ahead
-	raw[5] = record.TypeShot
-	binary.LittleEndian.PutUint16(raw[6:8], 130) // a plausible longer header
-	w := do(t, h, "POST", "/api/v1/ingest", raw)
+	// A well-formed record one version ahead: a 130-byte header ending in a
+	// crc32 over the record, then two 10-byte samples.
+	const hl = 130
+	newer := func(version uint8) []byte {
+		raw := make([]byte, hl+2*10)
+		binary.LittleEndian.PutUint32(raw[0:4], record.Magic)
+		raw[4] = version
+		raw[5] = record.TypeShot
+		binary.LittleEndian.PutUint16(raw[6:8], hl)
+		binary.LittleEndian.PutUint32(raw[hl-4:hl], crc32.ChecksumIEEE(raw))
+		return raw
+	}
+	w := do(t, h, "POST", "/api/v1/ingest", newer(record.FormatVersion+1))
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("newer-format record returned %d, want 503", w.Code)
 	}
 
+	// The same record with its CRC broken is corruption, not a newer
+	// firmware: it must get the 422 the device quarantines, or a single
+	// flipped version bit (3 -> 7) would stall the upload queue for ever.
+	bad := newer(record.FormatVersion + 4)
+	bad[hl+3] ^= 0x01
+	if w := do(t, h, "POST", "/api/v1/ingest", bad); w.Code != http.StatusUnprocessableEntity {
+		t.Errorf("newer version with a bad CRC returned %d, want 422", w.Code)
+	}
+
 	// A garbage version byte is still corruption, still a verdict.
-	raw[4] = 200
-	if w := do(t, h, "POST", "/api/v1/ingest", raw); w.Code != http.StatusUnprocessableEntity {
+	if w := do(t, h, "POST", "/api/v1/ingest", newer(200)); w.Code != http.StatusUnprocessableEntity {
 		t.Errorf("version 200 returned %d, want 422", w.Code)
 	}
 }

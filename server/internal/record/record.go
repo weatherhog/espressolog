@@ -24,6 +24,31 @@ var ErrNewerFormat = errors.New("record format newer than this server")
 // corrupt version byte of 200 is not a future firmware.
 const maxPlausibleFormat = 16
 
+// newerLooksIntact says whether a record in an unknown (newer) format is
+// nonetheless intact, using only what every version shares: the 8-byte
+// prelude's header_len, a crc32 as the header's LAST field, and 10-byte
+// samples after it. Without this, one flipped bit in a v3 record's version
+// byte (3 -> 7 or 11) made a CORRUPT record retryable for ever, and since the
+// device uploads oldest-first it would stall every shot behind it (review,
+// 2026-11-15). A record that fails this is corruption, and gets the 422 the
+// device quarantines.
+func newerLooksIntact(raw []byte) bool {
+	if len(raw) < 8 {
+		return false
+	}
+	hl := int(binary.LittleEndian.Uint16(raw[6:8]))
+	if hl < headerLenV1 || len(raw) < hl || (len(raw)-hl)%sampleLen != 0 {
+		return false
+	}
+	want := binary.LittleEndian.Uint32(raw[hl-4 : hl])
+	c := make([]byte, len(raw))
+	copy(c, raw)
+	for i := hl - 4; i < hl; i++ {
+		c[i] = 0
+	}
+	return crc32.ChecksumIEEE(c) == want
+}
+
 const (
 	Magic = 0x4C505345 // 'ESPL'
 	// FormatVersion is what the firmware writes TODAY. Decode accepts every
@@ -258,11 +283,8 @@ func Decode(raw []byte) (*Record, error) {
 	version := raw[4]
 	hLen, ok := headerLens[version]
 	if !ok {
-		if version > FormatVersion && version <= maxPlausibleFormat && len(raw) >= 8 {
-			declared := int(binary.LittleEndian.Uint16(raw[6:8]))
-			if declared >= headerLenV1 && len(raw) >= declared {
-				return nil, fmt.Errorf("%w: version %d", ErrNewerFormat, version)
-			}
+		if version > FormatVersion && version <= maxPlausibleFormat && newerLooksIntact(raw) {
+			return nil, fmt.Errorf("%w: version %d", ErrNewerFormat, version)
 		}
 		return nil, fmt.Errorf("unsupported format version %d", version)
 	}

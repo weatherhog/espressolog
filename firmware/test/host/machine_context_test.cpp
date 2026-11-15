@@ -245,6 +245,30 @@ int main() {
     printf("pump start fixed at pour start survives later presses OK\n");
   }
 
+  // 14. A press confirmed only AFTER the POURING transition (first drip
+  //     within ~300 ms of it, or a slow loop): pour start finds nothing, and
+  //     the completion-time fallback picks it up. A press already found at
+  //     pour start is not replaced by the fallback.
+  {
+    MachineContextTracker m;
+    m.onPourStart(1);
+    m.resolvePump(100200);                         // pour start: no press yet
+    assert(m.context().pump_line == PUMP_NONE);
+    m.onPumpPress(PUMP_1CUP, 100000);              // confirmed late, backdated
+    m.onPumpPress(PUMP_1CUP, 125000);              // and the stop press
+    m.resolvePumpIfUnknown(100200);                // at completion
+    assert(m.context().pump_line == PUMP_1CUP && m.context().pump_lead_ms == 200);
+
+    MachineContextTracker k;
+    k.onPumpPress(PUMP_2CUP, 100000);
+    k.onPourStart(1);
+    k.resolvePump(108000);                         // found at pour start
+    k.onPumpPress(PUMP_1CUP, 107000);              // a late-confirmed other press
+    k.resolvePumpIfUnknown(108000);
+    assert(k.context().pump_line == PUMP_2CUP && k.context().pump_lead_ms == 8000);
+    printf("completion fallback fills a late press, keeps a found one OK\n");
+  }
+
   // 12. The line mapping: lever A's two directions and hot water; steam and
   //     anything unknown are PUMP_NONE and are not remembered at all.
   {

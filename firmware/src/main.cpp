@@ -709,6 +709,9 @@ static void handleShotComplete(const ShotResult& r) {
   if (!spool_ok) {
     Serial.println("# spool unavailable — record NOT persisted");
   } else {
+    // Pour start already picked the press; this only fills it in if the
+    // press was confirmed after the POURING transition.
+    machine_ctx.resolvePumpIfUnknown(r.started_at_ms);
     String path = spool.writeShot(r, scales.slotMac(ScaleRole::YIELD),
                                   machine_ctx.context(), flow_tap_shot);
     if (path.length()) Serial.printf("# spooled %s%s\n", path.c_str(), r.valid ? "" : " (reject)");

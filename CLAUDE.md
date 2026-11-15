@@ -1595,7 +1595,9 @@ of the lever press that started the pump over the detector's t=0**, and
 `switch_direction` records lever A's direction ('up' = 1Cup, 'down' = 2Cup;
 NULL for a hot-water draw), with the raw byte in `pump_line`. The press is
 chosen **at pour start** — the latest witnessed pump press at or before
-t=0, within 60 s — so presses during the shot cannot displace it.
+t=0, within 60 s — so presses during the shot cannot displace it; if none
+was confirmed yet (a drip within ~300 ms of the press), the shot's
+completion looks once more.
 **`stop_ms` still counts from first drip, not from pump-on**, so in
 `v_shot` (migration 010) `pour_s` = `stop_ms` where the press was seen
 (NULL otherwise, so `pour_s IS NOT NULL` still means "switch-sensed"),
@@ -1641,9 +1643,11 @@ not say", which is the same thing a current record written with the display
 bus or the switches off reports, so nothing downstream needs a version
 check. **Deploy the server before flashing a format bump**: an older server
 cannot decode a newer record. **From this change on, breaking that rule no
-longer loses shots**: a server answers a well-formed record of a newer
-format with a retryable 503 instead of the 422 the device quarantines, so
-the board keeps it until the server is deployed. A server older than that
+longer loses shots**: a server answers a newer-format record whose CRC
+verifies with a retryable 503 instead of the 422 the device quarantines, so
+the board keeps it until the server is deployed. A newer-looking record
+whose CRC fails is corruption and still gets 422 — otherwise one flipped
+version bit would stall the oldest-first upload queue for ever. A server older than that
 still answers 422 — the rule stands.
 
 **`shot_sample.temp_dc` will be NULL for most of a shot and that is

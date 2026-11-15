@@ -55,7 +55,13 @@ void ScaleManager::begin(QueueHandle_t out_queue) {
 #endif
 
   connect_queue = xQueueCreate(2, sizeof(Slot*));
-  xTaskCreatePinnedToCore(&ScaleManager::connectTask, "scale_connect", 6144, this, 1, nullptr, 0);
+  if (!connect_queue ||
+      xTaskCreatePinnedToCore(&ScaleManager::connectTask, "scale_connect", 6144, this, 1,
+                              nullptr, 0) != pdPASS) {
+    // Without the task every connect would sit PENDING for ever, silently.
+    Serial.println("# SCALE CONNECT TASK NOT STARTED — no scale will connect. Reboot.");
+    if (connect_queue) { vQueueDelete(connect_queue); connect_queue = nullptr; }
+  }
 
   NimBLEDevice::init("espressolog");
   BookooScalesPlugin::apply();
@@ -81,11 +87,17 @@ void ScaleManager::tickSlot(Slot& s, uint32_t now) {
       }
       // Staleness beats the BLE supervision timeout when the scale falls
       // asleep: "connected" with no notifications is not a working scale.
-      if (now - s.last_sample_ms > STALE_MS) {
+      // Signed: last_sample_ms is written from the BLE task with its own
+      // millis(), which can be newer than this `now` — unsigned, that wrapped
+      // and dropped a healthy scale as stale (review, 2026-11-15).
+      if ((int32_t)(now - s.last_sample_ms) > (int32_t)STALE_MS) {
         dropConnection(s, now, "stale (no samples)");
         break;
       }
       s.dev->update();   // lib heartbeat, self-throttled to 2 s
+      // Healthy for a while: the next drop starts from the minimum again.
+      if (s.backoff_ms != BACKOFF_MIN_MS && now - s.connected_at_ms > HEALTHY_MS)
+        s.backoff_ms = BACKOFF_MIN_MS;
       break;
     }
     case SlotState::UNBOUND:
@@ -103,11 +115,22 @@ void ScaleManager::tickSlot(Slot& s, uint32_t now) {
     case SlotState::CONNECTING: {
       // Polled, never waited on: connectTask owns `dev` until this changes.
       uint8_t r = s.connect_result.load(std::memory_order_acquire);
-      if (r == CONNECT_PENDING) break;
+      if (r == CONNECT_PENDING) {
+        if (!s.connect_slow_logged && now - s.connect_started_ms > CONNECT_SLOW_MS) {
+          s.connect_slow_logged = true;
+          Serial.printf("# scale[%s] connect still pending after %lu s — the other scale "
+                        "cannot connect meanwhile\n",
+                        s.role == ScaleRole::YIELD ? "yield" : "dose",
+                        (unsigned long)((now - s.connect_started_ms) / 1000));
+        }
+        break;
+      }
       s.connect_result.store(CONNECT_IDLE, std::memory_order_relaxed);
       if (r == CONNECT_OK) {
         s.state = SlotState::CONNECTED;
-        s.backoff_ms = BACKOFF_MIN_MS;
+        // Not reset here: a link that drops within HEALTHY_MS keeps backing
+        // off (see CONNECTED, and scale.h on connectTask).
+        s.connected_at_ms = now;
         s.last_sample_ms = now;
         Serial.printf("# scale[%s] connected: %s (%lu ms, off the loop)\n",
                       s.role == ScaleRole::YIELD ? "yield" : "dose",
@@ -129,8 +152,12 @@ void ScaleManager::dropConnection(Slot& s, uint32_t now, const char* why) {
                 s.role == ScaleRole::YIELD ? "yield" : "dose", why);
   s.dev.reset();   // destroys the NimBLE client
   s.state = SlotState::LOST;
-  s.next_retry_ms = now + BACKOFF_MIN_MS;
-  s.backoff_ms = BACKOFF_MIN_MS;
+  // The current backoff, then grow it: a scale that connects and goes
+  // straight silent no longer retries every second. backoff_ms is back at
+  // the minimum after HEALTHY_MS of a good link, so the ordinary case — the
+  // scale fell asleep after minutes of use — still retries after 1 s.
+  s.next_retry_ms = now + s.backoff_ms;
+  s.backoff_ms = min(s.backoff_ms * 2, BACKOFF_MAX_MS);
   updateScanState();
 }
 
@@ -188,8 +215,9 @@ bool ScaleManager::startConnect(Slot& s, uint32_t now) {
       false);
   s.connect_result.store(CONNECT_PENDING, std::memory_order_relaxed);
   s.connect_started_ms = now;
+  s.connect_slow_logged = false;
   Slot* p = &s;
-  if (xQueueSend(connect_queue, &p, 0) != pdTRUE) {
+  if (!connect_queue || xQueueSend(connect_queue, &p, 0) != pdTRUE) {
     s.connect_result.store(CONNECT_IDLE, std::memory_order_relaxed);
     s.dev.reset();
     s.state = SlotState::LOST;

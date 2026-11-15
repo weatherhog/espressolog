@@ -405,6 +405,39 @@ int main() {
     printf("cup put back (real stream, shot 180) is flagged a placement OK\n");
   }
 
+  // A REAL shot whose weight dips by more than 20 g and recovers must NOT be
+  // flagged a placement (review, 2026-11-15: the first rule scanned the
+  // whole curve, so the recovery from a dip read as a 20 g rise, and good
+  // shots were excluded). Three dips, each on a pour already at 30 g: a
+  // brief lift, a bump, and the single 0 g sample a cup-scale reconnect
+  // injects mid-shot (remote_scales' bookoo connect() ends in setWeight(0)).
+  {
+    struct Dip { const char* name; uint32_t start_s10; uint32_t len_s10; double w; };
+    const Dip dips[] = {
+      {"1 s lift to -170 g", 200, 10, -170.0},
+      {"1 s bump down to 9 g", 200, 10, 9.0},
+      {"one 0 g sample (reconnect)", 200, 1, 0.0},
+    };
+    for (const Dip& dp : dips) {
+      ShotDetector d;
+      const ShotResult* rr = nullptr;
+      uint32_t tt = 100000;
+      for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+      bool fin = false;
+      for (int i = 0; i <= 300 && !fin; i++, tt += 100) {
+        double w = shotCurve(i / 10.0);
+        if ((uint32_t)i >= dp.start_s10 && (uint32_t)i < dp.start_s10 + dp.len_s10) w = dp.w;
+        fin = d.feed(tt, (int32_t)llround(w * 1000.0));
+      }
+      for (int i = 0; i < 200 && !fin; i++, tt += 100) fin = d.feed(tt, 35300);
+      assert(fin);
+      rr = &d.result();
+      if (rr->placement) printf("FLAGGED: %s\n", dp.name);
+      assert(!rr->placement);
+    }
+    printf("dips that recover (lift, bump, reconnect 0 g) are not placements OK\n");
+  }
+
   printf("all scenarios passed\n");
   return 0;
 }

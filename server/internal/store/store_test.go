@@ -1106,3 +1106,56 @@ func TestIngestPlacementIsExcluded(t *testing.T) {
 		t.Error("a v3 header claims a placement")
 	}
 }
+
+// Weigh the dose, set the cup back on the yield scale (a placement record),
+// pull the shot: the dose belongs to the shot, not to the placement. In
+// arrival order and out of it.
+func TestDoseSkipsExcludedShots(t *testing.T) {
+	dev := "aa:bb:cc:dd:ee:03"
+	base := time.Now().Add(-time.Hour).Truncate(time.Second)
+	at := func(d time.Duration) func(*record.Header) {
+		return func(h *record.Header) { h.StartedAtUnixMs = uint64(base.Add(d).UnixMilli()) }
+	}
+	placement := func(h *record.Header) {
+		at(-30 * time.Second)(h)
+		h.Flags |= record.FlagPlacement
+	}
+	doseOf := func(st *Store, id int64) sql.NullFloat64 {
+		var g sql.NullFloat64
+		if err := st.db.QueryRow(`SELECT dose_ground_g FROM shot WHERE id = ?`, id).Scan(&g); err != nil {
+			t.Fatal(err)
+		}
+		return g
+	}
+
+	for _, order := range []string{"weighing first", "weighing last"} {
+		st := openTestStore(t)
+		w := weighingRecord(1, 18000, base.Add(-time.Minute))
+		praw, prec := pumpRecordWith(t, 300, record.Pump2Cup, 8200, placement, nil)
+		sraw, srec := pumpRecordWith(t, 301, record.Pump2Cup, 8200, at(0), nil)
+		if order == "weighing first" {
+			if _, err := st.Ingest(dev, w, []byte{2}, base); err != nil {
+				t.Fatal(err)
+			}
+		}
+		pres, err := st.Ingest(dev, prec, praw, base)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sres, err := st.Ingest(dev, srec, sraw, base)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if order == "weighing last" {
+			if _, err := st.Ingest(dev, w, []byte{2}, base); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if g := doseOf(st, pres.ShotID); g.Valid {
+			t.Errorf("%s: the placement record took the dose (%v g)", order, g.Float64)
+		}
+		if g := doseOf(st, sres.ShotID); !g.Valid || g.Float64 != 18.0 {
+			t.Errorf("%s: the real shot's dose = %v, want 18", order, g)
+		}
+	}
+}

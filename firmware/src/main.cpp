@@ -710,6 +710,8 @@ static const char* stateName(ShotState s) {
 }
 
 static void printShotSummary(const ShotResult& r) {
+  if (r.placement)
+    Serial.println("# NOT A SHOT: rose >20 g within 1 s — a cup set down. Recorded, flagged, excluded.");
   Serial.println("# ---- shot complete ----");
   Serial.printf("# valid=%d fault=%d truncated=%d detector=%s fw=%s\n",
                 r.valid, r.fault, r.truncated, DETECTOR_VERSION, FIRMWARE_VERSION);
@@ -1154,8 +1156,8 @@ void loop() {
       net.sendLive(frame);
       if (complete) {
         handleShotComplete(detector.result());
-        snprintf(frame, sizeof(frame), "{\"ev\":\"shot\",\"valid\":%d,\"fault\":%d}",
-                 detector.result().valid, detector.result().fault);
+        snprintf(frame, sizeof(frame), "{\"ev\":\"shot\",\"valid\":%d,\"fault\":%d,\"placement\":%d}",
+                 detector.result().valid, detector.result().fault, detector.result().placement);
         net.sendLive(frame);
       }
       shot_active = detector.state() == ShotState::POURING

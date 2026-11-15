@@ -74,10 +74,11 @@ const (
 	// looking like it.
 	FlagFlowTap = 0x10
 	// FlagPlacement (firmware 0.11.1): the detector judged the "shot" a cup
-	// being set down — its curve rose >20 g within 1 s, which espresso
-	// cannot (the steepest of 75 real shots rose 7.7 g). Kept, so a
-	// misjudged shot is not lost; excluded at ingest. Only meaningful from
-	// format v4, the format 0.11.1 writes.
+	// being set down — its curve rose >20 g above its earlier peak within
+	// 1 s, which espresso cannot. Kept, so a misjudged shot is not lost;
+	// excluded at ingest. Read only from format v4 — but 0.11.0 also writes
+	// v4 and never sets it, so on a v4 record a CLEAR bit means "not a
+	// placement" only if firmware_version is 0.11.1 or later.
 	FlagPlacement = 0x20
 
 	headerLenV1 = 109

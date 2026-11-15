@@ -129,7 +129,11 @@ func (s *Store) Ingest(deviceID string, r *record.Record, raw []byte, receivedAt
 	switch h.RecordType {
 	case record.TypeShot:
 		res.ShotID, err = insertShot(tx, r, scaleID, startedAt, now)
-		if err == nil {
+		// An excluded record — a placement, a reject, a fault — is not the
+		// shot a weighing was for. Giving it the dose took it from the real
+		// shot pulled seconds later: set the cup back after weighing and the
+		// placement record claimed the 18 g (review, 2026-11-15).
+		if err == nil && !excludedAtIngest(h) {
 			err = attributeDoseToShot(tx, res.ShotID, startedAt)
 		}
 	case record.TypeWeighing:
@@ -414,7 +418,7 @@ func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time
 		excludeReason = "reject: under 5 g"
 	} else if h.Placement() {
 		excluded = 1
-		excludeReason = "cup placement: rose >20 g within 1 s, not a pour"
+		excludeReason = "cup placement: the detector judged it a cup set down, not a pour"
 	}
 	machineID, grinderID, epochID := defaultContext(tx, startedAt)
 	beanID, grindDial, brewTemp, preinfusion := defaultRecipe(tx, epochID, startedAt, h.SetpointTouched())
@@ -590,6 +594,12 @@ const (
 	doseMaxG   = 24.0
 )
 
+// excludedAtIngest says whether insertShot marks this record excluded —
+// the same three verdicts, in one place, so attribution cannot drift from it.
+func excludedAtIngest(h *record.Header) bool {
+	return h.Fault() || h.Reject() || h.Placement()
+}
+
 func attributeDoseToShot(tx *sql.Tx, shotID int64, startedAt time.Time) error {
 	started := startedAt.UTC().Format(time.RFC3339)
 	cutoff := startedAt.Add(-doseWindow).UTC().Format(time.RFC3339)
@@ -625,7 +635,7 @@ func attributeWeighingToLaterShot(tx *sql.Tx, weighingID int64, grams float64, o
 	var shotID int64
 	err := tx.QueryRow(`
 		SELECT id FROM shot
-		WHERE dose_ground_g IS NULL
+		WHERE dose_ground_g IS NULL AND excluded = 0
 		  AND started_at >= ? AND started_at < ?
 		ORDER BY started_at ASC LIMIT 1`,
 		observed, horizon).Scan(&shotID)

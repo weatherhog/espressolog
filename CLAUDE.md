@@ -677,11 +677,12 @@ three.
   than writing the protocol
 - Bookoo publish their protocol at `github.com/BooKooCode/OpenSource`
 - **The BLE connect runs off `loop()`, in its own task (0.11.1).** It
-  blocked `loop()` until then, and the scanner never forgets a scale it
-  has seen, so with one scale asleep the board froze ~1.8 s every few
-  seconds retrying it: on 2026-11-15 both lever presses of a shot fell
-  inside freezes and were missed, and the brew guard, which needs them,
-  went blind with them (invariant 2).
+  blocked `loop()` until then, so with one scale gone the board froze
+  ~1.8 s every few seconds retrying it: on 2026-11-15 both lever presses of
+  a shot fell inside freezes and were missed, and the brew guard, which
+  needs them, went blind with them (invariant 2). Why every few seconds is
+  inferred: a scale that connects and goes straight silent reset the
+  backoff to 1 s; it now grows until a link has been healthy for 10 s.
 - The scale sleeps after **~9 min idle — MEASURED**. Reconnect logic is
   mandatory. *(This said ~15 min until 2026-10-27, as did `scale.h`; the
   source of that figure was never recorded, and `docs/phase-0-status.md`
@@ -1591,8 +1592,12 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
 - **SETTLING** — keep sampling 5 s more → `yield_final_g`.
   `settle_offset_g = final − at_stop`.
 - **reject** — final yield < 5 g (a drip or a knock, not a shot)
-- **placement** — the curve rose >20 g within 1 s somewhere: a cup set
-  down, not espresso (the steepest of 75 real shots rose 7.7 g in 1 s).
+- **placement** — the curve rose >20 g ABOVE ITS EARLIER PEAK within 1 s:
+  a cup set down, not espresso (the steepest of 75 real shots rose 7.7 g in
+  1 s). Measured against the earlier peak, not the window's low, so a real
+  shot recovering from a dip — a lift, a bump, the 0 g sample a cup-scale
+  reconnect injects — is not flagged. An excluded record never takes a
+  dose.
   Kept, flagged (`SPOOL_FLAG_PLACEMENT`, firmware 0.11.1) and excluded at
   ingest. Added after shot 180 (2026-11-15): a cup put back on an un-tared
   scale landed slowly enough, 3–4 g per sample, to pass the per-sample

@@ -62,12 +62,19 @@ private:
     // must not touch it before.
     std::atomic<uint8_t> connect_result{0};   // ConnectResult
     uint32_t connect_started_ms = 0;
+    bool     connect_slow_logged = false;
+    uint32_t connected_at_ms = 0;
   };
   enum ConnectResult : uint8_t { CONNECT_IDLE = 0, CONNECT_PENDING, CONNECT_OK, CONNECT_FAIL };
 
   static constexpr uint32_t STALE_MS      = 3000;
   static constexpr uint32_t BACKOFF_MIN_MS = 1000;
   static constexpr uint32_t BACKOFF_MAX_MS = 30000;
+  // A link this healthy for this long earns a fresh minimum backoff.
+  static constexpr uint32_t HEALTHY_MS     = 10000;
+  // NimBLE's own connect timeout is 30 s and its service discovery waits
+  // without one; past this, say so — a hung connect blocks the other slot.
+  static constexpr uint32_t CONNECT_SLOW_MS = 45000;
 
   Slot slots[2];
   QueueHandle_t queue = nullptr;
@@ -81,11 +88,16 @@ private:
   bool anyConnecting() const;
 
   // The blocking BLE connect, off loop(). Until 2026-11-15 tryConnect() ran
-  // dev->connect() inline, and the scanner never forgets a scale it has
-  // seen, so with the grinder scale asleep loop() stalled ~1.8 s every few
-  // seconds retrying it: switch presses fell inside the stalls and were
-  // missed outright (shot 181), and the brew guard — which needs those
-  // presses — went blind with them (invariant 2).
+  // dev->connect() inline, and with the grinder scale gone loop() stalled
+  // ~1.8 s every few seconds retrying it: switch presses fell inside the
+  // stalls and were missed outright (shot 181), and the brew guard — which
+  // needs those presses — went blind with them (invariant 2). Why "every
+  // few seconds" rather than a growing backoff is INFERRED, not observed: a
+  // scale that accepts the connection and then sends nothing went stale in
+  // 3 s, and dropConnection() reset the backoff to 1 s each time. It now
+  // keeps growing until a link has been healthy for HEALTHY_MS. (A draft of
+  // this comment blamed the scanner for never forgetting a scale; it does —
+  // every scan restart clears its list.)
   QueueHandle_t connect_queue = nullptr;
   static void connectTask(void* arg);
 

@@ -213,16 +213,25 @@ bool ShotDetector::finishShot() {
   return true;
 }
 
-// Did the recorded curve ever climb PLACEMENT_RISE_MG within
-// PLACEMENT_RISE_MS? Two pointers over the (time-ordered) samples: for each
-// end sample, the minimum weight in the trailing window. O(n) amortised is
-// not needed at <=2048 samples; this is O(n * samples-per-second).
+// Did the curve ever climb PLACEMENT_RISE_MG ABOVE ITS EARLIER PEAK within
+// PLACEMENT_RISE_MS? For each sample j, the reference is the highest weight
+// seen before j's 1 s window opened — not the lowest weight inside it. A cup
+// landing climbs far above anything before it; a real shot recovering from
+// a dip (a lift, a bump, the single 0 g sample a cup-scale reconnect
+// injects) only climbs back to where it was. The first version compared
+// against the window's minimum and excluded good shots for exactly that
+// (review, 2026-11-15). One pass: `i` trails `j` to the window's start, and
+// `peak_before` is the maximum of every sample before `i`.
 bool ShotDetector::risesLikeAPlacement() const {
-  for (uint16_t j = 1; j < buf_count; j++) {
-    for (uint16_t i = j; i-- > 0;) {
-      if ((uint32_t)(buf[j].t_ms - buf[i].t_ms) > PLACEMENT_RISE_MS) break;
-      if (buf[j].weight_mg - buf[i].weight_mg > PLACEMENT_RISE_MG) return true;
+  if (buf_count == 0) return false;
+  uint16_t i = 0;
+  int32_t peak_before = buf[0].weight_mg;   // no sample before the first window
+  for (uint16_t j = 0; j < buf_count; j++) {
+    while (i < j && (uint32_t)(buf[j].t_ms - buf[i].t_ms) > PLACEMENT_RISE_MS) {
+      if (buf[i].weight_mg > peak_before) peak_before = buf[i].weight_mg;
+      i++;
     }
+    if (buf[j].weight_mg - peak_before > PLACEMENT_RISE_MG) return true;
   }
   return false;
 }

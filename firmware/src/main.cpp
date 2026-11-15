@@ -15,7 +15,7 @@
 #include "brew_guard.h"
 #include <driver/gpio.h>
 
-const char* FIRMWARE_VERSION = "0.11.1";
+const char* FIRMWARE_VERSION = "0.12.0";
 const char* DETECTOR_VERSION = "0a.6";
 
 static ScaleManager scales;
@@ -107,6 +107,13 @@ static void IRAM_ATTR dbusIsr() {
   dbus_head = nxt;
 }
 
+// What the machine contributes to a shot record (format v2). The logic
+// lives in machine_context.h so it can be host-tested — the first version
+// of this sat inline here, had no tests, and shipped two bugs a green
+// suite could not see: a previous shot's timer leaking into the next, and
+// setpoint_touched staying true for the whole boot.
+static MachineContextTracker machine_ctx;
+
 // Idempotent, like flowSetEnabled and switchesSetEnabled. `display on` while
 // already on zeroes the frame and drop counters, which is the only way to get
 // a per-event figure out of them: both are free-running since boot and nothing
@@ -128,6 +135,9 @@ static void displaySetEnabled(bool on) {
     attachInterrupt(digitalPinToInterrupt(DISPLAY_CLK_PIN), dbusIsr, RISING);
   }
   display_on = on;
+  // Off, on or re-attached: the machine may have been edited while nothing
+  // watched, so a remembered setpoint is no longer the machine's.
+  machine_ctx.forgetSetpoint();
 }
 
 static void pollDisplay() {
@@ -140,12 +150,6 @@ static void pollDisplay() {
   if (display_bus.poll(micros())) dbus_frames++;   // bus went quiet mid-frame
 }
 
-// What the machine contributes to a shot record (format v2). The logic
-// lives in machine_context.h so it can be host-tested — the first version
-// of this sat inline here, had no tests, and shipped two bugs a green
-// suite could not see: a previous shot's timer leaking into the next, and
-// setpoint_touched staying true for the whole boot.
-static MachineContextTracker machine_ctx;
 
 static void machineContextPoll() {
   if (!display_on) return;
@@ -741,6 +745,13 @@ static void handleShotComplete(const ShotResult& r) {
     String path = spool.writeShot(r, scales.slotMac(ScaleRole::YIELD),
                                   machine_ctx.context(), flow_tap_shot);
     if (path.length()) Serial.printf("# spooled %s%s\n", path.c_str(), r.valid ? "" : " (reject)");
+    if (machine_ctx.context().setpoint_dc != INT16_MIN)
+      Serial.printf("# setpoint %d C (last dialled on the display)\n",
+                    machine_ctx.context().setpoint_dc / 10);
+    else if (machine_ctx.context().setpoint_pending)
+      Serial.println("# setpoint edit not confirmed before this pour — recorded as unknown; no brew temperature carried onto or across this shot");
+    else
+      Serial.println("# setpoint not known (no confirmed edit seen, or the display was not decoding) — the server may carry an earlier one");
   }
   Serial.println("# ---- end shot ----");
 }
@@ -1128,7 +1139,8 @@ void loop() {
       ShotState before = detector.state();
       bool complete = detector.feed(smp.t_ms, smp.weight_mg, flow.total());
       if (before != ShotState::POURING && detector.state() == ShotState::POURING) {
-        machine_ctx.onPourStart(micros());
+        machine_ctx.onPourStart(micros(),
+                                display_on && !display_bus.stale(micros(), DISPLAY_FRESH_US));
         // Which press started the pump: decided now, while t=0 is fresh and
         // before the stop press or a later flush can crowd it out.
         machine_ctx.resolvePump(detector.result().started_at_ms);

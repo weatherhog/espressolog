@@ -775,9 +775,9 @@ firmware/          PlatformIO, Arduino framework
 server/            Go
   cmd/espressolog/
   internal/{api,live,record,store,web}/
-                   record = on-flash wire format (v1-v4 decode)
+                   record = on-flash wire format (v1-v5 decode)
                    web    = embed.FS for the built PWA
-  migrations/0*.sql         11 migrations; 001_init.sql is the base
+  migrations/0*.sql         12 migrations; 001_init.sql is the base
 web/               Vite + React PWA
   src/ · prototype/
 analysis/          Jupyter notebooks, reads the SQLite file
@@ -1670,7 +1670,43 @@ its header. *(A fixed 512-byte array in the header was tried first; it
 would have pushed every weighing record out of LittleFS's inline storage.)*
 The server stores the offsets raw in `shot_pre_pulse` (migration 011), with
 `shot.pre_pulse_total` NULL for "not captured" — only for a record that
-claims a live flow tap. **The server decodes v1 to v4** — older records
+claims a live flow tap. **Header format v5** (firmware 0.12.0) added
+`setpoint_dc` after the pulse block (123 → 125 bytes): the brew setpoint
+last dialled in on the front panel — a value that BLINKED as `SETPOINT`
+twice in a row, 80–130 °C, as it stood at pour start; kept across shots,
+forgotten on a reboot or when the display tap is switched, and not stamped
+while the display is not decoding (`machine_context.h`). An edit under
+way — two blinks in a row that differ from it and from each other, or the
+pump's timer cutting off a different blink (the lever pressed mid-edit) —
+makes the setpoint unknown until the next confirmed edit, and marks the
+NEXT shot with `SETPOINT_PENDING` (bit 6, its own — not `SETPOINT_TOUCHED`,
+which would also stop the pre-infusion carry). The server stores no brew
+temperature on that shot and carries none across it
+(`shot.setpoint_pending`), so later shots get what was typed on it or on
+a later shot, or nothing. The timer rule needs two TIMER frames in a row
+and judges the value that blinked, not the steady tail after a confirmed
+edit. **Known limits:** a lone different blink ended by an ordinary
+temperature frame is ignored (it is how a misread looks); a lever pressed
+before the new value has shown as `SETPOINT` once (~1 s after the last
+press — an edit's first two blinks decode as TEMPERATURE) still gets the
+old value stamped as `'display'`, on that shot and later ones until the
+next edit, and so does one pressed while a re-edit's first new value
+shows during the confirmed value's own blinking, or with one misdecoded
+frame between the pump's first two TIMER frames (the decoded button bits
+would settle both); pending survives a tap switch but not a reboot; an edit made
+while the bus was unplugged but `display` stayed on is not seen (forgetting on a quiet bus would also
+forget at every machine power-off); a re-derived run does not reach shots
+that already carried the old value; and a run no `Pr` matches empties
+pre-infusion on that shot only, so the next shot carries the earlier value
+across it. The server stores the confirmed setpoint as `brew_temp_c` with `brew_temp_source = 'display'`, and measures the
+pump-on run from the pulse train into `preinfusion_run_s`
+(`server/internal/store/preinfusion.go`: the dense run before the first
+≥ 1 s pause, its coasting tail stripped — shot 179 at Pr = 5 s measures
+5.1 s), with `preinfusion_s` the whole-second `Pr` it corresponds to
+(`'flow'`). Anything copied from an earlier shot is `'carried'`, anything
+typed or cleared `'user'` (migration 012). **A shot that recorded an edit
+is not a carry source** unless a human typed its value: its display value
+and run predate the edit. The run is re-derived at every server start. **The server decodes v1 to v5** — older records
 exist spooled and as fixtures, and losing one to a format bump would violate
 invariant 6. An older record reports the newer fields as "the machine did
 not say", which is the same thing a current record written with the display

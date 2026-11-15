@@ -134,6 +134,19 @@ seconds retrying it (gaps in every live frame), and both presses fell
 inside freezes. The connect now runs off `loop()` (0.11.1). Dose is
 missing on 179 and 181 for the same reason.
 
+**Pre-infusion and brew temperature now fill themselves in (firmware
+0.12.0, migration 012)** — the capture screen showed both "not recorded" on
+these shots. `preinfusion_s` is measured from the pre-drip pulses (179,
+backfilled at server start); `brew_temp_c` is the setpoint last
+dialled on the front panel (spool v5), so it appears from the first edit
+after each board boot and is carried from the last shot until then — a value counts once it has
+blinked twice. Pre-infusion is stored as the whole-second `Pr` (179: 5),
+the measured run beside it (`preinfusion_run_s`, 5.1). Each carries its
+source (`'flow'`, `'display'`, `'carried'`, `'user'`) and the capture
+screen shows it. The pause and coasting thresholds come from shot
+179 alone: if a measurement disagrees with the `Pr` setting, those are the
+first thing to check.
+
 ### 2026-11-14 — the first full test on the machine
 
 - **First full test (firmware 0.9.8)**: shots 177 and

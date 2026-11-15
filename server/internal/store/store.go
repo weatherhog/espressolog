@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log"
 	"sort"
 	"time"
 
@@ -33,6 +34,12 @@ func Open(path string, migrations embed.FS) (*Store, error) {
 	if err := s.migrate(migrations); err != nil {
 		db.Close()
 		return nil, err
+	}
+	if n, err := s.backfillPreinfusion(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("backfill pre-infusion: %w", err)
+	} else if n > 0 {
+		log.Printf("store: (re-)measured pre-infusion on %d shot(s) from their pulses", n)
 	}
 	return s, nil
 }
@@ -295,18 +302,22 @@ func defaultRecipe(tx *sql.Tx, epochID any, startedAt time.Time, thisShotEditedA
 	//
 	// "Across boots order is arbitrary" cuts both ways and only one direction
 	// is handled. The root cause is that the carry is STAMPED at ingest and
-	// nothing re-evaluates it, and there is no brew_temp_source column, so an
-	// inference cannot be told from a confirmation and cannot be retroactively
-	// unwritten. Closing it needs one of:
+	// nothing re-evaluates it. Since migration 012 an inference CAN be told
+	// from a confirmation (brew_temp_source / preinfusion_source = 'carried'),
+	// but nothing yet unwrites one retroactively. Closing it needs one of:
 	//
 	//   (a) compute the carry at READ time (a view) instead of stamping it, or
-	//   (b) add brew_temp_source / preinfusion_source = 'inferred', and have
-	//       the ingest of a setpoint_touched record NULL any later-pulled
-	//       'inferred' rows.
+	//   (b) have the ingest of a setpoint_touched record NULL any
+	//       later-pulled 'carried' rows (the source columns exist since 012).
+	//
+	// A v5 record that saw the setpoint dialled (brew_temp_source 'display')
+	// does not depend on any of this: its value is the machine's own.
 	//
 	// Both are schema changes and neither belongs in a deploy that is already
 	// running an irreversible migration. TestRecipeCarryKnownGapOnReversedArrival
-	// documents the case and will start failing the moment it is fixed.
+	// documents the case and will start failing the moment it is fixed. The
+	// same gap applies to setpoint_pending (v5): a pending shot that arrives
+	// after a later one does not unwrite that one's carried temperature.
 	//
 	// STOP AT A RECORDED PARAMETER EDIT, for BOTH values.
 	//
@@ -319,6 +330,9 @@ func defaultRecipe(tx *sql.Tx, epochID any, startedAt time.Time, thisShotEditedA
 	// timer. An edit made between shots, which is the realistic case, is
 	// latched and then cleared at the next pour start and never lands on any
 	// row. In practice this guard therefore fires rarely — *for real edits*.
+	// (A brew-temperature edit still BLINKING, unconfirmed, at pour start is
+	// the one between-shots edit that does land, and on its own column,
+	// setpoint_pending, v5 — not here: see the brew-temperature carry below.)
 	// BEFORE FIRMWARE 0.9.9 the decoder latched on ANY two blank frames
 	// within BLINK_WINDOW_US, so every steam cycle latched too (CLAUDE.md,
 	// the display-bus blink paragraph). A shot from that firmware that saw a
@@ -351,12 +365,20 @@ func defaultRecipe(tx *sql.Tx, epochID any, startedAt time.Time, thisShotEditedA
 	// chronological sequence. Measured: a shot pulled before an edit but
 	// ingested after it carried a pre-edit setpoint straight across.
 	//
-	// AND USE >=, NOT >. The edit shot itself holds the NEW value, and it is
-	// the only row that does. Excluding it meant brew_temp_c went NULL on the
-	// edit shot and stayed NULL on every shot after it forever, since nothing
-	// downstream would ever have a value to carry. Measured.
+	// AND USE >=, NOT >. The edit shot itself can hold the NEW value — when a
+	// human typed it — and is then the only row that does. Excluding it meant
+	// brew_temp_c went NULL on the edit shot and stayed NULL on every shot
+	// after it forever, since nothing downstream would ever have a value to
+	// carry. Measured. Its MACHINE values ('display', 'flow') predate the edit
+	// and are excluded below instead.
 	since := `COALESCE((SELECT MAX(started_at) FROM shot
 	                     WHERE setpoint_touched = 1 AND started_at <= ?), '')`
+	// The brew temperature alone also stops at a shot pulled while a
+	// temperature edit was still unconfirmed (setpoint_pending, v5): the
+	// value before it is the pre-edit one. >= so a value typed ON that shot
+	// still carries. Pre-infusion is not affected (review, 2026-11-15).
+	sincePending := `COALESCE((SELECT MAX(started_at) FROM shot
+	                     WHERE setpoint_pending = 1 AND started_at <= ?), '')`
 	if thisShotEditedAParameter {
 		// Only brew_temp_c and preinfusion_s: beanID and grindDial are already
 		// assigned above and stay. setpoint_touched latches on the machine's
@@ -366,17 +388,29 @@ func defaultRecipe(tx *sql.Tx, epochID any, startedAt time.Time, thisShotEditedA
 		// as though all four go NULL.)
 		return
 	}
+	// A shot that recorded an edit is NOT a carry source unless a human typed
+	// its value (or it predates 012 and has no source, when only a human
+	// could have put it there — the guard above gave it no carry). A
+	// 'display' value is the setpoint as it stood at POUR START, before the
+	// edit; a 'flow' run was measured before it. (A touched shot is never
+	// given a carry — see the guard above — so it holds no 'carried' value.)
+	// Taking either carried the pre-edit value onto every later shot (review,
+	// 2026-11-15). COALESCE: a v1 record has no setpoint_touched at all, and
+	// NOT (NULL AND ...) is NULL, which dropped it as a source.
 	var t float64
 	if tx.QueryRow(`SELECT brew_temp_c FROM shot
 	                 WHERE brew_temp_c IS NOT NULL AND started_at <= ?
+	                   AND NOT (COALESCE(setpoint_touched, 0) = 1 AND COALESCE(brew_temp_source, '') = 'display')
 	                   AND started_at >= ? AND started_at >= `+since+`
+	                   AND started_at >= `+sincePending+`
 	                 ORDER BY started_at DESC, id DESC LIMIT 1`,
-		at, staleFloor(startedAt), at).Scan(&t) == nil {
+		at, staleFloor(startedAt), at, at).Scan(&t) == nil {
 		brewTemp = t
 	}
 	var pre float64
 	if tx.QueryRow(`SELECT preinfusion_s FROM shot
 	                 WHERE preinfusion_s IS NOT NULL AND started_at <= ?
+	                   AND NOT (COALESCE(setpoint_touched, 0) = 1 AND COALESCE(preinfusion_source, '') = 'flow')
 	                   AND started_at >= ? AND started_at >= `+since+`
 	                 ORDER BY started_at DESC, id DESC LIMIT 1`,
 		at, staleFloor(startedAt), at).Scan(&pre) == nil {
@@ -387,8 +421,8 @@ func defaultRecipe(tx *sql.Tx, epochID any, startedAt time.Time, thisShotEditedA
 
 // How far back an inferred machine setting may reach. Without this the carry
 // is unbounded: a shot ingested a YEAR after the last recorded value inherits
-// it, and unlike bean_id and dose_ground_g there is no *_source column, so an
-// inferred temperature is indistinguishable from a confirmed one. That is the
+// it, and an inferred temperature reads like a confirmed one to anything that
+// does not check brew_temp_source (012; there was no source column before). That is the
 // very distinction migration 009 exists to restore, so leaving the carry
 // unbounded would move fabrication from the UI to the server and drop its
 // audit trail on the way.
@@ -401,8 +435,7 @@ func defaultRecipe(tx *sql.Tx, epochID any, startedAt time.Time, thisShotEditedA
 // INFERRED value into the new row, so the next ingest reads an inference as
 // its source and the clock measures the gap between consecutive SHOTS. For
 // anyone pulling several a day the bound never fires and one confirmation
-// propagates indefinitely, indistinguishable from a confirmed value because
-// there is no brew_temp_source column. The parameter-edit guard above is the
+// propagates indefinitely (marked 'carried' since 012, but still carried). The parameter-edit guard above is the
 // real protection; this is only a staleness floor for a long silence.
 const recipeMaxAge = 14 * 24 * time.Hour
 
@@ -423,6 +456,30 @@ func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time
 	}
 	machineID, grinderID, epochID := defaultContext(tx, startedAt)
 	beanID, grindDial, brewTemp, preinfusion := defaultRecipe(tx, epochID, startedAt, h.SetpointTouched())
+	brewTempSource, preinfusionSource := sourceIf(brewTemp, "carried"), sourceIf(preinfusion, "carried")
+	// A measurement outranks a carry. The setpoint the display showed being
+	// dialled (v5) is the machine's own word for this shot's setpoint — and
+	// it holds even when this shot recorded an edit, since it is the value
+	// as it stood at pour start. The pre-infusion run is measured from this
+	// shot's own pulses.
+	if c, ok := h.Setpoint(); ok {
+		brewTemp, brewTempSource = c, "display"
+	} else if h.SetpointPending() {
+		// An edit was blinking, unconfirmed, at pour start: the setpoint is
+		// unknown — not the last one, which is the pre-edit value.
+		brewTemp, brewTempSource = nil, nil
+	}
+	var preinfusionRun any
+	if run, ok := measuredPreinfusion(rec); ok {
+		preinfusionRun = run
+		if pr, ok := preinfusionSetting(run); ok {
+			preinfusion, preinfusionSource = pr, "flow"
+		} else {
+			// Measured, but no Pr the machine offers: a carried setting
+			// beside a run that contradicts it would read as confirmed.
+			preinfusion, preinfusionSource = nil, nil
+		}
+	}
 	// 'loaded' only if a bag actually was: an absent bean must stay NULL
 	// with no provenance rather than claim an attribution that never happened.
 	var beanSource any
@@ -434,7 +491,7 @@ func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time
 	// record predates the display bus, and so does a v2 record written with
 	// the bus switched off — both leave these NULL, which is the difference
 	// between "no reading" and "zero".
-	var boilerTempC, machineTimerS, setpointTouched any
+	var boilerTempC, machineTimerS, setpointTouched, setpointPending any
 	if c, ok := h.BoilerTempStartC(); ok {
 		boilerTempC = c
 	}
@@ -444,6 +501,9 @@ func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time
 	if h.FormatVersion >= 2 {
 		// Only meaningful once the firmware could latch it at all.
 		setpointTouched = boolToInt(h.SetpointTouched())
+	}
+	if h.FormatVersion >= 5 {
+		setpointPending = boolToInt(h.SetpointPending())
 	}
 
 	// Format v3 (0c) carries the lever press that started the pump. Lever A
@@ -487,15 +547,16 @@ func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time
 			started_at, tz_offset_min, scale_id,
 			machine_id, grinder_id, grind_epoch_id,
 			bean_id, bean_source, grind_dial, brew_temp_c, preinfusion_s,
+			brew_temp_source, preinfusion_source, preinfusion_run_s,
 			stop_ms, stopped_by,
 			yield_at_stop_g, yield_final_g, settle_offset_g,
 			peak_flow_gps, mean_flow_gps, flow_win_start_ms, flow_win_end_ms,
-			boiler_temp_start_c, machine_timer_s, setpoint_touched,
+			boiler_temp_start_c, machine_timer_s, setpoint_touched, setpoint_pending,
 			switch_direction, first_drip_ms, pump_line,
 			pre_pulse_total, pre_pulse_complete,
 			detector_version, firmware_version,
 			excluded, exclude_reason, created_at
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		// .UTC() to match every READ site. Equivalent today only because
 		// Ingest hands this an already-UTC time; the moment anything passes a
 		// zoned one, stored strings gain "+02:00" and MAX(started_at) — which
@@ -504,10 +565,11 @@ func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time
 		startedAt.UTC().Format(time.RFC3339), h.TzOffsetMin, scaleID,
 		machineID, grinderID, epochID,
 		beanID, beanSource, grindDial, brewTemp, preinfusion,
+		brewTempSource, preinfusionSource, preinfusionRun,
 		h.StopMs, stoppedBy,
 		mg(h.YieldAtStopMg), mg(h.YieldFinalMg), mg(h.SettleOffsetMg),
 		mg(h.PeakFlowMgps), mg(h.MeanFlowMgps), h.FlowWinStartMs, h.FlowWinEndMs,
-		boilerTempC, machineTimerS, setpointTouched,
+		boilerTempC, machineTimerS, setpointTouched, setpointPending,
 		switchDirection, firstDripMs, pumpLine,
 		prePulseTotal, prePulseComplete,
 		h.Detector(), h.Firmware(),
@@ -783,6 +845,16 @@ func (s *Store) UpdateShot(id int64, fields map[string]any) error {
 			vals = append(vals, "user")
 		}
 	}
+	// A typed brew temperature or pre-infusion is the user's word, and so is
+	// clearing one: 'user' with a NULL value is a deliberate blank, which
+	// the pre-infusion backfill must not refill on the next restart (review,
+	// 2026-11-15 — it did, when a clear also cleared the source).
+	for field, src := range map[string]string{"brew_temp_c": "brew_temp_source", "preinfusion_s": "preinfusion_source"} {
+		if _, ok := fields[field]; ok {
+			cols = append(cols, src)
+			vals = append(vals, "user")
+		}
+	}
 	if len(cols) == 0 {
 		return fmt.Errorf("no updatable fields in request")
 	}
@@ -959,4 +1031,108 @@ func boolToInt(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+// sourceIf is the provenance for a value: src when there is one, NULL with it.
+func sourceIf(v any, src string) any {
+	if v == nil {
+		return nil
+	}
+	return src
+}
+
+// measuredPreinfusion measures the pre-infusion run from a shot record's own
+// pre-drip pulses, for a lever-A shot only (a hot-water draw has no
+// pre-infusion). See preinfusion.go.
+func measuredPreinfusion(rec *record.Record) (float64, bool) {
+	line, lead, ok := rec.Header.PumpStart()
+	if !ok || (line != record.Pump1Cup && line != record.Pump2Cup) {
+		return 0, false
+	}
+	ms, total, complete, ok := rec.PrePulses()
+	if !ok {
+		return 0, false
+	}
+	return measurePreinfusion(ms, total, complete, int64(lead))
+}
+
+// backfillPreinfusion (re-)measures pre-infusion for every lever-A shot
+// with a pulse train, at every Open: preinfusion_run_s always, so a change
+// to the thresholds re-measures the archive, and preinfusion_s where it is
+// the server's to set — empty with no source (0.11.0's v4 shots, ingested
+// before 012), 'carried', or 'flow' itself. NEVER 'user' (typed, or
+// deliberately cleared) and never a pre-012 value with no source, which a
+// human may have typed. A 'flow' row the new thresholds cannot measure loses
+// its value, and so does a 'flow' or 'carried' row whose measured run maps
+// to no Pr the machine offers. Returns how many rows changed; a no-op once settled.
+func (s *Store) backfillPreinfusion() (int, error) {
+	rows, err := s.db.Query(`
+		SELECT id, pre_pulse_total, pre_pulse_complete, first_drip_ms,
+		       preinfusion_s, preinfusion_source, preinfusion_run_s FROM shot
+		WHERE pre_pulse_total IS NOT NULL AND pump_line IN (1, 2)
+		  AND first_drip_ms IS NOT NULL`)
+	if err != nil {
+		return 0, err
+	}
+	type cand struct {
+		id, total, drip int64
+		complete        bool
+		pre, run        sql.NullFloat64
+		src             sql.NullString
+	}
+	var cands []cand
+	for rows.Next() {
+		var c cand
+		var complete sql.NullInt64
+		if err := rows.Scan(&c.id, &c.total, &complete, &c.drip, &c.pre, &c.src, &c.run); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		c.complete = complete.Valid && complete.Int64 == 1
+		cands = append(cands, c)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, c := range cands {
+		var ms []uint16
+		pr, err := s.db.Query(`SELECT ms_after_press FROM shot_pre_pulse WHERE shot_id = ? ORDER BY n`, c.id)
+		if err != nil {
+			return n, err
+		}
+		for pr.Next() {
+			var v int64
+			if err := pr.Scan(&v); err != nil {
+				pr.Close()
+				return n, err
+			}
+			ms = append(ms, uint16(v))
+		}
+		pr.Close()
+		run, measured := measurePreinfusion(ms, int(c.total), c.complete, c.drip)
+		newRun := sql.NullFloat64{Float64: run, Valid: measured}
+		newPre, newSrc := c.pre, c.src
+		ours := c.src.String == "flow" || c.src.String == "carried" || (!c.src.Valid && !c.pre.Valid)
+		if ours {
+			if setting, ok := preinfusionSetting(run); measured && ok {
+				newPre = sql.NullFloat64{Float64: setting, Valid: true}
+				newSrc = sql.NullString{String: "flow", Valid: true}
+			} else if c.src.String == "flow" || measured {
+				// A 'flow' value the thresholds no longer support, or a
+				// measured run no Pr matches beside a carried setting.
+				newPre, newSrc = sql.NullFloat64{}, sql.NullString{}
+			}
+		}
+		if newRun == c.run && newPre == c.pre && newSrc == c.src {
+			continue
+		}
+		if _, err := s.db.Exec(`UPDATE shot SET preinfusion_run_s = ?, preinfusion_s = ?, preinfusion_source = ? WHERE id = ?`,
+			newRun, newPre, newSrc, c.id); err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, nil
 }

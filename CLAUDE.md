@@ -682,7 +682,9 @@ three.
   a shot fell inside freezes and were missed, and the brew guard, which
   needs them, went blind with them (invariant 2). Why every few seconds is
   inferred: a scale that connects and goes straight silent reset the
-  backoff to 1 s; it now grows until a link has been healthy for 10 s.
+  backoff to 1 s; it now grows across consecutive links shorter than
+  10 s, while the first drop after a wake or a healthy link still retries
+  after 1 s.
 - The scale sleeps after **~9 min idle — MEASURED**. Reconnect logic is
   mandatory. *(This said ~15 min until 2026-10-27, as did `scale.h`; the
   source of that figure was never recorded, and `docs/phase-0-status.md`
@@ -1596,8 +1598,10 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   a cup set down, not espresso (the steepest of 75 real shots rose 7.7 g in
   1 s). Measured against the earlier peak, not the window's low, so a real
   shot recovering from a dip — a lift, a bump, the 0 g sample a cup-scale
-  reconnect injects — is not flagged. An excluded record never takes a
-  dose.
+  reconnect injects — is not flagged. For 1 s after a gap in the samples
+  (a scale reconnect) nothing is judged, because the rise across the gap is
+  unknown; a placement there goes unflagged. **A placement never takes a
+  dose; a reject or a fault keeps its own** (`store.go`, `placementReason`).
   Kept, flagged (`SPOOL_FLAG_PLACEMENT`, firmware 0.11.1) and excluded at
   ingest. Added after shot 180 (2026-11-15): a cup put back on an un-tared
   scale landed slowly enough, 3–4 g per sample, to pass the per-sample

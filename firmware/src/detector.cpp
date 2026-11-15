@@ -222,11 +222,32 @@ bool ShotDetector::finishShot() {
 // against the window's minimum and excluded good shots for exactly that
 // (review, 2026-11-15). One pass: `i` trails `j` to the window's start, and
 // `peak_before` is the maximum of every sample before `i`.
+//
+// A GAP IN THE SAMPLES (a scale reconnect: seconds of nothing, then often
+// the injected 0 g) hides how fast the curve rose across it, so a real pour
+// measured against its pre-gap peak would read as a placement once the gap
+// is long enough (8 s at 2.5 g/s — review 2026-11-15). After a gap longer
+// than PLACEMENT_RISE_MS, the first PLACEMENT_RISE_MS of samples only feed
+// the peak and are never judged: a cup landing during or just after a scale
+// outage goes unflagged, which keeps a record rather than excluding one.
 bool ShotDetector::risesLikeAPlacement() const {
   if (buf_count == 0) return false;
   uint16_t i = 0;
   int32_t peak_before = buf[0].weight_mg;   // no sample before the first window
+  bool seeding = false;
+  uint32_t seed_from = 0;
   for (uint16_t j = 0; j < buf_count; j++) {
+    if (j > 0 && (uint32_t)(buf[j].t_ms - buf[j - 1].t_ms) > PLACEMENT_RISE_MS) {
+      seeding = true;
+      seed_from = buf[j].t_ms;
+    }
+    if (seeding) {
+      if ((uint32_t)(buf[j].t_ms - seed_from) <= PLACEMENT_RISE_MS) {
+        if (buf[j].weight_mg > peak_before) peak_before = buf[j].weight_mg;
+        continue;
+      }
+      seeding = false;
+    }
     while (i < j && (uint32_t)(buf[j].t_ms - buf[i].t_ms) > PLACEMENT_RISE_MS) {
       if (buf[i].weight_mg > peak_before) peak_before = buf[i].weight_mg;
       i++;

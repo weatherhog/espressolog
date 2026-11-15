@@ -1159,3 +1159,45 @@ func TestDoseSkipsExcludedShots(t *testing.T) {
 		}
 	}
 }
+
+// Only a cup placement loses the dose. A shot that choked under 5 g
+// (reject) still used the coffee, and keeps the weighing before it, in
+// either arrival order (review, 2026-11-15: both were denied it).
+func TestRejectKeepsItsDose(t *testing.T) {
+	dev := "aa:bb:cc:dd:ee:03"
+	base := time.Now().Add(-time.Hour).Truncate(time.Second)
+	reject := func(h *record.Header) {
+		h.StartedAtUnixMs = uint64(base.UnixMilli())
+		h.Flags |= record.FlagReject
+	}
+	for _, order := range []string{"weighing first", "weighing last"} {
+		st := openTestStore(t)
+		w := weighingRecord(1, 18000, base.Add(-time.Minute))
+		raw, rec := pumpRecordWith(t, 300, record.Pump2Cup, 8200, reject, nil)
+		if order == "weighing first" {
+			if _, err := st.Ingest(dev, w, []byte{2}, base); err != nil {
+				t.Fatal(err)
+			}
+		}
+		res, err := st.Ingest(dev, rec, raw, base)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if order == "weighing last" {
+			if _, err := st.Ingest(dev, w, []byte{2}, base); err != nil {
+				t.Fatal(err)
+			}
+		}
+		var g sql.NullFloat64
+		var excl int
+		if err := st.db.QueryRow(`SELECT dose_ground_g, excluded FROM shot WHERE id = ?`, res.ShotID).Scan(&g, &excl); err != nil {
+			t.Fatal(err)
+		}
+		if excl != 1 {
+			t.Fatalf("%s: reject not excluded", order)
+		}
+		if !g.Valid || g.Float64 != 18.0 {
+			t.Errorf("%s: the reject's dose = %v, want 18", order, g)
+		}
+	}
+}

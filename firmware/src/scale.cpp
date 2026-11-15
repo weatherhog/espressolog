@@ -95,9 +95,6 @@ void ScaleManager::tickSlot(Slot& s, uint32_t now) {
         break;
       }
       s.dev->update();   // lib heartbeat, self-throttled to 2 s
-      // Healthy for a while: the next drop starts from the minimum again.
-      if (s.backoff_ms != BACKOFF_MIN_MS && now - s.connected_at_ms > HEALTHY_MS)
-        s.backoff_ms = BACKOFF_MIN_MS;
       break;
     }
     case SlotState::UNBOUND:
@@ -128,8 +125,9 @@ void ScaleManager::tickSlot(Slot& s, uint32_t now) {
       s.connect_result.store(CONNECT_IDLE, std::memory_order_relaxed);
       if (r == CONNECT_OK) {
         s.state = SlotState::CONNECTED;
-        // Not reset here: a link that drops within HEALTHY_MS keeps backing
-        // off (see CONNECTED, and scale.h on connectTask).
+        // The connect-failure backoff restarts: the scale is awake. Whether
+        // a DROP backs off is link_backoff_ms's business (dropConnection).
+        s.backoff_ms = BACKOFF_MIN_MS;
         s.connected_at_ms = now;
         s.last_sample_ms = now;
         Serial.printf("# scale[%s] connected: %s (%lu ms, off the loop)\n",
@@ -152,12 +150,24 @@ void ScaleManager::dropConnection(Slot& s, uint32_t now, const char* why) {
                 s.role == ScaleRole::YIELD ? "yield" : "dose", why);
   s.dev.reset();   // destroys the NimBLE client
   s.state = SlotState::LOST;
-  // The current backoff, then grow it: a scale that connects and goes
-  // straight silent no longer retries every second. backoff_ms is back at
-  // the minimum after HEALTHY_MS of a good link, so the ordinary case — the
-  // scale fell asleep after minutes of use — still retries after 1 s.
-  s.next_retry_ms = now + s.backoff_ms;
-  s.backoff_ms = min(s.backoff_ms * 2, BACKOFF_MAX_MS);
+  // Two backoffs, kept apart (review 2026-11-15). link_backoff_ms grows
+  // only across CONSECUTIVE short-lived links, so a scale that connects and
+  // goes straight silent no longer retries every second. A link that lasted
+  // HEALTHY_MS — the scale fell asleep after use — retries after 1 s, and so
+  // does the FIRST short link after a wake: the backoff_ms that sleeping
+  // grew to 30 s restarted on CONNECT_OK, and is not what a drop uses (a
+  // draft did, and a link that hiccuped just after a wake waited 30 s, a
+  // whole pour). Failed connects after the drop grow from the drop's delay.
+  uint32_t delay;
+  if (now - s.connected_at_ms < HEALTHY_MS) {
+    delay = s.link_backoff_ms;
+    s.link_backoff_ms = min(s.link_backoff_ms * 2, BACKOFF_MAX_MS);
+  } else {
+    delay = BACKOFF_MIN_MS;
+    s.link_backoff_ms = BACKOFF_MIN_MS;
+  }
+  s.next_retry_ms = now + delay;
+  s.backoff_ms = min(delay * 2, BACKOFF_MAX_MS);
   updateScanState();
 }
 
@@ -297,6 +307,7 @@ bool ScaleManager::assign(ScaleRole role, const String& mac_or_last, Stream& out
   s.state = SlotState::SCANNING;
   s.next_retry_ms = 0;
   s.backoff_ms = BACKOFF_MIN_MS;
+  s.link_backoff_ms = BACKOFF_MIN_MS;
   prefs.putString(nvsKey(role), mac);
   updateScanState();
   out.printf("# %s scale bound to %s (persisted)\n",

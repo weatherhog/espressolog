@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cmath>
 #include <cassert>
+#include <initializer_list>
 
 static ShotDetector det;
 
@@ -436,6 +437,35 @@ int main() {
       assert(!rr->placement);
     }
     printf("dips that recover (lift, bump, reconnect 0 g) are not placements OK\n");
+  }
+
+  // A scale reconnect mid-pour: the samples stop for several seconds, then
+  // resume with the injected 0 g and the weight the pour reached meanwhile.
+  // Measured against the pre-gap peak that read as a 20 g rise in 1 s once
+  // the gap passed ~8 s (review, 2026-11-15). Never a placement.
+  {
+    for (uint32_t gap_s : {4u, 8u, 10u, 12u}) {
+      ShotDetector d;
+      uint32_t tt = 100000;
+      for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+      const uint32_t pour0 = tt;
+      bool fin = false;
+      auto w_at = [&](uint32_t now) {            // 2.5 g/s for 16 s, then flat
+        double s = (now - pour0) / 1000.0;
+        return s < 16.0 + gap_s ? 2.5 * s : 2.5 * (16.0 + gap_s);
+      };
+      for (; tt < pour0 + 8000 && !fin; tt += 100) fin = d.feed(tt, (int32_t)llround(w_at(tt) * 1000.0));
+      tt += gap_s * 1000;                         // nothing arrives
+      fin = fin || d.feed(tt, 0);                 // the reconnect's 0 g
+      tt += 100;
+      for (int i = 0; i < 400 && !fin; i++, tt += 100) fin = d.feed(tt, (int32_t)llround(w_at(tt) * 1000.0));
+      assert(fin);
+      const ShotResult* rr = &d.result();
+      if (rr->placement) printf("FLAGGED after a %u s gap\n", gap_s);
+      assert(!rr->placement);
+      assert(rr->valid);
+    }
+    printf("a pour across a scale-reconnect gap is not a placement OK\n");
   }
 
   printf("all scenarios passed\n");

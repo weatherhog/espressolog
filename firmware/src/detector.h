@@ -20,8 +20,9 @@ struct ShotResult {
   bool     valid;          // false: rejected (<5 g) or faulted
   bool     fault;          // cup removed mid-pour
   bool     truncated;      // hit the uint16 t_ms ceiling, stop was forced
-  // The curve rose more than PLACEMENT_RISE_MG within PLACEMENT_RISE_MS
-  // somewhere: a cup set down, not espresso, which cannot add 20 g in a
+  // The curve rose more than PLACEMENT_RISE_MG ABOVE ITS EARLIER PEAK
+  // within PLACEMENT_RISE_MS somewhere (risesLikeAPlacement() in
+  // detector.cpp has the rule and its gap exception): a cup set down, not espresso, which cannot add 20 g in a
   // second. The record is kept (a mistake here must not lose a real shot)
   // and the server excludes it. Added 2026-11-15 after shot 180: a cup put
   // back on the scale landed slowly enough — 3-4 g per sample — to pass the

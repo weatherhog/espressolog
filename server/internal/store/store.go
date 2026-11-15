@@ -129,11 +129,12 @@ func (s *Store) Ingest(deviceID string, r *record.Record, raw []byte, receivedAt
 	switch h.RecordType {
 	case record.TypeShot:
 		res.ShotID, err = insertShot(tx, r, scaleID, startedAt, now)
-		// An excluded record — a placement, a reject, a fault — is not the
-		// shot a weighing was for. Giving it the dose took it from the real
-		// shot pulled seconds later: set the cup back after weighing and the
-		// placement record claimed the 18 g (review, 2026-11-15).
-		if err == nil && !excludedAtIngest(h) {
+		// A cup placement is not the shot a weighing was for. Giving it the
+		// dose took it from the real shot pulled seconds later: set the cup
+		// back after weighing and the placement record claimed the 18 g
+		// (review, 2026-11-15). A reject or a fault keeps its dose — a shot
+		// that choked under 5 g still used the coffee.
+		if err == nil && ingestVerdict(h).reason != placementReason {
 			err = attributeDoseToShot(tx, res.ShotID, startedAt)
 		}
 	case record.TypeWeighing:
@@ -407,18 +408,15 @@ func staleFloor(startedAt time.Time) string {
 
 func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time, now string) (int64, error) {
 	h, samples := &rec.Header, rec.Samples
+	v := ingestVerdict(h)
 	var stoppedBy, excludeReason any
 	excluded := 0
-	if h.Fault() {
+	if v.reason != "" {
+		excluded = 1
+		excludeReason = v.reason
+	}
+	if v.fault {
 		stoppedBy = "fault"
-		excluded = 1
-		excludeReason = "fault: cup removed mid-pour"
-	} else if h.Reject() {
-		excluded = 1
-		excludeReason = "reject: under 5 g"
-	} else if h.Placement() {
-		excluded = 1
-		excludeReason = "cup placement: the detector judged it a cup set down, not a pour"
 	}
 	machineID, grinderID, epochID := defaultContext(tx, startedAt)
 	beanID, grindDial, brewTemp, preinfusion := defaultRecipe(tx, epochID, startedAt, h.SetpointTouched())
@@ -594,10 +592,33 @@ const (
 	doseMaxG   = 24.0
 )
 
-// excludedAtIngest says whether insertShot marks this record excluded —
-// the same three verdicts, in one place, so attribution cannot drift from it.
-func excludedAtIngest(h *record.Header) bool {
-	return h.Fault() || h.Reject() || h.Placement()
+// placementReason is the exclude_reason a cup placement is stored with. Both
+// dose-attribution paths key on it — the arrival path through ingestVerdict,
+// the late-weighing path through the stored column — so they judge the same
+// thing: a record whose verdict was "placement" never takes a dose. (Until
+// review 2026-11-15 one path read the header flags and the other the
+// editable `excluded` column, and they disagreed on rejects, faults and
+// manual exclusions.)
+const placementReason = "cup placement: the detector judged it a cup set down, not a pour"
+
+type verdict struct {
+	reason string // "" = not excluded at ingest
+	fault  bool
+}
+
+// ingestVerdict is the one place a record's ingest-time exclusion is decided;
+// insertShot stores it and attribution reads it. First match wins, so a
+// faulted placement is a fault.
+func ingestVerdict(h *record.Header) verdict {
+	switch {
+	case h.Fault():
+		return verdict{reason: "fault: cup removed mid-pour", fault: true}
+	case h.Reject():
+		return verdict{reason: "reject: under 5 g"}
+	case h.Placement():
+		return verdict{reason: placementReason}
+	}
+	return verdict{}
 }
 
 func attributeDoseToShot(tx *sql.Tx, shotID int64, startedAt time.Time) error {
@@ -635,10 +656,10 @@ func attributeWeighingToLaterShot(tx *sql.Tx, weighingID int64, grams float64, o
 	var shotID int64
 	err := tx.QueryRow(`
 		SELECT id FROM shot
-		WHERE dose_ground_g IS NULL AND excluded = 0
+		WHERE dose_ground_g IS NULL AND exclude_reason IS NOT ?
 		  AND started_at >= ? AND started_at < ?
 		ORDER BY started_at ASC LIMIT 1`,
-		observed, horizon).Scan(&shotID)
+		placementReason, observed, horizon).Scan(&shotID)
 	if err == sql.ErrNoRows {
 		return nil
 	}

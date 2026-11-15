@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cmath>
 #include <cassert>
+#include <initializer_list>
 
 static ShotDetector det;
 
@@ -61,6 +62,7 @@ int main() {
   uint32_t expected_t0 = pour_t0_wall + 8000;
   assert(r->started_at_ms > expected_t0 - 1500 && r->started_at_ms < expected_t0 + 2500);
   assert(det.state() == ShotState::IDLE);
+  assert(!r->placement);                          // a real pour is not a cup landing
 
   // Scenario 2: reject — a 2 g dribble.
   for (int i = 0; i < 30; i++, t += 100) feed(t, 0.0, nullptr);
@@ -378,6 +380,92 @@ int main() {
     for (uint16_t i = 1; i < rr->sample_count; i++)  // cumulative never goes backwards
       assert(rr->samples[i].inlet_pulses >= rr->samples[i - 1].inlet_pulses);
     printf("flowmeter windowing OK (%u pulses in-shot, 777 pre-shot excluded)\n", last);
+  }
+
+  // The cup put back on the scale, 2026-11-15 (shot 180): the device's own
+  // timestamped weight stream from the server's live journal, mg. The scale
+  // read -151 g with the cup off (it had been tared with the cup on); the
+  // cup came down slowly enough — 3-4 g per sample — to pass the per-sample
+  // step guard into POURING, then rose 151 g in ~0.6 s. Recorded, but
+  // flagged as a placement, so the server excludes it.
+  {
+    static const struct { uint32_t t; int32_t w; } s180[] = {
+      {353634,-151390}, {353754,-151390}, {353845,-151390}, {353964,-151390}, {354055,-151390}, {354144,-151390}, {354264,-151390}, {354354,-151390}, {354474,-151390}, {354564,-151390}, {354654,-151390}, {354774,-151390}, {354864,-151390}, {354985,-151390}, {355104,-151390}, {355135,-151390}, {355285,-151390}, {355374,-151390}, {355434,-151390}, {355584,-151390}, {355645,-151390}, {355734,-151390}, {355884,-151390}, {355944,-151390}, {356095,-151390}, {356155,-151390}, {356244,-151390}, {356395,-151390}, {356455,-151390}, {356544,-151390}, {356664,-151390}, {356754,-151390}, {356844,-151390}, {356964,-151390}, {357054,-151390}, {357144,-151390}, {357265,-151390}, {357354,-151390}, {357474,-151390}, {357564,-151390}, {357654,-151390}, {357775,-151390}, {357864,-151390}, {357954,-151390}, {358075,-151390}, {358164,-151390}, {358254,-151390}, {358374,-151390}, {358464,-151390}, {358554,-151390}, {358674,-151390}, {358764,-151390}, {358884,-151390}, {358975,-151390}, {359064,-151390}, {359185,-151390}, {359274,-151390}, {359365,-151390}, {359484,-151390}, {359575,-151390}, {359694,-151390}, {359784,-151390}, {359904,-151390}, {359994,-151390}, {360084,-151390}, {360205,-151390}, {360294,-151390}, {360415,-151390}, {360504,-151390}, {360594,-151390}, {360684,-151390}, {360804,-151390}, {360894,-151390}, {361014,-151390}, {361104,-151390}, {361224,-151390}, {361314,-151390}, {361374,-151390}, {361524,-151390}, {361584,-151390}, {361735,-151390}, {361824,-151390}, {361884,-151390}, {362034,-151390}, {362094,-147700}, {362184,-144800}, {362334,-144800}, {362394,-148100}, {362484,-138300}, {362604,-137300}, {362695,-149600}, {362785,-104400}, {362905,-41800}, {362994,-49300}, {363114,-13800}, {363204,-1200}, {363294,-800}, {363415,-800}, {363504,-800}, {363594,-800}, {363714,-600}, {363804,-600}, {363894,-600}, {364015,-600}, {364134,-600}, {364195,-600}, {364314,-600}, {364404,-600}, {364524,-600}, {364614,0}, {364704,0}, {364824,0}, {364914,0}, {365004,0}, {365124,0}, {365214,0}, {365304,0}, {365424,0}, {365514,0}, {365604,0}, {365724,0}, {365814,0}, {365934,0}, {366024,0}, {366114,0}, {366234,0}, {366355,0}, {366445,0}, {366534,0}, {366654,0}, {366744,0}, {366865,0}, {366954,0}, {367044,0}, {367164,0}, {367255,0}, {367375,0}, {367464,0}, {367525,0}, {367675,0}, {367764,0}, {367825,0}, {367974,0}, {368034,0}, {368124,0}, {368274,0}, {368334,0}, {368425,0}, {368544,0}, {368634,0}, {368784,0}, {368844,0}, {368934,0}, {369054,0}, {369144,0}, {369235,0}, {369354,0}, {369445,0}, {369534,0}, {369654,0}, {369745,0}, {369834,0}, {369954,0}, {370044,0}, {370134,0}, {370254,0}, {370344,0}, {370464,0}, {370555,0}, {370645,0}, {370764,0}, {370855,0}, {370945,0}, {371064,0}, {371154,0}, {371244,0}, {371364,0}, {371454,0}, {371574,0}, {371664,0}, {371754,0}, {371874,0}, {371964,0}, {372085,0}, {372174,0}, {372294,0}, {372385,0}, {372475,0}
+    };
+    ShotDetector d;
+    const ShotResult* rr = nullptr;
+    for (const auto& x : s180) {
+      if (d.feed(x.t, x.w)) { rr = &d.result(); break; }
+    }
+    // Feed flat until it completes, if the journal window ended first.
+    for (uint32_t t2 = s180[sizeof(s180) / sizeof(s180[0]) - 1].t + 100; !rr && t2 < 500000; t2 += 100)
+      if (d.feed(t2, 600)) rr = &d.result();
+    assert(rr);
+    assert(rr->yield_final_mg > 140000);              // what it would have claimed
+    assert(rr->placement);
+    printf("cup put back (real stream, shot 180) is flagged a placement OK\n");
+  }
+
+  // A REAL shot whose weight dips by more than 20 g and recovers must NOT be
+  // flagged a placement (review, 2026-11-15: the first rule scanned the
+  // whole curve, so the recovery from a dip read as a 20 g rise, and good
+  // shots were excluded). Three dips, each on a pour already at 30 g: a
+  // brief lift, a bump, and the single 0 g sample a cup-scale reconnect
+  // injects mid-shot (remote_scales' bookoo connect() ends in setWeight(0)).
+  {
+    struct Dip { const char* name; uint32_t start_s10; uint32_t len_s10; double w; };
+    const Dip dips[] = {
+      {"1 s lift to -170 g", 200, 10, -170.0},
+      {"1 s bump down to 9 g", 200, 10, 9.0},
+      {"one 0 g sample (reconnect)", 200, 1, 0.0},
+    };
+    for (const Dip& dp : dips) {
+      ShotDetector d;
+      const ShotResult* rr = nullptr;
+      uint32_t tt = 100000;
+      for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+      bool fin = false;
+      for (int i = 0; i <= 300 && !fin; i++, tt += 100) {
+        double w = shotCurve(i / 10.0);
+        if ((uint32_t)i >= dp.start_s10 && (uint32_t)i < dp.start_s10 + dp.len_s10) w = dp.w;
+        fin = d.feed(tt, (int32_t)llround(w * 1000.0));
+      }
+      for (int i = 0; i < 200 && !fin; i++, tt += 100) fin = d.feed(tt, 35300);
+      assert(fin);
+      rr = &d.result();
+      if (rr->placement) printf("FLAGGED: %s\n", dp.name);
+      assert(!rr->placement);
+    }
+    printf("dips that recover (lift, bump, reconnect 0 g) are not placements OK\n");
+  }
+
+  // A scale reconnect mid-pour: the samples stop for several seconds, then
+  // resume with the injected 0 g and the weight the pour reached meanwhile.
+  // Measured against the pre-gap peak that read as a 20 g rise in 1 s once
+  // the gap passed ~8 s (review, 2026-11-15). Never a placement.
+  {
+    for (uint32_t gap_s : {4u, 8u, 10u, 12u}) {
+      ShotDetector d;
+      uint32_t tt = 100000;
+      for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+      const uint32_t pour0 = tt;
+      bool fin = false;
+      auto w_at = [&](uint32_t now) {            // 2.5 g/s for 16 s, then flat
+        double s = (now - pour0) / 1000.0;
+        return s < 16.0 + gap_s ? 2.5 * s : 2.5 * (16.0 + gap_s);
+      };
+      for (; tt < pour0 + 8000 && !fin; tt += 100) fin = d.feed(tt, (int32_t)llround(w_at(tt) * 1000.0));
+      tt += gap_s * 1000;                         // nothing arrives
+      fin = fin || d.feed(tt, 0);                 // the reconnect's 0 g
+      tt += 100;
+      for (int i = 0; i < 400 && !fin; i++, tt += 100) fin = d.feed(tt, (int32_t)llround(w_at(tt) * 1000.0));
+      assert(fin);
+      const ShotResult* rr = &d.result();
+      if (rr->placement) printf("FLAGGED after a %u s gap\n", gap_s);
+      assert(!rr->placement);
+      assert(rr->valid);
+    }
+    printf("a pour across a scale-reconnect gap is not a placement OK\n");
   }
 
   printf("all scenarios passed\n");

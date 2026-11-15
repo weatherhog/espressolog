@@ -20,6 +20,14 @@ struct ShotResult {
   bool     valid;          // false: rejected (<5 g) or faulted
   bool     fault;          // cup removed mid-pour
   bool     truncated;      // hit the uint16 t_ms ceiling, stop was forced
+  // The curve rose more than PLACEMENT_RISE_MG ABOVE ITS EARLIER PEAK
+  // within PLACEMENT_RISE_MS somewhere (risesLikeAPlacement() in
+  // detector.cpp has the rule and its gap exception): a cup set down, not espresso, which cannot add 20 g in a
+  // second. The record is kept (a mistake here must not lose a real shot)
+  // and the server excludes it. Added 2026-11-15 after shot 180: a cup put
+  // back on the scale landed slowly enough — 3-4 g per sample — to pass the
+  // per-sample step guard into POURING, then rose 151 g in ~0.6 s.
+  bool     placement;
   uint32_t started_at_ms;  // millis() of t=0 (backdated to the flow crossing)
   // Where the detector judged the pour to have ended. HOW that is derived
   // depends on which path finalized the shot, and ONLY THE FIRST BACKDATES:
@@ -205,6 +213,10 @@ public:
   // arrive as a slow positive creep; a parked mass drifting from the
   // baseline is a new baseline, not a shot.
   static constexpr int32_t  PLACEMENT_STEP_MG = 5000;  // per-sample jump = cup moved
+  // Over a whole second: espresso runs at ~1-5 g/s, so 20 g in 1 s is 4x the
+  // fastest gusher and only something landing in (or on) the cup.
+  static constexpr int32_t  PLACEMENT_RISE_MG = 20000;
+  static constexpr uint32_t PLACEMENT_RISE_MS = 1000;
   static constexpr int32_t  PARKED_FLOW_MGPS  = 50;
   static constexpr uint32_t PARKED_HOLD_MS    = 2000;
 
@@ -274,6 +286,7 @@ private:
   void enterSettling(uint32_t t, int32_t w_at_stop, uint32_t stop_t, bool truncated);
   bool finishShot();
   bool finalizeLifted();   // cup removed → finalize at the peak weight
+  bool risesLikeAPlacement() const;
   void computeFlowWindow();
   void resetToIdle();
 };

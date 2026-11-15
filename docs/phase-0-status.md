@@ -119,6 +119,21 @@ machine's display.)
   TARGET or SETPOINT frame invalidates the value, which only shortens the
   exposure (CLAUDE.md, display-bus entry).
 
+### 2026-11-15 — the lever, first drip and pre-infusion, on real shots
+
+Firmware 0.11.0. **Shot 179 (2Cup) carried everything**: `down`, first drip
+9.86 s after the press, 163 pre-drip pulses (complete). Its pulse train
+shows the 5 s pre-infusion directly — pump on 0.1–5.1 s at ~25 pulses/s, a
+trickle to 6.3 s, nothing until 8.2 s, then the pump again, first drip at
+9.86 s — the first measurement of the pause, which was a hypothesis until
+then. **Shot 180 was not a shot**: the cup put back on the un-tared scale,
+recorded as a 151.6 g "pour" in 2.5 s; excluded by hand, and the detector
+now flags such curves (0.11.1). **Shot 181 (2Cup) lost its lever and pulse
+data**: the grinder scale had dropped out, `loop()` froze ~1.8 s every few
+seconds retrying it (gaps in every live frame), and both presses fell
+inside freezes. The connect now runs off `loop()` (0.11.1). Dose is
+missing on 179 and 181 for the same reason.
+
 ### 2026-11-14 — the first full test on the machine
 
 - **First full test (firmware 0.9.8)**: shots 177 and

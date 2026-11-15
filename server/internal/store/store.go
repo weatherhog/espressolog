@@ -128,8 +128,17 @@ func (s *Store) Ingest(deviceID string, r *record.Record, raw []byte, receivedAt
 
 	switch h.RecordType {
 	case record.TypeShot:
-		res.ShotID, err = insertShot(tx, r, scaleID, startedAt, now)
-		if err == nil {
+		var excluded bool
+		res.ShotID, excluded, err = insertShot(tx, r, scaleID, startedAt, now)
+		// A record excluded at ingest — a placement, a reject, a fault — is
+		// not the shot a weighing was for. Giving it the dose took it from
+		// the real shot pulled seconds later: set the cup back after weighing
+		// and the placement claimed the 18 g (review, 2026-11-15). Rejects
+		// too: almost every one is a knock or a drip, not a shot that choked
+		// (a second review, the same day, reversed a draft that let them keep
+		// it). The late-weighing path skips the same records by their stored
+		// ingest reason (attributeWeighingToLaterShot).
+		if err == nil && !excluded {
 			err = attributeDoseToShot(tx, res.ShotID, startedAt)
 		}
 	case record.TypeWeighing:
@@ -401,17 +410,16 @@ func staleFloor(startedAt time.Time) string {
 	return startedAt.UTC().Add(-recipeMaxAge).Format(time.RFC3339)
 }
 
-func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time, now string) (int64, error) {
+func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time, now string) (int64, bool, error) {
 	h, samples := &rec.Header, rec.Samples
 	var stoppedBy, excludeReason any
 	excluded := 0
+	if reason := excludeReasonAtIngest(h); reason != "" {
+		excluded = 1
+		excludeReason = reason
+	}
 	if h.Fault() {
 		stoppedBy = "fault"
-		excluded = 1
-		excludeReason = "fault: cup removed mid-pour"
-	} else if h.Reject() {
-		excluded = 1
-		excludeReason = "reject: under 5 g"
 	}
 	machineID, grinderID, epochID := defaultContext(tx, startedAt)
 	beanID, grindDial, brewTemp, preinfusion := defaultRecipe(tx, epochID, startedAt, h.SetpointTouched())
@@ -505,22 +513,22 @@ func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time
 		h.Detector(), h.Firmware(),
 		excluded, excludeReason, now)
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
 	shotID, err := r.LastInsertId()
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
 
 	if len(preMs) > 0 {
 		pst, err := tx.Prepare(`INSERT INTO shot_pre_pulse (shot_id, n, ms_after_press) VALUES (?,?,?)`)
 		if err != nil {
-			return 0, err
+			return 0, false, err
 		}
 		for n, ms := range preMs {
 			if _, err := pst.Exec(shotID, n, ms); err != nil {
 				pst.Close()
-				return 0, err
+				return 0, false, err
 			}
 		}
 		pst.Close()
@@ -537,7 +545,7 @@ func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time
 	// than failing the whole ingest (the raw record keeps both regardless).
 	stmt, err := tx.Prepare(`INSERT OR REPLACE INTO shot_sample (shot_id, t_ms, weight_mg, inlet_pulses, temp_dc) VALUES (?,?,?,?,?)`)
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
 	defer stmt.Close()
 	for _, smp := range samples {
@@ -556,10 +564,10 @@ func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time
 			pulses = smp.InletPulses
 		}
 		if _, err := stmt.Exec(shotID, smp.TMs, smp.WeightMg, pulses, temp); err != nil {
-			return 0, err
+			return 0, false, err
 		}
 	}
-	return shotID, nil
+	return shotID, excluded == 1, nil
 }
 
 func insertWeighing(tx *sql.Tx, h *record.Header, scaleID any, observedAt time.Time) (int64, error) {
@@ -587,6 +595,31 @@ const (
 	doseMaxG   = 24.0
 )
 
+// excludeReasonAtIngest is the one place a record's ingest-time exclusion
+// is decided ("" = not excluded). insertShot stores it and reports it, and
+// the arrival path's dose attribution reads that report rather than
+// re-deriving it. First match wins, so a faulted placement is a fault.
+func excludeReasonAtIngest(h *record.Header) string {
+	switch {
+	case h.Fault():
+		return reasonFault
+	case h.Reject():
+		return reasonReject
+	case h.Placement():
+		return reasonPlacement
+	}
+	return ""
+}
+
+// The exclude_reason values written at ingest. attributeWeighingToLaterShot
+// matches stored rows against them, so CHANGING ONE STRANDS EVERY ROW
+// ALREADY STORED WITH THE OLD TEXT — add a migration if one ever changes.
+const (
+	reasonFault     = "fault: cup removed mid-pour"
+	reasonReject    = "reject: under 5 g"
+	reasonPlacement = "cup placement: the detector judged it a cup set down, not a pour"
+)
+
 func attributeDoseToShot(tx *sql.Tx, shotID int64, startedAt time.Time) error {
 	started := startedAt.UTC().Format(time.RFC3339)
 	cutoff := startedAt.Add(-doseWindow).UTC().Format(time.RFC3339)
@@ -612,6 +645,14 @@ func attributeDoseToShot(tx *sql.Tx, shotID int64, startedAt time.Time) error {
 
 // Out-of-order arrival: a weighing whose shot was ingested first (upload
 // retries can reorder) claims the first still-doseless shot after it.
+// It skips the records the arrival path skips — those excluded AT INGEST
+// (fault, reject, placement), keyed on their stored reason — and nothing
+// else: a shot the user excluded by hand (a prep error, "discarded at
+// capture") still used the coffee and can take its dose, and a false reject
+// the user un-excludes becomes eligible (review 3, 2026-11-15: keyed on the
+// editable `excluded` alone, the two paths disagreed after any edit).
+// KNOWN, older than this: with reordered uploads it takes the earliest
+// weighing to ARRIVE, not the last one before the shot.
 func attributeWeighingToLaterShot(tx *sql.Tx, weighingID int64, grams float64, observedAt time.Time) error {
 	if grams < doseMinG || grams > doseMaxG {
 		return nil
@@ -623,9 +664,10 @@ func attributeWeighingToLaterShot(tx *sql.Tx, weighingID int64, grams float64, o
 	err := tx.QueryRow(`
 		SELECT id FROM shot
 		WHERE dose_ground_g IS NULL
+		  AND NOT (excluded = 1 AND COALESCE(exclude_reason, '') IN (?, ?, ?))
 		  AND started_at >= ? AND started_at < ?
 		ORDER BY started_at ASC LIMIT 1`,
-		observed, horizon).Scan(&shotID)
+		reasonFault, reasonReject, reasonPlacement, observed, horizon).Scan(&shotID)
 	if err == sql.ErrNoRows {
 		return nil
 	}

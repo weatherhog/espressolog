@@ -3,6 +3,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <memory>
+#include <atomic>
 
 class RemoteScales;
 class RemoteScalesScanner;
@@ -55,12 +56,27 @@ private:
     std::unique_ptr<RemoteScales> dev;
     volatile uint32_t last_sample_ms = 0;   // written from the BLE task
     uint32_t next_retry_ms = 0;
-    uint32_t backoff_ms = 1000;
+    uint32_t backoff_ms = 1000;        // between failed connects
+    uint32_t link_backoff_ms = 1000;   // after a link that delivered no weight
+    uint32_t flap_backoff_ms = 1000;   // after a link that did (capped low)
+    // CONNECTING runs in connectTask, not loop(): `dev` belongs to that task
+    // until `connect_result` leaves PENDING (release/acquire), and loop()
+    // must not touch it before.
+    std::atomic<uint8_t> connect_result{0};   // ConnectResult
+    uint32_t connect_started_ms = 0;
+    bool     connect_slow_logged = false;
+    uint32_t connected_at_ms = 0;
   };
+  enum ConnectResult : uint8_t { CONNECT_IDLE = 0, CONNECT_PENDING, CONNECT_OK, CONNECT_FAIL };
 
   static constexpr uint32_t STALE_MS      = 3000;
   static constexpr uint32_t BACKOFF_MIN_MS = 1000;
   static constexpr uint32_t BACKOFF_MAX_MS = 30000;
+  static constexpr uint32_t FLAP_BACKOFF_MAX_MS = 4000;
+  static constexpr uint32_t LONG_LINK_MS        = 10000;
+  // NimBLE's own connect timeout is 30 s and its service discovery waits
+  // without one; past this, say so — a hung connect blocks the other slot.
+  static constexpr uint32_t CONNECT_SLOW_MS = 45000;
 
   Slot slots[2];
   QueueHandle_t queue = nullptr;
@@ -69,8 +85,24 @@ private:
 
   void tickSlot(Slot& s, uint32_t now);
   void dropConnection(Slot& s, uint32_t now, const char* why);
-  bool tryConnect(Slot& s, uint32_t now);
+  bool startConnect(Slot& s, uint32_t now);
   void updateScanState();
+  bool anyConnecting() const;
+
+  // The blocking BLE connect, off loop(). Until 2026-11-15 tryConnect() ran
+  // dev->connect() inline, and with the grinder scale gone loop() stalled
+  // ~1.8 s every few seconds retrying it: switch presses fell inside the
+  // stalls and were missed outright (shot 181), and the brew guard — which
+  // needs those presses — went blind with them (invariant 2). Why "every
+  // few seconds" rather than a growing backoff is INFERRED, not observed: a
+  // scale that accepts the connection and then sends nothing went stale in
+  // 3 s, and dropConnection() reset the backoff to 1 s each time. It now
+  // grows to 30 s across links that delivered no weight, and only to 4 s
+  // across links that did (dropConnection has both). (A draft of
+  // this comment blamed the scanner for never forgetting a scale; it does —
+  // every scan restart clears its list.)
+  QueueHandle_t connect_queue = nullptr;
+  static void connectTask(void* arg);
 
   static ScaleManager* self;                // for the C-style lib callbacks
   static void onWeightYield(float grams);

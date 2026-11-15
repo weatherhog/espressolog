@@ -37,7 +37,8 @@ typedef struct __attribute__((packed)) {
   uint8_t  scale_role;         // 0 yield, 1 dose
   uint8_t  scale_mac[6];       // → equipment.ble_address lookup
   uint8_t  flags;              // bit0 FAULT, bit1 TRUNCATED, bit2 REJECT,
-                               // bit3 SETPOINT_TOUCHED, bit4 FLOW_TAP.
+                               // bit3 SETPOINT_TOUCHED, bit4 FLOW_TAP,
+                               // bit5 PLACEMENT.
                                // Keep this list in step with the #defines
                                // below: this struct is what a second reader
                                // reads, and a list that stops short reads as
@@ -148,6 +149,10 @@ static_assert(PRE_PULSES_MAX == 256, "the server's PrePulsesMax is 256");
 // 0.8.x carry placeholder zeros and no flag, so they read correctly as
 // "the machine did not say".
 #define SPOOL_FLAG_FLOW_TAP 0x10
+// 0.11.1. The detector judged the "shot" a cup being set down (ShotResult::
+// placement): its curve rose >20 g within 1 s, which espresso cannot. Kept,
+// so a misjudged real shot is not lost; the server excludes it.
+#define SPOOL_FLAG_PLACEMENT 0x20
 
 
 // LittleFS spool: one file per record under /spool, written only when no

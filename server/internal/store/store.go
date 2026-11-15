@@ -1044,7 +1044,8 @@ func measuredPreinfusion(rec *record.Record) (float64, bool) {
 // before 012), 'carried', or 'flow' itself. NEVER 'user' (typed, or
 // deliberately cleared) and never a pre-012 value with no source, which a
 // human may have typed. A 'flow' row the new thresholds cannot measure loses
-// its value. Returns how many rows changed; a no-op once settled.
+// its value, and so does a 'flow' or 'carried' row whose measured run maps
+// to no Pr the machine offers. Returns how many rows changed; a no-op once settled.
 func (s *Store) backfillPreinfusion() (int, error) {
 	rows, err := s.db.Query(`
 		SELECT id, pre_pulse_total, pre_pulse_complete, first_drip_ms,

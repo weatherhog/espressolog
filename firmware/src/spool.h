@@ -95,7 +95,9 @@ typedef struct __attribute__((packed)) {
   // --- format v5: the brew setpoint, off the front display (0e) ---
   // The value last dialled in on the machine (a SETPOINT frame, 80-130 C)
   // while this board watched, in decidegrees, as it stood at pour start.
-  // INT16_MIN = no edit seen since boot, or a weighing. THIS is brew_temp_c's
+  // INT16_MIN = no confirmed edit seen since boot (or since the display tap
+  // was switched), an edit not yet confirmed (SETPOINT_TOUCHED is then set),
+  // the display not decoding at pour start, or a weighing. THIS is brew_temp_c's
   // source when present; boiler_temp_start_dc is what the boiler showed.
   int16_t  setpoint_dc;
   // weighing-only (zero for shots):

@@ -1317,7 +1317,9 @@ func TestBackfillPreinfusion(t *testing.T) {
 	if _, err := st.db.Exec(`UPDATE shot SET preinfusion_s = 3, preinfusion_run_s = 2.9 WHERE id = ?`, res.ShotID); err != nil {
 		t.Fatal(err)
 	}
-	st.backfillPreinfusion()
+	if _, err := st.backfillPreinfusion(); err != nil {
+		t.Fatal(err)
+	}
 	if pre, run, src := read(); pre.Float64 != 5 || run.Float64 != 5.1 || src.String != "flow" {
 		t.Errorf("stale flow row re-derived to %v / %v (%v), want 5 / 5.1 flow", pre, run, src)
 	}
@@ -1326,7 +1328,9 @@ func TestBackfillPreinfusion(t *testing.T) {
 	if _, err := st.db.Exec(`UPDATE shot SET preinfusion_s = 2.5, preinfusion_source = NULL, preinfusion_run_s = NULL WHERE id = ?`, res.ShotID); err != nil {
 		t.Fatal(err)
 	}
-	st.backfillPreinfusion()
+	if _, err := st.backfillPreinfusion(); err != nil {
+		t.Fatal(err)
+	}
 	if pre, run, src := read(); pre.Float64 != 2.5 || src.Valid || run.Float64 != 5.1 {
 		t.Errorf("pre-012 value overwritten: %v / %v (%v), want 2.5 unsourced, run 5.1", pre, run, src)
 	}
@@ -1334,20 +1338,99 @@ func TestBackfillPreinfusion(t *testing.T) {
 	if _, err := st.db.Exec(`UPDATE shot SET preinfusion_s = 5, preinfusion_source = 'flow', pre_pulse_complete = 0 WHERE id = ?`, res.ShotID); err != nil {
 		t.Fatal(err)
 	}
-	st.backfillPreinfusion()
+	if _, err := st.backfillPreinfusion(); err != nil {
+		t.Fatal(err)
+	}
 	if pre, run, src := read(); pre.Valid || run.Valid || src.Valid {
 		t.Errorf("unmeasurable flow row kept: %v / %v (%v)", pre, run, src)
 	}
 	if _, err := st.db.Exec(`UPDATE shot SET pre_pulse_complete = 1 WHERE id = ?`, res.ShotID); err != nil {
 		t.Fatal(err)
 	}
-	st.backfillPreinfusion()
+	if _, err := st.backfillPreinfusion(); err != nil {
+		t.Fatal(err)
+	}
 	// Cleared by the user: stays cleared, though the run is still measured.
 	if err := st.UpdateShot(res.ShotID, map[string]any{"preinfusion_s": nil}); err != nil {
 		t.Fatal(err)
 	}
-	st.backfillPreinfusion()
+	if _, err := st.backfillPreinfusion(); err != nil {
+		t.Fatal(err)
+	}
 	if pre, run, src := read(); pre.Valid || src.String != "user" || run.Float64 != 5.1 {
 		t.Errorf("after a user clear and a restart: %v / %v (%v), want empty, user, run 5.1", pre, run, src)
+	}
+}
+
+// A measured run that maps to no Pr the machine offers (5.5 s and up) must
+// not sit beside a carried setting that contradicts it: at ingest and in the
+// backfill the setting goes empty, the run stays. And a v1 row — no
+// setpoint_touched at all — is still a carry source (review, 2026-11-15: NOT
+// (NULL AND ...) dropped it).
+func TestUnmappableRunAndV1CarrySource(t *testing.T) {
+	st := openTestStore(t)
+	dev := "aa:bb:cc:dd:ee:03"
+	base := time.Now().Add(-time.Hour).Truncate(time.Second)
+	long := append(dense(100, 5900), dense(8000, 9000)...) // a 5.8 s run, then the resume
+	measured := func(d time.Duration) func(*record.Header) {
+		return func(h *record.Header) {
+			h.StartedAtUnixMs = uint64(base.Add(d).UnixMilli())
+			h.Flags |= record.FlagFlowTap
+			h.PrePulseTotal, h.PrePulseCount, h.PrePulseFlags = uint16(len(long)), uint16(len(long)), record.PrePulsesComplete
+		}
+	}
+	plain := func(d time.Duration) func(*record.Header) {
+		return func(h *record.Header) { h.StartedAtUnixMs = uint64(base.Add(d).UnixMilli()) }
+	}
+	ingest := func(seq uint32, mut func(*record.Header), offsets []uint16) int64 {
+		t.Helper()
+		raw, rec := pumpRecordWith(t, seq, record.Pump2Cup, 9500, mut, offsets)
+		res, err := st.Ingest(dev, rec, raw, base)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res.ShotID
+	}
+	type rowT struct {
+		temp, pre, run sql.NullFloat64
+		tsrc, psrc     sql.NullString
+	}
+	row := func(id int64) rowT {
+		t.Helper()
+		var r rowT
+		if err := st.db.QueryRow(`SELECT brew_temp_c, brew_temp_source, preinfusion_s, preinfusion_source, preinfusion_run_s FROM shot WHERE id = ?`, id).
+			Scan(&r.temp, &r.tsrc, &r.pre, &r.psrc, &r.run); err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+
+	// A typed setting to carry: Pr 3, 93 C. Made a v1-shaped row: no
+	// setpoint_touched, and a 'display' brew temperature.
+	a := ingest(1, plain(0), nil)
+	if err := st.UpdateShot(a, map[string]any{"preinfusion_s": 3.0}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.db.Exec(`UPDATE shot SET brew_temp_c = 93, brew_temp_source = 'display', setpoint_touched = NULL WHERE id = ?`, a); err != nil {
+		t.Fatal(err)
+	}
+
+	b := ingest(2, measured(time.Minute), long)
+	if r := row(b); r.pre.Valid || r.psrc.Valid || r.run.Float64 != 5.8 {
+		t.Errorf("unmappable run at ingest: %+v; want no setting, run 5.8", r)
+	}
+	if r := row(b); r.temp.Float64 != 93 || r.tsrc.String != "carried" {
+		t.Errorf("v1-shaped 'display' row not carried from: %+v", r)
+	}
+
+	// The backfill: a 'carried' setting beside such a run is cleared too.
+	if _, err := st.db.Exec(`UPDATE shot SET preinfusion_s = 3, preinfusion_source = 'carried', preinfusion_run_s = NULL WHERE id = ?`, b); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.backfillPreinfusion(); err != nil {
+		t.Fatal(err)
+	}
+	if r := row(b); r.pre.Valid || r.psrc.Valid || r.run.Float64 != 5.8 {
+		t.Errorf("unmappable run after backfill: %+v; want no setting, run 5.8", r)
 	}
 }

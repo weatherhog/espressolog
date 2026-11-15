@@ -304,7 +304,7 @@ type Header struct {
 	PrePulseFlags uint8
 	PrePulseCount uint16 // offsets in the record's tail, after the samples
 	// v5. The brew setpoint last dialled in on the display, decidegrees;
-	// TempNone on an older record or when no edit was seen since boot.
+	// TempNone on an older record or when the record does not say (Setpoint).
 	SetpointDc  int16
 	GramsMg     int32
 	StableMs    uint32
@@ -371,8 +371,9 @@ func (h *Header) Reject() bool { return h.Flags&FlagReject != 0 }
 
 // Setpoint returns the brew setpoint the machine's display last showed being
 // dialled in (format v5), in whole degrees as the display renders it. ok is
-// false when the record does not say: older than v5, no edit seen since the
-// board booted, or a weighing.
+// false when the record does not say: older than v5, no confirmed edit seen
+// since the board booted, an edit not yet confirmed (the record is then
+// also SetpointTouched), the display not decoding, or a weighing.
 func (h *Header) Setpoint() (c float64, ok bool) {
 	if h.FormatVersion < 5 || h.RecordType != TypeShot || h.SetpointDc == TempNone {
 		return 0, false

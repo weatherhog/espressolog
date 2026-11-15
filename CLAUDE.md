@@ -1679,8 +1679,11 @@ different value is blinking (an edit not yet confirmed), and not stamped
 while the display is not decoding (`machine_context.h`). **Known limits:**
 an edit made while the bus was unplugged but `display` stayed on is not
 seen (forgetting on a quiet bus would also forget at every machine
-power-off); and a re-derived run does not reach shots that already
-carried the old value. The server stores
+power-off); a re-derived run does not reach shots that already
+carried the old value; a shot pulled while an edit is still unconfirmed
+records no brew temperature and is marked edited, so nothing is carried
+onto or across it — and one misread frame on an edit's last blink leaves
+that state until the next edit (type the value in). The server stores
 it as `brew_temp_c` with `brew_temp_source = 'display'`, and measures the
 pump-on run from the pulse train into `preinfusion_run_s`
 (`server/internal/store/preinfusion.go`: the dense run before the first

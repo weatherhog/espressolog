@@ -748,8 +748,10 @@ static void handleShotComplete(const ShotResult& r) {
     if (machine_ctx.context().setpoint_dc != INT16_MIN)
       Serial.printf("# setpoint %d C (last dialled on the display)\n",
                     machine_ctx.context().setpoint_dc / 10);
+    else if (machine_ctx.context().setpoint_touched)
+      Serial.println("# setpoint being edited (not yet confirmed) — recorded as unknown, not carried");
     else
-      Serial.println("# setpoint not seen since boot — the server carries the last one");
+      Serial.println("# setpoint not known (no confirmed edit seen, or the display was not decoding) — the server carries the last one");
   }
   Serial.println("# ---- end shot ----");
 }

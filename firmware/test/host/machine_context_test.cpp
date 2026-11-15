@@ -446,12 +446,18 @@ int main() {
       eb(93); eb(93);
       e.onPourStart(u);
       assert(e.context().setpoint_dc == 930);
+      eb(93);                                             // the same value: nothing changes
+      e.onPourStart(u);
+      assert(e.context().setpoint_dc == 930 && !e.context().setpoint_touched);
       eb(96);                                             // the edit begins
       e.onPourStart(u);
       assert(e.context().setpoint_dc == INT16_MIN);
+      assert(e.context().setpoint_touched);               // pending: not carried onto
+      e.onPourStart(u);
+      assert(e.context().setpoint_touched);               // still pending next shot
       eb(96);
       e.onPourStart(u);
-      assert(e.context().setpoint_dc == 960);
+      assert(e.context().setpoint_dc == 960 && !e.context().setpoint_touched);
       eb(96);                                             // more blinks of it: unchanged
       e.onReading(setpoint(88, u += 204000), true);       // steady tail: does not clear
       e.onReading(temp(88, u += 41000), false);

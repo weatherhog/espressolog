@@ -433,6 +433,31 @@ int main() {
     // An edit during the shot: this shot keeps 93, the next one gets 96.
     blink(96); blink(96);
     assert(m.context().setpoint_dc == 930);
+    // An edit that has not confirmed yet is UNKNOWN, not the old value: one
+    // blink of a different value clears it, the second confirms the new one.
+    {
+      MachineContextTracker e;
+      uint32_t u = 1000000;
+      auto eb = [&](int16_t c) {
+        e.onReading(setpoint(c, u += 204000), true);
+        DisplayBus::Reading b; b.mode = DisplayBus::Mode::BLANK; b.at_us = (u += 210000);
+        e.onReading(b, true);
+      };
+      eb(93); eb(93);
+      e.onPourStart(u);
+      assert(e.context().setpoint_dc == 930);
+      eb(96);                                             // the edit begins
+      e.onPourStart(u);
+      assert(e.context().setpoint_dc == INT16_MIN);
+      eb(96);
+      e.onPourStart(u);
+      assert(e.context().setpoint_dc == 960);
+      eb(96);                                             // more blinks of it: unchanged
+      e.onReading(setpoint(88, u += 204000), true);       // steady tail: does not clear
+      e.onReading(temp(88, u += 41000), false);
+      e.onPourStart(u);
+      assert(e.context().setpoint_dc == 960);
+    }
     m.onPourStart(t += 60000000);
     assert(m.context().setpoint_dc == 960);
     // The display not live at pour start: nothing stamped, still remembered.

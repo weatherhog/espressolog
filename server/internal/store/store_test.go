@@ -1313,13 +1313,35 @@ func TestBackfillPreinfusion(t *testing.T) {
 	if n, _ := st.backfillPreinfusion(); n != 0 {
 		t.Errorf("second backfill touched %d rows", n)
 	}
-	// A stale 'flow' value is re-derived.
+	// A stale 'flow' value is re-derived — the setting, not only the run.
 	if _, err := st.db.Exec(`UPDATE shot SET preinfusion_s = 3, preinfusion_run_s = 2.9 WHERE id = ?`, res.ShotID); err != nil {
 		t.Fatal(err)
 	}
-	if n, _ := st.backfillPreinfusion(); n != 1 {
-		t.Errorf("stale flow row not re-derived (%d)", n)
+	st.backfillPreinfusion()
+	if pre, run, src := read(); pre.Float64 != 5 || run.Float64 != 5.1 || src.String != "flow" {
+		t.Errorf("stale flow row re-derived to %v / %v (%v), want 5 / 5.1 flow", pre, run, src)
 	}
+	// A pre-012 value with no source may have been typed: never touched,
+	// though its run is measured.
+	if _, err := st.db.Exec(`UPDATE shot SET preinfusion_s = 2.5, preinfusion_source = NULL, preinfusion_run_s = NULL WHERE id = ?`, res.ShotID); err != nil {
+		t.Fatal(err)
+	}
+	st.backfillPreinfusion()
+	if pre, run, src := read(); pre.Float64 != 2.5 || src.Valid || run.Float64 != 5.1 {
+		t.Errorf("pre-012 value overwritten: %v / %v (%v), want 2.5 unsourced, run 5.1", pre, run, src)
+	}
+	// A 'flow' value the train no longer supports is cleared with its run.
+	if _, err := st.db.Exec(`UPDATE shot SET preinfusion_s = 5, preinfusion_source = 'flow', pre_pulse_complete = 0 WHERE id = ?`, res.ShotID); err != nil {
+		t.Fatal(err)
+	}
+	st.backfillPreinfusion()
+	if pre, run, src := read(); pre.Valid || run.Valid || src.Valid {
+		t.Errorf("unmeasurable flow row kept: %v / %v (%v)", pre, run, src)
+	}
+	if _, err := st.db.Exec(`UPDATE shot SET pre_pulse_complete = 1 WHERE id = ?`, res.ShotID); err != nil {
+		t.Fatal(err)
+	}
+	st.backfillPreinfusion()
 	// Cleared by the user: stays cleared, though the run is still measured.
 	if err := st.UpdateShot(res.ShotID, map[string]any{"preinfusion_s": nil}); err != nil {
 		t.Fatal(err)

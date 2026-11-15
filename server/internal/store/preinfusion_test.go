@@ -50,6 +50,7 @@ func TestMeasurePreinfusion(t *testing.T) {
 		{"pump straight through but only 4 s: unknown", dense(100, 4100), len(dense(100, 4100)), true, 4000, 0, false},
 		{"too few pulses", []uint16{100}, 1, true, 3000, 0, false},
 		{"nothing before the pause but one pulse", []uint16{100, 2000, 2040}, 3, true, 3000, 0, false},
+		{"a 0.4 s run before a pause is not Pr 0", append(dense(100, 500), dense(3000, 4000)...), len(dense(100, 500)) + len(dense(3000, 4000)), true, 4500, 0, false},
 	}
 	for _, c := range cases {
 		got, ok := measurePreinfusion(c.offsets, c.total, c.complete, c.drip)

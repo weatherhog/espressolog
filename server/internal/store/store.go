@@ -360,10 +360,12 @@ func defaultRecipe(tx *sql.Tx, epochID any, startedAt time.Time, thisShotEditedA
 	// chronological sequence. Measured: a shot pulled before an edit but
 	// ingested after it carried a pre-edit setpoint straight across.
 	//
-	// AND USE >=, NOT >. The edit shot itself holds the NEW value, and it is
-	// the only row that does. Excluding it meant brew_temp_c went NULL on the
-	// edit shot and stayed NULL on every shot after it forever, since nothing
-	// downstream would ever have a value to carry. Measured.
+	// AND USE >=, NOT >. The edit shot itself can hold the NEW value — when a
+	// human typed it — and is then the only row that does. Excluding it meant
+	// brew_temp_c went NULL on the edit shot and stayed NULL on every shot
+	// after it forever, since nothing downstream would ever have a value to
+	// carry. Measured. Its MACHINE values ('display', 'flow') predate the edit
+	// and are excluded below instead.
 	since := `COALESCE((SELECT MAX(started_at) FROM shot
 	                     WHERE setpoint_touched = 1 AND started_at <= ?), '')`
 	if thisShotEditedAParameter {
@@ -379,13 +381,15 @@ func defaultRecipe(tx *sql.Tx, epochID any, startedAt time.Time, thisShotEditedA
 	// its value (or it predates 012 and has no source, when only a human
 	// could have put it there — the guard above gave it no carry). A
 	// 'display' value is the setpoint as it stood at POUR START, before the
-	// edit; a 'flow' run was measured before it; a 'carried' one was copied
-	// across it. Taking any of them carried the pre-edit value onto every
-	// later shot (review, 2026-11-15).
+	// edit; a 'flow' run was measured before it. (A touched shot is never
+	// given a carry — see the guard above — so it holds no 'carried' value.)
+	// Taking either carried the pre-edit value onto every later shot (review,
+	// 2026-11-15). COALESCE: a v1 record has no setpoint_touched at all, and
+	// NOT (NULL AND ...) is NULL, which dropped it as a source.
 	var t float64
 	if tx.QueryRow(`SELECT brew_temp_c FROM shot
 	                 WHERE brew_temp_c IS NOT NULL AND started_at <= ?
-	                   AND NOT (setpoint_touched = 1 AND COALESCE(brew_temp_source, '') IN ('display', 'carried'))
+	                   AND NOT (COALESCE(setpoint_touched, 0) = 1 AND COALESCE(brew_temp_source, '') = 'display')
 	                   AND started_at >= ? AND started_at >= `+since+`
 	                 ORDER BY started_at DESC, id DESC LIMIT 1`,
 		at, staleFloor(startedAt), at).Scan(&t) == nil {
@@ -394,7 +398,7 @@ func defaultRecipe(tx *sql.Tx, epochID any, startedAt time.Time, thisShotEditedA
 	var pre float64
 	if tx.QueryRow(`SELECT preinfusion_s FROM shot
 	                 WHERE preinfusion_s IS NOT NULL AND started_at <= ?
-	                   AND NOT (setpoint_touched = 1 AND COALESCE(preinfusion_source, '') IN ('flow', 'carried'))
+	                   AND NOT (COALESCE(setpoint_touched, 0) = 1 AND COALESCE(preinfusion_source, '') = 'flow')
 	                   AND started_at >= ? AND started_at >= `+since+`
 	                 ORDER BY started_at DESC, id DESC LIMIT 1`,
 		at, staleFloor(startedAt), at).Scan(&pre) == nil {
@@ -454,6 +458,10 @@ func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time
 		preinfusionRun = run
 		if pr, ok := preinfusionSetting(run); ok {
 			preinfusion, preinfusionSource = pr, "flow"
+		} else {
+			// Measured, but no Pr the machine offers: a carried setting
+			// beside a run that contradicts it would read as confirmed.
+			preinfusion, preinfusionSource = nil, nil
 		}
 	}
 	// 'loaded' only if a bag actually was: an absent bean must stay NULL
@@ -1091,7 +1099,9 @@ func (s *Store) backfillPreinfusion() (int, error) {
 			if setting, ok := preinfusionSetting(run); measured && ok {
 				newPre = sql.NullFloat64{Float64: setting, Valid: true}
 				newSrc = sql.NullString{String: "flow", Valid: true}
-			} else if c.src.String == "flow" {
+			} else if c.src.String == "flow" || measured {
+				// A 'flow' value the thresholds no longer support, or a
+				// measured run no Pr matches beside a carried setting.
 				newPre, newSrc = sql.NullFloat64{}, sql.NullString{}
 			}
 		}

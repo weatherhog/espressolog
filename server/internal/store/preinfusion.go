@@ -91,13 +91,19 @@ func stripCoast(offsets []uint16, end int) int {
 }
 
 // runBefore measures the run ending at end (inclusive), coasting stripped.
+// It is a run before a PAUSE, so it is a pre-infusion of at least Pr 1: a
+// run that would round to 0 contradicts the pause and is not measured
+// (review, 2026-11-15).
 func runBefore(offsets []uint16, end int) (float64, bool) {
 	end = stripCoast(offsets, end)
 	if end == 0 {
 		return 0, false // a run of one pulse is not a run
 	}
-	s := float64(int(offsets[end])-int(offsets[0])) / 1000
-	return math.Round(s*10) / 10, true
+	s := math.Round(float64(int(offsets[end])-int(offsets[0]))/100) / 10
+	if s < 0.5 {
+		return 0, false
+	}
+	return s, true
 }
 
 // preinfusionSetting is the Pr setting a measured run corresponds to: the

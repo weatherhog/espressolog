@@ -1674,8 +1674,13 @@ claims a live flow tap. **Header format v5** (firmware 0.12.0) added
 `setpoint_dc` after the pulse block (123 → 125 bytes): the brew setpoint
 last dialled in on the front panel — a value that BLINKED as `SETPOINT`
 twice in a row, 80–130 °C, as it stood at pour start; kept across shots,
-forgotten on a reboot or when the display tap is switched, and not stamped
-while the display is not decoding (`machine_context.h`). The server stores
+forgotten on a reboot or when the display tap is switched, unknown while a
+different value is blinking (an edit not yet confirmed), and not stamped
+while the display is not decoding (`machine_context.h`). **Known limits:**
+an edit made while the bus was unplugged but `display` stayed on is not
+seen (forgetting on a quiet bus would also forget at every machine
+power-off); and a re-derived run does not reach shots that already
+carried the old value. The server stores
 it as `brew_temp_c` with `brew_temp_source = 'display'`, and measures the
 pump-on run from the pulse train into `preinfusion_run_s`
 (`server/internal/store/preinfusion.go`: the dense run before the first

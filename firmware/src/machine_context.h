@@ -304,8 +304,18 @@ private:
       if (shown_setpoint_c == INT16_MIN) return;               // still the same blank
       const int16_t v = shown_setpoint_c;
       shown_setpoint_c = INT16_MIN;
-      if (v == blinked_setpoint_c && v >= SETPOINT_MIN_C && v <= SETPOINT_MAX_C)
+      const bool in_range = v >= SETPOINT_MIN_C && v <= SETPOINT_MAX_C;
+      if (v == blinked_setpoint_c && in_range)
         last_setpoint_dc = (int16_t)(v * 10);
+      else if (in_range && (int32_t)v * 10 != last_setpoint_dc)
+        // A DIFFERENT value blinked: an edit is under way (or a misread),
+        // so the remembered setpoint is no longer known to be the machine's
+        // until the new one confirms. Without this a shot pulled in the
+        // second before confirmation recorded the pre-edit value as the
+        // machine's, and so did every shot after it (review, 2026-11-15).
+        // The steady frames after a blink stops are never followed by a
+        // blank, so they cannot clear it.
+        last_setpoint_dc = INT16_MIN;
       blinked_setpoint_c = v;
       return;
     }

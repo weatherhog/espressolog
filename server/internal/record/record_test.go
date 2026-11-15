@@ -131,8 +131,11 @@ func buildV2(t *testing.T, mutate func(*headerV2)) []byte {
 // these drifts from spool.h the device and the server disagree about every
 // field after the first one that moved.
 func TestHeaderLengths(t *testing.T) {
-	if got := binary.Size(Header{}); got != headerLenV4 {
-		t.Fatalf("binary.Size(Header) = %d, want %d", got, headerLenV4)
+	if got := binary.Size(Header{}); got != headerLenV5 {
+		t.Fatalf("binary.Size(Header) = %d, want %d", got, headerLenV5)
+	}
+	if got := binary.Size(headerV4{}); got != headerLenV4 {
+		t.Fatalf("binary.Size(headerV4) = %d, want %d", got, headerLenV4)
 	}
 	if got := binary.Size(headerV3{}); got != headerLenV3 {
 		t.Fatalf("binary.Size(headerV3) = %d, want %d", got, headerLenV3)
@@ -246,9 +249,9 @@ func TestDecodeV3PumpStart(t *testing.T) {
 // buildV4 assembles a format-4 record — what firmware 0.11.0 writes: the
 // header, the samples, then the pulse offsets as a tail padded with 0xFFFF
 // to whole groups of 5. mutate may change the header and the offsets.
-func buildV4(t *testing.T, mutate func(*Header, *[]uint16)) []byte {
+func buildV4(t *testing.T, mutate func(*headerV4, *[]uint16)) []byte {
 	t.Helper()
-	h := Header{
+	h := headerV4{
 		Magic: Magic, FormatVersion: 4, RecordType: TypeShot, HeaderLen: headerLenV4,
 		BootID: 0x11223344, Seq: 9, StartedAtMillis: 1000,
 		StopMs: 21000, YieldFinalMg: 36000, SampleCount: 2,
@@ -309,7 +312,7 @@ func TestDecodeV4PrePulses(t *testing.T) {
 
 	// Exactly 5 offsets fill one group with no padding; 0 offsets, no tail.
 	for _, n := range []int{0, 5, 6, 256} {
-		raw := buildV4(t, func(h *Header, o *[]uint16) {
+		raw := buildV4(t, func(h *headerV4, o *[]uint16) {
 			*o = make([]uint16, n)
 			for i := range *o {
 				(*o)[i] = uint16(i * 40)
@@ -326,10 +329,10 @@ func TestDecodeV4PrePulses(t *testing.T) {
 	}
 
 	// Not captured, no flow tap, and inconsistent fields all read as "not known".
-	for _, m := range []func(*Header, *[]uint16){
-		func(h *Header, o *[]uint16) { h.PrePulseTotal, h.PrePulseCount, *o = PrePulsesNone, 0, nil },
-		func(h *Header, o *[]uint16) { h.Flags &^= FlagFlowTap },
-		func(h *Header, o *[]uint16) { h.PrePulseTotal = 2 }, // more stored than in the window
+	for _, m := range []func(*headerV4, *[]uint16){
+		func(h *headerV4, o *[]uint16) { h.PrePulseTotal, h.PrePulseCount, *o = PrePulsesNone, 0, nil },
+		func(h *headerV4, o *[]uint16) { h.Flags &^= FlagFlowTap },
+		func(h *headerV4, o *[]uint16) { h.PrePulseTotal = 2 }, // more stored than in the window
 	} {
 		r, err := Decode(buildV4(t, m))
 		if err != nil {
@@ -356,6 +359,60 @@ func TestDecodeV4PrePulses(t *testing.T) {
 		if err == nil || strings.Contains(err.Error(), "crc") {
 			t.Errorf("pulse count %d: err = %v, want a length/count error", count, err)
 		}
+	}
+}
+
+// A v5 record carries the setpoint dialled on the display; a v4 record, and
+// a v5 one that saw no edit, say "not known" — never 0 degrees.
+func TestDecodeV5Setpoint(t *testing.T) {
+	build := func(setpointDc int16) []byte {
+		h := Header{
+			Magic: Magic, FormatVersion: 5, RecordType: TypeShot, HeaderLen: headerLenV5,
+			StopMs: 21000, YieldFinalMg: 36000, SampleCount: 1,
+			BoilerTempStartDc: 950, PumpLine: Pump2Cup, PumpLeadMs: 8200,
+			PrePulseTotal: 3, PrePulseFlags: PrePulsesComplete, PrePulseCount: 3,
+			SetpointDc: setpointDc, Flags: FlagFlowTap,
+		}
+		var buf bytes.Buffer
+		if err := binary.Write(&buf, binary.LittleEndian, &h); err != nil {
+			t.Fatal(err)
+		}
+		if err := binary.Write(&buf, binary.LittleEndian, []Sample{{TempDc: TempNone}}); err != nil {
+			t.Fatal(err)
+		}
+		if err := binary.Write(&buf, binary.LittleEndian, []uint16{200, 300, 5000, 0xFFFF, 0xFFFF}); err != nil {
+			t.Fatal(err)
+		}
+		raw := buf.Bytes()
+		binary.LittleEndian.PutUint32(raw[headerLenV5-4:], crc32.ChecksumIEEE(raw))
+		return raw
+	}
+	r, err := Decode(build(930))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c, ok := r.Header.Setpoint(); !ok || c != 93 {
+		t.Errorf("v5 setpoint = %v %v, want 93 true", c, ok)
+	}
+	if ms, _, _, ok := r.PrePulses(); !ok || len(ms) != 3 || ms[2] != 5000 {
+		t.Errorf("v5 pre pulses = %v %v", ms, ok)
+	}
+	if r.Header.YieldFinalMg != 36000 {
+		t.Error("fields after setpoint_dc moved")
+	}
+	r, err = Decode(build(TempNone))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := r.Header.Setpoint(); ok {
+		t.Error("a v5 record with no edit seen claims a setpoint")
+	}
+	r, err = Decode(buildV4(t, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := r.Header.Setpoint(); ok || r.Header.SetpointDc != TempNone {
+		t.Errorf("a v4 record claims a setpoint (%d)", r.Header.SetpointDc)
 	}
 }
 

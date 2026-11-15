@@ -7,6 +7,13 @@ import { patchShot, postTasting } from "./api.js";
 // settings (grind, dose, preinfusion, temp) are sticky — seeded from the
 // most recent shot that has them, because they only change when you change
 // the machine. Never a tax paid while holding a portafilter.
+// Where a recipe value came from (migration 012), as the badge beside it.
+const SOURCE_COL = { preinf: "preinfusion_source", temp: "brew_temp_source" };
+const SOURCE_BADGE = {
+  preinf: { flow: "measured", carried: "from last shot" },
+  temp:   { display: "from machine", carried: "from last shot" },
+};
+
 export default function Capture({ shots, beans, justSaved, onSaved }) {
   // Pending = never captured at all. A tasting row, even one saved without
   // a rating, counts as captured — otherwise saving twice was invited.
@@ -227,15 +234,15 @@ export default function Capture({ shots, beans, justSaved, onSaved }) {
               made-up number as the current setting is how it became a data
               problem the first time.
 
-              AND NOTE WHAT THIS STILL CANNOT SAY. Since 2026-10-12 the server
-              carries brew_temp_c and preinfusion_s forward at ingest, so `col`
-              is normally non-null and `unrecorded` is false — meaning a SERVER
-              INFERENCE renders here with no badge at all, under a heading that
-              says Confirm. There is no brew_temp_source column to distinguish
-              it from a value a human typed. That is the same provenance
-              problem migration 009 exists to undo, moved from this screen to
-              the server rather than removed. Fixing it properly needs the
-              source columns; see defaultRecipe in server/internal/store. */}
+              Since 2026-10-12 the server carries brew_temp_c and
+              preinfusion_s forward at ingest, and until migration 012 that
+              inference rendered here with no badge, indistinguishable from a
+              typed value. 012 added brew_temp_source / preinfusion_source:
+              'display' (the setpoint dialled on the machine), 'flow' (the
+              pump-on run measured from the pulses), 'carried', 'user'. The
+              badge below says which, so a carried guess no longer reads as a
+              confirmed setting. Rows from before 012 have no source and get
+              no badge. */}
           {/* FINDING: once `touched[k]` is set this ignores every later server
               value for that field, so the lost-update window is narrowed, not
               closed. Tap the dose once on a dose-less shot, let the grinder
@@ -260,10 +267,14 @@ export default function Capture({ shots, beans, justSaved, onSaved }) {
                   {label}
                   {k === "dose" && pending.dose_source === "measured" &&
                     <span style={{ color: T.flow }}> &middot; from scale</span>}
+                  {!touched[k] && SOURCE_BADGE[k]?.[pending[SOURCE_COL[k]]] &&
+                    <span style={{ color: pending[SOURCE_COL[k]] === "carried" ? T.inkSoft : T.flow }}>
+                      {" "}&middot; {SOURCE_BADGE[k][pending[SOURCE_COL[k]]]}
+                    </span>}
                   {unrecorded &&
                     <span style={{ color: T.inkSoft }}> &middot; not recorded</span>}
                   {moved &&
-                    <span style={{ color: T.flow }}> &middot; scale says {col}</span>}
+                    <span style={{ color: T.flow }}> &middot; {k === "dose" ? "scale" : "machine"} says {col}</span>}
                 </Eyebrow>
                 <Stepper value={shown} onChange={mark(k, set, shown)} step={step} unit={unit} />
               </div>

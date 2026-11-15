@@ -52,6 +52,10 @@ struct MachineContext {
   uint8_t  pre_pulse_flags      = 0;
   uint16_t pre_pulse_count      = 0;
   uint16_t pre_pulse_ms[PRE_PULSES_MAX] = {};
+  // v5: the brew-temperature SETPOINT, as last dialled in on the machine's
+  // front panel while this board watched (INT16_MIN = no edit seen since
+  // boot). See MachineContextTracker::onReading.
+  int16_t  setpoint_dc          = INT16_MIN;
 };
 
 // Gathers MachineContext across a shot. None of it is available at the
@@ -73,6 +77,10 @@ public:
   // shot's. Generous, because the gap between pump-on and the detector
   // reaching POURING is first-drip lag, which is puck-dependent.
   static constexpr uint32_t BOILER_MAX_AGE_US = 60000000;   // 60 s
+  // A dialled value outside this is not a brew setpoint (the manual's own
+  // range is narrower; a capture held the button to 120).
+  static constexpr int16_t SETPOINT_MIN_C = 80;
+  static constexpr int16_t SETPOINT_MAX_C = 130;
 
   // Call on every fresh display reading. `touched_latch` is
   // DisplayBus::setpointTouched(); the caller clears it at pour start.
@@ -95,6 +103,21 @@ public:
       last_boiler_us = r.at_us;
       have_boiler = true;
     } else if (r.mode == DisplayBus::Mode::SETPOINT || r.mode == DisplayBus::Mode::TARGET) {
+      // A SETPOINT frame is the number being dialled in. An edit ends with
+      // the display blinking the new value for ~3 s, so the LAST one seen is
+      // the setpoint the machine now holds — every edit in the captures
+      // does (2026-10-03 buttons and setup-menu). A ramp's passing values
+      // are overwritten by the frames after it. The range check keeps out
+      // anything that is not a brew temperature: the SET UP menu's values
+      // (pre-infusion 0-5 s, offsets, stand-by hours) never decoded as
+      // SETPOINT in the setup-menu capture, and this keeps it that way.
+      // TARGET (steam's 165, the 95 it cools back to) is the machine moving
+      // its own target, not the brew setpoint, and is not taken.
+      // NOT persisted: after a reboot it is unknown until the next edit, and
+      // the server carries the last value forward meanwhile.
+      if (r.mode == DisplayBus::Mode::SETPOINT &&
+          r.temp_c >= SETPOINT_MIN_C && r.temp_c <= SETPOINT_MAX_C)
+        last_setpoint_dc = (int16_t)(r.temp_c * 10);
       // AND THEY INVALIDATE the last one. Several non-boiler values decode
       // as TEMPERATURE: a blink's first cycle (it is recognised at its
       // second onset), steam's steady 165 for as long as steam holds
@@ -146,6 +169,9 @@ public:
     mc.pre_pulse_flags      = 0;
     mc.pre_pulse_count      = 0;
     mc.machine_timer_dl = timer_carry;
+    // The setpoint as it stood when the pour began: an edit DURING the shot
+    // applies to the next one. Kept across shots, unlike everything above.
+    mc.setpoint_dc = last_setpoint_dc;
     if (have_boiler && (uint32_t)(now_us - last_boiler_us) < BOILER_MAX_AGE_US) {
       mc.boiler_temp_start_dc = last_boiler_dc;
     }
@@ -255,6 +281,7 @@ private:
 
   MachineContext mc;
   int16_t  last_boiler_dc = INT16_MIN;
+  int16_t  last_setpoint_dc = INT16_MIN;
   uint32_t last_boiler_us = 0;
   bool     have_boiler = false;
   DisplayBus::Mode last_frame_mode = DisplayBus::Mode::NONE;

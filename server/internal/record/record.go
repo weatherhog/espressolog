@@ -55,7 +55,7 @@ const (
 	// version in headerLens, because v1 records exist both spooled on
 	// devices and as fixtures, and a format bump must never strand a shot
 	// (invariant 6).
-	FormatVersion = 4
+	FormatVersion = 5
 
 	TypeShot     = 1
 	TypeWeighing = 2
@@ -85,6 +85,7 @@ const (
 	headerLenV2 = 113 // v1 + boiler_temp_start_dc (int16) + machine_timer_dl (uint16)
 	headerLenV3 = 118 // v2 + pump_line (uint8) + pump_lead_ms (uint32)
 	headerLenV4 = 123 // v3 + pre_pulse_total (u16) + flags (u8) + count (u16); offsets in a tail
+	headerLenV5 = 125 // v4 + setpoint_dc (i16)
 
 	// PrePulsesNone is pre_pulse_total's "not captured".
 	PrePulsesNone = 0xFFFF
@@ -110,7 +111,7 @@ const (
 )
 
 // headerLens maps a format version to its on-wire header size.
-var headerLens = map[uint8]int{1: headerLenV1, 2: headerLenV2, 3: headerLenV3, 4: headerLenV4}
+var headerLens = map[uint8]int{1: headerLenV1, 2: headerLenV2, 3: headerLenV3, 4: headerLenV4, 5: headerLenV5}
 
 // headerV1 is the v1 layout, kept verbatim so old records still decode.
 // v2 inserted two fields in the middle, so the two cannot share a struct.
@@ -220,6 +221,45 @@ type headerV3 struct {
 	Crc32       uint32
 }
 
+// headerV4 is the v4 layout, kept verbatim so v4 records still decode. v5
+// inserted setpoint_dc after pre_pulse_count.
+type headerV4 struct {
+	Magic             uint32
+	FormatVersion     uint8
+	RecordType        uint8
+	HeaderLen         uint16
+	BootID            uint32
+	Seq               uint32
+	StartedAtUnixMs   uint64
+	StartedAtMillis   uint32
+	TzOffsetMin       int16
+	TimeValid         uint8
+	ScaleRole         uint8
+	ScaleMac          [6]byte
+	Flags             uint8
+	DetectorVersion   [8]byte
+	FirmwareVersion   [16]byte
+	StopMs            uint32
+	YieldAtStopMg     int32
+	YieldFinalMg      int32
+	SettleOffsetMg    int32
+	PeakFlowMgps      int32
+	MeanFlowMgps      int32
+	FlowWinStartMs    uint32
+	FlowWinEndMs      uint32
+	BoilerTempStartDc int16
+	MachineTimerDl    uint16
+	PumpLine          uint8
+	PumpLeadMs        uint32
+	PrePulseTotal     uint16
+	PrePulseFlags     uint8
+	PrePulseCount     uint16
+	GramsMg           int32
+	StableMs          uint32
+	SampleCount       uint16
+	Crc32             uint32
+}
+
 // Header mirrors the CURRENT spool_header_t field-for-field, and is also the
 // canonical in-memory form: an older record decodes into it with the fields
 // it predates left at their "not available" values. binary.Read consumes it
@@ -263,10 +303,13 @@ type Header struct {
 	PrePulseTotal uint16
 	PrePulseFlags uint8
 	PrePulseCount uint16 // offsets in the record's tail, after the samples
-	GramsMg       int32
-	StableMs      uint32
-	SampleCount   uint16
-	Crc32         uint32
+	// v5. The brew setpoint last dialled in on the display, decidegrees;
+	// TempNone on an older record or when no edit was seen since boot.
+	SetpointDc  int16
+	GramsMg     int32
+	StableMs    uint32
+	SampleCount uint16
+	Crc32       uint32
 }
 
 // Sample mirrors sample_t.
@@ -325,6 +368,17 @@ func (h *Header) BoilerTempStartC() (int, bool) {
 	return int(h.BoilerTempStartDc) / 10, true
 }
 func (h *Header) Reject() bool { return h.Flags&FlagReject != 0 }
+
+// Setpoint returns the brew setpoint the machine's display last showed being
+// dialled in (format v5), in whole degrees as the display renders it. ok is
+// false when the record does not say: older than v5, no edit seen since the
+// board booted, or a weighing.
+func (h *Header) Setpoint() (c float64, ok bool) {
+	if h.FormatVersion < 5 || h.RecordType != TypeShot || h.SetpointDc == TempNone {
+		return 0, false
+	}
+	return float64(h.SetpointDc) / 10, true
+}
 
 // PrePulses returns the flowmeter pulse train from the lever press to pour
 // confirmation — ms after the press, oldest first — with how many pulses
@@ -409,6 +463,7 @@ func Decode(raw []byte) (*Record, error) {
 			PumpLine:          PumpNone,
 			PumpLeadMs:        PumpLeadNone,
 			PrePulseTotal:     PrePulsesNone,
+			SetpointDc:        TempNone,
 			GramsMg:           v1.GramsMg, StableMs: v1.StableMs,
 			SampleCount: v1.SampleCount, Crc32: v1.Crc32,
 		}
@@ -433,6 +488,7 @@ func Decode(raw []byte) (*Record, error) {
 			PumpLine:      PumpNone,
 			PumpLeadMs:    PumpLeadNone,
 			PrePulseTotal: PrePulsesNone,
+			SetpointDc:    TempNone,
 			GramsMg:       v2.GramsMg, StableMs: v2.StableMs,
 			SampleCount: v2.SampleCount, Crc32: v2.Crc32,
 		}
@@ -456,12 +512,38 @@ func Decode(raw []byte) (*Record, error) {
 			PumpLine: v3.PumpLine, PumpLeadMs: v3.PumpLeadMs,
 			// v3 predates the pre-drip pulse train: "not captured".
 			PrePulseTotal: PrePulsesNone,
+			SetpointDc:    TempNone,
 			GramsMg:       v3.GramsMg, StableMs: v3.StableMs,
 			SampleCount: v3.SampleCount, Crc32: v3.Crc32,
 		}
 	case 4:
-		if err := binary.Read(bytes.NewReader(raw), binary.LittleEndian, &h); err != nil {
+		var v4 headerV4
+		if err := binary.Read(bytes.NewReader(raw), binary.LittleEndian, &v4); err != nil {
 			return nil, fmt.Errorf("header v4: %w", err)
+		}
+		h = Header{
+			Magic: v4.Magic, FormatVersion: v4.FormatVersion, RecordType: v4.RecordType,
+			HeaderLen: v4.HeaderLen, BootID: v4.BootID, Seq: v4.Seq,
+			StartedAtUnixMs: v4.StartedAtUnixMs, StartedAtMillis: v4.StartedAtMillis,
+			TzOffsetMin: v4.TzOffsetMin, TimeValid: v4.TimeValid, ScaleRole: v4.ScaleRole,
+			ScaleMac: v4.ScaleMac, Flags: v4.Flags,
+			DetectorVersion: v4.DetectorVersion, FirmwareVersion: v4.FirmwareVersion,
+			StopMs: v4.StopMs, YieldAtStopMg: v4.YieldAtStopMg, YieldFinalMg: v4.YieldFinalMg,
+			SettleOffsetMg: v4.SettleOffsetMg, PeakFlowMgps: v4.PeakFlowMgps,
+			MeanFlowMgps: v4.MeanFlowMgps, FlowWinStartMs: v4.FlowWinStartMs,
+			FlowWinEndMs:      v4.FlowWinEndMs,
+			BoilerTempStartDc: v4.BoilerTempStartDc, MachineTimerDl: v4.MachineTimerDl,
+			PumpLine: v4.PumpLine, PumpLeadMs: v4.PumpLeadMs,
+			PrePulseTotal: v4.PrePulseTotal, PrePulseFlags: v4.PrePulseFlags,
+			PrePulseCount: v4.PrePulseCount,
+			// v4 predates the display setpoint: "not seen".
+			SetpointDc: TempNone,
+			GramsMg:    v4.GramsMg, StableMs: v4.StableMs,
+			SampleCount: v4.SampleCount, Crc32: v4.Crc32,
+		}
+	case 5:
+		if err := binary.Read(bytes.NewReader(raw), binary.LittleEndian, &h); err != nil {
+			return nil, fmt.Errorf("header v5: %w", err)
 		}
 	}
 

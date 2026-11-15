@@ -376,6 +376,44 @@ int main() {
     printf("no display bus yields no claims OK\n");
   }
 
+  // Setpoint from the display (v5): the LAST SETPOINT frame of an edit is
+  // the new setpoint, it survives across shots, a ramp's passing values are
+  // overwritten, an edit during a shot applies to the next one, and nothing
+  // that is not a dialled brew temperature is taken.
+  {
+    MachineContextTracker m;
+    uint32_t t = 1000000;
+    m.onReading(temp(95, t), false);
+    m.onPourStart(t + 100);
+    assert(m.context().setpoint_dc == INT16_MIN);         // no edit seen yet
+    // An edit: ramp 95 -> 106, then the blink settles on 93.
+    for (int16_t c = 95; c <= 106; c++) m.onReading(setpoint(c, t += 41000), true);
+    m.onReading(setpoint(93, t += 400000), true);
+    m.onReading(setpoint(93, t += 400000), true);
+    m.onReading(temp(93, t += 3000000), false);
+    m.onPourStart(t);
+    assert(m.context().setpoint_dc == 930);
+    // Survives the next shot with no edit in between.
+    m.onPourStart(t += 60000000);
+    assert(m.context().setpoint_dc == 930);
+    // Not taken: a TARGET (steam's 165 / 95), a SETPOINT outside 80-130,
+    // a TEMPERATURE.
+    DisplayBus::Reading tg = setpoint(165, t += 41000);
+    tg.mode = DisplayBus::Mode::TARGET;
+    m.onReading(tg, false);
+    m.onReading(setpoint(5, t += 41000), true);           // a SET UP value
+    m.onReading(setpoint(165, t += 41000), true);
+    m.onReading(temp(97, t += 41000), false);
+    m.onPourStart(t);
+    assert(m.context().setpoint_dc == 930);
+    // An edit during the shot: this shot keeps 93, the next one gets 96.
+    m.onReading(setpoint(96, t += 41000), true);
+    assert(m.context().setpoint_dc == 930);
+    m.onPourStart(t += 60000000);
+    assert(m.context().setpoint_dc == 960);
+    printf("the dialled setpoint is remembered, last value wins, steam and SET UP are not taken OK\n");
+  }
+
   printf("\nall machine context tests passed\n");
   return 0;
 }

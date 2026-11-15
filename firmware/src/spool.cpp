@@ -57,7 +57,7 @@ bool Spool::macToBytes(const String& mac, uint8_t out[6]) {
 void Spool::fillCommon(spool_header_t& h, uint8_t record_type, uint32_t started_at_ms,
                        uint8_t role, const String& scale_mac) {
   h.magic = 0x4C505345;
-  h.format_version = 4;
+  h.format_version = SPOOL_FORMAT_VERSION;
   h.record_type = record_type;
   h.header_len = sizeof(h);
   h.boot_id = boot_id;
@@ -126,6 +126,7 @@ String Spool::writeShot(const ShotResult& r, const String& scale_mac,
   h.pre_pulse_total      = mc.pre_pulse_total;
   h.pre_pulse_flags      = mc.pre_pulse_flags;
   h.pre_pulse_count      = mc.pre_pulse_count > PRE_PULSES_MAX ? PRE_PULSES_MAX : mc.pre_pulse_count;
+  h.setpoint_dc          = mc.setpoint_dc;
   // The tail: the offsets, then 0xFFFF padding to a whole 10 bytes. Static,
   // not on the loop task's stack. Little-endian, like every other field.
   static uint16_t tail[PRE_PULSES_MAX + 4];
@@ -160,6 +161,7 @@ String Spool::writeWeighing(uint8_t role, const WeighingDetector::Event& ev, con
   fillCommon(h, 2, ev.started_at_ms, role, scale_mac);
   h.pump_lead_ms = PUMP_LEAD_NONE;   // a weighing has no pump start; never "0 ms"
   h.pre_pulse_total = PRE_PULSES_NONE;
+  h.setpoint_dc = INT16_MIN;
   h.grams_mg = ev.grams_mg;
   h.stable_ms = ev.stable_ms;
   h.sample_count = 0;
@@ -225,7 +227,7 @@ bool Spool::dump(const String& name, Stream& out) {
     out.printf("# %s: not a record\n", path.c_str());
     f.close(); return false;
   }
-  if (p.header_len != SPOOL_HEADER_LEN_V4) {
+  if (p.header_len != SPOOL_HEADER_LEN_V5) {
     // Refuse rather than misread. Parsing an older file with the current
     // struct shifts every field past the first one that moved and reports a
     // CRC mismatch, which looks like corruption instead of a version
@@ -233,7 +235,7 @@ bool Spool::dump(const String& name, Stream& out) {
     // wrong.
     out.printf("# %s: format v%u, header %u bytes — this firmware dumps v%u only.\n",
                path.c_str(), (unsigned)p.format_version, (unsigned)p.header_len,
-               (unsigned)4);
+               (unsigned)SPOOL_FORMAT_VERSION);
     out.println("# The record is intact and will upload; the server decodes every version.");
     f.close(); return false;
   }
@@ -258,6 +260,8 @@ bool Spool::dump(const String& name, Stream& out) {
     else
       out.printf("# pump_line=%u pump_lead_ms=%lu\n", (unsigned)h.pump_line,
                  (unsigned long)h.pump_lead_ms);
+    if (h.setpoint_dc == INT16_MIN) out.println("# setpoint=not seen");
+    else out.printf("# setpoint=%d C (dialled on the display)\n", h.setpoint_dc / 10);
     if (h.pre_pulse_total == PRE_PULSES_NONE)
       out.println("# pre_pulses=not captured");
     else

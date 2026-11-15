@@ -25,7 +25,7 @@
 // and the logger did not.
 typedef struct __attribute__((packed)) {
   uint32_t magic;              // 'ESPL' = 0x4C505345
-  uint8_t  format_version;     // 4 — see the version note above
+  uint8_t  format_version;     // 5 — see the version note above
   uint8_t  record_type;        // 1 = shot, 2 = weighing
   uint16_t header_len;         // sizeof(spool_header_t); forward-compat skip
   uint32_t boot_id;            // + seq = idempotency key
@@ -90,6 +90,12 @@ typedef struct __attribute__((packed)) {
   uint16_t pre_pulse_total;
   uint8_t  pre_pulse_flags;    // bit0 COMPLETE: no pulse in the window was lost
   uint16_t pre_pulse_count;    // offsets in the tail
+  // --- format v5: the brew setpoint, off the front display (0e) ---
+  // The value last dialled in on the machine (a SETPOINT frame, 80-130 C)
+  // while this board watched, in decidegrees, as it stood at pour start.
+  // INT16_MIN = no edit seen since boot, or a weighing. THIS is brew_temp_c's
+  // source when present; boiler_temp_start_dc is what the boiler showed.
+  int16_t  setpoint_dc;
   // weighing-only (zero for shots):
   int32_t  grams_mg;
   uint32_t stable_ms;
@@ -116,9 +122,11 @@ typedef struct __attribute__((packed)) {
 #define SPOOL_HEADER_LEN_V1  109
 #define SPOOL_HEADER_LEN_V2  113
 #define SPOOL_HEADER_LEN_V3  118
-#define SPOOL_HEADER_LEN_V4  123   // == sizeof(spool_header_t)
-static_assert(sizeof(spool_header_t) == SPOOL_HEADER_LEN_V4,
-              "spool_header_t drifted from the v4 wire length the server decodes");
+#define SPOOL_HEADER_LEN_V4  123
+#define SPOOL_HEADER_LEN_V5  125   // == sizeof(spool_header_t)
+#define SPOOL_FORMAT_VERSION 5
+static_assert(sizeof(spool_header_t) == SPOOL_HEADER_LEN_V5,
+              "spool_header_t drifted from the v5 wire length the server decodes");
 // The v4 tail's size in bytes for `count` offsets: rounded up to whole
 // groups of 5 (10 bytes), padding entries 0xFFFF.
 static inline size_t SPOOL_PRE_TAIL_BYTES(uint16_t count) {

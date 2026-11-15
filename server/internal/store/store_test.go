@@ -538,8 +538,8 @@ func TestIngestDoesNotInheritFromTheFuture(t *testing.T) {
 func v2BuildRecord(t *testing.T, boilerDc int16, timerDl uint16, touched bool) ([]byte, *record.Record) {
 	t.Helper()
 	h := record.Header{
-		Magic: record.Magic, FormatVersion: 4, RecordType: record.TypeShot,
-		HeaderLen: 123, BootID: 0xfeed0001, Seq: 1,
+		Magic: record.Magic, FormatVersion: 5, RecordType: record.TypeShot,
+		HeaderLen: 125, SetpointDc: record.TempNone, BootID: 0xfeed0001, Seq: 1,
 		PumpLine: record.PumpNone, PumpLeadMs: record.PumpLeadNone,
 		PrePulseTotal:   record.PrePulsesNone,
 		StartedAtUnixMs: uint64(time.Now().UnixMilli()), TimeValid: 1,
@@ -565,10 +565,10 @@ func v2BuildRecord(t *testing.T, boilerDc int16, timerDl uint16, touched bool) (
 		t.Fatal(err)
 	}
 	raw := buf.Bytes()
-	for i := 123 - 4; i < 123; i++ {
+	for i := 125 - 4; i < 125; i++ {
 		raw[i] = 0
 	}
-	binary.LittleEndian.PutUint32(raw[123-4:], crc32.ChecksumIEEE(raw))
+	binary.LittleEndian.PutUint32(raw[125-4:], crc32.ChecksumIEEE(raw))
 
 	rec, err := record.Decode(raw)
 	if err != nil {
@@ -668,8 +668,8 @@ func TestIngestLeavesMachineSignalsNullWhenUnavailable(t *testing.T) {
 func v2BuildFlowRecord(t *testing.T, seq uint32, flowTap bool, n int) ([]byte, *record.Record) {
 	t.Helper()
 	h := record.Header{
-		Magic: record.Magic, FormatVersion: 4, RecordType: record.TypeShot,
-		HeaderLen: 123, BootID: 0xfeed0002, Seq: seq,
+		Magic: record.Magic, FormatVersion: 5, RecordType: record.TypeShot,
+		HeaderLen: 125, SetpointDc: record.TempNone, BootID: 0xfeed0002, Seq: seq,
 		PumpLine: record.PumpNone, PumpLeadMs: record.PumpLeadNone,
 		PrePulseTotal:   record.PrePulsesNone,
 		StartedAtUnixMs: uint64(time.Now().UnixMilli()), TimeValid: 1,
@@ -709,10 +709,10 @@ func v2BuildFlowRecord(t *testing.T, seq uint32, flowTap bool, n int) ([]byte, *
 		t.Fatal(err)
 	}
 	raw := buf.Bytes()
-	for i := 123 - 4; i < 123; i++ {
+	for i := 125 - 4; i < 125; i++ {
 		raw[i] = 0
 	}
-	binary.LittleEndian.PutUint32(raw[123-4:], crc32.ChecksumIEEE(raw))
+	binary.LittleEndian.PutUint32(raw[125-4:], crc32.ChecksumIEEE(raw))
 
 	rec, err := record.Decode(raw)
 	if err != nil {
@@ -809,8 +809,8 @@ func pumpRecord(t *testing.T, seq uint32, line uint8, leadMs uint32) ([]byte, *r
 func pumpRecordWith(t *testing.T, seq uint32, line uint8, leadMs uint32, mutate func(*record.Header), offsets []uint16) ([]byte, *record.Record) {
 	t.Helper()
 	h := record.Header{
-		Magic: record.Magic, FormatVersion: 4, RecordType: record.TypeShot,
-		HeaderLen: 123, BootID: 0xfeed0003, Seq: seq,
+		Magic: record.Magic, FormatVersion: 5, RecordType: record.TypeShot,
+		HeaderLen: 125, SetpointDc: record.TempNone, BootID: 0xfeed0003, Seq: seq,
 		StartedAtUnixMs: uint64(time.Now().UnixMilli()) + uint64(seq), TimeValid: 1,
 		StopMs: 21000, YieldAtStopMg: 35800, YieldFinalMg: 36000,
 		PeakFlowMgps: 2100, MeanFlowMgps: 1710,
@@ -845,7 +845,7 @@ func pumpRecordWith(t *testing.T, seq uint32, line uint8, leadMs uint32, mutate 
 		}
 	}
 	raw := buf.Bytes()
-	binary.LittleEndian.PutUint32(raw[123-4:], crc32.ChecksumIEEE(raw))
+	binary.LittleEndian.PutUint32(raw[125-4:], crc32.ChecksumIEEE(raw))
 	rec, err := record.Decode(raw)
 	if err != nil {
 		t.Fatalf("built record does not decode: %v", err)
@@ -1189,5 +1189,108 @@ func TestUserExcludedShotKeepsLateDose(t *testing.T) {
 	}
 	if !g.Valid || g.Float64 != 18.0 {
 		t.Errorf("user-excluded shot's late dose = %v, want 18", g)
+	}
+}
+
+// The brew setpoint and the pre-infusion run reach the row as measurements
+// with their provenance (firmware 0.12.0, migration 012): the setpoint the
+// display showed being dialled as 'display', the pump-on run measured from
+// the pre-drip pulses as 'flow' — and the next shot without either carries
+// them as 'carried'. A hot-water draw is not measured, and a typed value
+// becomes 'user'.
+func TestIngestMeasuredRecipe(t *testing.T) {
+	st := openTestStore(t)
+	dev := "aa:bb:cc:dd:ee:03"
+	base := time.Now().Add(-time.Hour).Truncate(time.Second)
+	at := func(d time.Duration, extra func(*record.Header)) func(*record.Header) {
+		return func(h *record.Header) {
+			h.StartedAtUnixMs = uint64(base.Add(d).UnixMilli())
+			if extra != nil {
+				extra(h)
+			}
+		}
+	}
+	train := shot179()
+	measured := func(h *record.Header) {
+		h.SetpointDc = 930
+		h.Flags |= record.FlagFlowTap
+		h.PrePulseTotal, h.PrePulseCount, h.PrePulseFlags = uint16(len(train)), uint16(len(train)), record.PrePulsesComplete
+	}
+	row := func(id int64) (temp sql.NullFloat64, tsrc sql.NullString, pre sql.NullFloat64, psrc sql.NullString) {
+		t.Helper()
+		if err := st.db.QueryRow(`SELECT brew_temp_c, brew_temp_source, preinfusion_s, preinfusion_source FROM shot WHERE id = ?`, id).
+			Scan(&temp, &tsrc, &pre, &psrc); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	ingest := func(seq uint32, line uint8, mut func(*record.Header), offsets []uint16) int64 {
+		t.Helper()
+		raw, rec := pumpRecordWith(t, seq, line, 9855, mut, offsets)
+		res, err := st.Ingest(dev, rec, raw, base)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res.ShotID
+	}
+
+	a := ingest(1, record.Pump2Cup, at(0, measured), train)
+	if temp, tsrc, pre, psrc := row(a); temp.Float64 != 93 || tsrc.String != "display" || pre.Float64 != 5.1 || psrc.String != "flow" {
+		t.Errorf("measured shot: temp %v (%v), pre %v (%v); want 93 display, 5.1 flow", temp, tsrc, pre, psrc)
+	}
+	// Next shot: no setpoint seen (a reboot), no pulse train.
+	b := ingest(2, record.Pump2Cup, at(time.Minute, nil), nil)
+	if temp, tsrc, pre, psrc := row(b); temp.Float64 != 93 || tsrc.String != "carried" || pre.Float64 != 5.1 || psrc.String != "carried" {
+		t.Errorf("following shot: temp %v (%v), pre %v (%v); want 93 carried, 5.1 carried", temp, tsrc, pre, psrc)
+	}
+	// A shot that recorded an edit gets no carry — but the display's value
+	// still stands, and a hot-water draw's pulses are not a pre-infusion.
+	c := ingest(3, record.PumpWater, at(2*time.Minute, func(h *record.Header) {
+		measured(h)
+		h.SetpointDc = 960
+		h.Flags |= record.FlagSetpointTouched
+	}), train)
+	if temp, tsrc, pre, psrc := row(c); temp.Float64 != 96 || tsrc.String != "display" || pre.Valid || psrc.Valid {
+		t.Errorf("edited hot-water shot: temp %v (%v), pre %v (%v); want 96 display, no pre-infusion", temp, tsrc, pre, psrc)
+	}
+	// Typed values are the user's, and clearing one clears its source.
+	if err := st.UpdateShot(b, map[string]any{"brew_temp_c": 94.0, "preinfusion_s": nil}); err != nil {
+		t.Fatal(err)
+	}
+	if temp, tsrc, pre, psrc := row(b); temp.Float64 != 94 || tsrc.String != "user" || pre.Valid || psrc.Valid {
+		t.Errorf("after PATCH: temp %v (%v), pre %v (%v); want 94 user, cleared", temp, tsrc, pre, psrc)
+	}
+}
+
+// Shots ingested before pre-infusion was measured at ingest (0.11.0's v4
+// records, e.g. shot 179) are measured from their stored pulses at Open.
+func TestBackfillPreinfusion(t *testing.T) {
+	st := openTestStore(t)
+	train := shot179()
+	raw, rec := pumpRecordWith(t, 1, record.Pump2Cup, 9855, func(h *record.Header) {
+		h.Flags |= record.FlagFlowTap
+		h.PrePulseTotal, h.PrePulseCount, h.PrePulseFlags = uint16(len(train)), uint16(len(train)), record.PrePulsesComplete
+	}, train)
+	res, err := st.Ingest("aa:bb:cc:dd:ee:03", rec, raw, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.db.Exec(`UPDATE shot SET preinfusion_s = NULL, preinfusion_source = NULL WHERE id = ?`, res.ShotID); err != nil {
+		t.Fatal(err)
+	}
+	n, err := st.backfillPreinfusion()
+	if err != nil || n != 1 {
+		t.Fatalf("backfill = %d, %v; want 1", n, err)
+	}
+	var pre float64
+	var src string
+	if err := st.db.QueryRow(`SELECT preinfusion_s, preinfusion_source FROM shot WHERE id = ?`, res.ShotID).Scan(&pre, &src); err != nil {
+		t.Fatal(err)
+	}
+	if pre != 5.1 || src != "flow" {
+		t.Errorf("backfilled %v (%s), want 5.1 flow", pre, src)
+	}
+	if n, _ := st.backfillPreinfusion(); n != 0 {
+		t.Errorf("second backfill touched %d rows", n)
 	}
 }

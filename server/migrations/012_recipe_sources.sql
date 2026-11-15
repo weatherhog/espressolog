@@ -1,0 +1,23 @@
+-- Where brew_temp_c and preinfusion_s came from (firmware 0.12.0, server
+-- after 0.11.1). Until now neither had a source column, so a value carried
+-- forward at ingest could not be told from one a human typed (see
+-- defaultRecipe in store.go, and 009). From here:
+--
+--   brew_temp_source    'display'  the setpoint last dialled in on the
+--                                  machine's front panel, read off the
+--                                  display bus (spool v5 setpoint_dc)
+--                       'carried'  copied at ingest from an earlier shot
+--                       'user'     typed in the PWA
+--   preinfusion_source  'flow'     the pump-on run measured from the
+--                                  flowmeter pulses before first drip
+--                                  (shot_pre_pulse; store/preinfusion.go)
+--                       'carried'  copied at ingest from an earlier shot
+--                       'user'     typed in the PWA
+--
+-- NULL = unknown provenance: every row before this migration, whatever its
+-- value. Nothing is backfilled as 'carried' or 'user', because 009 showed
+-- this table cannot tell those apart after the fact. preinfusion_s IS
+-- backfilled from the pulse train where one exists and the column is empty
+-- (store.go, backfillPreinfusion), as 'flow'.
+ALTER TABLE shot ADD COLUMN brew_temp_source TEXT;
+ALTER TABLE shot ADD COLUMN preinfusion_source TEXT;

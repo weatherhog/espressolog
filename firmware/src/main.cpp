@@ -15,7 +15,7 @@
 #include "brew_guard.h"
 #include <driver/gpio.h>
 
-const char* FIRMWARE_VERSION = "0.11.1";
+const char* FIRMWARE_VERSION = "0.12.0";
 const char* DETECTOR_VERSION = "0a.6";
 
 static ScaleManager scales;
@@ -741,6 +741,11 @@ static void handleShotComplete(const ShotResult& r) {
     String path = spool.writeShot(r, scales.slotMac(ScaleRole::YIELD),
                                   machine_ctx.context(), flow_tap_shot);
     if (path.length()) Serial.printf("# spooled %s%s\n", path.c_str(), r.valid ? "" : " (reject)");
+    if (machine_ctx.context().setpoint_dc != INT16_MIN)
+      Serial.printf("# setpoint %d C (last dialled on the display)\n",
+                    machine_ctx.context().setpoint_dc / 10);
+    else
+      Serial.println("# setpoint not seen since boot — the server carries the last one");
   }
   Serial.println("# ---- end shot ----");
 }

@@ -284,9 +284,12 @@ static bool flow_tap_shot = false;
 // and read as healthy. millis() wraps at ~49.7 days, which covers every span
 // this diagnostic is asked about.
 static uint32_t flow_last_ms = 0;
-// Every counted pulse's millis() time, for the press-to-drip pulse train each
+// Every counted pulse's millis() time, for the press-to-confirmation pulse train each
 // shot carries (spool v4, machine_context.h capturePrePulses()). ~2 KB.
 static PulseLog pulse_log;
+// The last flow_dropped value pollFlow() saw, to notice the ISR losing
+// pulses. File scope so flowSetEnabled() can zero it with flow_dropped.
+static uint32_t flow_dropped_seen = 0;
 static bool     flow_ever = false;
 
 // Same producer/consumer split as the display bus: the ISR stamps and
@@ -340,6 +343,7 @@ static void flowSetEnabled(bool on) {
     flow.resetDiagnostics();
     pulse_log.clear(millis());   // pulses before a re-enable describe another tap state
     flow_dropped = 0;
+    flow_dropped_seen = 0;   // or a later drop count matching the old one goes unseen
     flow_ever = false;
     attachInterrupt(digitalPinToInterrupt(FLOW_PIN), flowIsr, FALLING);
   }
@@ -383,11 +387,10 @@ static void pollFlow() {
   if (!flow_on) return;
   // The ISR's ring overflowed since the last drain: pulses were lost before
   // they could reach the log, so a pre-drip window open now is incomplete.
-  static uint32_t dropped_seen = 0;
   uint32_t dropped_now = flow_dropped;
-  if (dropped_now != dropped_seen) {
-    dropped_seen = dropped_now;
-    if (dropped_now != 0) pulse_log.markGap(millis());
+  if (dropped_now != flow_dropped_seen) {
+    flow_dropped_seen = dropped_now;
+    pulse_log.markGap(millis());
   }
   while (flow_tail != flow_head) {
     uint32_t t_us = flow_ring[flow_tail];
@@ -732,7 +735,7 @@ static void handleShotComplete(const ShotResult& r) {
     // press was confirmed after the POURING transition.
     machine_ctx.resolvePumpIfUnknown(r.started_at_ms);
     if (flow_tap_shot && !machine_ctx.prePulsesCaptured())
-      machine_ctx.capturePrePulses(pulse_log, r.started_at_ms, r.started_at_ms);
+      machine_ctx.capturePrePulses(pulse_log, r.started_at_ms);
     String path = spool.writeShot(r, scales.slotMac(ScaleRole::YIELD),
                                   machine_ctx.context(), flow_tap_shot);
     if (path.length()) Serial.printf("# spooled %s%s\n", path.c_str(), r.valid ? "" : " (reject)");
@@ -1131,8 +1134,9 @@ void loop() {
         flow_tap_shot = flow_on;
         // And the pulses between the press and first drip, while the log
         // surely still holds them (spool v4).
+        machine_ctx.notePourConfirmed(millis());
         if (flow_tap_shot)
-          machine_ctx.capturePrePulses(pulse_log, detector.result().started_at_ms, millis());
+          machine_ctx.capturePrePulses(pulse_log, detector.result().started_at_ms);
         // The bus latch is per-boot; a new shot starts with a clean slate,
         // otherwise one tweak at the start of a session condemns every
         // shot after it.

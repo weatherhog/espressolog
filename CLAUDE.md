@@ -757,7 +757,7 @@ firmware/          PlatformIO, Arduino framework
     net.{h,cpp}             WiFi, WebSocket, HTTP POST
     display.{h,cpp}         J5 bus decode, blink discrimination
     live_display.h          when the display goes out on the live stream (PWA only)
-    pulse_log.h             recent flowmeter pulse times, for the press-to-drip train
+    pulse_log.h             recent flowmeter pulse times, for the pre-infusion pulse train
     machine_io.{h,cpp}      switch poller, debounce, event queue
     machine_context.h       per-shot machine facts for the spool header
     brew_guard.{h,cpp}      invariant 2 — is the pump running?
@@ -1696,17 +1696,18 @@ which is not what the code does:
 | `t0` → confirmation | ~300 ms (`POUR_HOLD_MS`) | `t0` is backdated to the flow crossing, but `pulse_base` is captured in `beginPour()`, which runs after the hold |
 | pump-on → first drip | seconds | the window opens at first drip; every pre-infusion pulse is outside it |
 
-The second dwarfs the first, which is why neither is fixed in code yet —
-closing 300 ms while seconds go uncounted is polish on the wrong axis. Both
-close together when the window opens at the pump-start edge — which **0c
-now supplies (firmware 0.10.0, as `first_drip_ms`) but the per-sample window
-does not use**. **From 0.11.0 the pre-infusion pulses are recorded anyway,
-separately**: the shot carries every counted pulse from the press to first
-drip (`shot_pre_pulse`, ms after the press), so pump-on, pause and resume
-can be derived in analysis. `inlet_pulses` itself is unchanged and still
-starts at pour confirmation.
+**Both gaps are covered from firmware 0.11.0, separately** — the
+per-sample window itself is unchanged and still opens at pour confirmation.
+The shot carries every counted pulse from the press (the pump-start edge 0c
+supplies, `first_drip_ms`) to pour confirmation, as ms after the press
+(`shot_pre_pulse`, `shot.pre_pulse_total`), so the two windows meet:
+`pre_pulse_total` plus the last `inlet_pulses` counts every pulse from the
+press to the stop, and pump-on, pause and resume can be derived in
+analysis. Before 0.11.0 neither gap was covered — closing 300 ms while
+seconds went uncounted was polish on the wrong axis.
 
-350 samples ≈ 3.5 KB per shot. One file per shot, header + samples.
+350 samples ≈ 3.5 KB per shot. One file per shot: header + samples, and
+from v4 the pre-infusion pulse tail (10 bytes per 5 pulses).
 Config (WiFi, endpoint, flow calibration, current bean, grind epoch) in
 NVS, not the filesystem.
 

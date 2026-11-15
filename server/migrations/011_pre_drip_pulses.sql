@@ -13,7 +13,7 @@
 -- shot.pre_pulse_total is how many pulses lay in the window — more than
 -- the rows if the firmware's 256-entry array filled. NULL = not captured
 -- (no press seen, flow tap off, a record older than v4), which is NOT the
--- same as 0 (captured, and no pulse came before first drip).
+-- same as 0 (captured, and no pulse came before pour confirmation).
 -- shot.pre_pulse_complete is 1 when the firmware's pulse log lost none of
 -- the window, 0 when the total is only a lower bound.
 ALTER TABLE shot ADD COLUMN pre_pulse_total INTEGER;

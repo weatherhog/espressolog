@@ -82,7 +82,7 @@ const (
 	// PrePulsesNone is pre_pulse_total's "not captured".
 	PrePulsesNone = 0xFFFF
 	// PrePulsesComplete (pre_pulse_flags bit 0): the firmware's pulse log
-	// lost none of the press-to-drip window, so the total is exact.
+	// lost none of the press-to-confirmation window, so the total is exact.
 	PrePulsesComplete = 0x01
 	// PrePulsesMax is the most offsets a v4 tail carries.
 	PrePulsesMax = 256

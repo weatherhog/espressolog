@@ -2,20 +2,21 @@
 #include <stdint.h>
 
 // The most recent counted flowmeter pulses, as millis() timestamps, so a shot
-// can carry the pulse train from the lever press to first drip (spool v4):
-// the pre-infusion phase, which the per-sample inlet_pulses window — opened
-// at first drip — never sees.
+// can carry the pulse train from the lever press to pour confirmation (spool
+// v4): the pre-infusion phase, which the per-sample inlet_pulses window —
+// opened at pour confirmation — never sees.
 //
 // Pure logic, host-tested (test/host/pulse_log_test.cpp). Fed from
 // pollFlow() with each pulse the glitch filter COUNTED, so the train matches
 // the counts the shot already stores.
 //
 // 512 entries is ~22 s at the ~23 pulses/s a 2026-11-13 flush showed: more
-// than a press-to-drip phase (seconds) needs, so the pulses are still here
+// than a press-to-confirmation phase (seconds) needs, so the pulses are still here
 // at pour start, when they are copied out.
 class PulseLog {
 public:
   static constexpr uint16_t N = 512;
+  static constexpr uint32_t GAP_SLACK_MS = 2000;
 
   void push(uint32_t ms) {
     ring[head] = ms;
@@ -31,7 +32,9 @@ public:
   }
 
   // Pulses were lost upstream (the ISR's ring overflowed) and noticed at
-  // now_ms. Any window that has not ended by then may be missing some.
+  // now_ms — by the next drain, so the loss itself was up to one loop (or
+  // one stall) earlier. A window it falls in, or ends shortly before, may be
+  // missing some.
   void markGap(uint32_t now_ms) {
     gap_ms = now_ms;
     have_gap = true;
@@ -44,8 +47,9 @@ public:
   // total is only a lower bound: the ring is full and its oldest entry is
   // not before the window (it has overwritten the start of it — or all of
   // it, review 2026-11-15), or a gap (clear(), markGap()) was recorded at or
-  // after the window opened. Offsets saturate at 65535 ms; callers keep
-  // windows shorter than that.
+  // in the window or within GAP_SLACK_MS after its end (the drain notices a
+  // loss late). Offsets saturate at 65535 ms; callers keep windows shorter
+  // than that.
   uint16_t extract(uint32_t from_ms, uint32_t to_ms, uint16_t* out, uint16_t max_out,
                    uint16_t* copied, bool* complete) const {
     uint16_t total = 0, n = 0;
@@ -64,7 +68,11 @@ public:
     // caught an oldest entry INSIDE the window, so a window overwritten
     // entirely read "complete, 0 pulses".)
     const bool overwritten = count == N && (int32_t)(ring[oldest] - from_ms) >= 0;
-    const bool gapped = have_gap && (int32_t)(gap_ms - from_ms) >= 0;
+    // Unsigned offset from the window's start, like the pulses: a gap long
+    // before the window is a huge offset and does not count, and — unlike the
+    // signed compare used until review 2026-11-15 — a gap 25 days old does
+    // not flip sign and condemn every window after it.
+    const bool gapped = have_gap && (uint32_t)(gap_ms - from_ms) <= span + GAP_SLACK_MS;
     *complete = !overwritten && !gapped;
     return total;
   }

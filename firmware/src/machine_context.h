@@ -42,9 +42,9 @@ struct MachineContext {
   // millis() timestamps; PUMP_NONE / PUMP_LEAD_NONE = not known.
   uint8_t  pump_line            = PUMP_NONE;
   uint32_t pump_lead_ms         = PUMP_LEAD_NONE;
-  // v4: every counted flowmeter pulse from that press to t=0, as ms after
-  // the press — the pre-infusion phase the per-sample inlet_pulses window
-  // (opened at first drip) never sees. Raw: analysis derives pump-on, pause
+  // v4: every counted flowmeter pulse from that press to pour confirmation,
+  // as ms after the press — the pre-infusion phase the per-sample
+  // inlet_pulses window (opened at pour confirmation) never sees. Raw: analysis derives pump-on, pause
   // and resume from the gaps. pre_pulse_total is how many lay in the window
   // (PRE_PULSES_NONE = not captured: no press, flow tap off); at most
   // PRE_PULSES_MAX are kept in pre_pulse_ms, the first ones.
@@ -208,22 +208,30 @@ public:
     if (mc.pump_line == PUMP_NONE) resolvePump(t0_ms);
   }
 
-  // Copy the pulses from this shot's press to end_ms out of the log, as ms
-  // after the press. Call at pour start after resolvePump(), with end_ms =
-  // millis() then: that is when beginPour() takes inlet_pulses' base, so the
-  // two windows meet and pre_pulse_total + the last inlet_pulses counts the
-  // press to stop with no pulse in neither (until review 2026-11-15 this
-  // window ended at the backdated t=0, ~300 ms earlier, and ~7 pulses fell
-  // between). The log holds ~22 s, so the pulses are surely still there.
-  // Called again at completion only if pour start found no press
-  // (resolvePumpIfUnknown()), with end_ms = t=0: they may be gone by then,
-  // and the COMPLETE flag says so. Does nothing without a press, so the
+  // Call at the POURING transition with millis() then: that is when
+  // beginPour() takes inlet_pulses' base, so a pre-drip window ending here
+  // meets it — pre_pulse_total + the last inlet_pulses counts the press to
+  // the stop with no pulse in neither.
+  void notePourConfirmed(uint32_t now_ms) { confirm_ms = now_ms; }
+
+  // Copy the pulses from this shot's press to pour confirmation out of the
+  // log, as ms after the press. Call at pour start after resolvePump() and
+  // notePourConfirmed() — the log holds ~22 s, so the pulses are surely
+  // still there — and again at completion only if pour start found no press
+  // (resolvePumpIfUnknown()), when they may be gone: the COMPLETE flag then
+  // says so. Both end at the noted confirmation (until review 2026-11-15
+  // the fallback ended at t=0, ~300 ms early). The window is clamped to
+  // 65535 ms so no offset saturates. Does nothing without a press, so the
   // record says "not captured" rather than "no pulses".
-  void capturePrePulses(const PulseLog& log, uint32_t t0_ms, uint32_t end_ms) {
+  void capturePrePulses(const PulseLog& log, uint32_t t0_ms) {
     if (mc.pump_line == PUMP_NONE || mc.pump_lead_ms == PUMP_LEAD_NONE) return;
+    const uint32_t from_ms = t0_ms - mc.pump_lead_ms;
+    uint32_t end_ms = confirm_ms;
+    if ((int32_t)(end_ms - t0_ms) < 0) end_ms = t0_ms;           // never before t=0
+    if (end_ms - from_ms > 0xFFFFu) end_ms = from_ms + 0xFFFFu;  // offsets fit u16
     bool complete = false;
     uint16_t copied = 0;
-    uint16_t total = log.extract(t0_ms - mc.pump_lead_ms, end_ms, mc.pre_pulse_ms,
+    uint16_t total = log.extract(from_ms, end_ms, mc.pre_pulse_ms,
                                  PRE_PULSES_MAX, &copied, &complete);
     mc.pre_pulse_total = total >= PRE_PULSES_NONE ? (uint16_t)(PRE_PULSES_NONE - 1) : total;
     mc.pre_pulse_count = copied;
@@ -243,6 +251,7 @@ private:
   Press   presses[N_PRESSES] = {};
   uint8_t press_head = 0;
   uint8_t press_count = 0;
+  uint32_t confirm_ms = 0;
 
   MachineContext mc;
   int16_t  last_boiler_dc = INT16_MIN;

@@ -28,7 +28,7 @@ from 2026-11-13, after PR #19; the server was deployed from
 `claude/live-temperature` before that merge.)* **Since 2026-11-15 it runs
 0.10.0** (PR #22: the lever and `first_drip_ms`, spool format v3), with the
 server deployed first and migration 010 applied. 0.11.0, which adds the
-press-to-drip pulse train (format v4), is on its branch. The *What runs where*
+press-to-confirmation pulse train (format v4), is on its branch. The *What runs where*
 table's 0.9.4 row is marked superseded.
 
 ### SECOND INVARIANT-1 INCIDENT ON J4 — `E01`, cause found and fixed

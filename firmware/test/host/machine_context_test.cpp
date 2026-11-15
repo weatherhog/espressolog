@@ -281,7 +281,8 @@ int main() {
     m.onPumpPress(PUMP_2CUP, 100000);
     m.onPourStart(1);
     m.resolvePump(108000);
-    m.capturePrePulses(log, 108000, 108000);
+    m.notePourConfirmed(108000);
+    m.capturePrePulses(log, 108000);
     const MachineContext& c = m.context();
     assert(m.prePulsesCaptured());
     assert(c.pre_pulse_total == 19 + 61 && c.pre_pulse_count == c.pre_pulse_total);
@@ -291,7 +292,8 @@ int main() {
     MachineContextTracker n;                       // no press: not captured
     n.onPourStart(1);
     n.resolvePump(108000);
-    n.capturePrePulses(log, 108000, 108000);
+    n.notePourConfirmed(108000);
+    n.capturePrePulses(log, 108000);
     assert(!n.prePulsesCaptured() && n.context().pre_pulse_count == 0);
 
     // The window ends where inlet_pulses starts (pour confirmation, ~300 ms
@@ -302,8 +304,34 @@ int main() {
     e.onPumpPress(PUMP_2CUP, 100000);
     e.onPourStart(1);
     e.resolvePump(108000);
-    e.capturePrePulses(log, 108000, 108300);       // confirmed at 108300
+    e.notePourConfirmed(108300);                   // confirmed at 108300
+    e.capturePrePulses(log, 108000);
     assert(e.context().pre_pulse_total == 19 + 61 + 2);
+
+    // The completion fallback (press confirmed late) ends at the same
+    // confirmation, not at t=0, so it meets inlet_pulses too.
+    MachineContextTracker f;
+    f.onPourStart(1);
+    f.resolvePump(108000);                         // no press yet
+    f.notePourConfirmed(108300);
+    f.capturePrePulses(log, 108000);               // does nothing: no press
+    assert(!f.prePulsesCaptured());
+    f.onPumpPress(PUMP_2CUP, 100000);              // confirmed late
+    f.resolvePumpIfUnknown(108000);
+    f.capturePrePulses(log, 108000);
+    assert(f.context().pre_pulse_total == 19 + 61 + 2);
+
+    // A confirmation absurdly late (a stall) is clamped so offsets fit: a
+    // pulse 70 s after the press would otherwise be stored as 0xFFFF.
+    log.push(100000 + 70000);
+    MachineContextTracker g;
+    g.onPumpPress(PUMP_2CUP, 100000);
+    g.onPourStart(1);
+    g.resolvePump(108000);
+    g.notePourConfirmed(100000 + 200000);
+    g.capturePrePulses(log, 108000);
+    for (uint16_t i = 0; i < g.context().pre_pulse_count; i++)
+      assert(g.context().pre_pulse_ms[i] < 0xFFFF);
 
     m.onPourStart(1);                              // the next shot starts clean
     assert(!m.prePulsesCaptured() && m.context().pre_pulse_count == 0);

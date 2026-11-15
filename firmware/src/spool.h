@@ -93,7 +93,7 @@ typedef struct __attribute__((packed)) {
   int32_t  grams_mg;
   uint32_t stable_ms;
   uint16_t sample_count;       // sample_t records following (0 for weighing)
-  uint32_t crc32;              // over header (this field zeroed) + samples
+  uint32_t crc32;              // over header (this field zeroed) + samples + v4 tail
 } spool_header_t;
 
 // The first 8 bytes are identical in every format version, by design —
@@ -123,6 +123,9 @@ static_assert(sizeof(spool_header_t) == SPOOL_HEADER_LEN_V4,
 static inline size_t SPOOL_PRE_TAIL_BYTES(uint16_t count) {
   return (size_t)((count + 4) / 5) * 10;
 }
+// The server refuses a tail longer than 256 offsets (record.PrePulsesMax):
+// raising this without it would have every such shot quarantined.
+static_assert(PRE_PULSES_MAX == 256, "the server's PrePulsesMax is 256");
 
 #define SPOOL_FLAG_FAULT     0x01
 #define SPOOL_FLAG_TRUNCATED 0x02

@@ -1,4 +1,5 @@
-// Host test for PulseLog — the pulse train from lever press to first drip.
+// Host test for PulseLog — the pulse train from lever press to pour
+// confirmation (the pre-infusion phase).
 #undef NDEBUG   // these suites assert with bare assert(); see the Makefile
 #include "../../src/pulse_log.h"
 #include <cstdio>
@@ -20,7 +21,7 @@ int main() {
     assert(out[19] == 2000);                      // last pre-infusion pulse
     assert(out[20] == 5000);                      // the 3 s pause shows as a gap
     assert(out[copied - 1] == 8000);              // t0 itself is inside
-    printf("1. the press-to-drip window, as offsets from the press OK\n");
+    printf("1. the press-to-confirmation window, as offsets from the press OK\n");
   }
 
   // 2. More pulses than max_out: the first max_out are kept, the total says
@@ -98,6 +99,30 @@ int main() {
     p.extract(1000, 2000, out, 64, &copied, &complete);
     assert(!complete);
     printf("7. an upstream gap inside the window is incomplete OK\n");
+  }
+
+  // 8. A gap long after the window ended (an overflow during the pour, seen
+  //    by a capture made at completion) does not condemn it; one just after
+  //    its end does (the drain notices late). And a gap 25+ days old does
+  //    not flip sign and condemn later windows.
+  {
+    PulseLog p;
+    for (uint32_t t = 1000; t < 2000; t += 50) p.push(t);
+    uint16_t out[64], copied; bool complete;
+    p.markGap(2000 + PulseLog::GAP_SLACK_MS + 30000);
+    p.extract(1000, 2000, out, 64, &copied, &complete);
+    assert(complete);
+    p.markGap(2500);
+    p.extract(1000, 2000, out, 64, &copied, &complete);
+    assert(!complete);
+
+    PulseLog q;
+    q.markGap(1000);
+    uint32_t later = 1000u + 2200000000u;          // ~25.5 days on
+    q.push(later + 100);
+    q.extract(later, later + 1000, out, 64, &copied, &complete);
+    assert(complete);
+    printf("8. gaps count only near the window, and never flip sign OK\n");
   }
 
   printf("\nall pulse log tests passed\n");

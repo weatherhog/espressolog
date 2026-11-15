@@ -328,6 +328,9 @@ func defaultRecipe(tx *sql.Tx, epochID any, startedAt time.Time, thisShotEditedA
 	// timer. An edit made between shots, which is the realistic case, is
 	// latched and then cleared at the next pour start and never lands on any
 	// row. In practice this guard therefore fires rarely — *for real edits*.
+	// (A brew-temperature edit still BLINKING, unconfirmed, at pour start is
+	// the one between-shots edit that does land, and on its own column,
+	// setpoint_pending, v5 — not here: see the brew-temperature carry below.)
 	// BEFORE FIRMWARE 0.9.9 the decoder latched on ANY two blank frames
 	// within BLINK_WINDOW_US, so every steam cycle latched too (CLAUDE.md,
 	// the display-bus blink paragraph). A shot from that firmware that saw a
@@ -368,6 +371,12 @@ func defaultRecipe(tx *sql.Tx, epochID any, startedAt time.Time, thisShotEditedA
 	// and are excluded below instead.
 	since := `COALESCE((SELECT MAX(started_at) FROM shot
 	                     WHERE setpoint_touched = 1 AND started_at <= ?), '')`
+	// The brew temperature alone also stops at a shot pulled while a
+	// temperature edit was still unconfirmed (setpoint_pending, v5): the
+	// value before it is the pre-edit one. >= so a value typed ON that shot
+	// still carries. Pre-infusion is not affected (review, 2026-11-15).
+	sincePending := `COALESCE((SELECT MAX(started_at) FROM shot
+	                     WHERE setpoint_pending = 1 AND started_at <= ?), '')`
 	if thisShotEditedAParameter {
 		// Only brew_temp_c and preinfusion_s: beanID and grindDial are already
 		// assigned above and stay. setpoint_touched latches on the machine's
@@ -391,8 +400,9 @@ func defaultRecipe(tx *sql.Tx, epochID any, startedAt time.Time, thisShotEditedA
 	                 WHERE brew_temp_c IS NOT NULL AND started_at <= ?
 	                   AND NOT (COALESCE(setpoint_touched, 0) = 1 AND COALESCE(brew_temp_source, '') = 'display')
 	                   AND started_at >= ? AND started_at >= `+since+`
+	                   AND started_at >= `+sincePending+`
 	                 ORDER BY started_at DESC, id DESC LIMIT 1`,
-		at, staleFloor(startedAt), at).Scan(&t) == nil {
+		at, staleFloor(startedAt), at, at).Scan(&t) == nil {
 		brewTemp = t
 	}
 	var pre float64
@@ -452,6 +462,10 @@ func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time
 	// shot's own pulses.
 	if c, ok := h.Setpoint(); ok {
 		brewTemp, brewTempSource = c, "display"
+	} else if h.SetpointPending() {
+		// An edit was blinking, unconfirmed, at pour start: the setpoint is
+		// unknown — not the last one, which is the pre-edit value.
+		brewTemp, brewTempSource = nil, nil
 	}
 	var preinfusionRun any
 	if run, ok := measuredPreinfusion(rec); ok {
@@ -475,7 +489,7 @@ func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time
 	// record predates the display bus, and so does a v2 record written with
 	// the bus switched off — both leave these NULL, which is the difference
 	// between "no reading" and "zero".
-	var boilerTempC, machineTimerS, setpointTouched any
+	var boilerTempC, machineTimerS, setpointTouched, setpointPending any
 	if c, ok := h.BoilerTempStartC(); ok {
 		boilerTempC = c
 	}
@@ -485,6 +499,9 @@ func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time
 	if h.FormatVersion >= 2 {
 		// Only meaningful once the firmware could latch it at all.
 		setpointTouched = boolToInt(h.SetpointTouched())
+	}
+	if h.FormatVersion >= 5 {
+		setpointPending = boolToInt(h.SetpointPending())
 	}
 
 	// Format v3 (0c) carries the lever press that started the pump. Lever A
@@ -532,12 +549,12 @@ func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time
 			stop_ms, stopped_by,
 			yield_at_stop_g, yield_final_g, settle_offset_g,
 			peak_flow_gps, mean_flow_gps, flow_win_start_ms, flow_win_end_ms,
-			boiler_temp_start_c, machine_timer_s, setpoint_touched,
+			boiler_temp_start_c, machine_timer_s, setpoint_touched, setpoint_pending,
 			switch_direction, first_drip_ms, pump_line,
 			pre_pulse_total, pre_pulse_complete,
 			detector_version, firmware_version,
 			excluded, exclude_reason, created_at
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		// .UTC() to match every READ site. Equivalent today only because
 		// Ingest hands this an already-UTC time; the moment anything passes a
 		// zoned one, stored strings gain "+02:00" and MAX(started_at) — which
@@ -550,7 +567,7 @@ func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time
 		h.StopMs, stoppedBy,
 		mg(h.YieldAtStopMg), mg(h.YieldFinalMg), mg(h.SettleOffsetMg),
 		mg(h.PeakFlowMgps), mg(h.MeanFlowMgps), h.FlowWinStartMs, h.FlowWinEndMs,
-		boilerTempC, machineTimerS, setpointTouched,
+		boilerTempC, machineTimerS, setpointTouched, setpointPending,
 		switchDirection, firstDripMs, pumpLine,
 		prePulseTotal, prePulseComplete,
 		h.Detector(), h.Firmware(),

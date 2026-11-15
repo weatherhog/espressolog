@@ -80,6 +80,10 @@ const (
 	// v4 and never sets it, so on a v4 record a CLEAR bit means "not a
 	// placement" only if firmware_version is 0.11.1 or later.
 	FlagPlacement = 0x20
+	// FlagSetpointPending (v5): a brew-temperature edit was blinking,
+	// unconfirmed, at pour start. The setpoint is unknown, and nothing may
+	// be carried onto the shot or across it.
+	FlagSetpointPending = 0x40
 
 	headerLenV1 = 109
 	headerLenV2 = 113 // v1 + boiler_temp_start_dc (int16) + machine_timer_dl (uint16)
@@ -369,11 +373,17 @@ func (h *Header) BoilerTempStartC() (int, bool) {
 }
 func (h *Header) Reject() bool { return h.Flags&FlagReject != 0 }
 
+// SetpointPending reports a brew-temperature edit under way, unconfirmed,
+// at pour start (v5).
+func (h *Header) SetpointPending() bool {
+	return h.FormatVersion >= 5 && h.Flags&FlagSetpointPending != 0
+}
+
 // Setpoint returns the brew setpoint the machine's display last showed being
 // dialled in (format v5), in whole degrees as the display renders it. ok is
 // false when the record does not say: older than v5, no confirmed edit seen
 // since the board booted, an edit not yet confirmed (the record is then
-// also SetpointTouched), the display not decoding, or a weighing.
+// SetpointPending), the display not decoding, or a weighing.
 func (h *Header) Setpoint() (c float64, ok bool) {
 	if h.FormatVersion < 5 || h.RecordType != TypeShot || h.SetpointDc == TempNone {
 		return 0, false

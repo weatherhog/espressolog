@@ -40,7 +40,7 @@ typedef struct __attribute__((packed)) {
   uint8_t  scale_mac[6];       // → equipment.ble_address lookup
   uint8_t  flags;              // bit0 FAULT, bit1 TRUNCATED, bit2 REJECT,
                                // bit3 SETPOINT_TOUCHED, bit4 FLOW_TAP,
-                               // bit5 PLACEMENT.
+                               // bit5 PLACEMENT, bit6 SETPOINT_PENDING.
                                // Keep this list in step with the #defines
                                // below: this struct is what a second reader
                                // reads, and a list that stops short reads as
@@ -96,7 +96,7 @@ typedef struct __attribute__((packed)) {
   // The value last dialled in on the machine (a SETPOINT frame, 80-130 C)
   // while this board watched, in decidegrees, as it stood at pour start.
   // INT16_MIN = no confirmed edit seen since boot (or since the display tap
-  // was switched), an edit not yet confirmed (SETPOINT_TOUCHED is then set),
+  // was switched), an edit not yet confirmed (SETPOINT_PENDING is then set),
   // the display not decoding at pour start, or a weighing. THIS is brew_temp_c's
   // source when present; boiler_temp_start_dc is what the boiler showed.
   int16_t  setpoint_dc;
@@ -165,6 +165,11 @@ static_assert(PRE_PULSES_MAX == 256, "the server's PrePulsesMax is 256");
 // placement): its curve rose >20 g within 1 s, which espresso cannot. Kept,
 // so a misjudged real shot is not lost; the server excludes it.
 #define SPOOL_FLAG_PLACEMENT 0x20
+// v5 (0.12.0). A brew-temperature edit was blinking, unconfirmed, at pour
+// start (MachineContext::setpoint_pending): the setpoint is unknown, and the
+// server must neither carry one onto this shot nor across it. Separate from
+// SETPOINT_TOUCHED on purpose, which also stops the pre-infusion carry.
+#define SPOOL_FLAG_SETPOINT_PENDING 0x40
 
 
 // LittleFS spool: one file per record under /spool, written only when no

@@ -55,9 +55,12 @@ struct MachineContext {
   // v5: the brew-temperature SETPOINT, as last dialled in on the machine's
   // front panel while this board watched (INT16_MIN = no confirmed edit
   // seen since boot or since the display tap was switched, an edit not yet
-  // confirmed — then setpoint_touched is set too — or the display not
+  // confirmed — then setpoint_pending is set — or the display not
   // decoding at pour start). See MachineContextTracker::noteSetpoint.
   int16_t  setpoint_dc          = INT16_MIN;
+  // v5: a brew-temperature edit was under way, not yet confirmed, at pour
+  // start — so this shot's setpoint is unknown, not "the last one".
+  bool     setpoint_pending     = false;
 };
 
 // Gathers MachineContext across a shot. None of it is available at the
@@ -141,9 +144,10 @@ public:
   // The display tap was switched off or on, or re-attached: a setpoint seen
   // before it may no longer be the machine's — it could have been edited
   // while nothing watched (review, 2026-11-15).
+  // An edit already pending STAYS pending: switching the tap mid-edit must
+  // not turn "unconfirmed" back into "carry the old one" (review 2026-11-15).
   void forgetSetpoint() {
     last_setpoint_dc = INT16_MIN;
-    setpoint_pending = false;
     shown_setpoint_c = blinked_setpoint_c = INT16_MIN;
   }
 
@@ -165,6 +169,7 @@ public:
     // pre_pulse_count entries of it are ever read.
     mc.boiler_temp_start_dc = INT16_MIN;
     mc.setpoint_touched     = false;
+    mc.setpoint_pending     = false;
     mc.pump_line            = PUMP_NONE;
     mc.pump_lead_ms         = PUMP_LEAD_NONE;
     mc.pre_pulse_total      = PRE_PULSES_NONE;
@@ -175,8 +180,11 @@ public:
     // applies to the next one. Kept across shots, unlike everything above.
     mc.setpoint_dc = display_live ? last_setpoint_dc : INT16_MIN;
     // An edit under way at pour start: this shot's setpoint is unknown and
-    // must not be carried onto it either (see noteSetpoint).
-    if (setpoint_pending) mc.setpoint_touched = true;
+    // the server must not carry one onto it, or across it (noteSetpoint).
+    // Its OWN flag (v5 SETPOINT_PENDING), not setpoint_touched: a pending
+    // brew-temperature edit says nothing about pre-infusion, and touched
+    // also stops that carry and condemns a 0f run (review 2026-11-15).
+    mc.setpoint_pending = setpoint_pending;
     if (have_boiler && (uint32_t)(now_us - last_boiler_us) < BOILER_MAX_AGE_US) {
       mc.boiler_temp_start_dc = last_boiler_dc;
     }
@@ -275,7 +283,6 @@ public:
   void clearPresses() { press_head = press_count = 0; }
 
   const MachineContext& context() const { return mc; }
-  bool setpointPending() const { return setpoint_pending; }
 
 private:
   struct Press { uint8_t line; uint32_t at_ms; };
@@ -313,11 +320,20 @@ private:
       const int16_t v = shown_setpoint_c;
       shown_setpoint_c = INT16_MIN;
       const bool in_range = v >= SETPOINT_MIN_C && v <= SETPOINT_MAX_C;
-      if (v == blinked_setpoint_c && in_range) {
+      const int16_t prev = blinked_setpoint_c;
+      const bool prev_deviant = prev >= SETPOINT_MIN_C && prev <= SETPOINT_MAX_C &&
+                                (int32_t)prev * 10 != last_setpoint_dc;
+      if (v == prev && in_range) {
         last_setpoint_dc = (int16_t)(v * 10);
         setpoint_pending = false;
       }
-      else if (in_range && (int32_t)v * 10 != last_setpoint_dc)
+      // TWO blinks in a row that are not the remembered value and do not
+      // agree: an edit is passing through values. One alone is ignored — a
+      // misread frame on an edit's last blink set this for the rest of the
+      // boot (review, 2026-11-15); a real new value confirms on its second
+      // blink anyway. KNOWN LIMIT: a shot pulled within ~0.4 s of the new
+      // value's first blink still gets the old value carried.
+      else if (in_range && (int32_t)v * 10 != last_setpoint_dc && prev_deviant)
         // A DIFFERENT value blinked: an edit is under way (or a misread),
         // so the remembered setpoint is no longer known to be the machine's
         // until the new one confirms. Without this a shot pulled in the
@@ -328,11 +344,10 @@ private:
         //
         // Clearing alone only relabelled the old value: the server then
         // carried it from the last shot (review, 2026-11-15). So the edit is
-        // also PENDING, and a shot pulled while it is marks itself
-        // setpoint_touched (onPourStart), which stops the server carrying
-        // onto or across it. KNOWN LIMIT: one misread frame on the last
-        // blink of an edit leaves it pending until the next edit, and shots
-        // meanwhile record no brew temperature (type it in).
+        // also PENDING, and a shot pulled while it is carries the
+        // SETPOINT_PENDING flag (onPourStart): the server records no brew
+        // temperature on it and carries none across it until a value is
+        // confirmed, or typed on a later shot.
       {
         last_setpoint_dc = INT16_MIN;
         setpoint_pending = true;

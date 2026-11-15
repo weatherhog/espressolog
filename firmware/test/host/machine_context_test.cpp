@@ -448,16 +448,27 @@ int main() {
       assert(e.context().setpoint_dc == 930);
       eb(93);                                             // the same value: nothing changes
       e.onPourStart(u);
-      assert(e.context().setpoint_dc == 930 && !e.context().setpoint_touched);
-      eb(96);                                             // the edit begins
+      assert(e.context().setpoint_dc == 930 && !e.context().setpoint_pending);
+      // One different blink alone is ignored: on an edit's last blink it is
+      // a misread, and a real new value confirms on its next blink anyway.
+      eb(98);
+      e.onReading(temp(93, u += 41000), false);
+      e.onPourStart(u);
+      assert(e.context().setpoint_dc == 930 && !e.context().setpoint_pending);
+      // Two different blinks that disagree: an edit passing through values.
+      eb(94); eb(95);
       e.onPourStart(u);
       assert(e.context().setpoint_dc == INT16_MIN);
-      assert(e.context().setpoint_touched);               // pending: not carried onto
+      assert(e.context().setpoint_pending);               // not carried onto
+      assert(!e.context().setpoint_touched);              // its own flag, not touched
       e.onPourStart(u);
-      assert(e.context().setpoint_touched);               // still pending next shot
-      eb(96);
+      assert(e.context().setpoint_pending);               // still pending next shot
+      e.forgetSetpoint();                                 // the tap switched mid-edit
       e.onPourStart(u);
-      assert(e.context().setpoint_dc == 960 && !e.context().setpoint_touched);
+      assert(e.context().setpoint_pending);               // stays pending
+      eb(96); eb(96);
+      e.onPourStart(u);
+      assert(e.context().setpoint_dc == 960 && !e.context().setpoint_pending);
       eb(96);                                             // more blinks of it: unchanged
       e.onReading(setpoint(88, u += 204000), true);       // steady tail: does not clear
       e.onReading(temp(88, u += 41000), false);

@@ -1434,3 +1434,55 @@ func TestUnmappableRunAndV1CarrySource(t *testing.T) {
 		t.Errorf("unmappable run after backfill: %+v; want no setting, run 5.8", r)
 	}
 }
+
+// A shot pulled while a brew-temperature edit was still blinking (v5
+// SETPOINT_PENDING): no brew temperature on it and none carried across it —
+// but pre-infusion carries as usual, and a value typed on the pending shot
+// carries forward (review, 2026-11-15: pending first rode on
+// setpoint_touched, which also cut the pre-infusion carry).
+func TestSetpointPendingStopsOnlyTheTemperatureCarry(t *testing.T) {
+	st := openTestStore(t)
+	dev := "aa:bb:cc:dd:ee:03"
+	base := time.Now().Add(-time.Hour).Truncate(time.Second)
+	at := func(d time.Duration, flags uint8) func(*record.Header) {
+		return func(h *record.Header) {
+			h.StartedAtUnixMs = uint64(base.Add(d).UnixMilli())
+			h.Flags |= flags
+		}
+	}
+	ingest := func(seq uint32, mut func(*record.Header)) int64 {
+		t.Helper()
+		raw, rec := pumpRecordWith(t, seq, record.Pump2Cup, 9500, mut, nil)
+		res, err := st.Ingest(dev, rec, raw, base)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res.ShotID
+	}
+	read := func(id int64) (temp, pre sql.NullFloat64, pending sql.NullInt64) {
+		t.Helper()
+		if err := st.db.QueryRow(`SELECT brew_temp_c, preinfusion_s, setpoint_pending FROM shot WHERE id = ?`, id).Scan(&temp, &pre, &pending); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	a := ingest(1, at(0, 0))
+	if err := st.UpdateShot(a, map[string]any{"brew_temp_c": 93.0, "preinfusion_s": 3.0}); err != nil {
+		t.Fatal(err)
+	}
+	p := ingest(2, at(time.Minute, record.FlagSetpointPending))
+	if temp, pre, pending := read(p); temp.Valid || pre.Float64 != 3 || pending.Int64 != 1 {
+		t.Errorf("pending shot: temp %v pre %v pending %v; want no temp, pre 3, pending 1", temp, pre, pending)
+	}
+	n := ingest(3, at(2*time.Minute, 0))
+	if temp, pre, pending := read(n); temp.Valid || pre.Float64 != 3 || pending.Int64 != 0 {
+		t.Errorf("shot after pending: temp %v pre %v pending %v; want no temp carried across, pre 3", temp, pre, pending)
+	}
+	if err := st.UpdateShot(p, map[string]any{"brew_temp_c": 96.0}); err != nil {
+		t.Fatal(err)
+	}
+	m := ingest(4, at(3*time.Minute, 0))
+	if temp, _, _ := read(m); temp.Float64 != 96 {
+		t.Errorf("a value typed on the pending shot did not carry: %v", temp)
+	}
+}

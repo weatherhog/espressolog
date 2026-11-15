@@ -1674,17 +1674,22 @@ claims a live flow tap. **Header format v5** (firmware 0.12.0) added
 `setpoint_dc` after the pulse block (123 → 125 bytes): the brew setpoint
 last dialled in on the front panel — a value that BLINKED as `SETPOINT`
 twice in a row, 80–130 °C, as it stood at pour start; kept across shots,
-forgotten on a reboot or when the display tap is switched, unknown while a
-different value is blinking (an edit not yet confirmed), and not stamped
-while the display is not decoding (`machine_context.h`). **Known limits:**
-an edit made while the bus was unplugged but `display` stayed on is not
-seen (forgetting on a quiet bus would also forget at every machine
-power-off); a re-derived run does not reach shots that already
-carried the old value; a shot pulled while an edit is still unconfirmed
-records no brew temperature and is marked edited, so nothing is carried
-onto or across it — and one misread frame on an edit's last blink leaves
-that state until the next edit (type the value in). The server stores
-it as `brew_temp_c` with `brew_temp_source = 'display'`, and measures the
+forgotten on a reboot or when the display tap is switched, and not stamped
+while the display is not decoding (`machine_context.h`). Two blinks in a
+row that differ from it and from each other mean an edit is under way: the
+setpoint goes unknown and the record carries the flag `SETPOINT_PENDING`
+(bit 6, its own — not `SETPOINT_TOUCHED`, which would also stop the
+pre-infusion carry), and the server stores no brew temperature on that shot
+and carries none across it (`shot.setpoint_pending`) until a value is
+confirmed or typed. **Known limits:** a single different blink is ignored
+(it is how a misread looks), so a shot pulled within ~0.4 s of a new
+value's first blink still gets the old one carried; pending survives a tap
+switch but not a reboot; an edit made while the bus was unplugged but
+`display` stayed on is not seen (forgetting on a quiet bus would also
+forget at every machine power-off); a re-derived run does not reach shots
+that already carried the old value; and a run no `Pr` matches empties
+pre-infusion on that shot only, so the next shot carries the earlier value
+across it. The server stores the confirmed setpoint as `brew_temp_c` with `brew_temp_source = 'display'`, and measures the
 pump-on run from the pulse train into `preinfusion_run_s`
 (`server/internal/store/preinfusion.go`: the dense run before the first
 ≥ 1 s pause, its coasting tail stripped — shot 179 at Pr = 5 s measures

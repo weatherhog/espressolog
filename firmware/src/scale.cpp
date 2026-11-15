@@ -95,11 +95,6 @@ void ScaleManager::tickSlot(Slot& s, uint32_t now) {
         break;
       }
       s.dev->update();   // lib heartbeat, self-throttled to 2 s
-      // A sample stamped after connected_at_ms is a real notification: the
-      // lib's injected setWeight(0) runs inside connect(), in connectTask,
-      // before loop() sees CONNECT_OK and stamps connected_at_ms.
-      if (!s.link_delivered && (int32_t)(s.last_sample_ms - s.connected_at_ms) > 0)
-        s.link_delivered = true;
       break;
     }
     case SlotState::UNBOUND:
@@ -134,7 +129,10 @@ void ScaleManager::tickSlot(Slot& s, uint32_t now) {
         // a DROP backs off is link_backoff_ms's business (dropConnection).
         s.backoff_ms = BACKOFF_MIN_MS;
         s.connected_at_ms = now;
-        s.link_delivered = false;
+        // MUST STAY HERE, AFTER the acquire load above: it overwrites the
+        // stamp of the lib's injected setWeight(0) — which ran inside
+        // connect(), before connectTask's release store — so dropConnection
+        // can tell a real notification by a stamp after connected_at_ms.
         s.last_sample_ms = now;
         Serial.printf("# scale[%s] connected: %s (%lu ms, off the loop)\n",
                       s.role == ScaleRole::YIELD ? "yield" : "dose",
@@ -154,21 +152,28 @@ void ScaleManager::tickSlot(Slot& s, uint32_t now) {
 void ScaleManager::dropConnection(Slot& s, uint32_t now, const char* why) {
   Serial.printf("# scale[%s] lost: %s\n",
                 s.role == ScaleRole::YIELD ? "yield" : "dose", why);
-  s.dev.reset();   // destroys the NimBLE client
+  s.dev.reset();   // destroys the NimBLE client; no sample lands after this
   s.state = SlotState::LOST;
-  // Two backoffs, kept apart (reviews 2026-11-15). link_backoff_ms grows
-  // only across consecutive links that never delivered a weight — a scale
-  // that accepts the connection and sends nothing — so those no longer
-  // retry every second. A link that delivered even one real sample retries
-  // after 1 s however short it was: that is a scale awake, and a hiccup
-  // just after a wake must not wait 30 s, a whole pour. (Drafts keyed this
-  // on the backoff_ms that sleeping grows, then on the link lasting 10 s;
-  // under both, silent links before the wake left the first real hiccup
-  // waiting 30 s.) Failed connects after the drop grow from its delay.
+  // Did this link deliver a real sample? Decided here, from the stamps, so a
+  // loop() stall cannot hide a delivery (a flag set on a later CONNECTED
+  // tick could miss one — review 3, 2026-11-15). See CONNECT_OK on why the
+  // lib's injected 0 g does not count.
+  const bool delivered = (int32_t)(s.last_sample_ms - s.connected_at_ms) > 0;
+  // Two drop backoffs (reviews 2026-11-15):
+  //  - silent links (connect, then nothing — what an asleep scale is
+  //    inferred to do) grow link_backoff_ms to BACKOFF_MAX_MS, so they no
+  //    longer retry every second;
+  //  - delivering links grow flap_backoff_ms only to FLAP_BACKOFF_MAX_MS: a
+  //    hiccup just after a wake never waits 30 s (a whole pour), and a scale
+  //    flapping at the edge of range does not hold the radio every second.
+  //    It restarts after a link of LONG_LINK_MS.
+  // Failed connects after the drop grow from the drop's delay.
   uint32_t delay;
-  if (s.link_delivered) {
-    delay = BACKOFF_MIN_MS;
+  if (delivered) {
     s.link_backoff_ms = BACKOFF_MIN_MS;
+    if (now - s.connected_at_ms >= LONG_LINK_MS) s.flap_backoff_ms = BACKOFF_MIN_MS;
+    delay = s.flap_backoff_ms;
+    s.flap_backoff_ms = min(s.flap_backoff_ms * 2, FLAP_BACKOFF_MAX_MS);
   } else {
     delay = s.link_backoff_ms;
     s.link_backoff_ms = min(s.link_backoff_ms * 2, BACKOFF_MAX_MS);
@@ -315,6 +320,7 @@ bool ScaleManager::assign(ScaleRole role, const String& mac_or_last, Stream& out
   s.next_retry_ms = 0;
   s.backoff_ms = BACKOFF_MIN_MS;
   s.link_backoff_ms = BACKOFF_MIN_MS;
+  s.flap_backoff_ms = BACKOFF_MIN_MS;
   prefs.putString(nvsKey(role), mac);
   updateScanState();
   out.printf("# %s scale bound to %s (persisted)\n",

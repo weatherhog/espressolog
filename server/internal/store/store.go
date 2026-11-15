@@ -136,7 +136,8 @@ func (s *Store) Ingest(deviceID string, r *record.Record, raw []byte, receivedAt
 		// and the placement claimed the 18 g (review, 2026-11-15). Rejects
 		// too: almost every one is a knock or a drip, not a shot that choked
 		// (a second review, the same day, reversed a draft that let them keep
-		// it). The late-weighing path skips the same rows by `excluded = 0`.
+		// it). The late-weighing path skips the same records by their stored
+		// ingest reason (attributeWeighingToLaterShot).
 		if err == nil && !excluded {
 			err = attributeDoseToShot(tx, res.ShotID, startedAt)
 		}
@@ -601,14 +602,23 @@ const (
 func excludeReasonAtIngest(h *record.Header) string {
 	switch {
 	case h.Fault():
-		return "fault: cup removed mid-pour"
+		return reasonFault
 	case h.Reject():
-		return "reject: under 5 g"
+		return reasonReject
 	case h.Placement():
-		return "cup placement: the detector judged it a cup set down, not a pour"
+		return reasonPlacement
 	}
 	return ""
 }
+
+// The exclude_reason values written at ingest. attributeWeighingToLaterShot
+// matches stored rows against them, so CHANGING ONE STRANDS EVERY ROW
+// ALREADY STORED WITH THE OLD TEXT — add a migration if one ever changes.
+const (
+	reasonFault     = "fault: cup removed mid-pour"
+	reasonReject    = "reject: under 5 g"
+	reasonPlacement = "cup placement: the detector judged it a cup set down, not a pour"
+)
 
 func attributeDoseToShot(tx *sql.Tx, shotID int64, startedAt time.Time) error {
 	started := startedAt.UTC().Format(time.RFC3339)
@@ -635,6 +645,14 @@ func attributeDoseToShot(tx *sql.Tx, shotID int64, startedAt time.Time) error {
 
 // Out-of-order arrival: a weighing whose shot was ingested first (upload
 // retries can reorder) claims the first still-doseless shot after it.
+// It skips the records the arrival path skips — those excluded AT INGEST
+// (fault, reject, placement), keyed on their stored reason — and nothing
+// else: a shot the user excluded by hand (a prep error, "discarded at
+// capture") still used the coffee and can take its dose, and a false reject
+// the user un-excludes becomes eligible (review 3, 2026-11-15: keyed on the
+// editable `excluded` alone, the two paths disagreed after any edit).
+// KNOWN, older than this: with reordered uploads it takes the earliest
+// weighing to ARRIVE, not the last one before the shot.
 func attributeWeighingToLaterShot(tx *sql.Tx, weighingID int64, grams float64, observedAt time.Time) error {
 	if grams < doseMinG || grams > doseMaxG {
 		return nil
@@ -645,10 +663,11 @@ func attributeWeighingToLaterShot(tx *sql.Tx, weighingID int64, grams float64, o
 	var shotID int64
 	err := tx.QueryRow(`
 		SELECT id FROM shot
-		WHERE dose_ground_g IS NULL AND excluded = 0
+		WHERE dose_ground_g IS NULL
+		  AND NOT (excluded = 1 AND COALESCE(exclude_reason, '') IN (?, ?, ?))
 		  AND started_at >= ? AND started_at < ?
 		ORDER BY started_at ASC LIMIT 1`,
-		observed, horizon).Scan(&shotID)
+		reasonFault, reasonReject, reasonPlacement, observed, horizon).Scan(&shotID)
 	if err == sql.ErrNoRows {
 		return nil
 	}

@@ -37,7 +37,8 @@ struct QTrace {
 enum class BenchVerdict : uint8_t {
   OK,
   HELD,          // Q still high at the cap: an open or high R_ext (a HOLD), reset by dropping the arm
-  NO_RISE,       // Q never went high: open C_ext, dead channel, missing chip, unarmed
+  NO_RISE,       // Q never went high: open C_ext, dead channel, missing chip, unarmed,
+                 // or its readback 1 K open (the pin's pull-down then reads a steady 0)
   OTHER_MOVED,   // a channel that was not fired changed level: a bridge or a cross-fire
   ENDED_WITH_GATE, // the drive pulse ended where the gate's did: the gate's reset ended it, so
                    // the drive's own RC did not -- its R_ext open or high (a HOLD the gate
@@ -49,7 +50,7 @@ inline const char* verdictName(BenchVerdict v) {
   switch (v) {
     case BenchVerdict::OK:          return "ok";
     case BenchVerdict::HELD:        return "HELD at the cap (open/high R_ext?)";
-    case BenchVerdict::NO_RISE:     return "NO PULSE (open C_ext, chip missing, or not armed)";
+    case BenchVerdict::NO_RISE:     return "NO PULSE (open C_ext, chip missing, not armed, or readback 1 K open)";
     case BenchVerdict::OTHER_MOVED: return "ANOTHER CHANNEL MOVED (bridge or cross-fire)";
     case BenchVerdict::ENDED_WITH_GATE:
       return "ENDED WITH THE GATE (drive R_ext open/high, or gate too short: meter the drive RC, compare `drive gate`)";

@@ -46,10 +46,13 @@ built.
    (board doc, "Bridges that can arm or light a channel") is done.
 6. USB from the Mac only. No other supply.
 7. **`display off` and `flow off`.** The sampler is a busy-wait and their
-   interrupts would stall it; the tool refuses with either on. Spool writes
-   and uploads cannot run during a sweep (it blocks `loop()`); what is left
-   is a Bluetooth or Wi-Fi flash write on the other core, which shows as an
-   outlier run.
+   interrupts would stall it; the tool refuses with either on. **Both
+   settings are saved**, so step 7 below turns them back on. Spool writes
+   and uploads cannot run during a sweep (it blocks `loop()`). What is left:
+   the USB-serial interrupt, the scheduler tick and the Wi-Fi event task on
+   the sampler's own core, and a Bluetooth or Wi-Fi flash write on the
+   other. They show as an outlier run; a sweep that ran across a Wi-Fi
+   reconnect is run again.
 
 ## Procedure
 
@@ -69,7 +72,11 @@ channel that moves here is a bridge.
   run the sweep again rather than recording it.
 
 **2. Each drive channel.** `drive fire 1 20`, then 2, 3 and 4. Expect about
-220 ms each.
+220 ms each. **A channel counts as watched for cross-fire only once its own
+`fire` run has shown a pulse**: with its readback 1 K open, its pin's
+pull-down reads a steady 0, and it can neither show a pulse nor show that
+it moved during another channel's run.
+- `NO PULSE` → open `C_ext`, the chip not seated, or the readback 1 K open.
 - `ENDED WITH THE GATE` → the drive pulse ended when the gate's did, so the
   gate's reset ended it, not the drive's own RC. **Two causes look the same**:
   the drive's `R_ext` open or high (a HOLD that the gate caught), or a gate
@@ -89,9 +96,13 @@ it**. RC and the '221 drift with temperature; the margins are taken from
 the worse of the two sets.
 
 **4. The readback value.** Swap one channel's 1 K readback for 10 K (a 2-pin
-header for the bench, as the RC was) and repeat its `drive fire 20`. If the
-widths agree within a few µs and the verdicts stay "ok", 10 K reads cleanly.
-Record it; the value is chosen with the rest.
+header for the bench, as the RC was) and repeat it as `drive fire <ch> 20
+nopd`. `nopd` drops the internal pull-down on that channel's readback:
+against 10 K it would leave a HIGH at about 2.7 V, 0.2 V over the input
+threshold, and the test would measure the pull-down rather than the 10 K.
+If the widths agree within a few µs and the verdicts stay "ok", 10 K reads
+cleanly. Record it, and record that the build's firmware keeps the
+pull-down on the other pins; the value is chosen with the rest.
 
 **5. The decision record.** In `docs/phase-0-status.md`, record the measured
 widths, warm and cold:
@@ -112,15 +123,23 @@ or the analyser through a pull-up, on that device's pins 3–4: they close for
 one pulse and open again. This is where a firmware fault gets found under
 observation, which is the reason (b) is fitted first.
 
+**7. Back on.** `display on`, `flow on`, then `status`: both taps on.
+Every `drive` summary ends with this reminder, because the board boots with
+whatever was saved, and a board back on the machine with both off logs
+shots with no flow count, no boiler temperature and no setpoint, silently.
+
 **Stop there.** Fitting (a1) or (a2) is Phase 1, a separate decision, and
 the machine-side `drivetest` has to exist first.
 
 ## What the `drive` command guarantees, and what it does not
 
 - **Every drive pin is an INPUT from the first line of `setup()` and after
-  every run**, with GPIO38's output latch written LOW first. Before that, through
-  the bootloader, GPIO38's external 10 K pull-down holds the arm net LOW. The external pulls hold `A̅` high and `R̅`
-  low.
+  every run**, with GPIO38's output latch written LOW first. Before that,
+  through the bootloader, only the external pulls hold the lines: in the
+  gate build GPIO38's 10 K holds the gate's `R̅` low, and the drive
+  channels' tied `R̅` (arm) net is held low by its own 10 K and by U3's `Q`;
+  only in the no-gate rework is GPIO38's 10 K the arm net's. The external
+  pulls hold `A̅` high and `R̅` low.
 - **Triggers are written HIGH before they become outputs**, and every `A̅`
   is read HIGH before GPIO38 rises.
 - **Every run ends by dropping GPIO38**, which ends any pulse still running,
@@ -131,7 +150,9 @@ the machine-side `drivetest` has to exist first.
 - **Before each run every `A̅` reads HIGH and every `Q` LOW.** The five `Q`
   readbacks sit on the ESP32's internal pull-down, so a chip that is not
   fitted (U3 on the Phase-0 board) reads LOW and shows as NO PULSE, not as
-  noise.
+  noise. The price: an open readback 1 K reads LOW too, so it is caught only
+  by that channel's own `fire` run (step 2). `nopd` drops the pull-down on
+  the fired channel for step 4.
 - **Widths are readback rise to fall**, sampled in a busy loop every few
   µs. The 5 µs trigger pulse moves only the reported rise time, not the
   width. A stall that hits every run alike would skew them all and is not

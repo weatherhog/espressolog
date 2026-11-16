@@ -95,18 +95,18 @@ of the machine with the machine at temperature, but **still unplugged from
 it**. RC and the '221 drift with temperature; the margins are taken from
 the worse of the two sets.
 
-**4. The readback value.** Swap one channel's 1 K readback for 10 K (a 2-pin
-header for the bench, as the RC was) and repeat it as `drive fire <ch> 20
-nopd`. `nopd` drops the internal pull-down on that channel's readback:
-against 10 K it would leave a HIGH at about 2.7 V, 0.2 V over the input
-threshold, and the test would measure the pull-down rather than the 10 K.
-If the widths agree within a few µs and the verdicts stay "ok", 10 K reads
-cleanly. **Then run it again without `nopd`**: that is the condition the
-firmware runs in, with the pull-down on every readback, and a HIGH 0.2 V
-over threshold is a margin to record, not to assume. Record both; the value
-is chosen with the rest, and **if 10 K is chosen, the step-5 record says so
-and the firmware's `driveRelease()` drops the pull-down on that pin** — the
-build must not run a configuration only the `nopd` run tested.
+**4. The readback value.** The firmware keeps the internal pull-down on
+**all five** readbacks, and the value chosen here applies to all five, so
+10 K is tested as it would be built: with the pull-down. Swap one drive
+channel's 1 K readback for 10 K (a 2-pin header for the bench, as the RC
+was) and repeat its `drive fire <ch> 20`; then do the same for the gate's
+readback with `drive gate 20`. With 10 K against the ~45 K pull-down a HIGH
+sits at about 2.7 V, 0.2 V over the input threshold, so **accept 10 K only
+if both runs match the 1 K widths within a few µs with every verdict "ok"**,
+and record the margin. `drive fire <ch> 20 nopd` repeats the drive run
+without that channel's pull-down: a comparison that says whether a
+disagreement is the pull-down's, not a configuration the build runs. If
+the runs with the pull-down are not clean, keep 1 K.
 
 **5. The decision record.** In `docs/phase-0-status.md`, record the measured
 widths, warm and cold:
@@ -162,8 +162,9 @@ the machine-side `drivetest` has to exist first.
   by that channel's own `fire` run (step 2). `nopd` drops the pull-down on
   the fired channel for step 4; with its chip or 1 K out that pin then
   floats and can abort the idle check at random rather than show NO PULSE.
-- **Arguments are whole words**: `drive fire 3 20 nopd`, in any order after
-  the channel. Anything else is refused by name.
+- **Arguments are whole words**: `drive fire 3 20 nopd`. The first number
+  is the channel (not for `gate`), the next the run count, and `nopd` may
+  stand anywhere. Anything else is refused by name.
 - **Widths are readback rise to fall**, sampled in a busy loop every few
   µs. The 5 µs trigger pulse moves only the reported rise time, not the
   width. A stall that hits every run alike would skew them all and is not

@@ -410,14 +410,19 @@ J5's 4.7 K pull-ups sit on the *machine's* rail. `pins` reads:
 ```
 
 Every machine-sourced pull-up is dead — including the flow line, which the
-firmware itself says should read **1**.
-*(2026-11-16: that footer was wrong about flow. `#` parks on or off with the
-turbine (CLAUDE.md, 0d), and from firmware 0.13.2 `pins` says "flow=0 or 1".
-The conclusion stands on `clk=0 data=0` alone: J5's pull-ups are on the
-machine's rail and read 1 whenever it is powered.)* That is an unpowered machine, and it
+firmware itself says should read **1**. That is an unpowered machine, and it
 is not the swap signature. `printPins()` cites CLAUDE.md for exactly this
 discrimination, so the claim that nothing distinguishes the two was wrong
 against a comment in the function being quoted.
+
+*(2026-11-16: that footer was wrong about flow, so the flow line is no
+evidence either way. `#` parks on or off with the turbine (CLAUDE.md, 0d),
+and from firmware 0.13.2 `pins` says "flow=0 or 1". What is left is
+`clk=0 data=0`, and one read of it is **consistent with** an unpowered
+machine, not proof: J5's pull-ups are on the machine's rail, but a live bus
+holds both lines low for part of every 41 ms frame, so a powered machine
+can read 0/0 once. Re-read `pins` several times; 0/0 every time is the
+unpowered signature, a 1 on either line is a powered machine.)*
 
 **It does not prove the taps work.** With the machine off a swapped pair
 reads 0/0 as well; what the reading does is remove any need for a wiring

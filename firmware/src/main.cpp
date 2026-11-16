@@ -363,6 +363,14 @@ static uint32_t sw_last_poll = 0, sw_max_gap = 0;
 // gap` -- the number that diagnoses dropped presses and J5 frame drops.
 static void noteLoopBlocked() { sw_last_poll = 0; }
 
+// Every character an ASCII digit (true for ""). The cast keeps a pasted
+// non-ASCII byte out of isdigit()'s undefined range.
+static bool isAllDigits(const String& v) {
+  for (unsigned i = 0; i < v.length(); i++)
+    if (!isdigit((unsigned char)v[i])) return false;
+  return true;
+}
+
 // Idempotent for the same reason as flowSetEnabled above: re-running
 // `switches on` is how state adopted from a floating line gets dropped, and
 // returning early when already on made that a no-op.
@@ -689,7 +697,9 @@ static void printPins(Stream& out) {
   makeTapPinsReadable();
   printPinLevels(out);
   // `#` does not reliably idle high: the open collector parks on or off with
-  // the turbine (CLAUDE.md, 0d). This said "flow=1" until 0.13.2.
+  // the turbine (CLAUDE.md, 0d). This said "flow=1" up to 0b76f40; 27ff1e6
+  // changed it while still reporting 0.13.1, so 0.13.1 is ambiguous here and
+  // 0.13.2 is the first version that always prints "flow=0 or 1".
   out.println("# expected at rest, on the machine: flow=0 or 1 (it parks either way),"
               " all four switches=0 (idle low, a press reads 1), clk=1 data=1"
               " (either can read 0 mid-frame while the bus runs)");
@@ -951,8 +961,7 @@ static void runDrive(Stream& out, const String& arg) {
     String tok = sp2 < 0 ? rest : rest.substring(0, sp2);
     rest = sp2 < 0 ? "" : rest.substring(sp2 + 1);
     rest.trim();
-    bool numeric = tok.length() > 0;
-    for (size_t k = 0; k < tok.length(); k++) numeric = numeric && isDigit(tok[k]);
+    bool numeric = tok.length() > 0 && isAllDigits(tok);
     if (tok == "nopd") {
       if (gate_only) { out.println("# drive: `nopd` is for fire/direct"); return; }
       nopd = true;
@@ -961,8 +970,8 @@ static void runDrive(Stream& out, const String& arg) {
     } else if (numeric && !have_n) {
       n = tok.toInt(); have_n = true;
     } else {
-      out.printf("# drive: REFUSED — what is `%s`? (drive %s%s [n] [nopd])\n", tok.c_str(),
-                 sub.c_str(), gate_only ? "" : " <1-4>");
+      out.printf("# drive: REFUSED — what is `%s`? (drive %s%s)\n", tok.c_str(),
+                 sub.c_str(), gate_only ? " [n]" : " <1-4> [n] [nopd]");
       return;
     }
   }
@@ -1005,6 +1014,7 @@ static void runDrive(Stream& out, const String& arg) {
           out.println("# off the machine every one of these reads 0; a J5 line can read 0"
                       " mid-frame, so a 0 below does not clear it:");
           printPinLevels(out);
+          noteLoopBlocked();
           return;
         }
   }
@@ -1102,7 +1112,8 @@ static void runDrive(Stream& out, const String& arg) {
   // branch, so a 1Cup/2Cup shot whose press the poller missed is unguarded
   // and flash can be written mid-shot (invariant 2).
   out.println("# REMINDER: `display on` and `flow on` before this board goes back on the"
-              " machine. Display off also blinds the brew guard (invariant 2).");
+              " machine. Display off also weakens the brew guard: a missed 1Cup/2Cup press"
+              " goes unguarded (invariant 2).");
   noteLoopBlocked();
 }
 
@@ -1198,9 +1209,7 @@ static void handleCommand(String line, Stream& out) {
         // and set 0 — the one value that disables filtering entirely and makes
         // the next flush read as raw edge counts. One typo would have looked
         // like a dramatic K-factor confirmation.
-        bool numeric = true;
-        for (unsigned i = 0; i < v.length(); i++)
-          if (!isdigit((unsigned char)v[i])) { numeric = false; break; }
+        bool numeric = isAllDigits(v);
         uint32_t us = numeric ? (uint32_t)v.toInt() : 0;
         if (!numeric) {
           out.printf("# refused — '%s' is not a number\n", v.c_str());

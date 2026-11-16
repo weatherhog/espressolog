@@ -7,7 +7,7 @@ sweep that settles the OPEN gate questions in `docs/phase-0-plan.md`
 drive-leg jumper: **Phase 0 never actuates** (CLAUDE.md, invariant 1), and
 everything below runs **off the machine** with jumpers (a1) and (a2) open.
 
-The firmware side is the `drive` command (firmware 0.13.0,
+The firmware side is the `drive` command (firmware 0.13.1,
 `firmware/src/drive_bench.h`, `runDrive()` in `main.cpp`). It fires one
 '221 channel at a time and times its `Q` through the readback, continuously
 sampled at a few µs, so the logic analyser is optional.
@@ -31,11 +31,11 @@ built.
 ## Preconditions — every one, every time
 
 1. **Off the machine.** J2, J4 and J5 T-pieces unplugged from the board. The
-   firmware refuses if J5's clock or data reads HIGH (J5 plugged into a
-   powered machine), if the display bus is decoding, or if a switch line
-   reads HIGH, but that is a backstop, not the check: it cannot see J5
-   plugged into a machine that is off, nor J2 or J4 at all (J2 has no
-   ground of its own, so its lines read LOW unplugged or not).
+   firmware watches J5's clock and data, J4's `#` and the four J2 lines
+   for 50 ms and refuses if any reads HIGH, but that is a backstop, not the
+   check: it cannot see a harness plugged into a machine that is off, nor
+   J4 with the turbine parked closed, nor J2 unless a lever is held (J2 has
+   no ground of its own, so its lines read LOW unplugged or not).
 2. **Drive-leg jumpers (a1) and (a2) OPEN**: bare pins, no shunt. Keep spare
    shunts out of the box.
 3. **LED jumper (b) open** for the timing runs. It is fitted only in step 6.
@@ -45,9 +45,11 @@ built.
 5. **The loupe inspection** of every '221 socket's adjacent pins
    (board doc, "Bridges that can arm or light a channel") is done.
 6. USB from the Mac only. No other supply.
-7. **No shot, no upload pending.** The sampler is a busy-wait; a flash write
-   stalls it and an edge seen late skews one run. The tool refuses with the
-   scale armed; let the spool drain (`ls` empty) before a sweep.
+7. **`display off` and `flow off`.** The sampler is a busy-wait and their
+   interrupts would stall it; the tool refuses with either on. Spool writes
+   and uploads cannot run during a sweep (it blocks `loop()`); what is left
+   is a Bluetooth or Wi-Fi flash write on the other core, which shows as an
+   outlier run.
 
 ## Procedure
 
@@ -115,22 +117,29 @@ the machine-side `drivetest` has to exist first.
 
 ## What the `drive` command guarantees, and what it does not
 
-- **Every drive pin is an INPUT at boot and after every run**, with GPIO38's
-  output latch written LOW first. The external pulls hold `A̅` high and `R̅`
+- **Every drive pin is an INPUT from the first line of `setup()` and after
+  every run**, with GPIO38's output latch written LOW first. Before that, through
+  the bootloader, GPIO38's external 10 K pull-down holds the arm net LOW. The external pulls hold `A̅` high and `R̅`
   low.
 - **Triggers are written HIGH before they become outputs**, and every `A̅`
   is read HIGH before GPIO38 rises.
 - **Every run ends by dropping GPIO38**, which ends any pulse still running,
   at the latest **1 s** after the trigger.
-- **It refuses** with the scale armed, with J5 clock or data HIGH, with the
-  display bus decoding, or with a switch line HIGH. None of these sees a
+- **It refuses** with the scale armed, with the display or flow tap on, or
+  with any J5, J4 or J2 line HIGH during a 50 ms watch. None of these sees a
   harness plugged into a machine that is off.
-- **Before each run every `A̅` reads HIGH and every `Q` LOW** (the gate's
-  `Q` only when the gate is fitted: in the `direct` build GPIO9 floats and
-  is neither read nor sampled).
-- **Widths are readback rise to fall**, sampled in a busy loop at a few µs;
-  the 5 µs trigger pulse and the 1 K readback add a constant well under
-  that. More than 50 runs is clamped to 50, and the tool says so.
+- **Before each run every `A̅` reads HIGH and every `Q` LOW.** The five `Q`
+  readbacks sit on the ESP32's internal pull-down, so a chip that is not
+  fitted (U3 on the Phase-0 board) reads LOW and shows as NO PULSE, not as
+  noise.
+- **Widths are readback rise to fall**, sampled in a busy loop every few
+  µs. The 5 µs trigger pulse moves only the reported rise time, not the
+  width. A stall that hits every run alike would skew them all and is not
+  visible as an outlier; hardware edge capture is left for `drivetest`.
+- **A run count above 50 is refused**, not clamped: 50 runs already hold
+  `loop()` for about 75 s.
+- **A sweep that aborts prints `ABORTED`** in its summary, with the runs it
+  finished.
 - **It is not a bound.** The 1 s cap is a busy-wait in `loop()`, not the
   IRAM timer ISR `docs/phase-0-plan.md` calls for. A hang inside the run
   leaves GPIO38 high until the gate's own RC, or with no gate, until reset.

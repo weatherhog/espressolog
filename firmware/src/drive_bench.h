@@ -62,7 +62,7 @@ inline const char* verdictName(BenchVerdict v) {
 // been ended by the gate resetting it, not by its own RC. Which of the two
 // is wrong the run cannot tell: a drive channel with an open R_ext holds
 // until the gate ends it, and looks exactly like a gate that is too short.
-static constexpr int64_t CUT_TOLERANCE_US = 200;
+static constexpr int64_t GATE_END_TOLERANCE_US = 200;
 
 // Judge one run. `fired` is the channel triggered (may be the gate itself);
 // `gate` is the gate's trace (nullptr when the run had no gate, or when the
@@ -79,7 +79,7 @@ inline BenchVerdict judge(const QTrace& fired, const QTrace* gate,
   if (gate && gate->fell() && fired.fell()) {
     int64_t d = fired.fall_us - gate->fall_us;
     if (d < 0) d = -d;
-    if (d <= CUT_TOLERANCE_US) return BenchVerdict::ENDED_WITH_GATE;
+    if (d <= GATE_END_TOLERANCE_US) return BenchVerdict::ENDED_WITH_GATE;
   }
   if (fired.edges > 2) return BenchVerdict::RETRIGGERED;
   return BenchVerdict::OK;

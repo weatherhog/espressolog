@@ -888,7 +888,7 @@ order). Neither alone would do it — the functional chain cannot tell wiring
 by *label* from wiring by *position*, and the silkscreen read cannot tell
 you the firmware agrees.
 
-**DRIVE side — DECIDED 2026-10-29; in firmware only as the bench `drive` command (0.13.0).** **One channel
+**DRIVE side — DECIDED 2026-10-29; in firmware only as the bench `drive` command (from 0.13.0).** **One channel
 per photoMOS — four channels, two dual `CD74HC221E`, plus a third for the
 arm-window gate, PROPOSED — footprint reserved** (ten bought). The
 pins rest on one layout fact: **positions 4–10 of the OPPOSITE header column

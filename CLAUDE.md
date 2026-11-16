@@ -151,8 +151,11 @@ Violating any of these is a bug, not a design choice.
    **One pin is bounded operationally, not structurally, and the invariant
    should say so rather than imply otherwise.** `selftest` makes **GPIO8**
    an output. (It is not the only output in the firmware — `updateLed()`
-   drives the onboard RGB LED — but it is the only one that can ever reach a
-   machine-facing net, which is the claim that matters.) On the perfboard it
+   drives the onboard RGB LED, and from 0.13.0 the bench `drive` command
+   drives the '221 triggers and GPIO38 — but those reach the machine only
+   through a photoMOS behind the open drive-leg jumpers, the structural
+   bound this clause is about; GPIO8 is the only output that can reach a
+   machine-facing net without one, which is the claim that matters.) On the perfboard it
    lands on a header with no trace, so a path to the machine exists only
    while the operator has deliberately fitted the selftest jumper to GPIO6 —
    which is why "unplug J4 first" is an **operational** rule. That is the
@@ -771,6 +774,7 @@ firmware/          PlatformIO, Arduino framework
     machine_io.{h,cpp}      switch poller, debounce, event queue
     machine_context.h       per-shot machine facts for the spool header
     brew_guard.{h,cpp}      invariant 2 — is the pump running?
+    drive_bench.h           bench timing of the drive '221s (`drive` command)
   test/host/                host-compiled unit tests, no board needed
 server/            Go
   cmd/espressolog/
@@ -1794,6 +1798,7 @@ cited inline a dozen times across the file and introduced nowhere, and
 | `docs/taps-and-dividers.md` | every corner table, in one place | choosing or substituting a resistor |
 | `docs/board-and-perfboard.md` | the pin enumeration and the mechanics | laying out or drilling the board |
 | `docs/hydraulics.md` | the gauge branch | with the case open |
+| `docs/drive-bench.md` | the drive block's bench bring-up and the gate sweep (`drive` command) — DRAFT | bringing up or measuring the drive side |
 
 **Code that wins over all of it**, because a document cannot be executed:
 

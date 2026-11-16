@@ -151,8 +151,11 @@ Violating any of these is a bug, not a design choice.
    **One pin is bounded operationally, not structurally, and the invariant
    should say so rather than imply otherwise.** `selftest` makes **GPIO8**
    an output. (It is not the only output in the firmware — `updateLed()`
-   drives the onboard RGB LED — but it is the only one that can ever reach a
-   machine-facing net, which is the claim that matters.) On the perfboard it
+   drives the onboard RGB LED, and from 0.13.0 the bench `drive` command
+   drives the '221 triggers and GPIO38 — but those reach the machine only
+   through a photoMOS behind the open drive-leg jumpers, the structural
+   bound this clause is about; GPIO8 is the only output that can reach a
+   machine-facing net without one, which is the claim that matters.) On the perfboard it
    lands on a header with no trace, so a path to the machine exists only
    while the operator has deliberately fitted the selftest jumper to GPIO6 —
    which is why "unplug J4 first" is an **operational** rule. That is the
@@ -771,6 +774,7 @@ firmware/          PlatformIO, Arduino framework
     machine_io.{h,cpp}      switch poller, debounce, event queue
     machine_context.h       per-shot machine facts for the spool header
     brew_guard.{h,cpp}      invariant 2 — is the pump running?
+    drive_bench.h           bench timing of the drive '221s (`drive` command)
   test/host/                host-compiled unit tests, no board needed
 server/            Go
   cmd/espressolog/
@@ -784,7 +788,8 @@ analysis/          Jupyter notebooks, reads the SQLite file
 docs/              overview · phase-0-status · phase-0-plan · shopping-list
                    machine-display-bus · machine-switches-j2 · flowmeter-j4
                    taps-and-dividers · board-and-perfboard · hydraulics
-                   (the last six are the 2026-10-19 split out of CLAUDE.md;
+                   drive-bench
+                   (six of these are the 2026-10-19 split out of CLAUDE.md;
                     the Reference section at the foot says what each is for)
 ```
 
@@ -883,7 +888,7 @@ order). Neither alone would do it — the functional chain cannot tell wiring
 by *label* from wiring by *position*, and the silkscreen read cannot tell
 you the firmware agrees.
 
-**DRIVE side — DECIDED 2026-10-29, nothing in firmware yet.** **One channel
+**DRIVE side — DECIDED 2026-10-29; in firmware only as the bench `drive` command (from 0.13.0).** **One channel
 per photoMOS — four channels, two dual `CD74HC221E`, plus a third for the
 arm-window gate, PROPOSED — footprint reserved** (ten bought). The
 pins rest on one layout fact: **positions 4–10 of the OPPOSITE header column
@@ -895,8 +900,10 @@ the other — which separates logic nets from sense nets and **says nothing
 about where pos 1 runs** *(a draft called it "the segregation the pos-1 rule
 asks for"; that rule is about the +5 V conductor, which never reaches a
 GPIO — `docs/phase-0-plan.md`, "keep pos 1 physically segregated")*.
-`main.cpp` names none of these yet; **changing one now means changing this
-table and the plan together**, as with the sense pins.
+`main.cpp` names all of them from 0.13.0, for the bench `drive` command
+(`docs/drive-bench.md`) and nothing else *(until 0.13.0: "names none of
+these yet")*; **changing one now means changing `main.cpp`, this table and
+the plan together**, as with the sense pins.
 
 | Signal | GPIO | Note |
 |---|---|---|
@@ -1794,6 +1801,7 @@ cited inline a dozen times across the file and introduced nowhere, and
 | `docs/taps-and-dividers.md` | every corner table, in one place | choosing or substituting a resistor |
 | `docs/board-and-perfboard.md` | the pin enumeration and the mechanics | laying out or drilling the board |
 | `docs/hydraulics.md` | the gauge branch | with the case open |
+| `docs/drive-bench.md` | the drive block's bench bring-up and the gate sweep (`drive` command) — DRAFT | bringing up or measuring the drive side |
 
 **Code that wins over all of it**, because a document cannot be executed:
 

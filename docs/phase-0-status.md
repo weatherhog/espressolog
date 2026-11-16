@@ -415,6 +415,15 @@ is not the swap signature. `printPins()` cites CLAUDE.md for exactly this
 discrimination, so the claim that nothing distinguishes the two was wrong
 against a comment in the function being quoted.
 
+*(2026-11-16: that footer was wrong about flow, so the flow line is no
+evidence either way. `#` parks on or off with the turbine (CLAUDE.md, 0d),
+and from firmware 0.13.2 `pins` says "flow=0 or 1". What is left is
+`clk=0 data=0`, and one read of it is **consistent with** an unpowered
+machine, not proof: J5's pull-ups are on the machine's rail, but a live bus
+holds both lines low for part of every 41 ms frame, so a powered machine
+can read 0/0 once. Re-read `pins` several times; 0/0 every time is the
+unpowered signature, a 1 on either line is a powered machine.)*
+
 **It does not prove the taps work.** With the machine off a swapped pair
 reads 0/0 as well; what the reading does is remove any need for a wiring
 hypothesis to explain `frames=0`. **The first `status` with the machine ON is

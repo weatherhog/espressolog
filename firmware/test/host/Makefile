@@ -19,7 +19,7 @@ CXX ?= clang++
 # flag does not.
 CXXFLAGS = -std=c++17 -Wall -UNDEBUG
 
-test: detector_test display_test machine_context_test machine_io_test armed_test brew_guard_test upload_policy_test spool_pick_test live_display_test pulse_log_test
+test: detector_test display_test machine_context_test machine_io_test armed_test brew_guard_test upload_policy_test spool_pick_test live_display_test pulse_log_test drive_bench_test
 	./detector_test
 	./display_test
 	./machine_context_test
@@ -30,12 +30,16 @@ test: detector_test display_test machine_context_test machine_io_test armed_test
 	./spool_pick_test
 	./live_display_test
 	./pulse_log_test
+	./drive_bench_test
 
 detector_test: detector_test.cpp ../../src/detector.cpp ../../src/detector.h
 	$(CXX) $(CXXFLAGS) -o $@ detector_test.cpp ../../src/detector.cpp
 
 pulse_log_test: pulse_log_test.cpp ../../src/pulse_log.h
 	$(CXX) $(CXXFLAGS) -o $@ pulse_log_test.cpp
+
+drive_bench_test: drive_bench_test.cpp ../../src/drive_bench.h
+	$(CXX) $(CXXFLAGS) -o $@ drive_bench_test.cpp
 
 live_display_test: live_display_test.cpp ../../src/live_display.h ../../src/display.h
 	$(CXX) $(CXXFLAGS) -o $@ live_display_test.cpp
@@ -69,5 +73,5 @@ replay: replay.cpp ../../src/detector.cpp ../../src/detector.h
 
 clean:
 	rm -f detector_test display_test machine_context_test machine_io_test armed_test \
-	      brew_guard_test upload_policy_test spool_pick_test live_display_test pulse_log_test replay
+	      brew_guard_test upload_policy_test spool_pick_test live_display_test pulse_log_test drive_bench_test replay
 .PHONY: test clean

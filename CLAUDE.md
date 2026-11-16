@@ -788,7 +788,8 @@ analysis/          Jupyter notebooks, reads the SQLite file
 docs/              overview · phase-0-status · phase-0-plan · shopping-list
                    machine-display-bus · machine-switches-j2 · flowmeter-j4
                    taps-and-dividers · board-and-perfboard · hydraulics
-                   (the last six are the 2026-10-19 split out of CLAUDE.md;
+                   drive-bench
+                   (six of these are the 2026-10-19 split out of CLAUDE.md;
                     the Reference section at the foot says what each is for)
 ```
 
@@ -887,7 +888,7 @@ order). Neither alone would do it — the functional chain cannot tell wiring
 by *label* from wiring by *position*, and the silkscreen read cannot tell
 you the firmware agrees.
 
-**DRIVE side — DECIDED 2026-10-29, nothing in firmware yet.** **One channel
+**DRIVE side — DECIDED 2026-10-29; in firmware only as the bench `drive` command (0.13.0).** **One channel
 per photoMOS — four channels, two dual `CD74HC221E`, plus a third for the
 arm-window gate, PROPOSED — footprint reserved** (ten bought). The
 pins rest on one layout fact: **positions 4–10 of the OPPOSITE header column
@@ -899,8 +900,10 @@ the other — which separates logic nets from sense nets and **says nothing
 about where pos 1 runs** *(a draft called it "the segregation the pos-1 rule
 asks for"; that rule is about the +5 V conductor, which never reaches a
 GPIO — `docs/phase-0-plan.md`, "keep pos 1 physically segregated")*.
-`main.cpp` names none of these yet; **changing one now means changing this
-table and the plan together**, as with the sense pins.
+`main.cpp` names all of them from 0.13.0, for the bench `drive` command
+(`docs/drive-bench.md`) and nothing else *(until 0.13.0: "names none of
+these yet")*; **changing one now means changing `main.cpp`, this table and
+the plan together**, as with the sense pins.
 
 | Signal | GPIO | Note |
 |---|---|---|

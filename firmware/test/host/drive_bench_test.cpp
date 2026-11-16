@@ -46,10 +46,11 @@ int main() {
     const QTrace* bad[] = { &quiet, &moved, &quiet };
     assert(judge(drive, &gate, bad, 3, false) == BenchVerdict::OTHER_MOVED);
 
-    // The drive pulse ended where the gate's did: the gate reset it.
+    // The drive pulse ended where the gate's did: the gate's reset ended it
+    // (an open drive R_ext held until then, or the gate is the shorter).
     QTrace cut = pulse(10, 150100);
     QTrace short_gate = pulse(0, 150000);
-    assert(judge(cut, &short_gate, others, 3, false) == BenchVerdict::CUT_BY_GATE);
+    assert(judge(cut, &short_gate, others, 3, false) == BenchVerdict::ENDED_WITH_GATE);
     // ...but not when the drive ends on its own well before the gate.
     assert(judge(drive, &short_gate, others, 3, false) == BenchVerdict::OK);
 
@@ -62,7 +63,7 @@ int main() {
 
     // Timing the gate alone: no gate trace to compare with.
     assert(judge(gate, nullptr, others, 3, false) == BenchVerdict::OK);
-    printf("2. verdicts: held, no pulse, neighbour moved, cut by gate, retriggered OK\n");
+    printf("2. verdicts: held, no pulse, neighbour moved, ended with gate, retriggered OK\n");
   }
 
   // 3. Stats ignore runs with no width.

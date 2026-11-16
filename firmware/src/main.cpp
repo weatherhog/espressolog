@@ -835,18 +835,25 @@ static inline bool fastRead(uint8_t pin) {
                   : (REG_READ(GPIO_IN1_REG) >> (pin - 32)) & 1;
 }
 
-// Sample the five Q readbacks continuously from t0 until `done` or the cap.
-// `stop_on` is the trace whose fall ends the run (plus 2 ms, to see a
-// retrigger); -1 = the gate.
-static bool driveSample(int64_t t0, QTrace q[4], QTrace& gate, int stop_on) {
+// Sample the five Q readbacks continuously from t0 until the watched trace
+// falls, or the cap. `stop_on` is the trace whose fall ends the run, plus
+// RETRIGGER_TAIL_US to catch a second pulse; -1 = the gate.
+//
+// The loop is a busy-wait in loopTask. Anything that stalls the core -- a
+// flash write disables the cache on both -- stalls the sampler too, and an
+// edge seen late reads as a pulse a little long or short. On the bench with
+// no shot running that is rare; an outlier run is repeated, not believed
+// (docs/drive-bench.md).
+static constexpr int64_t RETRIGGER_TAIL_US = 20000;
+static bool driveSample(int64_t t0, QTrace q[4], QTrace& gate, int stop_on, bool gate_fitted) {
   int64_t ended_at = -1;
   for (;;) {
     int64_t t = esp_timer_get_time() - t0;
     for (int i = 0; i < 4; i++) q[i].feed(fastRead(DRIVE_CH[i].q), t);
-    gate.feed(fastRead(GATE_Q_PIN), t);
+    if (gate_fitted) gate.feed(fastRead(GATE_Q_PIN), t);   // GPIO9 floats in the no-gate build
     const QTrace& s = stop_on < 0 ? gate : q[stop_on];
     if (ended_at < 0 && s.fell()) ended_at = t;
-    if (ended_at >= 0 && t - ended_at > 2000) return false;
+    if (ended_at >= 0 && t - ended_at > RETRIGGER_TAIL_US) return false;
     if (t > DRIVE_CAP_US) return s.level;      // still high at the cap: held
     if (!s.rose() && t > 5000) return false;   // never started
   }
@@ -890,7 +897,8 @@ static void runDrive(Stream& out, const String& arg) {
     if (ch < 0 || ch > 3) { out.println("# drive: channel 1-4"); return; }
   }
   int n = rest.length() ? rest.toInt() : 1;
-  if (n < 1 || n > 50) n = 1;
+  if (n < 1) n = 1;
+  if (n > 50) { out.println("# drive: at most 50 runs; running 50"); n = 50; }
 
   // BENCH ONLY. Invariant 1 is held by the open drive-leg jumpers, which
   // firmware cannot see; these refusals keep the tool off a live machine
@@ -904,30 +912,56 @@ static void runDrive(Stream& out, const String& arg) {
                 " Bench only: J2, J4 and J5 unplugged (docs/drive-bench.md).");
     return;
   }
-  for (uint8_t p : SW_PINS)
-    if (digitalRead(p)) {
-      out.printf("# drive: REFUSED — switch line GPIO%u reads HIGH: J2 is connected and live\n", p);
+  // The check that works whatever `display` is set to: J5's clock and data
+  // idle HIGH on the machine's 4.7 K pull-ups whenever J5 is plugged and the
+  // machine is on, and read LOW through the board's own 16.4 K shunts when
+  // it is unplugged. The pads are made readable first, as `pins` does (an
+  // S3 pad leaves reset with its input buffer off); never while the bus ISR
+  // owns them. It cannot see J5 plugged with the machine OFF, nor J2 or J4.
+  if (!display_on) {
+    pinMode(DISPLAY_CLK_PIN, INPUT);
+    pinMode(DISPLAY_DATA_PIN, INPUT);
+    delayMicroseconds(100);
+  }
+  if (gpio_get_level((gpio_num_t)DISPLAY_CLK_PIN) || gpio_get_level((gpio_num_t)DISPLAY_DATA_PIN)) {
+    out.println("# drive: REFUSED — J5 clock or data reads HIGH, so J5 is plugged into a"
+                " powered machine. Bench only (docs/drive-bench.md).");
+    return;
+  }
+  // A held lever only: J2 carries no ground, so with J4 and J5 unplugged its
+  // lines read LOW whether or not J2 is plugged. A backstop, not a check.
+  for (uint8_t p : SW_PINS) {
+    pinMode(p, INPUT);   // INPUT is what `switches on` sets; harmless if already so
+    if (gpio_get_level((gpio_num_t)p)) {
+      out.printf("# drive: REFUSED — switch line GPIO%u reads HIGH: a lever is held on a"
+                 " connected machine\n", p);
       return;
     }
+  }
 
   out.println("# ***********************************************************");
   out.println("# * DRIVE BENCH: fires 74HC221 channels one at a time.");
   out.println("# * Off the machine only, drive-leg jumpers (a1)(a2) OPEN.");
-  out.println("# * loop() blocks ~1 s per run; scales and uploads stall.");
+  out.println("# * loop() blocks up to ~1.5 s per run; scales and uploads stall.");
   out.println("# ***********************************************************");
 
+  const bool gate_fitted = !direct;   // `direct` is the no-gate rework: U3 and its 1 K out
   WidthStats ws;
   uint16_t bad = 0;
+  int done = 0;
   for (int run = 0; run < n; run++) {
     driveRelease();
-    // Every A̅ an armed R̅ rise could fire must read HIGH first
-    // (docs/phase-0-plan.md: never let R̅ rise without reading them).
-    bool idle = digitalRead(GATE_TRIG_PIN) == HIGH;
-    for (const DriveChan& c : DRIVE_CH) idle = idle && digitalRead(c.trig) == HIGH;
-    if (!idle || digitalRead(GATE_Q_PIN) || digitalRead(GATE_EN_PIN)) {
-      out.println("# drive: ABORTED — not idle (an A̅ low, or the gate/arm net high). See `drive status`.");
-      driveRelease();
-      return;
+    delayMicroseconds(100);   // let the pulls settle the just-released pins
+    // Every A̅ an armed R̅ rise could fire must read HIGH, and every Q LOW,
+    // first (docs/phase-0-plan.md: never let R̅ rise without reading them).
+    // GPIO9 only with the gate fitted: in the no-gate build it floats.
+    bool idle = digitalRead(GATE_TRIG_PIN) == HIGH && digitalRead(GATE_EN_PIN) == LOW;
+    for (const DriveChan& c : DRIVE_CH)
+      idle = idle && digitalRead(c.trig) == HIGH && digitalRead(c.q) == LOW;
+    if (gate_fitted) idle = idle && digitalRead(GATE_Q_PIN) == LOW;
+    if (!idle) {
+      out.println("# drive: ABORTED — not idle (an A̅ low, a Q high, or the arm net high). See `drive status`.");
+      break;
     }
     QTrace q[4], gate;
     bool held;
@@ -941,7 +975,7 @@ static void runDrive(Stream& out, const String& arg) {
     if (gate_only) {
       t0 = esp_timer_get_time();
       drivePulseLow(GATE_TRIG_PIN);
-      held = driveSample(t0, q, gate, -1);
+      held = driveSample(t0, q, gate, -1, true);
     } else {
       if (fire) {
         drivePulseLow(GATE_TRIG_PIN);
@@ -950,13 +984,15 @@ static void runDrive(Stream& out, const String& arg) {
         if (!digitalRead(GATE_Q_PIN)) {
           driveRelease();
           out.println("# drive: ABORTED — the gate did not fire (U3 or its 1 K out? `direct` is the no-gate build)");
-          return;
+          break;
         }
-        gate.feed(true, 0);   // the gate is already high when the drive fires
+        // The gate is already high when the drive fires; its trace starts at
+        // the drive trigger, so its "width" here is not the gate's width.
+        gate.feed(true, 0);
       }
       t0 = esp_timer_get_time();
       drivePulseLow(DRIVE_CH[ch].trig);
-      held = driveSample(t0, q, gate, ch);
+      held = driveSample(t0, q, gate, ch, fire);
     }
     driveRelease();   // disarm unconditionally: ends any pulse still running
 
@@ -969,21 +1005,23 @@ static void runDrive(Stream& out, const String& arg) {
     if (gate_only) printTrace(out, "gate", gate);
     else {
       printTrace(out, DRIVE_CH[ch].name, q[ch]);
-      if (fire) printTrace(out, "gate (cut at disarm)", gate);
+      if (fire) printTrace(out, "gate, from trig", gate);
     }
     for (int i = 0; i < 4; i++)
       if ((gate_only || i != ch) && q[i].edges) printTrace(out, DRIVE_CH[i].name, q[i]);
     if (v == BenchVerdict::OK) { ws.add(fired.width_us()); }
     else bad++;
+    done++;
     delay(500);   // a gap between runs; the '221s are non-retriggerable anyway
   }
   driveRelease();
+  // Printed on an abort too: the runs already finished are still data.
   if (ws.n)
-    out.printf("# %s: n=%u  min %.3f  mean %.3f  max %.3f ms  (%u bad)\n",
-               gate_only ? "gate" : DRIVE_CH[ch].name, (unsigned)ws.n,
+    out.printf("# %s: %d of %d runs, n=%u ok  min %.3f  mean %.3f  max %.3f ms  (%u bad)\n",
+               gate_only ? "gate" : DRIVE_CH[ch].name, done, n, (unsigned)ws.n,
                ws.min_us / 1000.0, ws.mean_us() / 1000.0, ws.max_us / 1000.0, (unsigned)bad);
   else
-    out.printf("# no good runs (%u bad)\n", (unsigned)bad);
+    out.printf("# %d of %d runs, no good runs (%u bad)\n", done, n, (unsigned)bad);
 }
 
 static void handleCommand(String line, Stream& out) {
@@ -1235,11 +1273,13 @@ static void pollSerial(Stream& in) {
 }
 
 void setup() {
+  // FIRST, before the 2 s USB wait: drive pins INPUT and GPIO38's latch LOW.
+  // After a crash mid-`drive` the arm net must not wait on the banner.
+  driveRelease();
   Serial.begin(115200);
   Serial0.begin(115200);   // UART bridge (COM port): debug log + CLI
   delay(2000);   // native USB CDC needs a moment before the first lines land
   Serial.printf("# espressolog %s (detector %s)\n", FIRMWARE_VERSION, DETECTOR_VERSION);
-  driveRelease();   // drive pins INPUT, GPIO38 latch LOW, before anything else runs
 
   // 4th arg: our partition is labeled "littlefs", not the wrapper's default "spiffs"
   //

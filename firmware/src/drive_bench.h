@@ -39,7 +39,9 @@ enum class BenchVerdict : uint8_t {
   HELD,          // Q still high at the cap: an open or high R_ext (a HOLD), reset by dropping the arm
   NO_RISE,       // Q never went high: open C_ext, dead channel, missing chip, unarmed
   OTHER_MOVED,   // a channel that was not fired changed level: a bridge or a cross-fire
-  CUT_BY_GATE,   // the drive pulse ended with the gate's: the gate is narrower than the drive
+  ENDED_WITH_GATE, // the drive pulse ended where the gate's did: the gate's reset ended it, so
+                   // the drive's own RC did not -- its R_ext open or high (a HOLD the gate
+                   // caught), or the gate shorter than the drive. Never "grow the gate" first.
   RETRIGGERED,   // more than one pulse on the fired channel: noise on A̅ or R̅, or a bad '221
 };
 
@@ -49,14 +51,17 @@ inline const char* verdictName(BenchVerdict v) {
     case BenchVerdict::HELD:        return "HELD at the cap (open/high R_ext?)";
     case BenchVerdict::NO_RISE:     return "NO PULSE (open C_ext, chip missing, or not armed)";
     case BenchVerdict::OTHER_MOVED: return "ANOTHER CHANNEL MOVED (bridge or cross-fire)";
-    case BenchVerdict::CUT_BY_GATE: return "CUT BY THE GATE (gate pulse shorter than drive)";
+    case BenchVerdict::ENDED_WITH_GATE:
+      return "ENDED WITH THE GATE (drive R_ext open/high, or gate too short: meter the drive RC, compare `drive gate`)";
     case BenchVerdict::RETRIGGERED: return "RETRIGGERED (more than one pulse)";
   }
   return "?";
 }
 
 // A drive pulse whose fall lies within this of the gate's is taken to have
-// been ended by the gate resetting it, not by its own RC.
+// been ended by the gate resetting it, not by its own RC. Which of the two
+// is wrong the run cannot tell: a drive channel with an open R_ext holds
+// until the gate ends it, and looks exactly like a gate that is too short.
 static constexpr int64_t CUT_TOLERANCE_US = 200;
 
 // Judge one run. `fired` is the channel triggered (may be the gate itself);
@@ -74,7 +79,7 @@ inline BenchVerdict judge(const QTrace& fired, const QTrace* gate,
   if (gate && gate->fell() && fired.fell()) {
     int64_t d = fired.fall_us - gate->fall_us;
     if (d < 0) d = -d;
-    if (d <= CUT_TOLERANCE_US) return BenchVerdict::CUT_BY_GATE;
+    if (d <= CUT_TOLERANCE_US) return BenchVerdict::ENDED_WITH_GATE;
   }
   if (fired.edges > 2) return BenchVerdict::RETRIGGERED;
   return BenchVerdict::OK;

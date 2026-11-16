@@ -7,7 +7,7 @@ sweep that settles the OPEN gate questions in `docs/phase-0-plan.md`
 drive-leg jumper: **Phase 0 never actuates** (CLAUDE.md, invariant 1), and
 everything below runs **off the machine** with jumpers (a1) and (a2) open.
 
-The firmware side is the `drive` command (firmware 0.13.1,
+The firmware side is the `drive` command (firmware 0.13.2,
 `firmware/src/drive_bench.h`, `runDrive()` in `main.cpp`). It fires one
 '221 channel at a time and times its `Q` through the readback, continuously
 sampled at a few µs, so the logic analyser is optional.
@@ -47,7 +47,7 @@ built.
 6. USB from the Mac only. No other supply.
 7. **`display off` and `flow off`.** The sampler is a busy-wait and their
    interrupts would stall it; the tool refuses with either on. **Both
-   settings are saved**, so step 7 below turns them back on. Spool writes
+   settings are saved**, so procedure step 7, *Back on*, turns them back on. Spool writes
    and uploads cannot run during a sweep (it blocks `loop()`). What is left:
    the USB-serial interrupt, the scheduler tick and the Wi-Fi event task on
    the sampler's own core, and a Bluetooth or Wi-Fi flash write on the
@@ -101,8 +101,12 @@ nopd`. `nopd` drops the internal pull-down on that channel's readback:
 against 10 K it would leave a HIGH at about 2.7 V, 0.2 V over the input
 threshold, and the test would measure the pull-down rather than the 10 K.
 If the widths agree within a few µs and the verdicts stay "ok", 10 K reads
-cleanly. Record it, and record that the build's firmware keeps the
-pull-down on the other pins; the value is chosen with the rest.
+cleanly. **Then run it again without `nopd`**: that is the condition the
+firmware runs in, with the pull-down on every readback, and a HIGH 0.2 V
+over threshold is a margin to record, not to assume. Record both; the value
+is chosen with the rest, and **if 10 K is chosen, the step-5 record says so
+and the firmware's `driveRelease()` drops the pull-down on that pin** — the
+build must not run a configuration only the `nopd` run tested.
 
 **5. The decision record.** In `docs/phase-0-status.md`, record the measured
 widths, warm and cold:
@@ -125,8 +129,11 @@ observation, which is the reason (b) is fitted first.
 
 **7. Back on.** `display on`, `flow on`, then `status`: both taps on.
 Every `drive` summary ends with this reminder, because the board boots with
-whatever was saved, and a board back on the machine with both off logs
-shots with no flow count, no boiler temperature and no setpoint, silently.
+whatever was saved. A board back on the machine with both off logs shots
+with no flow count, no boiler temperature and no setpoint, silently — and
+**with the display off the brew guard loses its display-timer branch**, so
+a 1Cup or 2Cup shot whose press the poller missed is unguarded and flash
+can be written during it (invariant 2).
 
 **Stop there.** Fitting (a1) or (a2) is Phase 1, a separate decision, and
 the machine-side `drivetest` has to exist first.
@@ -137,7 +144,8 @@ the machine-side `drivetest` has to exist first.
   every run**, with GPIO38's output latch written LOW first. Before that,
   through the bootloader, only the external pulls hold the lines: in the
   gate build GPIO38's 10 K holds the gate's `R̅` low, and the drive
-  channels' tied `R̅` (arm) net is held low by its own 10 K and by U3's `Q`;
+  channels' tied `R̅` (arm) net is held low by its own 10 K (and by U3's
+  `Q`, when U3 is fitted);
   only in the no-gate rework is GPIO38's 10 K the arm net's. The external
   pulls hold `A̅` high and `R̅` low.
 - **Triggers are written HIGH before they become outputs**, and every `A̅`
@@ -152,7 +160,10 @@ the machine-side `drivetest` has to exist first.
   fitted (U3 on the Phase-0 board) reads LOW and shows as NO PULSE, not as
   noise. The price: an open readback 1 K reads LOW too, so it is caught only
   by that channel's own `fire` run (step 2). `nopd` drops the pull-down on
-  the fired channel for step 4.
+  the fired channel for step 4; with its chip or 1 K out that pin then
+  floats and can abort the idle check at random rather than show NO PULSE.
+- **Arguments are whole words**: `drive fire 3 20 nopd`, in any order after
+  the channel. Anything else is refused by name.
 - **Widths are readback rise to fall**, sampled in a busy loop every few
   µs. The 5 µs trigger pulse moves only the reported rise time, not the
   width. A stall that hits every run alike would skew them all and is not

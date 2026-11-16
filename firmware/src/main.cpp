@@ -18,7 +18,7 @@
 #include <esp_timer.h>
 #include <driver/gpio.h>
 
-const char* FIRMWARE_VERSION = "0.13.1";
+const char* FIRMWARE_VERSION = "0.13.2";
 const char* DETECTOR_VERSION = "0a.6";
 
 static ScaleManager scales;
@@ -358,6 +358,10 @@ static void flowSetEnabled(bool on) {
 }
 
 static uint32_t sw_last_poll = 0, sw_max_gap = 0;
+// A command that deliberately blocks loop() for seconds (selftest, drive)
+// calls this when it ends, so the block is not recorded as a `worst poll
+// gap` -- the number that diagnoses dropped presses and J5 frame drops.
+static void noteLoopBlocked() { sw_last_poll = 0; }
 
 // Idempotent for the same reason as flowSetEnabled above: re-running
 // `switches on` is how state adopted from a floating line gets dropped, and
@@ -618,7 +622,7 @@ static void runSelfTest(Stream& out, uint32_t pulses, uint32_t hz) {
   uint32_t glitch  = flow.glitches() - g0;
   uint32_t dropped = flow_dropped - d0;
   pinMode(SELFTEST_PIN, INPUT);         // high-impedance again, measurement taken
-  sw_last_poll = 0;                     // this block was not a loop() stall
+  noteLoopBlocked();                    // this block was not a loop() stall
   out.printf("# selftest: expected %lu, counted %lu (%+ld), glitches %lu, ring drops %lu\n",
              (unsigned long)pulses, (unsigned long)counted,
              (long)counted - (long)pulses, (unsigned long)glitch, (unsigned long)dropped);
@@ -633,15 +637,16 @@ static void runSelfTest(Stream& out, uint32_t pulses, uint32_t hz) {
 // Every machine-facing sense pin, once: `pins` prints them, makeTapPinsReadable
 // configures them, and the `drive` refusal watches them. A new tap pin goes
 // here and nowhere else, so it cannot be printed but missed by the refusal.
-struct TapPin { const char* name; uint8_t pin; bool display; };
+// `group` is the connector, which is where `pins` puts its " | " separators.
+struct TapPin { const char* name; uint8_t pin; bool display; char group; };
 static const TapPin TAP_PINS[] = {
-  { "flow",  FLOW_PIN,         false },
-  { "1cup",  SW_PINS[0],       false },
-  { "2cup",  SW_PINS[1],       false },
-  { "steam", SW_PINS[2],       false },
-  { "water", SW_PINS[3],       false },
-  { "clk",   DISPLAY_CLK_PIN,  true  },
-  { "data",  DISPLAY_DATA_PIN, true  },
+  { "flow",  FLOW_PIN,         false, '4' },
+  { "1cup",  SW_PINS[0],       false, '2' },
+  { "2cup",  SW_PINS[1],       false, '2' },
+  { "steam", SW_PINS[2],       false, '2' },
+  { "water", SW_PINS[3],       false, '2' },
+  { "clk",   DISPLAY_CLK_PIN,  true,  '5' },
+  { "data",  DISPLAY_DATA_PIN, true,  '5' },
 };
 
 // Every sense pin INPUT, so gpio_get_level() reads the pad: `pins` and the
@@ -665,11 +670,11 @@ static void printPinLevels(Stream& out) {
   out.print("# pins:");
   for (size_t i = 0; i < sizeof(TAP_PINS) / sizeof(TAP_PINS[0]); i++) {
     const TapPin& t = TAP_PINS[i];
-    // separators as before: flow | four switches | two display lines
-    out.printf("%s%s/GPIO%u=%d", (i == 1 || i == 5) ? " | " : " ", t.name, t.pin,
+    bool new_group = i > 0 && t.group != TAP_PINS[i - 1].group;
+    out.printf("%s%s/GPIO%u=%d", new_group ? " | " : " ", t.name, t.pin,
                gpio_get_level((gpio_num_t)t.pin));
   }
-  out.println();
+  out.print("\n");   // LF, as `pins` always ended this line
 }
 
 // Raw levels of every machine input. The bench tool for a divider: touch the
@@ -684,9 +689,10 @@ static void printPins(Stream& out) {
   makeTapPinsReadable();
   printPinLevels(out);
   // `#` does not reliably idle high: the open collector parks on or off with
-  // the turbine (CLAUDE.md, 0d). This said "flow=1" until 0.13.1.
+  // the turbine (CLAUDE.md, 0d). This said "flow=1" until 0.13.2.
   out.println("# expected at rest, on the machine: flow=0 or 1 (it parks either way),"
-              " all four switches=0 (idle low, a press reads 1), clk=1 data=1");
+              " all four switches=0 (idle low, a press reads 1), clk=1 data=1"
+              " (either can read 0 mid-frame while the bus runs)");
 }
 
 static void printMachine(Stream& out) {
@@ -838,12 +844,20 @@ static constexpr int64_t DRIVE_CAP_US = 1000000;
 // whose chip or 1 K is out -- U3 on the Phase-0 board, any chip not yet in
 // its socket -- reads LOW instead of floating, so a missing chip shows as
 // NO PULSE rather than as noise, and no build needs a special case.
-static void driveRelease() {
+//
+// `no_pd_pin` (the `nopd` option) is the one readback left without it, so a
+// sweep's every release keeps the same condition. That pin floats when its
+// chip or 1 K is out, and then can trip the idle check at random instead of
+// showing NO PULSE.
+static void driveRelease(int no_pd_pin = -1) {
   digitalWrite(GATE_EN_PIN, LOW);
   pinMode(GATE_EN_PIN, INPUT);
   pinMode(GATE_TRIG_PIN, INPUT);
   pinMode(GATE_Q_PIN, INPUT_PULLDOWN);
-  for (const DriveChan& c : DRIVE_CH) { pinMode(c.trig, INPUT); pinMode(c.q, INPUT_PULLDOWN); }
+  for (const DriveChan& c : DRIVE_CH) {
+    pinMode(c.trig, INPUT);
+    pinMode(c.q, c.q == no_pd_pin ? INPUT : INPUT_PULLDOWN);
+  }
 }
 
 // One falling edge on a trigger: latch HIGH before OUTPUT, so the pin never
@@ -924,25 +938,35 @@ static void runDrive(Stream& out, const String& arg) {
     out.println("# drive status | drive gate [n] | drive fire <1-4> [n] [nopd] | drive direct <1-4> [n] [nopd]");
     return;
   }
-  int ch = -1;
-  if (!gate_only) {
+  // Arguments as whole words, in any order after the channel: a number is
+  // the run count, `nopd` (fire/direct only) drops the internal pull-down on
+  // the fired channel's readback for docs/drive-bench.md step 4 -- against a
+  // 10 K readback the ~45 K pull-down leaves a HIGH at ~2.7 V, 0.2 V over
+  // VIH. Anything else is refused by name, so `3nopd` cannot run silently
+  // with the pull-down still on.
+  int ch = -1, n = 1;
+  bool nopd = false, have_ch = gate_only, have_n = false;
+  while (rest.length()) {
     int sp2 = rest.indexOf(' ');
-    ch = (sp2 < 0 ? rest : rest.substring(0, sp2)).toInt() - 1;
+    String tok = sp2 < 0 ? rest : rest.substring(0, sp2);
     rest = sp2 < 0 ? "" : rest.substring(sp2 + 1);
-    if (ch < 0 || ch > 3) { out.println("# drive: channel 1-4"); return; }
-  }
-  // `nopd` (fire/direct only): the fired channel's readback without the
-  // internal pull-down, for docs/drive-bench.md step 4 -- against a 10 K
-  // readback the ~45 K pull-down leaves a HIGH at ~2.7 V, 0.2 V over VIH,
-  // and would be measured instead of the 10 K.
-  bool nopd = false;
-  if (rest.endsWith("nopd")) {
-    nopd = !gate_only;
-    rest = rest.substring(0, rest.length() - 4);
     rest.trim();
-    if (gate_only) { out.println("# drive: `nopd` is for fire/direct"); return; }
+    bool numeric = tok.length() > 0;
+    for (size_t k = 0; k < tok.length(); k++) numeric = numeric && isDigit(tok[k]);
+    if (tok == "nopd") {
+      if (gate_only) { out.println("# drive: `nopd` is for fire/direct"); return; }
+      nopd = true;
+    } else if (numeric && !have_ch) {
+      ch = tok.toInt() - 1; have_ch = true;
+    } else if (numeric && !have_n) {
+      n = tok.toInt(); have_n = true;
+    } else {
+      out.printf("# drive: REFUSED — what is `%s`? (drive %s%s [n] [nopd])\n", tok.c_str(),
+                 sub.c_str(), gate_only ? "" : " <1-4>");
+      return;
+    }
   }
-  int n = rest.length() ? rest.toInt() : 1;
+  if (!gate_only && (ch < 0 || ch > 3)) { out.println("# drive: channel 1-4"); return; }
   // Refused, not clamped: 50 runs already block loop() for ~75 s, and the
   // detector is checked once, before the first run.
   if (n < 1 || n > 50) { out.println("# drive: REFUSED — run count 1-50"); return; }
@@ -991,13 +1015,13 @@ static void runDrive(Stream& out, const String& arg) {
   out.println("# * loop() blocks up to ~1.5 s per run; scales and uploads stall.");
   out.println("# ***********************************************************");
 
+  const int no_pd_pin = nopd ? DRIVE_CH[ch].q : -1;   // the same in every release of the sweep
   WidthStats ws;
   uint16_t bad = 0;
   int done = 0;
   bool aborted = false;
   for (int run = 0; run < n; run++) {
-    driveRelease();
-    if (nopd) pinMode(DRIVE_CH[ch].q, INPUT);
+    driveRelease(no_pd_pin);
     delayMicroseconds(100);   // let the pulls settle the just-released pins
     // Every A̅ an armed R̅ rise could fire must read HIGH, and every Q LOW,
     // first (docs/phase-0-plan.md: never let R̅ rise without reading them).
@@ -1029,7 +1053,7 @@ static void runDrive(Stream& out, const String& arg) {
         int64_t g0 = esp_timer_get_time();
         while (!digitalRead(GATE_Q_PIN) && esp_timer_get_time() - g0 < 1000) {}
         if (!digitalRead(GATE_Q_PIN)) {
-          driveRelease();
+          driveRelease(no_pd_pin);
           out.println("# drive: ABORTED — the gate did not fire (U3 or its 1 K out? `direct` is the no-gate build)");
           aborted = true;
           break;
@@ -1042,7 +1066,7 @@ static void runDrive(Stream& out, const String& arg) {
       drivePulseLow(DRIVE_CH[ch].trig);
       held = driveSample(t0, q, gate, ch);
     }
-    driveRelease();   // disarm unconditionally: ends any pulse still running
+    driveRelease(no_pd_pin);   // disarm unconditionally: ends any pulse still running
 
     const QTrace& fired = gate_only ? gate : q[ch];
     const QTrace* others[4];
@@ -1072,10 +1096,14 @@ static void runDrive(Stream& out, const String& arg) {
                ws.min_us / 1000.0, ws.mean_us() / 1000.0, ws.max_us / 1000.0, (unsigned)bad);
   else
     out.printf("# %s%d of %d runs, no good runs (%u bad)\n", ab, done, n, (unsigned)bad);
-  // The sweep needed `display off` and `flow off`, and both are SAVED: a board
-  // back on the machine would boot logging shots with neither.
-  out.println("# REMINDER: `display on` and `flow on` before this board goes back on the machine");
-  sw_last_poll = 0;   // this block was not a loop() stall (as selftest does)
+  // The sweep needed `display off` and `flow off`, and both are SAVED. A board
+  // back on the machine with them off logs no flow, boiler temperature or
+  // setpoint -- and with the display off the brew guard loses its TIMER
+  // branch, so a 1Cup/2Cup shot whose press the poller missed is unguarded
+  // and flash can be written mid-shot (invariant 2).
+  out.println("# REMINDER: `display on` and `flow on` before this board goes back on the"
+              " machine. Display off also blinds the brew guard (invariant 2).");
+  noteLoopBlocked();
 }
 
 static void handleCommand(String line, Stream& out) {
@@ -1332,7 +1360,7 @@ void setup() {
   // through them GPIO38 is an unconfigured pad and the external pulls hold
   // the line, not this call: in the gate build GPIO38's 10 K holds the
   // GATE's R̅ low, and the drive channels' tied R̅ (arm) net is held low by
-  // its own 10 K and U3's Q; only in the no-gate rework is GPIO38's 10 K
+  // its own 10 K (and by U3's Q, when U3 is fitted); only in the no-gate rework is GPIO38's 10 K
   // the arm net's.
   driveRelease();
   Serial.begin(115200);

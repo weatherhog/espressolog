@@ -11,7 +11,7 @@ or GET /api/v1/shots (capped at 1000 rows by the server).
 
 WHAT A SESSION IS
 
-  Consecutive records less than GAP_MIN apart. Every record counts towards
+  Consecutive records at most GAP_MIN apart. Every record counts towards
   the gap -- excluded ones too, since a reject or a split shot still means
   the machine and grinder were just used -- but only CLEAN shots get a
   position.
@@ -19,9 +19,7 @@ WHAT A SESSION IS
   A session whose FIRST RECORD is not a clean shot -- a drip under 5 g, a
   reject, a shot from another stratum -- is reported on its own line and
   left out of the main result: its first clean shot was not the first time
-  the machine ran. Most such openers are drips of 0.3-3 g, which look like
-  a flush or a cancelled press, so that line is an accidental "flush first"
-  comparison. Even so, "first" can only mean "first shot the scale saw":
+  the machine ran. Even so, "first" can only mean "first shot the scale saw":
   a flush with no cup on the scale, or a ground and dumped dose, leaves no
   record and is invisible here.
 
@@ -30,6 +28,13 @@ FINDINGS (2026-11-20, against the LIVE SERVER at user_version 12 -- not the
 the stratum held 80 clean shots in 39 sessions, 2026-09-04 to 2026-11-20,
 all Moonwalker / dial 7.9 / epoch 1 / detector 0a.6. 7 of the 39 sessions
 were opened by another record, leaving 69 shots in 32 sessions.)
+
+  Of those 7 live openers, six are drips of 0.3-3.3 g, which look like a
+  flush or a cancelled press. The seventh is shot 182, excluded by hand as
+  "first shot of the day, dial-in (choked, 16.5 g in 45 s)" -- a first shot
+  the slowdown may itself have spoiled. On the snapshot one opener is a full
+  38.3 g shot with no bean recorded (id 80), so this line is not only
+  flushes; read it as "the machine ran before the first clean shot".
 
   The first shot of a session flows ~9 % slower:
 
@@ -48,18 +53,23 @@ were opened by another record, leaving 69 shots in 32 sessions.)
   The 7 sessions opened by another record point the same way (4 of 4,
   +0.27 g/s, p ~0.12); too few to say more.
 
-  SIZE, on these same rows: mean flow sigma 0.216 g/s. Taking out the
-  first/later offset leaves 0.202 g/s -- 12 % of the variance, about 6 % of
-  sigma. Real, but a small part of the spread. Nothing here says anything
-  about 0f's 0.21 g/s, which comes from the 2026-09-29 snapshot: on that
-  snapshot this script finds +0.06 g/s, 11 of 17, p ~0.39 -- no effect.
+  SIZE, printed by the script, main sessions: mean flow sigma 0.216 g/s,
+  0.202 within first/later -- 12 % of the variance, about 6 % of sigma.
+  Real, but a small part of the spread. Nothing here says anything about
+  0f's 0.21 g/s, which comes from the 2026-09-29 snapshot: on that snapshot
+  this script finds +0.06 g/s, 11 of 17, p ~0.39 -- no significant effect,
+  which is weak evidence on 17 sessions, not a shown absence.
 
-  IT GREW. `--split 2026-09-30`: before, +0.065 g/s, 12 of 18, p ~0.34;
-  from that date, +0.267 g/s, 11 of 12, p ~0.0026. Something changed. A
-  colder kitchen in October and November would fit a machine warm-up
-  cause, and so would anything else seasonal; the archive records no
-  ambient temperature (ambient_c is NULL throughout), so this is a hint,
-  not a test.
+  IT IS CONCENTRATED AFTER 2026-09-30. `--split 2026-09-30`: before,
+  +0.065 g/s, 12 of 18, p ~0.34; from that date, +0.267 g/s, 11 of 12,
+  p ~0.0026. Each of those tests a period against zero, which does not show
+  the periods differ. The script's between-period test on the paired means
+  gives p ~0.048 -- borderline, from one test with a split date chosen
+  after looking (the 0f snapshot boundary), and a Fisher test on the sign
+  counts gives ~0.19. So "it grew" is a candidate, not a finding. If it
+  holds, a colder kitchen in October and November would fit a machine
+  warm-up cause, and so would anything else seasonal; the archive records
+  no ambient temperature (ambient_c is NULL throughout).
 
   ONE CONFOUND NOT RULED OUT: first shots average 0.2 g more ground dose
   (18.13 vs 17.93 g). Whether that moves flow measurably is untested.
@@ -72,9 +82,12 @@ were opened by another record, leaving 69 shots in 32 sessions.)
   flush before the first shot on some days, a ground and dumped dose on
   others.
 
-NO ID EXCLUSIONS, unlike overshoot.py: shot 37's knock is late in its
-settle window and does not touch mean_flow_gps, and 25/26 and 200/201 are
-excluded = 1 in the database.
+NO ID EXCLUSIONS, unlike overshoot.py. 25/26 and 200/201 are excluded = 1
+in the database. Shot 37 is kept: its knock (19.44 s) falls in the stop
+window and its slow lift in the settle window, which pulls yield_final_g to
+33.8 g from ~35.7 g. The flow window ends at 80 % of yield_final_g
+(detector.cpp computeFlowWindow), so its mean_flow_gps reads ~0.02 g/s low
+(1.996 against ~2.018) -- far below the effect measured here.
 """
 import argparse
 import datetime as dt
@@ -164,7 +177,37 @@ def sign_flip_p(diffs):
     obs = abs(st.mean(diffs))
     hits = sum(1 for _ in range(PERMUTATIONS)
                if abs(st.mean([d * rng.choice((1, -1)) for d in diffs])) >= obs)
-    return hits / PERMUTATIONS
+    return (hits + 1) / (PERMUTATIONS + 1)
+
+
+def between_p(a, b):
+    """Two-sided permutation p that two sets of paired differences share one
+    mean -- the test the split needs before calling the periods different."""
+    if len(a) < 2 or len(b) < 2:
+        return float("nan")
+    rng = random.Random(SEED)
+    obs = abs(st.mean(a) - st.mean(b))
+    pool, hits = a + b, 0
+    for _ in range(PERMUTATIONS):
+        rng.shuffle(pool)
+        if abs(st.mean(pool[:len(a)]) - st.mean(pool[len(a):])) >= obs:
+            hits += 1
+    return (hits + 1) / (PERMUTATIONS + 1)
+
+
+def variance_share(sess):
+    """How much of the mean-flow spread the first/later split explains, on
+    the shots of these sessions: (sigma, sigma within groups, share of
+    variance)."""
+    first = [s[0]["mean_flow_gps"] for s in sess]
+    later = [r["mean_flow_gps"] for s in sess for r in s[1:]]
+    allv = first + later
+    if len(first) < 2 or len(later) < 2:
+        return None
+    m1, m2 = st.mean(first), st.mean(later)
+    within = st.pvariance([x - m1 for x in first] + [x - m2 for x in later])
+    total = st.pvariance(allv)
+    return total ** 0.5, within ** 0.5, 1 - within / total
 
 
 def line(label, sess):
@@ -213,12 +256,20 @@ def main():
     print()
     line("main (sessions opened by a clean shot)", main_sess)
     line("opened by another record            ", opened_other)
+    vs = variance_share(main_sess)
+    if vs:
+        print(f"\nmean flow sigma {vs[0]:.3f} g/s, {vs[1]:.3f} within first/later: "
+              f"{100 * vs[2]:.1f} % of the variance, "
+              f"{100 * (1 - vs[1] / vs[0]):.1f} % of sigma")
 
     if args.split:
         cut = dt.datetime.fromisoformat(args.split).replace(tzinfo=dt.timezone.utc)
         print(f"\nsplit at {args.split}, main sessions only:")
-        line(f"  before", [s for s in main_sess if ts(s[0]) < cut])
-        line(f"  from  ", [s for s in main_sess if ts(s[0]) >= cut])
+        before = [s for s in main_sess if ts(s[0]) < cut]
+        after = [s for s in main_sess if ts(s[0]) >= cut]
+        line("  before", before)
+        line("  from  ", after)
+        print(f"  periods differ? p={between_p(paired(before, 'mean_flow_gps'), paired(after, 'mean_flow_gps')):.4f}")
 
     print("\nsensitivity to the session gap, main sessions only:")
     for g in SENSITIVITY_GAPS:

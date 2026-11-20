@@ -1370,15 +1370,16 @@ bound on what control could fix, not a machine spec.
 
 **THE FIRST SHOT OF A SESSION FLOWS SLOWER — stratify by it too.**
 Found 2026-11-20 by `analysis/session_warmup.py` **against the live server**
-— not the 2026-09-29 snapshot that "80" means below: the 0f stratum there
-held 80 clean shots in 39 sessions, 69 in 32 once sessions opened by any
+— not the 2026-09-29 snapshot that "80" means below: on the live server
+the 0f stratum held 80 clean shots in 39 sessions, 69 in 32 once sessions opened by any
 record that is not a clean shot in the stratum — mostly drips, one
 discarded dial-in — are set aside (a session is records at most 60 min
 apart; 120 and 240 merge one pair and reach the same conclusion). Mean flow by position:
 **1st 1.66 g/s, 2nd 1.80, 3rd 1.89**. Paired within session, later shots
 ran faster in 23 of 30 sessions, **+0.15 g/s (~9 %), p ~0.0075**. On those
-rows it is **12 % of the variance, ~6 % of σ** (the script prints both) —
-real, but a small part of the spread. **It says nothing about the 0.21 g/s
+rows the split explains **12 % of the variance; separating first from
+later shots would cut σ by ~6 %** (the script prints both) — real, but a
+small part of the spread. **It says nothing about the 0.21 g/s
 above**: on that snapshot the script finds no significant effect
 (+0.06 g/s, p ~0.39, 17 sessions — weak evidence, not a shown absence).
 **It is concentrated after 2026-09-30**: `--split 2026-09-30` gives

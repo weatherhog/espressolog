@@ -34,7 +34,10 @@ were opened by another record, leaving 69 shots in 32 sessions.)
   "first shot of the day, dial-in (choked, 16.5 g in 45 s)" -- a first shot
   the slowdown may itself have spoiled. On the snapshot one opener is a full
   38.3 g shot with no bean recorded (id 80), so this line is not only
-  flushes; read it as "the machine ran before the first clean shot".
+  flushes; read it as "the machine ran before the first clean shot". The
+  live server has since recorded its bean and dial (Moonwalker, 7.9), so
+  there it is clean and no longer an opener -- which is why the live
+  "before" period (20 sessions, 18 with 2+) is not the snapshot's (19, 17).
 
   The first shot of a session flows ~9 % slower:
 
@@ -54,7 +57,10 @@ were opened by another record, leaving 69 shots in 32 sessions.)
   +0.27 g/s, p ~0.12); too few to say more.
 
   SIZE, printed by the script, main sessions: mean flow sigma 0.216 g/s,
-  0.202 within first/later -- 12 % of the variance, about 6 % of sigma.
+  0.202 within first/later: the split explains 12 % of the variance, and
+  separating first from later shots would cut sigma by ~6 %. (The offset
+  itself, +0.146 g/s, is about two thirds of sigma -- a large shift on a
+  minority of shots, not a small one.)
   Real, but a small part of the spread. Nothing here says anything about
   0f's 0.21 g/s, which comes from the 2026-09-29 snapshot: on that snapshot
   this script finds +0.06 g/s, 11 of 17, p ~0.39 -- no significant effect,
@@ -76,8 +82,9 @@ were opened by another record, leaving 69 shots in 32 sessions.)
 
   WHAT IT DOES NOT SAY IS WHY. Grinder (first grind after sitting: retention,
   cold burrs) and machine (group and water path not at equilibrium although
-  the display reads 95) both fit. The 3rd-shot row, n=7, hints the effect
-  keeps fading past shot 2, which would fit warm-up -- too few to lean on.
+  the display reads 95) both fit. The 3rd-shot row cannot say whether it
+  keeps fading past shot 2: it is unpaired, and its 7 sessions are a
+  different mix from rows 1 and 2.
   Separating them needs an intervention, not more of the same data: a blank
   flush before the first shot on some days, a ground and dumped dose on
   others.
@@ -85,9 +92,10 @@ were opened by another record, leaving 69 shots in 32 sessions.)
 NO ID EXCLUSIONS, unlike overshoot.py. 25/26 and 200/201 are excluded = 1
 in the database. Shot 37 is kept: its knock (19.44 s) falls in the stop
 window and its slow lift in the settle window, which pulls yield_final_g to
-33.8 g from ~35.7 g. The flow window ends at 80 % of yield_final_g
+33.8 g from ~35.9 g, the settle peak. The flow window ends at 80 % of yield_final_g
 (detector.cpp computeFlowWindow), so its mean_flow_gps reads ~0.02 g/s low
-(1.996 against ~2.018) -- far below the effect measured here.
+(1.996 against ~2.019, recomputed from its samples) -- far below the
+effect measured here.
 """
 import argparse
 import datetime as dt
@@ -124,9 +132,9 @@ def load_db(path):
 def load_api(base):
     with urllib.request.urlopen(base.rstrip("/") + "/api/v1/shots?limit=1000",
                                 timeout=15) as r:
-        rows = json.load(r)
+        rows = json.load(r) or []   # the server encodes zero rows as null
     if len(rows) >= 1000:
-        print("WARNING: the server caps the list at 1000 rows; older shots are missing")
+        print("WARNING: 1000 rows is the server's cap; older shots may be missing")
     return [{k: row.get(k) for k in FIELDS} for row in rows]
 
 
@@ -260,7 +268,7 @@ def main():
     if vs:
         print(f"\nmean flow sigma {vs[0]:.3f} g/s, {vs[1]:.3f} within first/later: "
               f"{100 * vs[2]:.1f} % of the variance, "
-              f"{100 * (1 - vs[1] / vs[0]):.1f} % of sigma")
+              f"separating them cuts sigma by {100 * (1 - vs[1] / vs[0]):.1f} %")
 
     if args.split:
         cut = dt.datetime.fromisoformat(args.split).replace(tzinfo=dt.timezone.utc)

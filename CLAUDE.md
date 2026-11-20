@@ -1368,6 +1368,20 @@ Stratify before trusting any re-run — one bean, one grind epoch, one
 reason. The figure bundles puck prep with the machine, so it is an upper
 bound on what control could fix, not a machine spec.
 
+**THE FIRST SHOT OF A SESSION FLOWS SLOWER — stratify by it too.**
+Found 2026-11-20 (`analysis/session_warmup.py`, 80 clean shots, 39
+sessions; a session is records < 60 min apart, and 30–240 min gives the
+same answer). Mean flow by position: **1st 1.66 g/s, 2nd 1.80, 3rd 1.89**.
+Paired within session, later shots ran faster in 27 of 34 sessions,
+**+0.16 g/s (~9 %), p ~0.0015** — about 15 % of the 0.21 g/s σ above, so
+part of the noise floor is a structured, removable factor. **It has grown**:
++0.10 g/s and not significant up to the 0f snapshot (which is why that run
+did not see it), +0.25 g/s in 13 of 14 sessions since 2026-09-30. **Cause
+unknown** — grinder first grind and machine warm-up both fit, and first
+shots also carry 0.2 g more dose, untested. Separating grinder from machine
+needs an intervention (a blank flush before the first shot on some days, a
+dumped dose on others), not more of the same data.
+
 ---
 
 ## Weighing attribution

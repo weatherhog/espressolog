@@ -28,32 +28,35 @@ struct ShotResult {
   // back on the scale landed slowly enough — 3-4 g per sample — to pass the
   // per-sample step guard into POURING, then rose 151 g in ~0.6 s.
   bool     placement;
-  // 0a.7. Something landed on the scale after the shot had substance: one
-  // sample more than PLACEMENT_STEP_MG (5 g) ABOVE THE PEAK SO FAR, rising
-  // faster than MAX_POUR_MGPS (10 g/s) since the sample before, once
-  // running_max >= REJECT_MIN_MG (not judged for 1 s after a sample gap
-  // > 1 s; jumpsOntoScale() in detector.cpp has the rule).
-  //   DURING SETTLING the pour has stopped, so the true weight is the peak:
-  //   the peak is frozen for the rest of settling, and a lift or the end of
-  //   settling reads it -- so nothing that landed, however it wobbles,
-  //   presses, comes off or partly stays, becomes the yield. Before 0a.7 a hand, the portafilter or a
-  //   spoon set on the scale while settling entered the peak as "late
-  //   drips" and a lift finalized the shot AT it: shot 205 (2026-11-21,
-  //   37.8 g recorded as 49.41 g), shot 81 (37.4 as 43.5).
-  //   DURING THE POUR it is only flagged; the yield logic is 0a.6's. Taking
-  //   an object out under a moving weight was tried and made things worse
-  //   (review 2026-11-21: a wobbling hand or an object lifted off in steps
-  //   ended shots early with a wrong yield). A jump mid-pour can still reach
-  //   the yield or the mean-flow window, exactly as before -- the flag is
-  //   what tells the reader to look.
+  // 0a.7. Something landed on the scale after the shot had substance.
+  //   DURING SETTLING after a confirmed stop (2 s flat, so the true weight
+  //   is the peak plus drips): only a rise of at most DRIP_STEP_MG in one
+  //   sample may raise the peak, and the weight ending up more than
+  //   PLACEMENT_STEP_MG above it -- in one step or several -- is an
+  //   object. That freezes the peak for the rest of settling; a lift or the
+  //   end of settling reads it, and the placement scan stops where it
+  //   landed. Before 0a.7 a hand, the portafilter or a spoon set down while
+  //   settling entered the peak as "late drips" -- and the yield, with or
+  //   without a lift: shot 205 (2026-11-21, 37.8 g recorded as 49.41 g),
+  //   shot 81 (37.4 as 43.5).
+  //   DURING THE POUR, and after a FORCED stop at MAX_SHOT_MS (the pour may
+  //   still be running), it is only flagged, by jumpsOntoScale(): one
+  //   sample more than 5 g above the peak, rising faster than
+  //   MAX_POUR_MGPS (10 g/s), not within 1 s after a > 1 s sample gap. The
+  //   yield logic there is 0a.6's; taking an object out under a moving
+  //   weight was tried and made things worse (reviews 2026-11-21). A jump
+  //   mid-pour can still reach the yield or the mean-flow window -- the
+  //   flag is what tells the reader to look.
   // The record is kept; the flag alone never excludes (SPOOL_FLAG_DISTURBED).
-  // KNOWN LIMITS: a first sample that rises less than the onset rule still
-  // counts (205's +0.6 g before its +7.8 g step, so 205 now reads 38.4, not
-  // 37.8); an object that creeps on slower than a pour is not seen; one that
-  // lands more than 20 g above its earlier peak within 1 s is still a placement and
-  // excluded as one; drips after something lands while settling are lost
-  // (a few tenths of a gram); and the lift paths are unchanged -- a lift
-  // during SETTLING still overwrites stop_ms as described below.
+  // KNOWN LIMITS: while settling, an object under PLACEMENT_STEP_MG (5 g)
+  // is not flagged -- it stays out of the peak, but the end of settling
+  // reads last_w and includes it (a lift does not); drips after a landing
+  // are lost (a few tenths of a gram); 205's +0.6 g first step is a drip by
+  // the rule, so 205 reads 38.4, not 37.8. During the pour an object that
+  // creeps on slower than a pour, or in steps of 5 g or less, is not seen,
+  // and one landing more than 20 g above its earlier peak within 1 s is
+  // still a placement and excluded as one. The lift paths are unchanged --
+  // a lift during SETTLING still overwrites stop_ms as described below.
   bool     disturbed;
   uint32_t started_at_ms;  // millis() of t=0 (backdated to the flow crossing)
   // Where the detector judged the pour to have ended. HOW that is derived
@@ -245,6 +248,9 @@ public:
   // rose 7.7 g in 1 s; a rise faster than 10 g/s between two samples is
   // something set on the scale (jumpsOntoScale()).
   static constexpr int32_t  MAX_POUR_MGPS     = 10000;
+  // 0a.7, SETTLING (not truncated): only a rise of at most this in one sample
+  // may raise the peak. Drips arrive in tenths; the Bookoo steps 0.1-0.2 g.
+  static constexpr int32_t  DRIP_STEP_MG      = 500;
   // Over a whole second: espresso runs at ~1-5 g/s, so 20 g in 1 s is 4x the
   // fastest gusher and only something landing in (or on) the cup.
   static constexpr int32_t  PLACEMENT_RISE_MG = 20000;
@@ -307,6 +313,7 @@ private:
   int32_t  running_max = 0;      // peak so far (0a.7: frozen once anything lands while settling)
   int32_t  last_w = 0;
   bool     disturbing = false;   // SETTLING only: something landed; the peak is frozen
+  uint16_t placement_scan_end = 0;  // buf index where it landed; 0 = scan all
   uint32_t last_t = 0;           // this sample's time
   uint32_t prev_t = 0;           // the previous sample's time
   uint32_t gap_at = 0;           // first sample after the last > 1 s gap; 0 = none

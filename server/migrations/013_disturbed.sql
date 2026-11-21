@@ -1,9 +1,10 @@
 -- Detector 0a.7 (firmware 0.14.0), spool flag DISTURBED (0x80): something
 -- landed on the scale after the shot had substance -- one sample more than
--- 5 g above the peak so far, rising faster than 10 g/s, which espresso
--- cannot. DURING SETTLING the detector kept it out of the yield; DURING THE
--- POUR it only flags it, and the yield and mean flow are as 0a.6 measured
--- them -- distrust them on such a row. Up to 0a.6 such a jump entered the
+-- 5 g above the peak. WHILE SETTLING after a confirmed stop the detector
+-- froze the peak and kept the object out of the yield (an object under 5 g
+-- is neither flagged nor, at the end of settling, kept out); DURING THE
+-- POUR, or after a forced stop at 60 s, it only flags it, and the yield and
+-- mean flow are as 0a.6 measured them -- distrust them on such a row. Up to 0a.6 such a jump entered the
 -- peak and a lift then recorded the shot AT it (shot 205, 2026-11-21: 37.8 g
 -- stored as 49.41 g; shot 81: 37.4 as 43.5).
 --

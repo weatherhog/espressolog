@@ -9,8 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"hash/crc32"
+	"regexp"
 	"strconv"
-	"strings"
 )
 
 // ErrNewerFormat marks a record that looks well-formed but was written in a
@@ -88,9 +88,9 @@ const (
 	// shot or across it. Set on one shot per unconfirmed edit.
 	FlagSetpointPending = 0x40
 	// FlagDisturbed (detector 0a.7, firmware 0.14.0): something landed on
-	// the scale after the shot had substance -- one sample more than 5 g
-	// above the peak so far, faster than any pour. During settling the
-	// detector kept it out of the yield; during the pour it only flags it.
+	// the scale after the shot had substance -- more than 5 g above the
+	// peak. While settling after a confirmed stop the detector kept it out
+	// of the yield; during the pour, or after a forced stop, it only flags it.
 	// A real shot; the flag alone never excludes. Not tied to a format version: the
 	// layout did not change, so it is read off detector_version instead
 	// (Disturbed()).
@@ -400,25 +400,26 @@ func (h *Header) Disturbed() (disturbed, known bool) {
 	return h.Flags&FlagDisturbed != 0, true
 }
 
+// detectorVersionRe matches the detector versions this firmware writes,
+// "<major><series letter>.<n>" ("0a.7"), with any suffix after n ignored.
+var detectorVersionRe = regexp.MustCompile(`^(\d+)([a-z])\.(\d+)`)
+
 // detectorAtLeast reports whether detector version v is 0a.min or later.
 // Every detector so far is "0a.N"; a later series ("0b.1", "1a.0") counts
 // as newer, so a renumbering cannot silently turn the flag into NULL, and a
-// suffix after N ("0a.8-rc", "0a.8b") is ignored. An empty version, or
-// "0a." with no number after it, is treated as older.
+// suffix after N ("0a.8-rc") is ignored. Anything that does not look like a
+// detector version ("", "dev", "test") is unknown, i.e. not at least.
 func detectorAtLeast(v string, min int) bool {
-	if v == "" {
+	m := detectorVersionRe.FindStringSubmatch(v)
+	if m == nil {
 		return false
 	}
-	rest, ok := strings.CutPrefix(v, "0a.")
-	if !ok {
-		return v > "0a."
+	major, _ := strconv.Atoi(m[1])
+	n, _ := strconv.Atoi(m[3])
+	if major != 0 || m[2] != "a" {
+		return major > 0 || m[2] > "a"
 	}
-	end := 0
-	for end < len(rest) && rest[end] >= '0' && rest[end] <= '9' {
-		end++
-	}
-	n, err := strconv.Atoi(rest[:end])
-	return err == nil && n >= min
+	return n >= min
 }
 
 // Setpoint returns the brew setpoint the machine's display last showed being

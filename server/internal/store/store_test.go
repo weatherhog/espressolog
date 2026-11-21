@@ -1126,6 +1126,8 @@ func TestIngestDisturbed(t *testing.T) {
 		{"0b.1 disturbed", "0b.1", true, sql.NullInt64{Int64: 1, Valid: true}},
 		{"empty version", "", true, sql.NullInt64{}},
 		{"0a.8-rc disturbed", "0a.8-rc", true, sql.NullInt64{Int64: 1, Valid: true}},
+		{"dev build", "dev", true, sql.NullInt64{}},
+		{"1a.0 disturbed", "1a.0", true, sql.NullInt64{Int64: 1, Valid: true}},
 	} {
 		raw, rec := pumpRecordWith(t, uint32(300+i), record.Pump2Cup, 8200, func(h *record.Header) {
 			h.DetectorVersion = [8]byte{}

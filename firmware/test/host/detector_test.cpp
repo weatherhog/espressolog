@@ -693,7 +693,54 @@ int main() {
     return (ph - (int)ph) < 0.5 ? 7.0 : (off < 4.0 ? off : 4.0); }, false, 0);
   settleCase("8 g, then 1.4 g left behind", [](double s) {
     return s < 21.0 ? 0.0 : s < 22.5 ? 8.0 : 1.4; }, false, 0);
+  // Review 2026-11-21, round 4: an object landing over several samples
+  // (4 g + 4 g passed the one-sample rule: 44 g of 36, unflagged).
+  settleCase("8 g landing as 4 + 4 g", [](double s) {
+    return s < 21.0 ? 0.0 : s < 21.1 ? 4.0 : 8.0; }, false, 0);
+  settleCase("12 g landing as 4 + 4 + 4 g", [](double s) {
+    return s < 21.0 ? 0.0 : s < 21.1 ? 4.0 : s < 21.2 ? 8.0 : 12.0; }, false, 0);
   printf("objects during settling never reach the yield or end the shot early OK\n");
+  {
+    // Round 4: a portafilter (300 g) set down while settling. The yield was
+    // already protected, but the placement scan read the settling samples
+    // and excluded the whole shot. It now stops where the object landed.
+    ShotDetector d;
+    uint32_t tt = 7000000;
+    bool fin = false;
+    for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+    for (int i = 0; i < 400 && !fin; i++, tt += 100) {
+      double s = i / 10.0;
+      double w = (s < 18.0 ? 2.0 * s : 36.0) + (s >= 21.0 ? 300.0 : 0.0);
+      fin = d.feed(tt, (int32_t)llround(w * 1000.0));
+    }
+    assert(fin);
+    const ShotResult& rr = d.result();
+    printf("portafilter while settling: placement=%d disturbed=%d final=%d\n",
+           rr.placement, rr.disturbed, rr.yield_final_mg);
+    assert(rr.valid && rr.disturbed && !rr.placement);
+    assert(rr.yield_final_mg > 35500 && rr.yield_final_mg < 36500);
+    printf("an object over 20 g while settling is not a placement OK\n");
+  }
+  {
+    // Round 4: a forced stop at 60 s with the pour still running. The peak
+    // is not the true weight there, so it is not frozen: flagged only.
+    ShotDetector d;
+    uint32_t tt = 8000000;
+    bool fin = false;
+    for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+    for (int i = 0; i < 800 && !fin; i++, tt += 100) {
+      double s = i / 10.0;
+      double w = 0.6 * s + (s >= 61.0 ? 8.0 : 0.0);   // slow pour past 60 s
+      fin = d.feed(tt, (int32_t)llround(w * 1000.0));
+    }
+    assert(fin);
+    const ShotResult& rr = d.result();
+    printf("truncated, object at 61 s: trunc=%d disturbed=%d final=%d\n",
+           rr.truncated, rr.disturbed, rr.yield_final_mg);
+    assert(rr.truncated && rr.disturbed);
+    assert(rr.yield_final_mg > 44000);               // pour kept counting (0a.6 behaviour)
+    printf("a truncated shot is flagged, not frozen OK\n");
+  }
 
   printf("all scenarios passed\n");
   return 0;

@@ -160,6 +160,7 @@ void ShotDetector::beginPour(uint32_t crossing_t) {
   running_max = 0;
   lift_since = 0;
   disturbing = false;
+  placement_scan_end = 0;
   // Backdate: replay the pre-history ring from the flow crossing onward,
   // relative to the armed baseline.
   for (size_t i = 0; i < ring_count; i++) {
@@ -233,13 +234,19 @@ bool ShotDetector::finishShot() {
 // than PLACEMENT_RISE_MS, the first PLACEMENT_RISE_MS of samples only feed
 // the peak and are never judged: a cup landing during or just after a scale
 // outage goes unflagged, which keeps a record rather than excluding one.
+//
+// 0a.7: an object that lands WHILE SETTLING is not a placement -- the shot
+// before it is real and its yield is protected -- so the scan stops at the
+// sample where it landed (placement_scan_end). A cup put back on the scale
+// (shot 180) rises during the pour and is unaffected.
 bool ShotDetector::risesLikeAPlacement() const {
-  if (buf_count == 0) return false;
+  uint16_t n = placement_scan_end ? placement_scan_end : buf_count;
+  if (n == 0) return false;
   uint16_t i = 0;
   int32_t peak_before = buf[0].weight_mg;   // no sample before the first window
   bool seeding = false;
   uint32_t seed_from = 0;
-  for (uint16_t j = 0; j < buf_count; j++) {
+  for (uint16_t j = 0; j < n; j++) {
     if (j > 0 && (uint32_t)(buf[j].t_ms - buf[j - 1].t_ms) > PLACEMENT_RISE_MS) {
       seeding = true;
       seed_from = buf[j].t_ms;
@@ -307,6 +314,7 @@ void ShotDetector::resetToIdle() {
   parked_since = 0;
   lift_since = 0;
   disturbing = false;
+  placement_scan_end = 0;
 }
 
 bool ShotDetector::feed(uint32_t t, int32_t w, uint32_t inlet_pulses_total) {
@@ -447,20 +455,32 @@ bool ShotDetector::feed(uint32_t t, int32_t w, uint32_t inlet_pulses_total) {
 
     case ShotState::SETTLING: {
       int32_t rel = w - baseline;
-      // 0a.7: the pour has stopped, so the true weight is the peak plus a few
-      // drips. A jump onto the scale freezes the peak FOR THE REST OF
-      // SETTLING: nothing after it -- the object, its wobble, a press and
-      // release, a remainder left behind -- can raise it, and a lift or the
-      // end of settling reads it. Never cleared on purpose: a draft that
-      // cleared it when the weight came back near the peak let each release
-      // raise the peak a little until a pressing hand passed for drips
-      // (review 2026-11-21). The cost is the drips after the landing, a few
-      // tenths of a gram. Shot 205: +7.8 g then +3.2 g, then the lift.
-      if (!disturbing && jumpsOntoScale(t, w, prev_w, rel)) {
-        disturbing = true;
-        res.disturbed = true;
+      if (res.truncated) {
+        // Forced stop at MAX_SHOT_MS: the pour may still be running, so the
+        // peak is not the true weight. Flag only, as during the pour (0a.7).
+        if (jumpsOntoScale(t, w, prev_w, rel)) res.disturbed = true;
+        if (rel > running_max) running_max = rel;   // late drips
+      } else {
+        // 0a.7: the stop is confirmed (2 s flat), so the true weight is the
+        // peak plus drips, and drips arrive in tenths of a gram. Only a rise
+        // of at most DRIP_STEP_MG in one sample may raise the peak; anything
+        // that ends up more than PLACEMENT_STEP_MG above it is an object,
+        // however many samples it took to land (review 2026-11-21: 4 g + 4 g
+        // passed a one-sample rule). That FREEZES THE PEAK FOR THE REST OF
+        // SETTLING -- nothing after it, wobble, press and release or a
+        // remainder, can raise it -- and a lift or the end of settling reads
+        // it. Never cleared on purpose (a draft that unfroze it near the peak
+        // let a pressing hand pass for drips). The cost is the drips after
+        // the landing, a few tenths of a gram. Shot 205: +0.6, +7.8, +3.2 g,
+        // then the lift. No rate test here: nothing is pouring.
+        if (!disturbing && rel - running_max > PLACEMENT_STEP_MG) {
+          disturbing = true;
+          res.disturbed = true;
+          placement_scan_end = buf_count;   // the placement scan stops here
+        }
+        if (!disturbing && rel > running_max && w - prev_w <= DRIP_STEP_MG)
+          running_max = rel;
       }
-      if (!disturbing && rel > running_max) running_max = rel;
       // The pour already ended (stop confirmed). If the cup is lifted during
       // settling, just finalize now at the peak — no need to wait it out.
       if (running_max - rel > LIFT_DROP_MG) return finalizeLifted();

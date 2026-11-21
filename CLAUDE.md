@@ -1368,6 +1368,30 @@ Stratify before trusting any re-run — one bean, one grind epoch, one
 reason. The figure bundles puck prep with the machine, so it is an upper
 bound on what control could fix, not a machine spec.
 
+**THE FIRST SHOT OF A SESSION FLOWS SLOWER — stratify by it too.**
+Found 2026-11-20 by `analysis/session_warmup.py` **against the live server**
+— not the 2026-09-29 snapshot that "80" means below: on the live server
+the 0f stratum held 80 clean shots in 39 sessions, 69 in 32 once sessions opened by any
+record that is not a clean shot in the stratum — mostly drips, one
+discarded dial-in — are set aside (a session is records at most 60 min
+apart; 120 and 240 merge one pair and reach the same conclusion). Mean flow by position:
+**1st 1.66 g/s, 2nd 1.80, 3rd 1.89**. Paired within session, later shots
+ran faster in 23 of 30 sessions, **+0.15 g/s (~9 %), p ~0.0075**. On those
+rows the split explains **12 % of the variance; separating first from
+later shots would cut σ by ~6 %** (the script prints both) — real, but a
+small part of the spread. **It says nothing about the 0.21 g/s
+above**: on that snapshot the script finds no significant effect
+(+0.06 g/s, p ~0.39, 17 sessions — weak evidence, not a shown absence).
+**It is concentrated after 2026-09-30**: `--split 2026-09-30` gives
++0.07 g/s before, not significant, and +0.27 g/s in 11 of 12 sessions from
+that date — but a test of one period against the other gives only
+p ~0.05, on a split date chosen after looking, so **"it grew" is a
+candidate, not a finding**. **Cause unknown** — grinder
+first grind and machine warm-up both fit, and first shots also carry 0.2 g
+more dose, untested. Separating grinder from machine needs an intervention
+(a blank flush before the first shot on some days, a dumped dose on others),
+not more of the same data.
+
 ---
 
 ## Weighing attribution
@@ -1517,7 +1541,9 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   slip, not a
   rival count: every other figure in its paragraph (σ 0.21 / 3.43,
   12.2 % / 14.2 %, n=46, corr +0.13) matches the notebook's 80-shot run
-  exactly. *(Two drafts of this sentence miscounted: "six files", copied
+  exactly. **A different 80 appears from 2026-11-20**: `analysis/session_warmup.py`
+  and the 0f paragraph count 80 clean shots in one stratum **on the live
+  server**, not the snapshot, and both say so where they state it. *(Two drafts of this sentence miscounted: "six files", copied
   from a review without recounting, and "137 twice" when the commit message
   that shipped it had already said three. Both in the paragraph about not
   copying denominators — which is the argument for `grep` over any prose

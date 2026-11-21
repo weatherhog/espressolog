@@ -89,8 +89,8 @@ const (
 	FlagSetpointPending = 0x40
 	// FlagDisturbed (detector 0a.7, firmware 0.14.0): something landed on
 	// the scale after the shot had substance -- one sample more than 5 g
-	// above the peak so far -- and the detector took the yield from before
-	// it. A real shot, NOT excluded. Not tied to a format version: the
+	// above the peak so far, faster than any pour -- and the detector kept
+	// its mass out of the yield. A real shot; the flag alone never excludes. Not tied to a format version: the
 	// layout did not change, so it is read off detector_version instead
 	// (Disturbed()).
 	FlagDisturbed = 0x80
@@ -399,12 +399,17 @@ func (h *Header) Disturbed() (disturbed, known bool) {
 	return h.Flags&FlagDisturbed != 0, true
 }
 
-// detectorAtLeast reports whether a "0a.N" detector version is at least
-// 0a.min. Anything that does not parse is treated as older.
+// detectorAtLeast reports whether detector version v is 0a.min or later.
+// Every detector so far is "0a.N"; a later series ("0b.1", "1a.0") counts
+// as newer, so a renumbering cannot silently turn the flag into NULL. An
+// empty or "0a."-prefixed but unparsable version is treated as older.
 func detectorAtLeast(v string, min int) bool {
+	if v == "" {
+		return false
+	}
 	rest, ok := strings.CutPrefix(v, "0a.")
 	if !ok {
-		return false
+		return v > "0a."
 	}
 	n, err := strconv.Atoi(rest)
 	return err == nil && n >= min

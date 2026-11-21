@@ -174,10 +174,10 @@ static_assert(PRE_PULSES_MAX == 256, "the server's PrePulsesMax is 256");
 // SETPOINT_TOUCHED on purpose, which also stops the pre-infusion carry.
 #define SPOOL_FLAG_SETPOINT_PENDING 0x40
 // Detector 0a.7 (firmware 0.14.0). Something landed on the scale after the
-// shot had substance -- one sample more than 5 g above the peak so far
-// (ShotResult::disturbed) -- and the yield was taken from before it. Kept and
-// NOT excluded: the record is a real shot whose yield the detector already
-// protected. A clear bit means "not disturbed" only from 0a.7; older
+// shot had substance -- one sample more than 5 g above the peak so far,
+// rising faster than any pour (ShotResult::disturbed) -- and its mass was
+// kept out of the yield. The flag alone does not exclude: the record is a
+// real shot whose yield the detector already protected. A clear bit means "not disturbed" only from 0a.7; older
 // detectors never set it.
 #define SPOOL_FLAG_DISTURBED 0x80
 

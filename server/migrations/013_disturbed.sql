@@ -1,15 +1,17 @@
 -- Detector 0a.7 (firmware 0.14.0), spool flag DISTURBED (0x80): something
 -- landed on the scale after the shot had substance -- one sample more than
--- 5 g above the peak so far, which espresso cannot add in ~100 ms -- and the
--- detector took the yield from before it. Up to 0a.6 such a jump entered the
+-- 5 g above the peak so far, rising faster than 10 g/s, which espresso
+-- cannot -- and the detector kept its mass out of the yield. Up to 0a.6 such a jump entered the
 -- peak and a lift then recorded the shot AT it (shot 205, 2026-11-21: 37.8 g
 -- stored as 49.41 g; shot 81: 37.4 as 43.5).
 --
---   1     disturbed; the yield is the weight before the disturbance
+--   1     disturbed; the object's mass was kept out of the yield
 --   0     detector 0a.7 or later saw nothing land
 --   NULL  an older detector, which never set the flag: unknown, not "no"
 --
--- NOT an exclusion: the shot is real and its yield already protected. The
+-- NOT an exclusion by itself: the shot is real and its yield already
+-- protected (a disturbed record that is also a placement is still excluded
+-- as a placement). The
 -- samples stay raw (invariant 3), so the disturbance is still visible in the
 -- curve. Nothing is backfilled: older rows were judged by hand, and the
 -- worst of them were excluded on 2026-11-21 (81, 200, 201, 205).

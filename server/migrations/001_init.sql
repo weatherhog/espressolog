@@ -191,7 +191,7 @@ CREATE TABLE shot (
                                         --     not 5 s) after the real stop
                                         -- fact:stop-ms-lift-bound STOP_WINDOW_MS + SETTLE_MS|~7 s
                                         --   reject     - the sub-5 g FLAT ABORT
-                                        --     (detector.cpp:348-359) assigns NONE
+                                        --     (feed()'s POURING case) assigns NONE
                                         --     of these: stop_ms = 0,
                                         --     yield_at_stop_g = 0,
                                         --     settle_offset_g = 0

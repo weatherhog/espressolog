@@ -501,8 +501,9 @@ int main() {
   };
   {
     // Shot 205 (2026-11-21): stopped at ~28.5 s on ~37.4 g, then +7.8 g and
-    // +3.2 g at 33.9 s while settling, then lifted. 0a.6 recorded 49.41 g
-    // with stop_ms at the jump and settle_offset 0.
+    // +3.2 g at 33.9 s while settling, then lifted. 0a.6 recorded 49.41 g.
+    // The lift during settling still overwrites stop_ms (a lift path,
+    // unchanged in 0a.7); only the yield is protected.
     ShotResult rr = replayThenLift(SHOT_205, sizeof SHOT_205 / sizeof SHOT_205[0]);
     printf("shot 205 replay: valid=%d disturbed=%d stop_ms=%u at_stop=%d final=%d settle=%d\n",
            rr.valid, rr.disturbed, rr.stop_ms, rr.yield_at_stop_mg, rr.yield_final_mg,
@@ -510,11 +511,8 @@ int main() {
     assert(rr.valid && rr.disturbed && !rr.placement);
     // The +0.6 g first sample of the disturbance still counts (known limit).
     assert(rr.yield_final_mg >= 37400 && rr.yield_final_mg <= 38500);
-    // The stop found in the pour survives the lift: backdated, not the jump.
-    assert(rr.stop_ms > 27000 && rr.stop_ms < 31000);
-    assert(rr.yield_at_stop_mg > 37000 && rr.yield_at_stop_mg < 38000);
-    assert(rr.settle_offset_mg == rr.yield_final_mg - rr.yield_at_stop_mg);
-    printf("a jump during settling is not the yield, and the lift keeps the stop OK\n");
+    assert(rr.yield_at_stop_mg == rr.yield_final_mg && rr.settle_offset_mg == 0);
+    printf("a jump during settling is not the yield OK\n");
   }
   {
     // Shot 81 (2026-09-29): flat at 37.4 g, then +0.8 g and +5.3 g in the
@@ -547,8 +545,7 @@ int main() {
     printf("a hand resting through settling is not the yield OK\n");
   }
   {
-    // An ordinary pour, lifted after the stop, is not disturbed and keeps a
-    // backdated stop (0a.7) instead of the lift sample.
+    // An ordinary pour, lifted after the stop, is not disturbed.
     ShotDetector d;
     uint32_t tt = 1300000;
     bool fin = false;
@@ -564,10 +561,87 @@ int main() {
     printf("clean lift after stop: disturbed=%d stop_ms=%u final=%d settle=%d\n",
            rr.disturbed, rr.stop_ms, rr.yield_final_mg, rr.settle_offset_mg);
     assert(rr.valid && !rr.disturbed);
-    assert(rr.stop_ms < 20000);                  // the plateau began ~18 s, not the 23 s lift
     assert(rr.yield_final_mg > 35500 && rr.yield_final_mg < 36500);
     (void)start;
-    printf("a clean lift after the stop keeps the backdated stop OK\n");
+    printf("a clean lift after the stop is not disturbed OK\n");
+  }
+
+  {
+    // Review 2026-11-21: an object set on the scale MID-POUR and taken off
+    // again. The first 0a.7 draft compared against the fixed pre-jump
+    // weight, which the pour outgrew, so the disturbance never cleared: the
+    // stop was suppressed, the shot truncated at 60 s and read 19.8 g of 36.
+    for (int lift_at : {0, 25}) {
+      ShotDetector d;
+      uint32_t tt = 2000000;
+      bool fin = false;
+      for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+      for (int i = 0; i < 700 && !fin; i++, tt += 100) {
+        double s = i / 10.0;
+        double w = s < 18.0 ? 2.0 * s : 36.0;    // 2 g/s to 36 g
+        if (s >= 10.0 && s < 14.0) w += 8.0;     // 8 g on the scale, 10-14 s
+        if (lift_at && s >= lift_at) w = -180.0; // cup lifted
+        fin = d.feed(tt, (int32_t)llround(w * 1000.0));
+      }
+      assert(fin);
+      const ShotResult& rr = d.result();
+      printf("object mid-pour (lift %d): disturbed=%d trunc=%d stop_ms=%u final=%d\n",
+             lift_at, rr.disturbed, rr.truncated, rr.stop_ms, rr.yield_final_mg);
+      assert(rr.valid && rr.disturbed && !rr.truncated);
+      assert(rr.yield_final_mg > 35000 && rr.yield_final_mg < 36800);
+      if (!lift_at) assert(rr.stop_ms > 16000 && rr.stop_ms < 20000);
+    }
+    printf("an object on and off the scale mid-pour clears, the pour keeps counting OK\n");
+  }
+  {
+    // Review 2026-11-21: a FAST pour across a short sample gap climbs past
+    // "peak + 5 g" in one sample (7 g/s over 800 ms = 5.6 g). Judged as a
+    // rate it is a pour, not an object.
+    struct Case { double gps; uint32_t gap_ms; };
+    for (const Case& c : {Case{7.0, 800}, Case{6.0, 900}, Case{9.0, 700}}) {
+      ShotDetector d;
+      uint32_t tt = 3000000;
+      bool fin = false;
+      for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+      uint32_t pour0 = tt;
+      auto w_at = [&](uint32_t now) {
+        double s = (now - pour0) / 1000.0;
+        double v = c.gps * s;
+        return v < 38.0 ? v : 38.0;
+      };
+      for (; tt < pour0 + 3000; tt += 100) d.feed(tt, (int32_t)llround(w_at(tt) * 1000.0));
+      tt += c.gap_ms - 100;                      // samples stop briefly
+      for (int i = 0; i < 400 && !fin; i++, tt += 100)
+        fin = d.feed(tt, (int32_t)llround(w_at(tt) * 1000.0));
+      assert(fin);
+      const ShotResult& rr = d.result();
+      printf("fast pour %.0f g/s across %u ms: disturbed=%d final=%d trunc=%d\n",
+             c.gps, c.gap_ms, rr.disturbed, rr.yield_final_mg, rr.truncated);
+      assert(!rr.disturbed && !rr.truncated);
+      assert(rr.yield_final_mg > 37000);
+    }
+    printf("a fast pour across a short gap is not a disturbance OK\n");
+  }
+  {
+    // Review 2026-11-21: a spoon resting 0.5 s mid-pour became the first
+    // sample at 80 % of final, so mean_flow read 2.84 g/s for a 2.00 pour.
+    ShotDetector d;
+    uint32_t tt = 4000000;
+    bool fin = false;
+    for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+    for (int i = 0; i < 400 && !fin; i++, tt += 100) {
+      double s = i / 10.0;
+      double w = s < 18.0 ? 2.0 * s : 36.0;
+      if (s >= 12.0 && s < 12.5) w += 8.0;       // spoon
+      fin = d.feed(tt, (int32_t)llround(w * 1000.0));
+    }
+    assert(fin);
+    const ShotResult& rr = d.result();
+    printf("spoon mid-pour: disturbed=%d mean=%d mgps win=%u..%u\n",
+           rr.disturbed, rr.mean_flow_mgps, rr.flow_win_start_ms, rr.flow_win_end_ms);
+    assert(rr.disturbed);
+    assert(rr.mean_flow_mgps > 1850 && rr.mean_flow_mgps < 2150);
+    printf("a spoon mid-pour does not move mean flow OK\n");
   }
 
   printf("all scenarios passed\n");

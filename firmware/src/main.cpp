@@ -758,7 +758,7 @@ static void printShotSummary(const ShotResult& r) {
   if (r.placement)
     Serial.println("# NOT A SHOT: rose >20 g above its earlier peak within 1 s — a cup set down. Recorded, flagged, excluded.");
   if (r.disturbed)
-    Serial.println("# DISTURBED: something landed on the scale (>5 g above the peak in one sample); yield taken from before it. Recorded, flagged.");
+    Serial.println("# DISTURBED: something landed on the scale (>5 g above the peak, faster than any pour); its weight was kept out of the yield. Recorded, flagged.");
   Serial.println("# ---- shot complete ----");
   Serial.printf("# valid=%d fault=%d truncated=%d detector=%s fw=%s\n",
                 r.valid, r.fault, r.truncated, DETECTOR_VERSION, FIRMWARE_VERSION);
@@ -1513,8 +1513,10 @@ void loop() {
       net.sendLive(frame);
       if (complete) {
         handleShotComplete(detector.result());
-        snprintf(frame, sizeof(frame), "{\"ev\":\"shot\",\"valid\":%d,\"fault\":%d,\"placement\":%d}",
-                 detector.result().valid, detector.result().fault, detector.result().placement);
+        snprintf(frame, sizeof(frame),
+                 "{\"ev\":\"shot\",\"valid\":%d,\"fault\":%d,\"placement\":%d,\"disturbed\":%d}",
+                 detector.result().valid, detector.result().fault, detector.result().placement,
+                 detector.result().disturbed);
         net.sendLive(frame);
       }
       shot_active = detector.state() == ShotState::POURING

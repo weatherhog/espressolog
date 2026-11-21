@@ -164,7 +164,9 @@ export default function Pull({ shots, beans, activeBeanId, onIngested }) {
         }
         if (f.ev === "shot") {
           setLastEvent(f.placement ? "not a shot — cup set down"
-            : f.fault ? "shot faulted (cup removed?)" : f.valid ? "shot complete" : "rejected (<5 g)");
+            : f.fault ? "shot faulted (cup removed?)"
+            : f.valid ? (f.disturbed ? "shot complete — something landed on the scale, kept out of the yield" : "shot complete")
+            : "rejected (<5 g)");
           return;
         }
         // The machine's own display, off the J5 tap. A screen, not a record:

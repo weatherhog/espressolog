@@ -160,7 +160,9 @@ void ShotDetector::beginPour(uint32_t crossing_t) {
   running_max = 0;
   lift_since = 0;
   disturbing = false;
-  last_clean_rel = 0;
+  disturb_offset = 0;
+  clean_flow_mgps = 0;
+  memset(dist_bits, 0, sizeof dist_bits);
   // Backdate: replay the pre-history ring from the flow crossing onward,
   // relative to the armed baseline.
   for (size_t i = 0; i < ring_count; i++) {
@@ -189,6 +191,7 @@ void ShotDetector::computeFlowWindow() {
   int32_t w80 = (int32_t)(((int64_t)res.yield_final_mg * 8) / 10);
   const sample_t *s1 = nullptr, *s2 = nullptr;
   for (uint16_t i = 0; i < buf_count; i++) {
+    if (isDisturbed(i)) continue;   // 0a.7: an object on the scale is not flow
     if (!s1 && buf[i].weight_mg >= REJECT_MIN_MG) s1 = &buf[i];
     if (!s2 && buf[i].weight_mg >= w80) { s2 = &buf[i]; break; }
   }
@@ -205,7 +208,7 @@ void ShotDetector::computeFlowWindow() {
 bool ShotDetector::finishShot() {
   // Still disturbed when settling ran out (something left resting on the
   // scale): the last undisturbed weight is the yield, not the hand on it.
-  res.yield_final_mg = disturbing ? last_clean_rel : last_w - baseline;
+  res.yield_final_mg = last_w - baseline - (disturbing ? disturb_offset : 0);
   res.settle_offset_mg = res.yield_final_mg - res.yield_at_stop_mg;
   res.fault = false;
   res.valid = res.yield_final_mg >= REJECT_MIN_MG;
@@ -281,49 +284,69 @@ bool ShotDetector::finalizeLifted() {
   return true;
 }
 
-// The cup was lifted after the stop was confirmed (0a.7). Unlike
-// finalizeLifted(), the pour's end is already known: keep the stop_ms and
-// yield_at_stop_mg enterSettling() recorded, and let settle_offset measure
-// the drips caught before the lift. running_max is the undisturbed peak, so
-// a jump just before the lift cannot become the yield (shot 205).
-bool ShotDetector::finalizeLiftedAfterStop() {
-  res.yield_final_mg = running_max;
-  res.settle_offset_mg = res.yield_final_mg - res.yield_at_stop_mg;
-  res.fault = false;
-  res.valid = running_max >= REJECT_MIN_MG;
-  res.sample_count = buf_count;
-  res.samples = buf;
-  res.placement = risesLikeAPlacement();
-  computeFlowWindow();
-  resetToIdle();
-  return true;
+// Something set on the scale once the shot has substance (0a.7). Returns the
+// weight with the object's mass taken out -- `rel` itself when there is no
+// disturbance -- which is what every yield decision reads.
+//
+// ONSET needs all three, so a real pour cannot trip it:
+//  - the sample lands more than PLACEMENT_STEP_MG ABOVE THE PEAK so far: a
+//    weight recovering from a dip (a bump, the 0 g sample a cup-scale
+//    reconnect injects) only climbs back to about where it was;
+//  - it rose FASTER than MAX_POUR_MGPS since the previous sample: a fast
+//    pour across a short gap (7 g/s over 800 ms) climbs 5.6 g, which is
+//    under 10 g/s x 0.8 s, so the jump is judged as a rate, not a size;
+//  - not within PLACEMENT_RISE_MS after a gap longer than that (a
+//    reconnect: the injected 0 g lands right after it and the real climb a
+//    sample later -- the exception risesLikeAPlacement() makes).
+// Before substance the POURING tare rule owns big steps.
+//
+// WHILE DISTURBED the object's mass is carried as an OFFSET, so the pour
+// keeps counting underneath it: the onset jump minus what the flow before
+// it would have added, plus any later rise still faster than a pour (an
+// object that lands over two samples -- shot 205's +7.8 g then +3.2 g).
+//
+// IT CLEARS on a single-sample FALL of at least half the offset (the object
+// lifted off; a lift of the cup clears it too, and the lift rule takes
+// over), not against a fixed pre-jump weight, which the pour outgrows.
+int32_t ShotDetector::trackDisturbance(uint32_t t, int32_t w, int32_t prev_w, int32_t rel) {
+  uint32_t dt = (uint32_t)(t - prev_t);
+  int32_t rise = w - prev_w;
+  int32_t pour_allowance = (int32_t)(((int64_t)MAX_POUR_MGPS * dt) / 1000);
+  if (!disturbing) {
+    if (running_max >= REJECT_MIN_MG
+        && rel - running_max > PLACEMENT_STEP_MG
+        && rise > pour_allowance
+        && (gap_at == 0 || (uint32_t)(t - gap_at) > PLACEMENT_RISE_MS)) {
+      disturbing = true;
+      res.disturbed = true;
+      disturb_at = t;
+      // What the pour itself would have added meanwhile. Nothing once the
+      // stop is confirmed: settling drips are within the scale's jitter.
+      int32_t expected = st == ShotState::SETTLING ? 0
+          : (int32_t)(((int64_t)clean_flow_mgps * dt) / 1000);
+      disturb_offset = rise - expected;
+    } else {
+      clean_flow_mgps = flow_now > 0 ? flow_now : 0;
+      return rel;
+    }
+  } else if (prev_w - w >= disturb_offset / 2) {
+    disturbing = false;           // the object came off
+    clean_flow_mgps = flow_now > 0 ? flow_now : 0;
+    return rel;
+  } else if (rise > pour_allowance) {
+    int32_t expected = st == ShotState::SETTLING ? 0
+        : (int32_t)(((int64_t)clean_flow_mgps * dt) / 1000);
+    disturb_offset += rise - expected;   // still landing
+  }
+  return rel - disturb_offset;
 }
 
-// One sample landing more than PLACEMENT_STEP_MG ABOVE THE PEAK so far, once
-// the shot has substance, is something set on the scale, not espresso: mark
-// the shot and hold the disturbance open until the weight is back within
-// PLACEMENT_STEP_MG of where it stood before the jump.
-//  - Above the PEAK, not merely a big step: a weight recovering from a dip
-//    (a bump, the 0 g sample a cup-scale reconnect injects) climbs back to
-//    about where it was, plus the little the pour added meanwhile.
-//  - Not for PLACEMENT_RISE_MS after a gap longer than that (a reconnect):
-//    the pour kept running while nothing was sampled, and the reconnect's
-//    injected 0 g lands right after the gap, so the real climb shows up a
-//    sample or two later — the same exception risesLikeAPlacement() makes.
-//  - Before substance the POURING tare rule owns big steps.
-bool ShotDetector::trackDisturbance(int32_t w, int32_t prev_w, int32_t rel) {
-  if (!disturbing && running_max >= REJECT_MIN_MG
-      && rel - running_max > PLACEMENT_STEP_MG
-      && (gap_at == 0 || (uint32_t)(last_t - gap_at) > PLACEMENT_RISE_MS)) {
-    disturbing = true;
-    res.disturbed = true;
-    pre_disturb_rel = prev_w - baseline;
-  } else if (disturbing && rel <= pre_disturb_rel + PLACEMENT_STEP_MG) {
-    disturbing = false;
-  }
-  if (disturbing) return false;
-  last_clean_rel = rel;
-  return true;
+void ShotDetector::markDisturbed(uint16_t i) {
+  dist_bits[i >> 3] |= (uint8_t)(1u << (i & 7));
+}
+
+bool ShotDetector::isDisturbed(uint16_t i) const {
+  return dist_bits[i >> 3] & (1u << (i & 7));
 }
 
 void ShotDetector::resetToIdle() {
@@ -338,6 +361,7 @@ void ShotDetector::resetToIdle() {
 bool ShotDetector::feed(uint32_t t, int32_t w, uint32_t inlet_pulses_total) {
   pulse_now = inlet_pulses_total;
   if (last_t != 0 && (uint32_t)(t - last_t) > PLACEMENT_RISE_MS) gap_at = t;
+  prev_t = last_t;
   last_t = t;
   flow_now = computeFlow(t, w);
   ringPush(t, w);
@@ -413,11 +437,12 @@ bool ShotDetector::feed(uint32_t t, int32_t w, uint32_t inlet_pulses_total) {
           && (w - prev_w > PLACEMENT_STEP_MG || prev_w - w > PLACEMENT_STEP_MG)) {
         baseline += (w - prev_w);
       }
-      int32_t rel = w - baseline;
-      appendSample(t, rel);
-      bool clean = trackDisturbance(w, prev_w, rel);
-      if (clean && rel > running_max) running_max = rel;
-      if (clean && flow_now > res.peak_flow_mgps) res.peak_flow_mgps = flow_now;
+      int32_t raw_rel = w - baseline;
+      appendSample(t, raw_rel);                       // the samples stay raw
+      int32_t rel = trackDisturbance(t, w, prev_w, raw_rel);   // object taken out
+      if (disturbing) markDisturbed(buf_count - 1);
+      if (rel > running_max) running_max = rel;
+      if (!disturbing && flow_now > res.peak_flow_mgps) res.peak_flow_mgps = flow_now;
 
       if (running_max - rel > LIFT_DROP_MG) {
         // Dropped well below the peak. A brief dip is a bump; a sustained
@@ -434,14 +459,18 @@ bool ShotDetector::feed(uint32_t t, int32_t w, uint32_t inlet_pulses_total) {
       } else {
         lift_since = 0;
         uint32_t t_then; int32_t w_then;
-        if (running_max >= REJECT_MIN_MG && !disturbing) {
+        if (running_max >= REJECT_MIN_MG) {
           // Stop: weight flat (|Δ| < 0.3 g) over the last 2 s, once the shot
           // has substance. Jitter-proof where "flow < 0.1 g/s" was not.
-          if (ringAt(t - STOP_WINDOW_MS, t_then, w_then) && t - t_then >= STOP_WINDOW_MS) {
+          // While disturbed the object's mass cancels in the delta, but only
+          // for a window that opens after it landed (0a.7).
+          if (ringAt(t - STOP_WINDOW_MS, t_then, w_then) && t - t_then >= STOP_WINDOW_MS
+              && (!disturbing || (int32_t)(t_then - disturb_at) >= 0)) {
             int32_t delta = w - w_then;
             if (delta < STOP_DELTA_MG && delta > -STOP_DELTA_MG) {
               // The plateau began at t_then; that's the stop.
-              enterSettling(t, w_then - baseline, t_then, false);
+              enterSettling(t, w_then - baseline - (disturbing ? disturb_offset : 0),
+                            t_then, false);
             }
           }
         } else if (running_max < REJECT_MIN_MG
@@ -461,19 +490,21 @@ bool ShotDetector::feed(uint32_t t, int32_t w, uint32_t inlet_pulses_total) {
       }
       if (st == ShotState::POURING && t - t0 >= MAX_SHOT_MS) {
         // Not an espresso anymore; stop before uint16 t_ms can wrap.
-        enterSettling(t, disturbing ? last_clean_rel : rel, t, true);
+        enterSettling(t, rel, t, true);   // rel already has any object taken out
       }
       break;
     }
 
     case ShotState::SETTLING: {
-      int32_t rel = w - baseline;
-      // Late drips raise the peak; a disturbance does not (0a.7).
-      if (trackDisturbance(w, prev_w, rel) && rel > running_max) running_max = rel;
+      int32_t raw_rel = w - baseline;
+      // Late drips raise the peak; an object set on the scale does not (0a.7).
+      int32_t rel = trackDisturbance(t, w, prev_w, raw_rel);
+      if (rel > running_max) running_max = rel;
       // The pour already ended (stop confirmed). If the cup is lifted during
-      // settling, finalize now — keeping the stop already recorded (0a.7).
-      if (running_max - rel > LIFT_DROP_MG) return finalizeLiftedAfterStop();
-      appendSample(t, rel);
+      // settling, just finalize now at the peak — no need to wait it out.
+      if (running_max - rel > LIFT_DROP_MG) return finalizeLifted();
+      appendSample(t, raw_rel);
+      if (disturbing) markDisturbed(buf_count - 1);
       if ((int32_t)(t - settle_until) >= 0) return finishShot();
       break;
     }

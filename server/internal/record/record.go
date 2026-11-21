@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"hash/crc32"
+	"regexp"
+	"strconv"
 )
 
 // ErrNewerFormat marks a record that looks well-formed but was written in a
@@ -85,6 +87,14 @@ const (
 	// timer. The setpoint is unknown, and nothing may be carried onto the
 	// shot or across it. Set on one shot per unconfirmed edit.
 	FlagSetpointPending = 0x40
+	// FlagDisturbed (detector 0a.7, firmware 0.14.0): something landed on
+	// the scale after the shot had substance -- more than 5 g above the
+	// peak. While settling after a confirmed stop the detector kept it out
+	// of the yield; during the pour, or after a forced stop, it only flags it.
+	// A real shot; the flag alone never excludes. Not tied to a format version: the
+	// layout did not change, so it is read off detector_version instead
+	// (Disturbed()).
+	FlagDisturbed = 0x80
 
 	headerLenV1 = 109
 	headerLenV2 = 113 // v1 + boiler_temp_start_dc (int16) + machine_timer_dl (uint16)
@@ -378,6 +388,38 @@ func (h *Header) Reject() bool { return h.Flags&FlagReject != 0 }
 // before this pour (v5); see FlagSetpointPending.
 func (h *Header) SetpointPending() bool {
 	return h.FormatVersion >= 5 && h.Flags&FlagSetpointPending != 0
+}
+
+// Disturbed reports the detector's disturbance flag. known is false for a
+// detector older than 0a.7, which never set the bit, so a clear bit there
+// says nothing.
+func (h *Header) Disturbed() (disturbed, known bool) {
+	if !detectorAtLeast(h.Detector(), 7) {
+		return false, false
+	}
+	return h.Flags&FlagDisturbed != 0, true
+}
+
+// detectorVersionRe matches the detector versions this firmware writes,
+// "<major><series letter>.<n>" ("0a.7"), with any suffix after n ignored.
+var detectorVersionRe = regexp.MustCompile(`^(\d+)([a-z])\.(\d+)`)
+
+// detectorAtLeast reports whether detector version v is 0a.min or later.
+// Every detector so far is "0a.N"; a later series ("0b.1", "1a.0") counts
+// as newer, so a renumbering cannot silently turn the flag into NULL, and a
+// suffix after N ("0a.8-rc") is ignored. Anything that does not look like a
+// detector version ("", "dev", "test") is unknown, i.e. not at least.
+func detectorAtLeast(v string, min int) bool {
+	m := detectorVersionRe.FindStringSubmatch(v)
+	if m == nil {
+		return false
+	}
+	major, _ := strconv.Atoi(m[1])
+	n, _ := strconv.Atoi(m[3])
+	if major != 0 || m[2] != "a" {
+		return major > 0 || m[2] > "a"
+	}
+	return n >= min
 }
 
 // Setpoint returns the brew setpoint the machine's display last showed being

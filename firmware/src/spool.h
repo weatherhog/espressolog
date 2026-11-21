@@ -40,7 +40,8 @@ typedef struct __attribute__((packed)) {
   uint8_t  scale_mac[6];       // → equipment.ble_address lookup
   uint8_t  flags;              // bit0 FAULT, bit1 TRUNCATED, bit2 REJECT,
                                // bit3 SETPOINT_TOUCHED, bit4 FLOW_TAP,
-                               // bit5 PLACEMENT, bit6 SETPOINT_PENDING.
+                               // bit5 PLACEMENT, bit6 SETPOINT_PENDING,
+                               // bit7 DISTURBED.
                                // Keep this list in step with the #defines
                                // below: this struct is what a second reader
                                // reads, and a list that stops short reads as
@@ -172,6 +173,15 @@ static_assert(PRE_PULSES_MAX == 256, "the server's PrePulsesMax is 256");
 // across it. Separate from
 // SETPOINT_TOUCHED on purpose, which also stops the pre-infusion carry.
 #define SPOOL_FLAG_SETPOINT_PENDING 0x40
+// Detector 0a.7 (firmware 0.14.0). Something landed on the scale after the
+// shot had substance -- more than 5 g above the peak (ShotResult::disturbed
+// has the exact rule for each phase). While settling after a confirmed stop
+// its mass was kept out of the yield; during the pour, or after a forced
+// stop, it is only flagged, and a reader should distrust that shot's yield
+// and mean flow. The flag alone does
+// not exclude. A clear bit means "not disturbed" only from 0a.7; older
+// detectors never set it.
+#define SPOOL_FLAG_DISTURBED 0x80
 
 
 // LittleFS spool: one file per record under /spool, written only when no

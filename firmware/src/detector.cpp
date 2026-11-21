@@ -159,6 +159,10 @@ void ShotDetector::beginPour(uint32_t crossing_t) {
   buf_count = 0;
   running_max = 0;
   lift_since = 0;
+  disturbing = false;
+  scan_cut = false;
+  landed_now = false;
+  placement_scan_end = 0;
   // Backdate: replay the pre-history ring from the flow crossing onward,
   // relative to the armed baseline.
   for (size_t i = 0; i < ring_count; i++) {
@@ -199,9 +203,11 @@ void ShotDetector::computeFlowWindow() {
 }
 
 // Normal completion: the cup stayed on through settling, so last_w is the
-// settled weight (drips included) — the most accurate yield.
+// settled weight (drips included) — the most accurate yield. Unless
+// something landed on the scale while settling (0a.7): then the peak frozen
+// at that moment is the yield, and the drips after it are lost.
 bool ShotDetector::finishShot() {
-  res.yield_final_mg = last_w - baseline;
+  res.yield_final_mg = disturbing ? running_max : last_w - baseline;
   res.settle_offset_mg = res.yield_final_mg - res.yield_at_stop_mg;
   res.fault = false;
   res.valid = res.yield_final_mg >= REJECT_MIN_MG;
@@ -230,13 +236,19 @@ bool ShotDetector::finishShot() {
 // than PLACEMENT_RISE_MS, the first PLACEMENT_RISE_MS of samples only feed
 // the peak and are never judged: a cup landing during or just after a scale
 // outage goes unflagged, which keeps a record rather than excluding one.
+//
+// 0a.7: an object that lands WHILE SETTLING is not a placement -- the shot
+// before it is real and its yield is protected -- so the scan stops at the
+// sample where it landed (placement_scan_end). A cup put back on the scale
+// (shot 180) rises during the pour and is unaffected.
 bool ShotDetector::risesLikeAPlacement() const {
-  if (buf_count == 0) return false;
+  uint16_t n = scan_cut ? placement_scan_end : buf_count;
+  if (n == 0) return false;
   uint16_t i = 0;
   int32_t peak_before = buf[0].weight_mg;   // no sample before the first window
   bool seeding = false;
   uint32_t seed_from = 0;
-  for (uint16_t j = 0; j < buf_count; j++) {
+  for (uint16_t j = 0; j < n; j++) {
     if (j > 0 && (uint32_t)(buf[j].t_ms - buf[j - 1].t_ms) > PLACEMENT_RISE_MS) {
       seeding = true;
       seed_from = buf[j].t_ms;
@@ -277,16 +289,43 @@ bool ShotDetector::finalizeLifted() {
   return true;
 }
 
+// Something set on the scale once the shot has substance (0a.7). ONSET needs
+// all three, so a real pour cannot trip it:
+//  - the sample lands more than PLACEMENT_STEP_MG ABOVE THE PEAK so far: a
+//    weight recovering from a dip (a bump, the 0 g sample a cup-scale
+//    reconnect injects) only climbs back to about where it was;
+//  - it rose FASTER than MAX_POUR_MGPS since the previous sample: a fast
+//    pour across a short gap (7 g/s over 800 ms = 5.6 g) is a pour;
+//  - not within PLACEMENT_RISE_MS after a gap longer than that (a
+//    reconnect: the injected 0 g lands right after it and the real climb a
+//    sample later -- the exception risesLikeAPlacement() makes).
+// Before substance the POURING tare rule owns big steps.
+bool ShotDetector::jumpsOntoScale(uint32_t t, int32_t w, int32_t prev_w, int32_t rel) const {
+  uint32_t dt = (uint32_t)(t - prev_t);
+  int32_t pour_allowance = (int32_t)(((int64_t)MAX_POUR_MGPS * dt) / 1000);
+  return running_max >= REJECT_MIN_MG
+      && rel - running_max > PLACEMENT_STEP_MG
+      && w - prev_w > pour_allowance
+      && (gap_at == 0 || (uint32_t)(t - gap_at) > PLACEMENT_RISE_MS);
+}
+
 void ShotDetector::resetToIdle() {
   st = ShotState::IDLE;
   ring_count = 0;   // a stale pre-pour history must not arm the next shot
   pour_cand_since = 0;
   parked_since = 0;
   lift_since = 0;
+  disturbing = false;
+  scan_cut = false;
+  landed_now = false;
+  placement_scan_end = 0;
 }
 
 bool ShotDetector::feed(uint32_t t, int32_t w, uint32_t inlet_pulses_total) {
   pulse_now = inlet_pulses_total;
+  if (last_t != 0 && (uint32_t)(t - last_t) > PLACEMENT_RISE_MS) gap_at = t;
+  prev_t = last_t;
+  last_t = t;
   flow_now = computeFlow(t, w);
   ringPush(t, w);
   int32_t prev_w = last_w;
@@ -363,6 +402,12 @@ bool ShotDetector::feed(uint32_t t, int32_t w, uint32_t inlet_pulses_total) {
       }
       int32_t rel = w - baseline;
       appendSample(t, rel);
+      // 0a.7: during the pour a jump onto the scale is only FLAGGED. The
+      // true weight is moving, so taking the object out reliably needs more
+      // than the curve gives (review 2026-11-21: an offset carried under a
+      // pour grew with a wobbling hand and ended shots early); the yield
+      // logic here is exactly 0a.6's, and the flag tells the reader.
+      if (jumpsOntoScale(t, w, prev_w, rel)) res.disturbed = true;
       if (rel > running_max) running_max = rel;
       if (flow_now > res.peak_flow_mgps) res.peak_flow_mgps = flow_now;
 
@@ -414,11 +459,50 @@ bool ShotDetector::feed(uint32_t t, int32_t w, uint32_t inlet_pulses_total) {
 
     case ShotState::SETTLING: {
       int32_t rel = w - baseline;
-      if (rel > running_max) running_max = rel;   // late drips
+      if (res.truncated) {
+        // Forced stop at MAX_SHOT_MS: the pour may still be running, so the
+        // peak is not the true weight. Flag only, as during the pour (0a.7).
+        if (jumpsOntoScale(t, w, prev_w, rel)) res.disturbed = true;
+        if (rel > running_max) running_max = rel;   // late drips
+      } else {
+        // 0a.7: the stop is confirmed (2 s flat), so the true weight is the
+        // peak plus drips, and drips creep up in tenths of a gram. The peak
+        // follows a reading only when it is LESS than DRIP_STEP_MG ABOVE THE
+        // PEAK -- judged against the peak, not the previous reading, so
+        // something whose first reading lands 0.5 g or more above the peak
+        // never joins it however still it sits (review 2026-11-21: a step
+        // rule let any flat sample after an object or a grip take it in).
+        // Something creeping on in steps under 0.5 g IS followed, like drips
+        // (detector.h, known limits). Anything that ends up more than
+        // PLACEMENT_STEP_MG above the peak is an object, however many samples
+        // it took to land (4 g + 4 g passed a one-sample rule). That FREEZES THE PEAK FOR THE REST OF
+        // SETTLING -- nothing after it, wobble, press and release or a
+        // remainder, can raise it -- and a lift or the end of settling reads
+        // it. Never cleared on purpose (a draft that unfroze it near the peak
+        // let a pressing hand pass for drips). The cost is the drips after
+        // the landing, a few tenths of a gram. Shot 205: +0.6, +7.8, +3.2 g,
+        // then the lift. No rate test here: nothing is pouring.
+        if (!disturbing && rel - running_max > PLACEMENT_STEP_MG) {
+          disturbing = true;
+          res.disturbed = true;
+          landed_now = true;
+        }
+        if (!disturbing && rel > running_max && rel - running_max < DRIP_STEP_MG)
+          running_max = rel;
+      }
       // The pour already ended (stop confirmed). If the cup is lifted during
       // settling, just finalize now at the peak — no need to wait it out.
       if (running_max - rel > LIFT_DROP_MG) return finalizeLifted();
       appendSample(t, rel);
+      if (landed_now) {
+        // The placement scan stops before the sample where it landed. Taken
+        // AFTER appendSample(), which merges a same-millisecond sample into
+        // the previous slot -- set before it, a burst put the landing inside
+        // the scan and excluded the shot (review 2026-11-21).
+        landed_now = false;
+        scan_cut = true;
+        placement_scan_end = buf_count > 0 ? buf_count - 1 : 0;
+      }
       if ((int32_t)(t - settle_until) >= 0) return finishShot();
       break;
     }

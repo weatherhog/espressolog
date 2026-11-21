@@ -781,7 +781,7 @@ server/            Go
   internal/{api,live,record,store,web}/
                    record = on-flash wire format (v1-v5 decode)
                    web    = embed.FS for the built PWA
-  migrations/0*.sql         12 migrations; 001_init.sql is the base
+  migrations/0*.sql         13 migrations; 001_init.sql is the base
 web/               Vite + React PWA
   src/ · prototype/
 analysis/          Jupyter notebooks, reads the SQLite file
@@ -1580,7 +1580,7 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
 
   **A FOURTH PATH ASSIGNS NONE OF THESE FIELDS**, so it is not in the table
   and `settle_offset = final − at_stop` does not hold there: the sub-5 g
-  flat abort (`detector.cpp:348-359`) leaves `stop_ms`, `yield_at_stop_g`
+  flat abort (in `feed()`'s POURING case) leaves `stop_ms`, `yield_at_stop_g`
   and `settle_offset_g` at zero while `yield_final_g` is `running_max`. It
   is spooled and ingested like any other record and `store.go` marks it
   `excluded = 1` — **but neither `v_shot` definition filters on `excluded`**
@@ -1626,7 +1626,9 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   Three rounds on one sentence, and each round was right about the thing it
   replaced and wrong about something adjacent to it.
 - **SETTLING** — keep sampling 5 s more → `yield_final_g`.
-  `settle_offset_g = final − at_stop`.
+  `settle_offset_g = final − at_stop`. **Not on a disturbed settle**
+  (0a.7, the **disturbed** entry below): there `yield_final_g` is the peak
+  frozen when something landed, without the drips after it.
 - **reject** — final yield < 5 g (a drip or a knock, not a shot)
 - **placement** — the curve rose >20 g ABOVE ITS EARLIER PEAK within 1 s:
   a cup set down, not espresso (the steepest of 75 real shots rose 7.7 g in
@@ -1642,6 +1644,68 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   scale landed slowly enough, 3–4 g per sample, to pass the per-sample
   step guard into POURING.
 - **fault** — weight drops > 5 g mid-pour (cup removed)
+- **disturbed** (detector **0a.7**, firmware 0.14.0) — something set on
+  the scale once the shot has 5 g. **What it does depends on when:**
+  - **while settling after a confirmed stop** (2 s flat, so the true weight
+    is the peak plus drips): the peak follows a reading only when it is
+    **less than 0.5 g above the peak** (`DRIP_STEP_MG`), so nothing whose
+    first reading lands 0.5 g or more above it joins it, and the weight
+    ending up **more than 5 g above it, in one step or several**, is an
+    object (something that *creeps* on in steps under 0.5 g is followed
+    like drips — see the limits). That
+    **freezes the peak for the rest of settling**: a lift or the end of
+    settling reads it, so the object — wobbling, pressed and released,
+    partly left behind — stays out of the yield, and the placement scan
+    stops where it landed, so a portafilter set down does not exclude the
+    shot. Never unfrozen (a draft that did let a pressing hand pass for
+    drips); the drips after the landing are lost;
+  - **during the pour, and after a forced stop at 60 s** (the pour may
+    still run): **flagged only**, when one sample lands more than 5 g above
+    the peak **and** rose faster than 10 g/s (`MAX_POUR_MGPS`; the steepest
+    real shot rose 7.7 g in 1 s), not within 1 s after a sample gap longer
+    than 1 s. The
+    yield logic is 0a.6's, so a jump mid-pour can still reach the yield or
+    the mean-flow window. Taking an object out under a moving weight was
+    built twice on 2026-11-21 and both reviews broke it. **Distrust the
+    yield and `mean_flow_gps` of a disturbed shot** unless its curve shows
+    the jump after the stop.
+
+  Kept and flagged (`SPOOL_FLAG_DISTURBED` 0x80, `shot.disturbed`,
+  migration 013 — NULL before 0a.7). **The flag alone never excludes**; a
+  disturbed record that is also a placement (more than 20 g above its
+  earlier peak within 1 s, during the pour or after a forced stop) is
+  still excluded as one.
+  **Up to 0a.6 an object set down while settling entered the peak and the
+  yield** — at the end of settling, or at a lift: shot 205 (2026-11-21)
+  stored 37.8 g as 49.41 g, shot 81 37.4 as 43.5 — both, with 200/201,
+  excluded by hand that day. **Replaying every stored shot through 0a.7**
+  flags 17 records — 16 already excluded, plus shot 65, excluded the same
+  day — and changes ten yields (12, 17, 62, 65, 81, 106, 167, 192, 197,
+  205); every one of the clean shots among them moves toward the flat
+  weight before the end, and 205 replays as 37.9 g (flat 37.8). **It also found
+  a bias nobody had seen: picking the cup up presses it down first.** Shots
+  62, 65, 192 and 197 sit flat, then rise 0.7–7.6 g in the last one or two
+  samples before the lift, and 0a.6 stored that press as the yield (62:
+  41.0 g for a flat 37.4; 65: 31.6 for 23.9). 0a.7's drip band keeps it
+  out. **Stored lift-terminated yields from 0a.6 can read high** by the
+  grip; nothing marks which. **Known limits, while settling:** an object
+  under 5 g is not flagged and the end of settling counts it (a lift does
+  not, if its first reading lands 0.5 g or more above the peak); anything
+  that **creeps on in steps under 0.5 g** (a hand leaning in at ~3 g/s) is
+  followed into the peak like drips, unflagged — it cannot be told from a
+  resumed pour; and **if the pour resumes after a confirmed stop**, the
+  peak stops following it for good at the first step of 0.5 g or more
+  (flow × sample interval: one 240 ms BLE gap at 2.5 g/s is enough, and
+  the SHOT_205 curve has gaps like that every second or two) and freezes
+  it low, flagged — main took the last weight. **During the pour,** an object that creeps on or lands in steps of
+  5 g or less is not seen; and **the lift paths are unchanged** —
+  a lift during settling still overwrites `stop_ms` as the table above
+  says. **0a.7 is its own stratum**: `analysis/overshoot.py`,
+  `analysis/session_warmup.py` and the 0f notebook filter on
+  `detector_version = '0a.6'`, so 0a.7 shots do not enter them until a
+  script says so. **Deploy the server before flashing 0.14.0**: the format
+  is unchanged, so an older server accepts the record and silently drops
+  the bit.
 
 Flow rate: central difference over a 700 ms window. `mean_flow_gps` over
 from 5 g out to 80 % of final, skipping the first-drop lag.

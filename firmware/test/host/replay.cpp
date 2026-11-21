@@ -14,8 +14,8 @@ int main() {
     if (sscanf(line, "%lu,%ld", &t, &w) != 2) continue;
     if (det.feed((uint32_t)t, (int32_t)w)) {
       const ShotResult& r = det.result();
-      printf("RECORD valid=%d fault=%d trunc=%d t0=%u stop_ms=%u at_stop=%d final=%d settle=%d peak=%d mean=%d win0=%u win1=%u n=%u\n",
-             r.valid, r.fault, r.truncated, r.started_at_ms, r.stop_ms,
+      printf("RECORD valid=%d fault=%d trunc=%d placement=%d disturbed=%d t0=%u stop_ms=%u at_stop=%d final=%d settle=%d peak=%d mean=%d win0=%u win1=%u n=%u\n",
+             r.valid, r.fault, r.truncated, r.placement, r.disturbed, r.started_at_ms, r.stop_ms,
              r.yield_at_stop_mg, r.yield_final_mg, r.settle_offset_mg,
              r.peak_flow_mgps, r.mean_flow_mgps,
              r.flow_win_start_ms, r.flow_win_end_ms, r.sample_count);

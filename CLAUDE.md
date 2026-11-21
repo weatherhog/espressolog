@@ -781,7 +781,7 @@ server/            Go
   internal/{api,live,record,store,web}/
                    record = on-flash wire format (v1-v5 decode)
                    web    = embed.FS for the built PWA
-  migrations/0*.sql         12 migrations; 001_init.sql is the base
+  migrations/0*.sql         13 migrations; 001_init.sql is the base
 web/               Vite + React PWA
   src/ · prototype/
 analysis/          Jupyter notebooks, reads the SQLite file
@@ -1484,6 +1484,15 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   <!-- fact:stop-ms-backdating backdated STOP_WINDOW_MS -->
   <!-- fact:stop-ms-row-mapping | flat stop — the normal one | backdated `STOP_WINDOW_MS` | the weight at that instant |;;| `truncated = 1` (`MAX_SHOT_MS`, 60 s) | the confirming sample, **not** backdated | that same instant |;;| **cup lifted** (`finalizeLifted`) | the last retained sample | `running_max`, which may be earlier | -->
 
+  **FROM DETECTOR 0a.7 A LIFT DURING SETTLING KEEPS THE STOP.** It no
+  longer overwrites `stop_ms` / `yield_at_stop_g`, and `settle_offset_g`
+  measures the drips caught before the lift instead of being zeroed. The
+  POURING lift is unchanged, so the table's third row now means the POURING
+  lift only — **for 0a.7 records**; every record up to 0a.6 carries the
+  overwrite described below, so a query must branch on `detector_version`.
+  Replayed over the archive, the 31 affected records keep their yield to
+  the milligram and their stop moves 2.1–6.7 s earlier.
+
   **THE ROWS ARE NOT MUTUALLY EXCLUSIVE.** `finalizeLifted()` never clears
   `res.truncated`, so a shot force-stopped at 60 s and *then* lifted during
   settling reads `truncated = 1` with lift-derived values. **A query that
@@ -1642,6 +1651,23 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   scale landed slowly enough, 3–4 g per sample, to pass the per-sample
   step guard into POURING.
 - **fault** — weight drops > 5 g mid-pour (cup removed)
+- **disturbed** (detector **0a.7**, firmware 0.14.0) — once the shot has
+  5 g, **one sample landing more than 5 g ABOVE THE PEAK SO FAR** is
+  something set on the scale, not espresso. Until the weight is back within
+  5 g of where it stood, nothing raises the peak, the stop rule is not
+  checked, and a forced stop or the end of settling reads the last
+  undisturbed weight. Kept, flagged (`SPOOL_FLAG_DISTURBED` 0x80,
+  `shot.disturbed`, migration 013 — NULL before 0a.7) and **not** excluded.
+  Not judged for 1 s after a sample gap (a reconnect), and a recovery from
+  a dip is not above the peak, so neither trips it. **Up to 0a.6 such a jump
+  entered the peak and a lift then recorded the shot AT it**: shot 205
+  (2026-11-21) stored 37.8 g as 49.41 g, shot 81 37.4 as 43.5 — both, with
+  200/201, excluded by hand that day. Replaying every stored shot through
+  0a.7 flags 16 records, all already excluded, and no clean shot.
+  **Known limits:** a disturbance's first sample under 5 g still counts
+  (205 replays as 38.4 g, not 37.8), one that creeps on in < 5 g steps is
+  not seen, and one that never leaves pins the yield at the weight before
+  it.
 
 Flow rate: central difference over a 700 ms window. `mean_flow_gps` over
 from 5 g out to 80 % of final, skipping the first-drop lag.

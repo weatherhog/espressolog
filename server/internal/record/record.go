@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"hash/crc32"
+	"strconv"
+	"strings"
 )
 
 // ErrNewerFormat marks a record that looks well-formed but was written in a
@@ -85,6 +87,13 @@ const (
 	// timer. The setpoint is unknown, and nothing may be carried onto the
 	// shot or across it. Set on one shot per unconfirmed edit.
 	FlagSetpointPending = 0x40
+	// FlagDisturbed (detector 0a.7, firmware 0.14.0): something landed on
+	// the scale after the shot had substance -- one sample more than 5 g
+	// above the peak so far -- and the detector took the yield from before
+	// it. A real shot, NOT excluded. Not tied to a format version: the
+	// layout did not change, so it is read off detector_version instead
+	// (Disturbed()).
+	FlagDisturbed = 0x80
 
 	headerLenV1 = 109
 	headerLenV2 = 113 // v1 + boiler_temp_start_dc (int16) + machine_timer_dl (uint16)
@@ -378,6 +387,27 @@ func (h *Header) Reject() bool { return h.Flags&FlagReject != 0 }
 // before this pour (v5); see FlagSetpointPending.
 func (h *Header) SetpointPending() bool {
 	return h.FormatVersion >= 5 && h.Flags&FlagSetpointPending != 0
+}
+
+// Disturbed reports the detector's disturbance flag. known is false for a
+// detector older than 0a.7, which never set the bit, so a clear bit there
+// says nothing.
+func (h *Header) Disturbed() (disturbed, known bool) {
+	if !detectorAtLeast(h.Detector(), 7) {
+		return false, false
+	}
+	return h.Flags&FlagDisturbed != 0, true
+}
+
+// detectorAtLeast reports whether a "0a.N" detector version is at least
+// 0a.min. Anything that does not parse is treated as older.
+func detectorAtLeast(v string, min int) bool {
+	rest, ok := strings.CutPrefix(v, "0a.")
+	if !ok {
+		return false
+	}
+	n, err := strconv.Atoi(rest)
+	return err == nil && n >= min
 }
 
 // Setpoint returns the brew setpoint the machine's display last showed being

@@ -159,6 +159,8 @@ void ShotDetector::beginPour(uint32_t crossing_t) {
   buf_count = 0;
   running_max = 0;
   lift_since = 0;
+  disturbing = false;
+  last_clean_rel = 0;
   // Backdate: replay the pre-history ring from the flow crossing onward,
   // relative to the armed baseline.
   for (size_t i = 0; i < ring_count; i++) {
@@ -201,7 +203,9 @@ void ShotDetector::computeFlowWindow() {
 // Normal completion: the cup stayed on through settling, so last_w is the
 // settled weight (drips included) — the most accurate yield.
 bool ShotDetector::finishShot() {
-  res.yield_final_mg = last_w - baseline;
+  // Still disturbed when settling ran out (something left resting on the
+  // scale): the last undisturbed weight is the yield, not the hand on it.
+  res.yield_final_mg = disturbing ? last_clean_rel : last_w - baseline;
   res.settle_offset_mg = res.yield_final_mg - res.yield_at_stop_mg;
   res.fault = false;
   res.valid = res.yield_final_mg >= REJECT_MIN_MG;
@@ -277,16 +281,64 @@ bool ShotDetector::finalizeLifted() {
   return true;
 }
 
+// The cup was lifted after the stop was confirmed (0a.7). Unlike
+// finalizeLifted(), the pour's end is already known: keep the stop_ms and
+// yield_at_stop_mg enterSettling() recorded, and let settle_offset measure
+// the drips caught before the lift. running_max is the undisturbed peak, so
+// a jump just before the lift cannot become the yield (shot 205).
+bool ShotDetector::finalizeLiftedAfterStop() {
+  res.yield_final_mg = running_max;
+  res.settle_offset_mg = res.yield_final_mg - res.yield_at_stop_mg;
+  res.fault = false;
+  res.valid = running_max >= REJECT_MIN_MG;
+  res.sample_count = buf_count;
+  res.samples = buf;
+  res.placement = risesLikeAPlacement();
+  computeFlowWindow();
+  resetToIdle();
+  return true;
+}
+
+// One sample landing more than PLACEMENT_STEP_MG ABOVE THE PEAK so far, once
+// the shot has substance, is something set on the scale, not espresso: mark
+// the shot and hold the disturbance open until the weight is back within
+// PLACEMENT_STEP_MG of where it stood before the jump.
+//  - Above the PEAK, not merely a big step: a weight recovering from a dip
+//    (a bump, the 0 g sample a cup-scale reconnect injects) climbs back to
+//    about where it was, plus the little the pour added meanwhile.
+//  - Not for PLACEMENT_RISE_MS after a gap longer than that (a reconnect):
+//    the pour kept running while nothing was sampled, and the reconnect's
+//    injected 0 g lands right after the gap, so the real climb shows up a
+//    sample or two later — the same exception risesLikeAPlacement() makes.
+//  - Before substance the POURING tare rule owns big steps.
+bool ShotDetector::trackDisturbance(int32_t w, int32_t prev_w, int32_t rel) {
+  if (!disturbing && running_max >= REJECT_MIN_MG
+      && rel - running_max > PLACEMENT_STEP_MG
+      && (gap_at == 0 || (uint32_t)(last_t - gap_at) > PLACEMENT_RISE_MS)) {
+    disturbing = true;
+    res.disturbed = true;
+    pre_disturb_rel = prev_w - baseline;
+  } else if (disturbing && rel <= pre_disturb_rel + PLACEMENT_STEP_MG) {
+    disturbing = false;
+  }
+  if (disturbing) return false;
+  last_clean_rel = rel;
+  return true;
+}
+
 void ShotDetector::resetToIdle() {
   st = ShotState::IDLE;
   ring_count = 0;   // a stale pre-pour history must not arm the next shot
   pour_cand_since = 0;
   parked_since = 0;
   lift_since = 0;
+  disturbing = false;
 }
 
 bool ShotDetector::feed(uint32_t t, int32_t w, uint32_t inlet_pulses_total) {
   pulse_now = inlet_pulses_total;
+  if (last_t != 0 && (uint32_t)(t - last_t) > PLACEMENT_RISE_MS) gap_at = t;
+  last_t = t;
   flow_now = computeFlow(t, w);
   ringPush(t, w);
   int32_t prev_w = last_w;
@@ -363,8 +415,9 @@ bool ShotDetector::feed(uint32_t t, int32_t w, uint32_t inlet_pulses_total) {
       }
       int32_t rel = w - baseline;
       appendSample(t, rel);
-      if (rel > running_max) running_max = rel;
-      if (flow_now > res.peak_flow_mgps) res.peak_flow_mgps = flow_now;
+      bool clean = trackDisturbance(w, prev_w, rel);
+      if (clean && rel > running_max) running_max = rel;
+      if (clean && flow_now > res.peak_flow_mgps) res.peak_flow_mgps = flow_now;
 
       if (running_max - rel > LIFT_DROP_MG) {
         // Dropped well below the peak. A brief dip is a bump; a sustained
@@ -381,7 +434,7 @@ bool ShotDetector::feed(uint32_t t, int32_t w, uint32_t inlet_pulses_total) {
       } else {
         lift_since = 0;
         uint32_t t_then; int32_t w_then;
-        if (running_max >= REJECT_MIN_MG) {
+        if (running_max >= REJECT_MIN_MG && !disturbing) {
           // Stop: weight flat (|Δ| < 0.3 g) over the last 2 s, once the shot
           // has substance. Jitter-proof where "flow < 0.1 g/s" was not.
           if (ringAt(t - STOP_WINDOW_MS, t_then, w_then) && t - t_then >= STOP_WINDOW_MS) {
@@ -391,7 +444,8 @@ bool ShotDetector::feed(uint32_t t, int32_t w, uint32_t inlet_pulses_total) {
               enterSettling(t, w_then - baseline, t_then, false);
             }
           }
-        } else if (ringAt(t - ABORT_FLAT_MS, t_then, w_then) && t - t_then >= ABORT_FLAT_MS) {
+        } else if (running_max < REJECT_MIN_MG
+                   && ringAt(t - ABORT_FLAT_MS, t_then, w_then) && t - t_then >= ABORT_FLAT_MS) {
           // Never reached 5 g and flat for a long while: a false trigger.
           int32_t delta = w - w_then;
           if (delta < STOP_DELTA_MG && delta > -STOP_DELTA_MG) {
@@ -407,17 +461,18 @@ bool ShotDetector::feed(uint32_t t, int32_t w, uint32_t inlet_pulses_total) {
       }
       if (st == ShotState::POURING && t - t0 >= MAX_SHOT_MS) {
         // Not an espresso anymore; stop before uint16 t_ms can wrap.
-        enterSettling(t, rel, t, true);
+        enterSettling(t, disturbing ? last_clean_rel : rel, t, true);
       }
       break;
     }
 
     case ShotState::SETTLING: {
       int32_t rel = w - baseline;
-      if (rel > running_max) running_max = rel;   // late drips
+      // Late drips raise the peak; a disturbance does not (0a.7).
+      if (trackDisturbance(w, prev_w, rel) && rel > running_max) running_max = rel;
       // The pour already ended (stop confirmed). If the cup is lifted during
-      // settling, just finalize now at the peak — no need to wait it out.
-      if (running_max - rel > LIFT_DROP_MG) return finalizeLifted();
+      // settling, finalize now — keeping the stop already recorded (0a.7).
+      if (running_max - rel > LIFT_DROP_MG) return finalizeLiftedAfterStop();
       appendSample(t, rel);
       if ((int32_t)(t - settle_until) >= 0) return finishShot();
       break;

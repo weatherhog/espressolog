@@ -28,6 +28,25 @@ struct ShotResult {
   // back on the scale landed slowly enough — 3-4 g per sample — to pass the
   // per-sample step guard into POURING, then rose 151 g in ~0.6 s.
   bool     placement;
+  // 0a.7. Something landed on the scale after the shot had substance: one
+  // sample more than PLACEMENT_STEP_MG (5 g) ABOVE THE PEAK SO FAR once
+  // running_max >= REJECT_MIN_MG, which a dribble of espresso cannot make
+  // in ~100 ms (not judged for 1 s after a sample gap > 1 s;
+  // trackDisturbance() in detector.cpp has why). From that sample until the weight falls back to within
+  // PLACEMENT_STEP_MG of where it stood before the step, nothing raises
+  // running_max, the stop rule is not checked, and a forced stop or the
+  // end of settling reads the last undisturbed weight -- so the jump never
+  // becomes the yield. Before 0a.7 a hand, the portafilter or a spoon set
+  // on the scale entered running_max as "late drips" and a lift then
+  // finalized the shot AT it: shot 205 (2026-11-21, 37.8 g recorded as
+  // 49.41 g), shot 81 (37.4 as 43.5), shot 200's 30.4 g. The record is
+  // kept and only flagged (SPOOL_FLAG_DISTURBED); the samples stay raw.
+  // KNOWN LIMITS: the first sample of a disturbance that rises by less
+  // than 5 g still counts (205's +0.6 g before its +7.8 g step, so 205
+  // would now read 38.4, not 37.8); a disturbance that creeps on in steps
+  // of < 5 g is not seen at all; and one that never leaves pins the yield
+  // at the pre-disturbance weight, drips after it uncounted.
+  bool     disturbed;
   uint32_t started_at_ms;  // millis() of t=0 (backdated to the flow crossing)
   // Where the detector judged the pour to have ended. HOW that is derived
   // depends on which path finalized the shot, and ONLY THE FIRST BACKDATES:
@@ -78,12 +97,22 @@ struct ShotResult {
   // filter strips the low-yield and excluded shots most likely to BE lifts
   // (finalizeLifted() sets valid = running_max >= REJECT_MIN_MG, so a
   // sub-5 g lift lands as excluded = 1). Seven is that script's prose, and
-  // nobody can recount it from here: this repo carries no shot data (the
-  // only .bin fixtures are two wire-format records for the decoder).
+  // nobody can recount it from here: this repo carries no shot archive (the
+  // only .bin fixtures are two wire-format records for the decoder, and from
+  // 0a.7 test/host/shot_curves.h holds two shots' curves, 205 and 81).
   // Said "seven of the first 46 logged shots" until 2026-10-27, and was
   // briefly a check-facts fact, which froze the wrong denominator into CI.
   // Shot 37 is NOT on this path — its decline never crossed LIFT_DROP_MG, so
   // finalizeLifted() never ran for it, and the query removes it by id anyway.
+  //
+  // FROM DETECTOR 0a.7 A LIFT DURING SETTLING NO LONGER OVERWRITES. It
+  // keeps the stop_ms and yield_at_stop_mg enterSettling() stored (so the
+  // flat-stop backdating survives and truncated pairs with its own values),
+  // and settle_offset_mg = final - at_stop measures the drips caught before
+  // the lift instead of being zeroed (finalizeLiftedAfterStop()). The
+  // overwrite described above is what every record up to 0a.6 carries; a
+  // query must branch on detector_version to know which it is reading. The
+  // POURING lift site is unchanged.
   //
   // A FOURTH path assigns this field nothing at all: the sub-5 g flat abort
   // (detector.cpp:348-359) returns true with stop_ms, yield_at_stop_mg and
@@ -272,8 +301,13 @@ private:
   uint32_t pulse_now = 0;        // latest free-running flowmeter count
   uint32_t pulse_base = 0;       // its value at pour CONFIRMATION (not t=0 —
                                  // see feed()); samples store the difference
-  int32_t  running_max = 0;
+  int32_t  running_max = 0;      // undisturbed peak (0a.7: a disturbance cannot raise it)
   int32_t  last_w = 0;
+  bool     disturbing = false;   // inside a disturbance right now (see ShotResult::disturbed)
+  int32_t  pre_disturb_rel = 0;  // relative weight just before the step that began it
+  int32_t  last_clean_rel = 0;   // relative weight of the last undisturbed sample
+  uint32_t last_t = 0;           // this sample's time
+  uint32_t gap_at = 0;           // first sample after the last > 1 s gap; 0 = none
 
   void ringPush(uint32_t t, int32_t w);
   int32_t computeFlow(uint32_t t, int32_t w) const;
@@ -286,6 +320,9 @@ private:
   void enterSettling(uint32_t t, int32_t w_at_stop, uint32_t stop_t, bool truncated);
   bool finishShot();
   bool finalizeLifted();   // cup removed → finalize at the peak weight
+  bool finalizeLiftedAfterStop();  // cup removed during SETTLING (0a.7)
+  // 0a.7: track a disturbance; returns true when `rel` may count as coffee.
+  bool trackDisturbance(int32_t w, int32_t prev_w, int32_t rel);
   bool risesLikeAPlacement() const;
   void computeFlowWindow();
   void resetToIdle();

@@ -505,6 +505,12 @@ func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time
 	if h.FormatVersion >= 5 {
 		setpointPending = boolToInt(h.SetpointPending())
 	}
+	// Detector 0a.7: something landed on the scale mid-record and the yield
+	// was taken from before it. NULL for an older detector, which cannot say.
+	var disturbed any
+	if d, known := h.Disturbed(); known {
+		disturbed = boolToInt(d)
+	}
 
 	// Format v3 (0c) carries the lever press that started the pump. Lever A
 	// is the shot lever, so its two directions map onto the schema's
@@ -552,11 +558,12 @@ func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time
 			yield_at_stop_g, yield_final_g, settle_offset_g,
 			peak_flow_gps, mean_flow_gps, flow_win_start_ms, flow_win_end_ms,
 			boiler_temp_start_c, machine_timer_s, setpoint_touched, setpoint_pending,
+			disturbed,
 			switch_direction, first_drip_ms, pump_line,
 			pre_pulse_total, pre_pulse_complete,
 			detector_version, firmware_version,
 			excluded, exclude_reason, created_at
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		// .UTC() to match every READ site. Equivalent today only because
 		// Ingest hands this an already-UTC time; the moment anything passes a
 		// zoned one, stored strings gain "+02:00" and MAX(started_at) — which
@@ -570,6 +577,7 @@ func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time
 		mg(h.YieldAtStopMg), mg(h.YieldFinalMg), mg(h.SettleOffsetMg),
 		mg(h.PeakFlowMgps), mg(h.MeanFlowMgps), h.FlowWinStartMs, h.FlowWinEndMs,
 		boilerTempC, machineTimerS, setpointTouched, setpointPending,
+		disturbed,
 		switchDirection, firstDripMs, pumpLine,
 		prePulseTotal, prePulseComplete,
 		h.Detector(), h.Firmware(),

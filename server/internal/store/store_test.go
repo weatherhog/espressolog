@@ -1107,6 +1107,49 @@ func TestIngestPlacementIsExcluded(t *testing.T) {
 	}
 }
 
+// Detector 0a.7's DISTURBED bit is stored as disturbed = 1, a clear bit from
+// 0a.7 as 0, and any bit from an older detector as NULL -- it never set the
+// flag, so it cannot say. Never an exclusion.
+func TestIngestDisturbed(t *testing.T) {
+	st := openTestStore(t)
+	for i, c := range []struct {
+		name     string
+		detector string
+		flag     bool
+		want     sql.NullInt64
+	}{
+		{"0a.7 disturbed", "0a.7", true, sql.NullInt64{Int64: 1, Valid: true}},
+		{"0a.7 clean", "0a.7", false, sql.NullInt64{Int64: 0, Valid: true}},
+		{"0a.12 disturbed", "0a.12", true, sql.NullInt64{Int64: 1, Valid: true}},
+		{"0a.6 bit set", "0a.6", true, sql.NullInt64{}},
+		{"0a.6 clear", "0a.6", false, sql.NullInt64{}},
+	} {
+		raw, rec := pumpRecordWith(t, uint32(300+i), record.Pump2Cup, 8200, func(h *record.Header) {
+			h.DetectorVersion = [8]byte{}
+			copy(h.DetectorVersion[:], c.detector)
+			if c.flag {
+				h.Flags |= record.FlagDisturbed
+			}
+		}, nil)
+		res, err := st.Ingest("aa:bb:cc:dd:ee:03", rec, raw, time.Now())
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		var got sql.NullInt64
+		var excluded int
+		if err := st.db.QueryRow(`SELECT disturbed, excluded FROM shot WHERE id = ?`, res.ShotID).
+			Scan(&got, &excluded); err != nil {
+			t.Fatal(err)
+		}
+		if got != c.want {
+			t.Errorf("%s: disturbed = %v, want %v", c.name, got, c.want)
+		}
+		if excluded != 0 {
+			t.Errorf("%s: excluded = %d, want 0 -- a disturbed shot is real", c.name, excluded)
+		}
+	}
+}
+
 // A record excluded at ingest — a placement (a cup set back after weighing,
 // shot 180), a reject (a knock, a flat abort under 5 g) or a legacy fault —
 // is stored excluded and must not take the dose from the real shot pulled

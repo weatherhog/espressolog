@@ -1,6 +1,7 @@
 // Host-side smoke test for ShotDetector: synthetic 10 Hz curves.
 #undef NDEBUG   // these suites assert with bare assert(); see the Makefile
 #include "../../src/detector.h"
+#include "shot_curves.h"
 #include <cstdio>
 #include <cmath>
 #include <cassert>
@@ -107,6 +108,7 @@ int main() {
   }
   assert(done && r->valid && !r->fault);
   assert(r->yield_final_mg > 37000);   // full shot, the bump didn't truncate it
+  assert(!r->disturbed);               // 0a.7: the recovery is not a disturbance
   printf("bump-during-pour ignored (%d mg)\n", r->yield_final_mg);
 
   // Scenario 4 (real shot lost 2026-08-28): slow pre-infusion drips crossed
@@ -401,7 +403,13 @@ int main() {
     for (uint32_t t2 = s180[sizeof(s180) / sizeof(s180[0]) - 1].t + 100; !rr && t2 < 500000; t2 += 100)
       if (d.feed(t2, 600)) rr = &d.result();
     assert(rr);
-    assert(rr->yield_final_mg > 140000);              // what it would have claimed
+    printf("shot 180 replay: placement=%d disturbed=%d final=%d\n",
+           rr->placement, rr->disturbed, rr->yield_final_mg);
+    // Up to 0a.6 it claimed the whole ~151 g. From 0a.7 the jump past 5 g
+    // is a disturbance and never reaches the yield; the placement flag, read
+    // off the raw samples, still marks it for exclusion.
+    assert(rr->disturbed);
+    assert(rr->yield_final_mg < 20000);
     assert(rr->placement);
     printf("cup put back (real stream, shot 180) is flagged a placement OK\n");
   }
@@ -434,7 +442,10 @@ int main() {
       assert(fin);
       rr = &d.result();
       if (rr->placement) printf("FLAGGED: %s\n", dp.name);
+      if (rr->disturbed) printf("DISTURBED: %s\n", dp.name);
       assert(!rr->placement);
+      assert(!rr->disturbed);   // 0a.7: climbing back is not a jump above the peak
+      assert(rr->yield_final_mg > 35000);
     }
     printf("dips that recover (lift, bump, reconnect 0 g) are not placements OK\n");
   }
@@ -463,9 +474,100 @@ int main() {
       const ShotResult* rr = &d.result();
       if (rr->placement) printf("FLAGGED after a %u s gap\n", gap_s);
       assert(!rr->placement);
+      assert(!rr->disturbed);   // 0a.7: the climb after the gap is not a jump
       assert(rr->valid);
     }
     printf("a pour across a scale-reconnect gap is not a placement OK\n");
+  }
+
+  // ---- 0a.7: something set on the scale must not become the yield ----
+  // Replays a real stored curve on a fresh detector, arms it on 0 g first,
+  // then lifts the cup off (scale far negative) and returns the record.
+  auto replayThenLift = [](const CurvePoint* c, size_t n) -> ShotResult {
+    static ShotDetector d;
+    d = ShotDetector();
+    uint32_t base = 500000, tt = base;
+    for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+    assert(d.state() == ShotState::ARMED);
+    uint32_t start = tt;
+    bool fin = false;
+    for (size_t i = 0; i < n && !fin; i++) {
+      tt = start + c[i].t_ms;
+      fin = d.feed(tt, c[i].weight_mg);
+    }
+    for (int i = 0; i < 40 && !fin; i++) { tt += 100; fin = d.feed(tt, -200000); }
+    assert(fin);
+    return d.result();
+  };
+  {
+    // Shot 205 (2026-11-21): stopped at ~28.5 s on ~37.4 g, then +7.8 g and
+    // +3.2 g at 33.9 s while settling, then lifted. 0a.6 recorded 49.41 g
+    // with stop_ms at the jump and settle_offset 0.
+    ShotResult rr = replayThenLift(SHOT_205, sizeof SHOT_205 / sizeof SHOT_205[0]);
+    printf("shot 205 replay: valid=%d disturbed=%d stop_ms=%u at_stop=%d final=%d settle=%d\n",
+           rr.valid, rr.disturbed, rr.stop_ms, rr.yield_at_stop_mg, rr.yield_final_mg,
+           rr.settle_offset_mg);
+    assert(rr.valid && rr.disturbed && !rr.placement);
+    // The +0.6 g first sample of the disturbance still counts (known limit).
+    assert(rr.yield_final_mg >= 37400 && rr.yield_final_mg <= 38500);
+    // The stop found in the pour survives the lift: backdated, not the jump.
+    assert(rr.stop_ms > 27000 && rr.stop_ms < 31000);
+    assert(rr.yield_at_stop_mg > 37000 && rr.yield_at_stop_mg < 38000);
+    assert(rr.settle_offset_mg == rr.yield_final_mg - rr.yield_at_stop_mg);
+    printf("a jump during settling is not the yield, and the lift keeps the stop OK\n");
+  }
+  {
+    // Shot 81 (2026-09-29): flat at 37.4 g, then +0.8 g and +5.3 g in the
+    // last two samples, then lifted. 0a.6 recorded 43.5 g.
+    ShotResult rr = replayThenLift(SHOT_81, sizeof SHOT_81 / sizeof SHOT_81[0]);
+    printf("shot 81 replay: valid=%d disturbed=%d stop_ms=%u final=%d\n",
+           rr.valid, rr.disturbed, rr.stop_ms, rr.yield_final_mg);
+    assert(rr.valid && rr.disturbed);
+    assert(rr.yield_final_mg >= 37000 && rr.yield_final_mg <= 38300);
+    printf("shot 81's last-sample jump is not the yield OK\n");
+  }
+  {
+    // A hand left resting on the scale through the end of settling: the
+    // yield is the weight before it, not the weight with it.
+    ShotDetector d;
+    uint32_t tt = 900000;
+    bool fin = false;
+    for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+    for (int i = 0; i < 300 && !fin; i++, tt += 100) {
+      double s = i / 10.0;
+      double w = s < 18.0 ? 2.0 * s : 36.0;      // 2 g/s to 36 g, then flat
+      if (s >= 21.5) w += 12.0;                  // hand on the scale while settling
+      fin = d.feed(tt, (int32_t)llround(w * 1000.0));
+    }
+    assert(fin);
+    const ShotResult& rr = d.result();
+    printf("resting hand: disturbed=%d final=%d\n", rr.disturbed, rr.yield_final_mg);
+    assert(rr.valid && rr.disturbed);
+    assert(rr.yield_final_mg > 35500 && rr.yield_final_mg < 36500);
+    printf("a hand resting through settling is not the yield OK\n");
+  }
+  {
+    // An ordinary pour, lifted after the stop, is not disturbed and keeps a
+    // backdated stop (0a.7) instead of the lift sample.
+    ShotDetector d;
+    uint32_t tt = 1300000;
+    bool fin = false;
+    for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+    uint32_t start = tt;
+    for (int i = 0; i < 300 && !fin; i++, tt += 100) {
+      double s = i / 10.0;
+      double w = s < 18.0 ? 2.0 * s : (s < 23.0 ? 36.0 : -180.0);   // lifted at 23 s
+      fin = d.feed(tt, (int32_t)llround(w * 1000.0));
+    }
+    assert(fin);
+    const ShotResult& rr = d.result();
+    printf("clean lift after stop: disturbed=%d stop_ms=%u final=%d settle=%d\n",
+           rr.disturbed, rr.stop_ms, rr.yield_final_mg, rr.settle_offset_mg);
+    assert(rr.valid && !rr.disturbed);
+    assert(rr.stop_ms < 20000);                  // the plateau began ~18 s, not the 23 s lift
+    assert(rr.yield_final_mg > 35500 && rr.yield_final_mg < 36500);
+    (void)start;
+    printf("a clean lift after the stop keeps the backdated stop OK\n");
   }
 
   printf("all scenarios passed\n");

@@ -165,7 +165,7 @@ export default function Pull({ shots, beans, activeBeanId, onIngested }) {
         if (f.ev === "shot") {
           setLastEvent(f.placement ? "not a shot — cup set down"
             : f.fault ? "shot faulted (cup removed?)"
-            : f.valid ? (f.disturbed ? "shot complete — something landed on the scale, kept out of the yield" : "shot complete")
+            : f.valid ? (f.disturbed ? "shot complete — something landed on the scale, check the yield" : "shot complete")
             : "rejected (<5 g)");
           return;
         }

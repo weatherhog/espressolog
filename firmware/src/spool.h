@@ -175,9 +175,10 @@ static_assert(PRE_PULSES_MAX == 256, "the server's PrePulsesMax is 256");
 #define SPOOL_FLAG_SETPOINT_PENDING 0x40
 // Detector 0a.7 (firmware 0.14.0). Something landed on the scale after the
 // shot had substance -- one sample more than 5 g above the peak so far,
-// rising faster than any pour (ShotResult::disturbed) -- and its mass was
-// kept out of the yield. The flag alone does not exclude: the record is a
-// real shot whose yield the detector already protected. A clear bit means "not disturbed" only from 0a.7; older
+// rising faster than any pour (ShotResult::disturbed). During settling its
+// mass was kept out of the yield; during the pour it is only flagged, and a
+// reader should distrust that shot's yield and mean flow. The flag alone does
+// not exclude. A clear bit means "not disturbed" only from 0a.7; older
 // detectors never set it.
 #define SPOOL_FLAG_DISTURBED 0x80
 

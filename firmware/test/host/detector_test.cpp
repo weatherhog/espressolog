@@ -405,11 +405,10 @@ int main() {
     assert(rr);
     printf("shot 180 replay: placement=%d disturbed=%d final=%d\n",
            rr->placement, rr->disturbed, rr->yield_final_mg);
-    // Up to 0a.6 it claimed the whole ~151 g. From 0a.7 the jump past 5 g
-    // is a disturbance and never reaches the yield; the placement flag, read
-    // off the raw samples, still marks it for exclusion.
+    // It lands mid-pour, where 0a.7 only flags: the yield still claims the
+    // whole ~151 g, and the placement flag is what excludes it.
     assert(rr->disturbed);
-    assert(rr->yield_final_mg < 20000);
+    assert(rr->yield_final_mg > 140000);              // what it claims
     assert(rr->placement);
     printf("cup put back (real stream, shot 180) is flagged a placement OK\n");
   }
@@ -567,10 +566,10 @@ int main() {
   }
 
   {
-    // Review 2026-11-21: an object set on the scale MID-POUR and taken off
-    // again. The first 0a.7 draft compared against the fixed pre-jump
-    // weight, which the pour outgrew, so the disturbance never cleared: the
-    // stop was suppressed, the shot truncated at 60 s and read 19.8 g of 36.
+    // An object set on the scale MID-POUR and taken off again. 0a.7 only
+    // flags it; the yield logic is 0a.6's. (Reviews 2026-11-21: two drafts
+    // that tried to take the object out under the moving weight truncated
+    // the shot at 60 s, or ended it early when the object came off in steps.)
     for (int lift_at : {0, 25}) {
       ShotDetector d;
       uint32_t tt = 2000000;
@@ -591,7 +590,7 @@ int main() {
       assert(rr.yield_final_mg > 35000 && rr.yield_final_mg < 36800);
       if (!lift_at) assert(rr.stop_ms > 16000 && rr.stop_ms < 20000);
     }
-    printf("an object on and off the scale mid-pour clears, the pour keeps counting OK\n");
+    printf("an object on and off the scale mid-pour is flagged, the shot unharmed OK\n");
   }
   {
     // Review 2026-11-21: a FAST pour across a short sample gap climbs past
@@ -623,8 +622,9 @@ int main() {
     printf("a fast pour across a short gap is not a disturbance OK\n");
   }
   {
-    // Review 2026-11-21: a spoon resting 0.5 s mid-pour became the first
-    // sample at 80 % of final, so mean_flow read 2.84 g/s for a 2.00 pour.
+    // A spoon resting 0.5 s mid-pour. Flagged only: it still becomes the
+    // first sample at 80 % of final and moves mean flow, exactly as on 0a.6
+    // (known limit) -- the flag is how a reader knows to distrust it.
     ShotDetector d;
     uint32_t tt = 4000000;
     bool fin = false;
@@ -639,10 +639,51 @@ int main() {
     const ShotResult& rr = d.result();
     printf("spoon mid-pour: disturbed=%d mean=%d mgps win=%u..%u\n",
            rr.disturbed, rr.mean_flow_mgps, rr.flow_win_start_ms, rr.flow_win_end_ms);
-    assert(rr.disturbed);
-    assert(rr.mean_flow_mgps > 1850 && rr.mean_flow_mgps < 2150);
-    printf("a spoon mid-pour does not move mean flow OK\n");
+    assert(rr.disturbed && rr.valid);
+    assert(rr.yield_final_mg > 35500 && rr.yield_final_mg < 36500);
+    printf("a spoon mid-pour is flagged OK\n");
   }
+
+  // Review 2026-11-21, round 2: the cases that broke the offset draft, now
+  // in SETTLING where 0a.7 repairs the yield. Pour 2 g/s to 36 g, flat from
+  // 18 s (stop confirmed ~20 s, settling to ~25 s); `obj` adds weight.
+  auto settleCase = [](const char* name, double (*obj)(double), bool burst,
+                       int lift_at) -> ShotResult {
+    static ShotDetector d;
+    d = ShotDetector();
+    uint32_t tt = 6000000;
+    bool fin = false;
+    for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+    for (int i = 0; i < 400 && !fin; i++) {
+      double s = i / 10.0;
+      double w = (s < 18.0 ? 2.0 * s : 36.0) + obj(s);
+      if (lift_at && s >= lift_at) w = -180.0;
+      fin = d.feed(tt, (int32_t)llround(w * 1000.0));
+      tt += (burst && i % 3 == 0) ? 0 : 100;   // every third sample: same ms
+    }
+    assert(fin);
+    ShotResult r = d.result();
+    printf("settling, %s: disturbed=%d final=%d stop_ms=%u\n", name, r.disturbed,
+           r.yield_final_mg, r.stop_ms);
+    assert(r.valid && r.disturbed && !r.placement);
+    assert(r.yield_final_mg > 35500 && r.yield_final_mg < 36800);
+    // Never ended early. (With bursts the clock runs a third slower than the
+    // sample count, so the pour itself ends earlier in ms; a lift during
+    // settling overwrites stop_ms, as on 0a.6.)
+    if (!burst && !lift_at) assert(r.stop_ms > 16000 && r.stop_ms < 20500);
+    return r;
+  };
+  settleCase("wobbling 10 g hand", [](double s) {
+    return s >= 21.0 ? 10.0 + ((int)(s * 10) % 2 ? 0.6 : -0.6) : 0.0; }, false, 0);
+  settleCase("12 g off in 5/5/2 g steps", [](double s) {
+    return s < 21.0 ? 0.0 : s < 22.5 ? 12.0 : s < 22.6 ? 7.0 : s < 22.7 ? 2.0 : 0.0; }, false, 0);
+  settleCase("12 g, 7 g taken off", [](double s) {
+    return s < 21.0 ? 0.0 : s < 22.5 ? 12.0 : 5.0; }, false, 0);
+  settleCase("8 g with same-ms bursts", [](double s) {
+    return s >= 21.0 ? 8.0 : 0.0; }, true, 0);
+  settleCase("10 g then lifted", [](double s) {
+    return s >= 21.0 ? 10.0 : 0.0; }, false, 23);
+  printf("objects during settling never reach the yield or end the shot early OK\n");
 
   printf("all scenarios passed\n");
   return 0;

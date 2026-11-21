@@ -32,23 +32,27 @@ struct ShotResult {
   // sample more than PLACEMENT_STEP_MG (5 g) ABOVE THE PEAK SO FAR, rising
   // faster than MAX_POUR_MGPS (10 g/s) since the sample before, once
   // running_max >= REJECT_MIN_MG (not judged for 1 s after a sample gap
-  // > 1 s; trackDisturbance() in detector.cpp has the rule). Until a
-  // single-sample fall of at least half its mass takes it off, the object's
-  // mass is carried as an offset and taken out of every yield decision --
-  // the peak, the lift test, the stop, a forced stop, the end of settling
-  // -- while the pour keeps counting underneath it; its samples are left
-  // out of the mean-flow window. So the jump never becomes the yield. Before 0a.7 a hand, the portafilter or a spoon set
-  // on the scale entered running_max as "late drips" and a lift then
-  // finalized the shot AT it: shot 205 (2026-11-21, 37.8 g recorded as
-  // 49.41 g), shot 81 (37.4 as 43.5), shot 200's 30.4 g. The record is
-  // kept and only flagged (SPOOL_FLAG_DISTURBED); the samples stay raw.
-  // KNOWN LIMITS: a first sample that rises by less than the onset rule
-  // still counts (205's +0.6 g before its +7.8 g step, so 205 now reads
-  // 38.4, not 37.8); an object that creeps on slower than a pour is not
-  // seen at all; one taken off in steps each under half its mass is never
-  // cleared, so its offset stays subtracted; and a lift during SETTLING
-  // still overwrites stop_ms as described below -- 0a.7 changes the yield,
-  // not the lift paths.
+  // > 1 s; jumpsOntoScale() in detector.cpp has the rule).
+  //   DURING SETTLING the pour has stopped, so the true weight is the peak:
+  //   the peak is frozen until the weight is back within SETTLE_BAND_MG of
+  //   it, and a lift or the end of settling reads the frozen peak -- so the
+  //   jump never becomes the yield. Before 0a.7 a hand, the portafilter or a
+  //   spoon set on the scale while settling entered the peak as "late
+  //   drips" and a lift finalized the shot AT it: shot 205 (2026-11-21,
+  //   37.8 g recorded as 49.41 g), shot 81 (37.4 as 43.5).
+  //   DURING THE POUR it is only flagged; the yield logic is 0a.6's. Taking
+  //   an object out under a moving weight was tried and made things worse
+  //   (review 2026-11-21: a wobbling hand or an object lifted off in steps
+  //   ended shots early with a wrong yield). A jump mid-pour can still reach
+  //   the yield or the mean-flow window, exactly as before -- the flag is
+  //   what tells the reader to look.
+  // The record is kept; the flag alone never excludes (SPOOL_FLAG_DISTURBED).
+  // KNOWN LIMITS: a first sample that rises less than the onset rule still
+  // counts (205's +0.6 g before its +7.8 g step, so 205 now reads 38.4, not
+  // 37.8); an object that creeps on slower than a pour is not seen; one that
+  // lands 20 g or more above the peak within 1 s is still a placement and
+  // excluded as one; and the lift paths are unchanged -- a lift during
+  // SETTLING still overwrites stop_ms as described below.
   bool     disturbed;
   uint32_t started_at_ms;  // millis() of t=0 (backdated to the flow crossing)
   // Where the detector judged the pour to have ended. HOW that is derived
@@ -238,8 +242,11 @@ public:
   static constexpr int32_t  PLACEMENT_STEP_MG = 5000;  // per-sample jump = cup moved
   // 0a.7: no pour adds weight faster than this. The steepest of 75 real shots
   // rose 7.7 g in 1 s; a rise faster than 10 g/s between two samples is
-  // something set on the scale (trackDisturbance()).
+  // something set on the scale (jumpsOntoScale()).
   static constexpr int32_t  MAX_POUR_MGPS     = 10000;
+  // 0a.7, SETTLING: back within this of the frozen peak = the object is off.
+  // Settling drips add a few tenths of a gram; 1.5 g leaves room for them.
+  static constexpr int32_t  SETTLE_BAND_MG    = 1500;
   // Over a whole second: espresso runs at ~1-5 g/s, so 20 g in 1 s is 4x the
   // fastest gusher and only something landing in (or on) the cup.
   static constexpr int32_t  PLACEMENT_RISE_MG = 20000;
@@ -301,11 +308,7 @@ private:
                                  // see feed()); samples store the difference
   int32_t  running_max = 0;      // undisturbed peak (0a.7: a disturbance cannot raise it)
   int32_t  last_w = 0;
-  bool     disturbing = false;   // inside a disturbance right now (see ShotResult::disturbed)
-  int32_t  disturb_offset = 0;   // the object's mass, taken out of every yield decision
-  uint32_t disturb_at = 0;       // when it landed (the stop window must open after)
-  int32_t  clean_flow_mgps = 0;  // flow at the last undisturbed sample
-  uint8_t  dist_bits[MAX_SAMPLES / 8] = {};  // buf samples taken while disturbed
+  bool     disturbing = false;   // SETTLING only: an object on the scale right now
   uint32_t last_t = 0;           // this sample's time
   uint32_t prev_t = 0;           // the previous sample's time
   uint32_t gap_at = 0;           // first sample after the last > 1 s gap; 0 = none
@@ -321,10 +324,8 @@ private:
   void enterSettling(uint32_t t, int32_t w_at_stop, uint32_t stop_t, bool truncated);
   bool finishShot();
   bool finalizeLifted();   // cup removed → finalize at the peak weight
-  // 0a.7: track a disturbance; returns `rel` with any object's mass taken out.
-  int32_t trackDisturbance(uint32_t t, int32_t w, int32_t prev_w, int32_t rel);
-  void markDisturbed(uint16_t i);
-  bool isDisturbed(uint16_t i) const;
+  // 0a.7: did this sample jump onto the scale (ShotResult::disturbed)?
+  bool jumpsOntoScale(uint32_t t, int32_t w, int32_t prev_w, int32_t rel) const;
   bool risesLikeAPlacement() const;
   void computeFlowWindow();
   void resetToIdle();

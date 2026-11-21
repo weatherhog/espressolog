@@ -1645,27 +1645,37 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
 - **disturbed** (detector **0a.7**, firmware 0.14.0) — once the shot has
   5 g, **one sample landing more than 5 g ABOVE THE PEAK SO FAR and rising
   faster than 10 g/s** (`MAX_POUR_MGPS`; the steepest real shot rose
-  7.7 g in 1 s) is something set on the scale, not espresso. Its mass is
-  carried as an offset and taken out of the peak, the lift test, the stop
-  and the final yield while the pour keeps counting underneath; it clears
-  on a single-sample fall of at least half that mass, and its samples are
-  left out of the mean-flow window. Kept and flagged (`SPOOL_FLAG_DISTURBED`
-  0x80, `shot.disturbed`, migration 013 — NULL before 0a.7). **The flag
-  alone never excludes**; a disturbed record that is also a placement is
-  still excluded as one. Not judged for 1 s after a sample gap (a
-  reconnect); a recovery from a dip is not above the peak, and a fast pour
-  across a short gap is judged as a rate, so neither trips it. **Up to 0a.6
-  such a jump entered the peak and a lift then recorded the shot AT it**:
-  shot 205 (2026-11-21) stored 37.8 g as 49.41 g, shot 81 37.4 as 43.5 —
-  both, with 200/201, excluded by hand that day. Replaying every stored
-  shot through 0a.7 flags 16 records, all already excluded, and changes no
-  other shot. **Known limits:** a first sample that rises less than the
-  onset rule still counts (205 replays as 38.4 g, not 37.8); an object
-  that creeps on slower than a pour is not seen; one taken off in small
-  steps is never cleared; and **the lift paths are unchanged** — a lift
-  during settling still overwrites `stop_ms` as the table above says.
-  **Deploy the server before flashing 0.14.0**: the format is unchanged,
-  so an older server accepts the record and silently drops the bit.
+  7.7 g in 1 s) is something set on the scale, not espresso. Not judged for
+  1 s after a sample gap (a reconnect); a recovery from a dip is not above
+  the peak, and a fast pour across a short gap is judged as a rate, so
+  neither trips it. **What it does depends on when:**
+  - **while settling** (the stop confirmed, so the true weight is the
+    peak): the peak is frozen until the weight is back within 1.5 g of it,
+    and a lift or the end of settling reads the frozen peak — **the jump
+    never becomes the yield**, however it wobbles or comes off;
+  - **during the pour: flagged only.** The yield logic is 0a.6's, so a jump
+    mid-pour can still reach the yield or the mean-flow window. Taking an
+    object out under a moving weight was built twice on 2026-11-21 and both
+    reviews broke it (a wobbling hand or an object lifted off in steps
+    ended shots early with a wrong yield). **Distrust the yield and
+    `mean_flow_gps` of a disturbed shot** unless its curve shows the jump
+    after the stop.
+
+  Kept and flagged (`SPOOL_FLAG_DISTURBED` 0x80, `shot.disturbed`,
+  migration 013 — NULL before 0a.7). **The flag alone never excludes**; a
+  disturbed record that is also a placement (20 g or more above the peak
+  within 1 s) is still excluded as one. **Up to 0a.6 a jump while settling
+  entered the peak and a lift then recorded the shot AT it**: shot 205
+  (2026-11-21) stored 37.8 g as 49.41 g, shot 81 37.4 as 43.5 — both, with
+  200/201, excluded by hand that day. Replaying every stored shot through
+  0a.7 flags 16 records, all already excluded, and changes the yield of
+  three (81, 106, 205), all toward the real one. **Known limits:** a first
+  sample that rises less than the onset rule still counts (205 replays as
+  38.4 g, not 37.8); an object that creeps on slower than a pour is not
+  seen; and **the lift paths are unchanged** — a lift during settling still
+  overwrites `stop_ms` as the table above says. **Deploy the server before
+  flashing 0.14.0**: the format is unchanged, so an older server accepts
+  the record and silently drops the bit.
 
 Flow rate: central difference over a 700 ms window. `mean_flow_gps` over
 from 5 g out to 80 % of final, skipping the first-drop lag.

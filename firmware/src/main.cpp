@@ -758,7 +758,7 @@ static void printShotSummary(const ShotResult& r) {
   if (r.placement)
     Serial.println("# NOT A SHOT: rose >20 g above its earlier peak within 1 s — a cup set down. Recorded, flagged, excluded.");
   if (r.disturbed)
-    Serial.println("# DISTURBED: something landed on the scale (>5 g above the peak, faster than any pour). Kept out of the yield if it landed while settling; mid-pour it is only flagged. Recorded.");
+    Serial.println("# DISTURBED: something landed on the scale (>5 g above the peak). Kept out of the yield if it landed while settling; mid-pour or after a forced stop it is only flagged. Recorded.");
   Serial.println("# ---- shot complete ----");
   Serial.printf("# valid=%d fault=%d truncated=%d detector=%s fw=%s\n",
                 r.valid, r.fault, r.truncated, DETECTOR_VERSION, FIRMWARE_VERSION);

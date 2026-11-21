@@ -1645,9 +1645,10 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
 - **disturbed** (detector **0a.7**, firmware 0.14.0) — something set on
   the scale once the shot has 5 g. **What it does depends on when:**
   - **while settling after a confirmed stop** (2 s flat, so the true weight
-    is the peak plus drips): only a rise of at most 0.5 g per sample
-    (`DRIP_STEP_MG`) may raise the peak, and the weight ending up **more
-    than 5 g above it, in one step or several**, is an object. That
+    is the peak plus drips): the peak follows a reading only when it is
+    **less than 0.5 g above the peak** (`DRIP_STEP_MG`), so nothing resting
+    on the scale joins it, and the weight ending up **more than 5 g above
+    it, in one step or several**, is an object. That
     **freezes the peak for the rest of settling**: a lift or the end of
     settling reads it, so the object — wobbling, pressed and released,
     partly left behind — stays out of the yield, and the placement scan
@@ -1667,23 +1668,28 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   Kept and flagged (`SPOOL_FLAG_DISTURBED` 0x80, `shot.disturbed`,
   migration 013 — NULL before 0a.7). **The flag alone never excludes**; a
   disturbed record that is also a placement (more than 20 g above its
-  earlier peak within 1 s, during the pour) is still excluded as one.
+  earlier peak within 1 s, during the pour or after a forced stop) is
+  still excluded as one.
   **Up to 0a.6 an object set down while settling entered the peak and the
   yield** — at the end of settling, or at a lift: shot 205 (2026-11-21)
   stored 37.8 g as 49.41 g, shot 81 37.4 as 43.5 — both, with 200/201,
   excluded by hand that day. **Replaying every stored shot through 0a.7**
-  flags 17 records — 16 already excluded, plus shot 65 — and changes eight
-  yields, every one toward the flat weight before the end. **It also found
+  flags 17 records — 16 already excluded, plus shot 65, excluded the same
+  day — and changes ten yields (12, 17, 62, 65, 81, 106, 167, 192, 197,
+  205); every one of the clean shots among them moves toward the flat
+  weight before the end, and 205 replays as 37.9 g (flat 37.8). **It also found
   a bias nobody had seen: picking the cup up presses it down first.** Shots
   62, 65, 192 and 197 sit flat, then rise 0.7–7.6 g in the last one or two
   samples before the lift, and 0a.6 stored that press as the yield (62:
-  41.0 g for a flat 37.4; 65: 31.6 for 23.9). 0a.7's drip-step rule keeps
-  it out. **Stored lift-terminated yields from 0a.6 can read high** by the
-  grip; nothing marks which. **Known limits:** while settling, an
-  object under 5 g is not flagged and the end of settling counts it (a
-  lift does not); 205's first +0.6 g counts as a drip (it replays as
-  38.4 g, not 37.8); during the pour, an object that creeps on or lands in
-  steps of 5 g or less is not seen; and **the lift paths are unchanged** —
+  41.0 g for a flat 37.4; 65: 31.6 for 23.9). 0a.7's drip band keeps it
+  out. **Stored lift-terminated yields from 0a.6 can read high** by the
+  grip; nothing marks which. **Known limits:** while settling, an object
+  under 5 g is not flagged and the end of settling counts it (a lift does
+  not); if the pour resumes after a confirmed stop while the scale reports
+  sparsely (steps of 0.5 g or more), the peak cannot follow and freezes
+  low, flagged — main took the last weight; at the Themis's ~10 Hz it
+  follows; during the pour, an object that creeps on or lands in steps of
+  5 g or less is not seen; and **the lift paths are unchanged** —
   a lift during settling still overwrites `stop_ms` as the table above
   says. **0a.7 is its own stratum**: `analysis/overshoot.py`,
   `analysis/session_warmup.py` and the 0f notebook filter on

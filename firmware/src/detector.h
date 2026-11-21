@@ -30,10 +30,10 @@ struct ShotResult {
   bool     placement;
   // 0a.7. Something landed on the scale after the shot had substance.
   //   DURING SETTLING after a confirmed stop (2 s flat, so the true weight
-  //   is the peak plus drips): only a rise of at most DRIP_STEP_MG in one
-  //   sample may raise the peak, and the weight ending up more than
-  //   PLACEMENT_STEP_MG above it -- in one step or several -- is an
-  //   object. That freezes the peak for the rest of settling; a lift or the
+  //   is the peak plus drips): the peak follows a reading only when it is
+  //   less than DRIP_STEP_MG above the peak, so nothing resting on the
+  //   scale joins it, and the weight ending up more than PLACEMENT_STEP_MG
+  //   above it -- in one step or several -- is an object. That freezes the peak for the rest of settling; a lift or the
   //   end of settling reads it, and the placement scan stops where it
   //   landed. Before 0a.7 a hand, the portafilter or a spoon set down while
   //   settling entered the peak as "late drips" -- and the yield, with or
@@ -49,13 +49,17 @@ struct ShotResult {
   //   flag is what tells the reader to look.
   // The record is kept; the flag alone never excludes (SPOOL_FLAG_DISTURBED).
   // KNOWN LIMITS: while settling, an object under PLACEMENT_STEP_MG (5 g)
-  // is not flagged -- it stays out of the peak, but the end of settling
-  // reads last_w and includes it (a lift does not); drips after a landing
-  // are lost (a few tenths of a gram); 205's +0.6 g first step is a drip by
-  // the rule, so 205 reads 38.4, not 37.8. During the pour an object that
+  // is not flagged -- it stays out of the peak, so a lift reads the peak
+  // without it, but the end of settling reads last_w and includes it; drips
+  // after a landing are lost (a few tenths of a gram); and if the pour
+  // RESUMES after a confirmed stop while the scale reports sparsely
+  // (steps of 0.5 g or more, ~4 Hz at 2.5 g/s), the peak cannot follow it
+  // and freezes, flagged, low (main took last_w) -- at the Themis's ~10 Hz
+  // it follows. Shot 205 replays as 37.9 g (flat 37.8). During the pour an object that
   // creeps on slower than a pour, or in steps of 5 g or less, is not seen,
   // and one landing more than 20 g above its earlier peak within 1 s is
-  // still a placement and excluded as one. The lift paths are unchanged --
+  // still a placement and excluded as one -- as it is after a forced stop,
+  // where the placement scan is not cut. The lift paths are unchanged --
   // a lift during SETTLING still overwrites stop_ms as described below.
   bool     disturbed;
   uint32_t started_at_ms;  // millis() of t=0 (backdated to the flow crossing)
@@ -248,8 +252,9 @@ public:
   // rose 7.7 g in 1 s; a rise faster than 10 g/s between two samples is
   // something set on the scale (jumpsOntoScale()).
   static constexpr int32_t  MAX_POUR_MGPS     = 10000;
-  // 0a.7, SETTLING (not truncated): only a rise of at most this in one sample
-  // may raise the peak. Drips arrive in tenths; the Bookoo steps 0.1-0.2 g.
+  // 0a.7, SETTLING (not truncated): the peak follows a reading only when it
+  // is less than this above the peak (shot 205's grip began at exactly +0.5). Drips creep up in tenths; the Bookoo
+  // steps 0.1-0.2 g.
   static constexpr int32_t  DRIP_STEP_MG      = 500;
   // Over a whole second: espresso runs at ~1-5 g/s, so 20 g in 1 s is 4x the
   // fastest gusher and only something landing in (or on) the cup.
@@ -313,7 +318,9 @@ private:
   int32_t  running_max = 0;      // peak so far (0a.7: frozen once anything lands while settling)
   int32_t  last_w = 0;
   bool     disturbing = false;   // SETTLING only: something landed; the peak is frozen
-  uint16_t placement_scan_end = 0;  // buf index where it landed; 0 = scan all
+  bool     scan_cut = false;     // placement_scan_end is set (an object landed while settling)
+  bool     landed_now = false;   // it landed on this sample; set the cut after appending
+  uint16_t placement_scan_end = 0;  // scan buf[0 .. this) when scan_cut
   uint32_t last_t = 0;           // this sample's time
   uint32_t prev_t = 0;           // the previous sample's time
   uint32_t gap_at = 0;           // first sample after the last > 1 s gap; 0 = none

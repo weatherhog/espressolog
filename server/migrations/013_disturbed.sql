@@ -1,20 +1,23 @@
 -- Detector 0a.7 (firmware 0.14.0), spool flag DISTURBED (0x80): something
--- landed on the scale after the shot had substance -- one sample more than
--- 5 g above the peak. WHILE SETTLING after a confirmed stop the detector
--- froze the peak and kept the object out of the yield (an object under 5 g
--- is neither flagged nor, at the end of settling, kept out); DURING THE
--- POUR, or after a forced stop at 60 s, it only flags it, and the yield and
--- mean flow are as 0a.6 measured them -- distrust them on such a row. Up to 0a.6 such a jump entered the
--- peak and a lift then recorded the shot AT it (shot 205, 2026-11-21: 37.8 g
--- stored as 49.41 g; shot 81: 37.4 as 43.5).
+-- landed on the scale after the shot had substance, more than 5 g above the
+-- peak (detector.h, ShotResult::disturbed, has the rule per phase).
+-- WHILE SETTLING after a confirmed stop the detector froze the peak and
+-- kept the object out of the yield (an object under 5 g is neither flagged
+-- nor, at the end of settling, kept out); DURING THE POUR, or after a
+-- forced stop at 60 s, it only flags it, and the yield and mean flow are as
+-- 0a.6 measured them -- distrust them on such a row. Up to 0a.6 such an
+-- object entered the peak and the yield, at a lift or at the end of
+-- settling (shot 205, 2026-11-21: 37.8 g stored as 49.41 g; shot 81: 37.4
+-- as 43.5), and so did the press of a hand gripping the cup to lift it
+-- (shot 65: 23.9 as 31.6).
 --
 --   1     disturbed (see above for what was and was not repaired)
 --   0     detector 0a.7 or later saw nothing land
 --   NULL  an older detector, which never set the flag: unknown, not "no"
 --
 -- NOT an exclusion by itself: the shot is real (a disturbed record that is
--- also a placement is still excluded as a placement). The
--- samples stay raw (invariant 3), so the disturbance is still visible in the
--- curve. Nothing is backfilled: older rows were judged by hand, and the
--- worst of them were excluded on 2026-11-21 (81, 200, 201, 205).
+-- also a placement is still excluded as a placement). The samples stay raw
+-- (invariant 3), so the disturbance is still visible in the curve. Nothing
+-- is backfilled: older rows were judged by hand, and the worst of them were
+-- excluded on 2026-11-21 (65, 81, 200, 201, 205).
 ALTER TABLE shot ADD COLUMN disturbed INTEGER;

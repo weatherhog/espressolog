@@ -505,8 +505,9 @@ func insertShot(tx *sql.Tx, rec *record.Record, scaleID any, startedAt time.Time
 	if h.FormatVersion >= 5 {
 		setpointPending = boolToInt(h.SetpointPending())
 	}
-	// Detector 0a.7: something landed on the scale mid-record and the yield
-	// was taken from before it. NULL for an older detector, which cannot say.
+	// Detector 0a.7: something landed on the scale mid-record (kept out of
+	// the yield while settling, only flagged during the pour). NULL for an
+	// older detector, which cannot say.
 	var disturbed any
 	if d, known := h.Disturbed(); known {
 		disturbed = boolToInt(d)

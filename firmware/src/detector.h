@@ -34,9 +34,9 @@ struct ShotResult {
   // running_max >= REJECT_MIN_MG (not judged for 1 s after a sample gap
   // > 1 s; jumpsOntoScale() in detector.cpp has the rule).
   //   DURING SETTLING the pour has stopped, so the true weight is the peak:
-  //   the peak is frozen until the weight is back within SETTLE_BAND_MG of
-  //   it, and a lift or the end of settling reads the frozen peak -- so the
-  //   jump never becomes the yield. Before 0a.7 a hand, the portafilter or a
+  //   the peak is frozen for the rest of settling, and a lift or the end of
+  //   settling reads it -- so nothing that landed, however it wobbles,
+  //   presses, comes off or partly stays, becomes the yield. Before 0a.7 a hand, the portafilter or a
   //   spoon set on the scale while settling entered the peak as "late
   //   drips" and a lift finalized the shot AT it: shot 205 (2026-11-21,
   //   37.8 g recorded as 49.41 g), shot 81 (37.4 as 43.5).
@@ -50,9 +50,10 @@ struct ShotResult {
   // KNOWN LIMITS: a first sample that rises less than the onset rule still
   // counts (205's +0.6 g before its +7.8 g step, so 205 now reads 38.4, not
   // 37.8); an object that creeps on slower than a pour is not seen; one that
-  // lands 20 g or more above the peak within 1 s is still a placement and
-  // excluded as one; and the lift paths are unchanged -- a lift during
-  // SETTLING still overwrites stop_ms as described below.
+  // lands more than 20 g above its earlier peak within 1 s is still a placement and
+  // excluded as one; drips after something lands while settling are lost
+  // (a few tenths of a gram); and the lift paths are unchanged -- a lift
+  // during SETTLING still overwrites stop_ms as described below.
   bool     disturbed;
   uint32_t started_at_ms;  // millis() of t=0 (backdated to the flow crossing)
   // Where the detector judged the pour to have ended. HOW that is derived
@@ -244,9 +245,6 @@ public:
   // rose 7.7 g in 1 s; a rise faster than 10 g/s between two samples is
   // something set on the scale (jumpsOntoScale()).
   static constexpr int32_t  MAX_POUR_MGPS     = 10000;
-  // 0a.7, SETTLING: back within this of the frozen peak = the object is off.
-  // Settling drips add a few tenths of a gram; 1.5 g leaves room for them.
-  static constexpr int32_t  SETTLE_BAND_MG    = 1500;
   // Over a whole second: espresso runs at ~1-5 g/s, so 20 g in 1 s is 4x the
   // fastest gusher and only something landing in (or on) the cup.
   static constexpr int32_t  PLACEMENT_RISE_MG = 20000;
@@ -306,9 +304,9 @@ private:
   uint32_t pulse_now = 0;        // latest free-running flowmeter count
   uint32_t pulse_base = 0;       // its value at pour CONFIRMATION (not t=0 —
                                  // see feed()); samples store the difference
-  int32_t  running_max = 0;      // undisturbed peak (0a.7: a disturbance cannot raise it)
+  int32_t  running_max = 0;      // peak so far (0a.7: frozen once anything lands while settling)
   int32_t  last_w = 0;
-  bool     disturbing = false;   // SETTLING only: an object on the scale right now
+  bool     disturbing = false;   // SETTLING only: something landed; the peak is frozen
   uint32_t last_t = 0;           // this sample's time
   uint32_t prev_t = 0;           // the previous sample's time
   uint32_t gap_at = 0;           // first sample after the last > 1 s gap; 0 = none

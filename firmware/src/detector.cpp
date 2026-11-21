@@ -1,4 +1,5 @@
 #include "detector.h"
+#include <string.h>
 #include <limits.h>
 
 // ---- WeighingDetector -------------------------------------------------------
@@ -199,12 +200,10 @@ void ShotDetector::computeFlowWindow() {
 }
 
 // Normal completion: the cup stayed on through settling, so last_w is the
-// settled weight (drips included) — the most accurate yield.
+// settled weight (drips included) — the most accurate yield. Unless
+// something landed on the scale while settling (0a.7): then the peak frozen
+// at that moment is the yield, and the drips after it are lost.
 bool ShotDetector::finishShot() {
-  // Still disturbed when settling ran out (something left resting on the
-  // scale): the last undisturbed weight is the yield, not the hand on it.
-  // 0a.7: something set on the scale during settling and still there when
-  // it ran out -- the yield is the peak from before it, not the object.
   res.yield_final_mg = disturbing ? running_max : last_w - baseline;
   res.settle_offset_mg = res.yield_final_mg - res.yield_at_stop_mg;
   res.fault = false;
@@ -418,8 +417,6 @@ bool ShotDetector::feed(uint32_t t, int32_t w, uint32_t inlet_pulses_total) {
         if (running_max >= REJECT_MIN_MG) {
           // Stop: weight flat (|Δ| < 0.3 g) over the last 2 s, once the shot
           // has substance. Jitter-proof where "flow < 0.1 g/s" was not.
-          // While disturbed the object's mass cancels in the delta, but only
-          // for a window that opens after it landed (0a.7).
           if (ringAt(t - STOP_WINDOW_MS, t_then, w_then) && t - t_then >= STOP_WINDOW_MS) {
             int32_t delta = w - w_then;
             if (delta < STOP_DELTA_MG && delta > -STOP_DELTA_MG) {
@@ -427,8 +424,7 @@ bool ShotDetector::feed(uint32_t t, int32_t w, uint32_t inlet_pulses_total) {
               enterSettling(t, w_then - baseline, t_then, false);
             }
           }
-        } else if (running_max < REJECT_MIN_MG
-                   && ringAt(t - ABORT_FLAT_MS, t_then, w_then) && t - t_then >= ABORT_FLAT_MS) {
+        } else if (ringAt(t - ABORT_FLAT_MS, t_then, w_then) && t - t_then >= ABORT_FLAT_MS) {
           // Never reached 5 g and flat for a long while: a false trigger.
           int32_t delta = w - w_then;
           if (delta < STOP_DELTA_MG && delta > -STOP_DELTA_MG) {
@@ -452,15 +448,17 @@ bool ShotDetector::feed(uint32_t t, int32_t w, uint32_t inlet_pulses_total) {
     case ShotState::SETTLING: {
       int32_t rel = w - baseline;
       // 0a.7: the pour has stopped, so the true weight is the peak plus a few
-      // drips. A jump onto the scale freezes the peak until the weight comes
-      // back within SETTLE_BAND_MG of it -- the object off, however slowly,
-      // and whatever it wobbled meanwhile. Late drips raise the peak; an
-      // object does not (shot 205: +7.8 g then +3.2 g, then the lift).
+      // drips. A jump onto the scale freezes the peak FOR THE REST OF
+      // SETTLING: nothing after it -- the object, its wobble, a press and
+      // release, a remainder left behind -- can raise it, and a lift or the
+      // end of settling reads it. Never cleared on purpose: a draft that
+      // cleared it when the weight came back near the peak let each release
+      // raise the peak a little until a pressing hand passed for drips
+      // (review 2026-11-21). The cost is the drips after the landing, a few
+      // tenths of a gram. Shot 205: +7.8 g then +3.2 g, then the lift.
       if (!disturbing && jumpsOntoScale(t, w, prev_w, rel)) {
         disturbing = true;
         res.disturbed = true;
-      } else if (disturbing && rel <= running_max + SETTLE_BAND_MG) {
-        disturbing = false;
       }
       if (!disturbing && rel > running_max) running_max = rel;
       // The pour already ended (stop confirmed). If the cup is lifted during

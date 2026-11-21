@@ -1650,9 +1650,11 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   the peak, and a fast pour across a short gap is judged as a rate, so
   neither trips it. **What it does depends on when:**
   - **while settling** (the stop confirmed, so the true weight is the
-    peak): the peak is frozen until the weight is back within 1.5 g of it,
-    and a lift or the end of settling reads the frozen peak — **the jump
-    never becomes the yield**, however it wobbles or comes off;
+    peak): the peak is frozen **for the rest of settling**, and a lift or
+    the end of settling reads it — so nothing that landed becomes the
+    yield, however it wobbles, presses and releases, comes off or partly
+    stays (a draft that unfroze it near the peak let a pressing hand pass
+    for drips); the drips after the landing are lost;
   - **during the pour: flagged only.** The yield logic is 0a.6's, so a jump
     mid-pour can still reach the yield or the mean-flow window. Taking an
     object out under a moving weight was built twice on 2026-11-21 and both
@@ -1663,8 +1665,8 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
 
   Kept and flagged (`SPOOL_FLAG_DISTURBED` 0x80, `shot.disturbed`,
   migration 013 — NULL before 0a.7). **The flag alone never excludes**; a
-  disturbed record that is also a placement (20 g or more above the peak
-  within 1 s) is still excluded as one. **Up to 0a.6 a jump while settling
+  disturbed record that is also a placement (more than 20 g above its
+  earlier peak within 1 s) is still excluded as one. **Up to 0a.6 a jump while settling
   entered the peak and a lift then recorded the shot AT it**: shot 205
   (2026-11-21) stored 37.8 g as 49.41 g, shot 81 37.4 as 43.5 — both, with
   200/201, excluded by hand that day. Replaying every stored shot through
@@ -1672,7 +1674,8 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   three (81, 106, 205), all toward the real one. **Known limits:** a first
   sample that rises less than the onset rule still counts (205 replays as
   38.4 g, not 37.8); an object that creeps on slower than a pour is not
-  seen; and **the lift paths are unchanged** — a lift during settling still
+  seen; drips after something lands while settling are lost (a few tenths
+  of a gram); and **the lift paths are unchanged** — a lift during settling still
   overwrites `stop_ms` as the table above says. **Deploy the server before
   flashing 0.14.0**: the format is unchanged, so an older server accepts
   the record and silently drops the bit.

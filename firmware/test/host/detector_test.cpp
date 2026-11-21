@@ -683,6 +683,16 @@ int main() {
     return s >= 21.0 ? 8.0 : 0.0; }, true, 0);
   settleCase("10 g then lifted", [](double s) {
     return s >= 21.0 ? 10.0 : 0.0; }, false, 23);
+  // Review 2026-11-21, round 3: a hand pressing and releasing. A draft that
+  // unfroze the peak when the weight came back near it let each release
+  // raise the peak until a 7 g hand passed for drips (43 g of 36).
+  settleCase("7 g hand pressing and releasing", [](double s) {
+    if (s < 21.0) return 0.0;
+    double ph = s - 21.0;                         // 1 s cycles: 0.5 s on, 0.5 s off
+    double off = 1.4 * (int)(ph);                 // each release leaves a little more
+    return (ph - (int)ph) < 0.5 ? 7.0 : (off < 4.0 ? off : 4.0); }, false, 0);
+  settleCase("8 g, then 1.4 g left behind", [](double s) {
+    return s < 21.0 ? 0.0 : s < 22.5 ? 8.0 : 1.4; }, false, 0);
   printf("objects during settling never reach the yield or end the shot early OK\n");
 
   printf("all scenarios passed\n");

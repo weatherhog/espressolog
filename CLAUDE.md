@@ -1626,7 +1626,9 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   Three rounds on one sentence, and each round was right about the thing it
   replaced and wrong about something adjacent to it.
 - **SETTLING** — keep sampling 5 s more → `yield_final_g`.
-  `settle_offset_g = final − at_stop`.
+  `settle_offset_g = final − at_stop`. **Not on a disturbed settle**
+  (0a.7, the **disturbed** entry below): there `yield_final_g` is the peak
+  frozen when something landed, without the drips after it.
 - **reject** — final yield < 5 g (a drip or a knock, not a shot)
 - **placement** — the curve rose >20 g ABOVE ITS EARLIER PEAK within 1 s:
   a cup set down, not espresso (the steepest of 75 real shots rose 7.7 g in
@@ -1646,9 +1648,11 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   the scale once the shot has 5 g. **What it does depends on when:**
   - **while settling after a confirmed stop** (2 s flat, so the true weight
     is the peak plus drips): the peak follows a reading only when it is
-    **less than 0.5 g above the peak** (`DRIP_STEP_MG`), so nothing resting
-    on the scale joins it, and the weight ending up **more than 5 g above
-    it, in one step or several**, is an object. That
+    **less than 0.5 g above the peak** (`DRIP_STEP_MG`), so nothing whose
+    first reading lands 0.5 g or more above it joins it, and the weight
+    ending up **more than 5 g above it, in one step or several**, is an
+    object (something that *creeps* on in steps under 0.5 g is followed
+    like drips — see the limits). That
     **freezes the peak for the rest of settling**: a lift or the end of
     settling reads it, so the object — wobbling, pressed and released,
     partly left behind — stays out of the yield, and the placement scan
@@ -1658,7 +1662,8 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   - **during the pour, and after a forced stop at 60 s** (the pour may
     still run): **flagged only**, when one sample lands more than 5 g above
     the peak **and** rose faster than 10 g/s (`MAX_POUR_MGPS`; the steepest
-    real shot rose 7.7 g in 1 s), not within 1 s after a sample gap. The
+    real shot rose 7.7 g in 1 s), not within 1 s after a sample gap longer
+    than 1 s. The
     yield logic is 0a.6's, so a jump mid-pour can still reach the yield or
     the mean-flow window. Taking an object out under a moving weight was
     built twice on 2026-11-21 and both reviews broke it. **Distrust the
@@ -1683,12 +1688,16 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   samples before the lift, and 0a.6 stored that press as the yield (62:
   41.0 g for a flat 37.4; 65: 31.6 for 23.9). 0a.7's drip band keeps it
   out. **Stored lift-terminated yields from 0a.6 can read high** by the
-  grip; nothing marks which. **Known limits:** while settling, an object
+  grip; nothing marks which. **Known limits, while settling:** an object
   under 5 g is not flagged and the end of settling counts it (a lift does
-  not); if the pour resumes after a confirmed stop while the scale reports
-  sparsely (steps of 0.5 g or more), the peak cannot follow and freezes
-  low, flagged — main took the last weight; at the Themis's ~10 Hz it
-  follows; during the pour, an object that creeps on or lands in steps of
+  not, if its first reading lands 0.5 g or more above the peak); anything
+  that **creeps on in steps under 0.5 g** (a hand leaning in at ~3 g/s) is
+  followed into the peak like drips, unflagged — it cannot be told from a
+  resumed pour; and **if the pour resumes after a confirmed stop**, the
+  peak stops following it for good at the first step of 0.5 g or more
+  (flow × sample interval: one 240 ms BLE gap at 2.5 g/s is enough, and
+  the SHOT_205 curve has gaps like that every second or two) and freezes
+  it low, flagged — main took the last weight. **During the pour,** an object that creeps on or lands in steps of
   5 g or less is not seen; and **the lift paths are unchanged** —
   a lift during settling still overwrites `stop_ms` as the table above
   says. **0a.7 is its own stratum**: `analysis/overshoot.py`,

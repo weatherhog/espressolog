@@ -3,7 +3,8 @@
 -- peak (detector.h, ShotResult::disturbed, has the rule per phase).
 -- WHILE SETTLING after a confirmed stop the detector froze the peak and
 -- kept the object out of the yield (an object under 5 g is neither flagged
--- nor, at the end of settling, kept out); DURING THE POUR, or after a
+-- nor, at the end of settling, kept out, and one that creeps on in steps
+-- under 0.5 g is followed like drips); DURING THE POUR, or after a
 -- forced stop at 60 s, it only flags it, and the yield and mean flow are as
 -- 0a.6 measured them -- distrust them on such a row. Up to 0a.6 such an
 -- object entered the peak and the yield, at a lift or at the end of

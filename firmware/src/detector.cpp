@@ -469,9 +469,11 @@ bool ShotDetector::feed(uint32_t t, int32_t w, uint32_t inlet_pulses_total) {
         // peak plus drips, and drips creep up in tenths of a gram. The peak
         // follows a reading only when it is LESS than DRIP_STEP_MG ABOVE THE
         // PEAK -- judged against the peak, not the previous reading, so
-        // something resting on the scale never joins it however still it
-        // sits (review 2026-11-21: a step rule let any flat sample after an
-        // object or a grip take it in). Anything that ends up more than
+        // something whose first reading lands 0.5 g or more above the peak
+        // never joins it however still it sits (review 2026-11-21: a step
+        // rule let any flat sample after an object or a grip take it in).
+        // Something creeping on in steps under 0.5 g IS followed, like drips
+        // (detector.h, known limits). Anything that ends up more than
         // PLACEMENT_STEP_MG above the peak is an object, however many samples
         // it took to land (4 g + 4 g passed a one-sample rule). That FREEZES THE PEAK FOR THE REST OF
         // SETTLING -- nothing after it, wobble, press and release or a

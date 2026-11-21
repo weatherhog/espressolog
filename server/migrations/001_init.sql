@@ -244,7 +244,7 @@ CREATE TABLE shot (
                       ('manual','board_timer','auto_weight','fault') OR stopped_by IS NULL),
   s_since_flush     REAL,               -- brew temp proxy on a single boiler
   yield_at_stop_g   REAL,
-  yield_final_g     REAL,               -- after drips settle
+  yield_final_g     REAL,               -- after drips settle (0a.7: the frozen peak if disturbed, see 013)
   settle_offset_g   REAL,               -- final − at_stop. THE PHASE-1 CALIBRATION.
   peak_flow_gps     REAL,
   mean_flow_gps     REAL,               -- over the stable window only

@@ -31,9 +31,11 @@ struct ShotResult {
   // 0a.7. Something landed on the scale after the shot had substance.
   //   DURING SETTLING after a confirmed stop (2 s flat, so the true weight
   //   is the peak plus drips): the peak follows a reading only when it is
-  //   less than DRIP_STEP_MG above the peak, so nothing resting on the
-  //   scale joins it, and the weight ending up more than PLACEMENT_STEP_MG
-  //   above it -- in one step or several -- is an object. That freezes the peak for the rest of settling; a lift or the
+  //   less than DRIP_STEP_MG above the peak, so nothing whose first reading
+  //   lands 0.5 g or more above the peak joins it, and the weight ending up
+  //   more than PLACEMENT_STEP_MG above it -- in one step or several -- is
+  //   an object. Something that CREEPS on in steps under 0.5 g is followed
+  //   like drips and never flagged (see the limits). That freezes the peak for the rest of settling; a lift or the
   //   end of settling reads it, and the placement scan stops where it
   //   landed. Before 0a.7 a hand, the portafilter or a spoon set down while
   //   settling entered the peak as "late drips" -- and the yield, with or
@@ -48,14 +50,18 @@ struct ShotResult {
   //   mid-pour can still reach the yield or the mean-flow window -- the
   //   flag is what tells the reader to look.
   // The record is kept; the flag alone never excludes (SPOOL_FLAG_DISTURBED).
-  // KNOWN LIMITS: while settling, an object under PLACEMENT_STEP_MG (5 g)
-  // is not flagged -- it stays out of the peak, so a lift reads the peak
-  // without it, but the end of settling reads last_w and includes it; drips
-  // after a landing are lost (a few tenths of a gram); and if the pour
-  // RESUMES after a confirmed stop while the scale reports sparsely
-  // (steps of 0.5 g or more, ~4 Hz at 2.5 g/s), the peak cannot follow it
-  // and freezes, flagged, low (main took last_w) -- at the Themis's ~10 Hz
-  // it follows. Shot 205 replays as 37.9 g (flat 37.8). During the pour an object that
+  // KNOWN LIMITS, while settling: an object under PLACEMENT_STEP_MG (5 g)
+  // is not flagged -- if its first reading is 0.5 g or more above the peak
+  // it stays out of the peak, so a lift reads the peak without it, but the
+  // end of settling reads last_w and includes it; anything that creeps on
+  // in steps under 0.5 g (a hand leaning in at ~3 g/s) is followed like
+  // drips into the peak, unflagged, and cannot be told from a resumed
+  // pour; drips after a landing are lost (a few tenths of a gram); and if
+  // the pour RESUMES after a confirmed stop, the peak stops following it
+  // for good at the first step of 0.5 g or more -- flow x sample interval,
+  // so a single 240 ms BLE gap at 2.5 g/s is enough, and a 5 g/s resumption
+  // at a clean 100 ms -- and freezes it low, flagged (main took last_w).
+  // Shot 205 replays as 37.9 g (flat 37.8). During the pour an object that
   // creeps on slower than a pour, or in steps of 5 g or less, is not seen,
   // and one landing more than 20 g above its earlier peak within 1 s is
   // still a placement and excluded as one -- as it is after a forced stop,

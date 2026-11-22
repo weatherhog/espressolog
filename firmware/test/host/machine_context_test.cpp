@@ -556,7 +556,7 @@ int main() {
     m.onPumpPress(PUMP_2CUP, 360000, 25000);
     m.resolvePump(368000);
     const MachineContext& c = m.context();
-    assert(c.machine_on_ms == 300000);
+    assert(c.machine_on_ms == 304100);   // from 4.1 s before the first frame
     assert(c.machine_on_flags == 0);
     assert(c.pump_idle_ms == 25000);
     printf("on-time from a cold start: %u ms, exact OK\n", (unsigned)c.machine_on_ms);
@@ -583,7 +583,7 @@ int main() {
     for (uint32_t t = 900000; t <= 1100000; t += 41) m.onBusFrame(t, t - 5);      // 5 min off, back on
     m.onPumpPress(PUMP_1CUP, 1050000);
     m.resolvePump(1058000);
-    assert(m.context().machine_on_ms == 150000);
+    assert(m.context().machine_on_ms == 154100);
     assert(m.context().machine_on_flags == 0);
     printf("a second power-on in one boot is exact OK\n");
   }
@@ -595,7 +595,7 @@ int main() {
     for (uint32_t t = 105000; t <= 200000; t += 41) m.onBusFrame(t, t - 5);
     m.onPumpPress(PUMP_2CUP, 190000);
     m.resolvePump(198000);
-    assert(m.context().machine_on_ms == 160000);
+    assert(m.context().machine_on_ms == 164100);
     printf("a 5 s frame dropout is not a power-on OK\n");
   }
   {
@@ -621,7 +621,7 @@ int main() {
     for (uint32_t t = 220041; t <= 400000; t += 41) m.onBusFrame(t, t - 5);
     m.onPumpPress(PUMP_2CUP, 390000);
     m.resolvePump(398000);
-    assert(m.context().machine_on_ms == 330000);     // still from 60 s, not 220 s
+    assert(m.context().machine_on_ms == 334100);     // still from 60 s, not 220 s
     assert(m.context().machine_on_flags == 0);
     printf("a blocked loop is not a power-on OK\n");
   }
@@ -638,7 +638,7 @@ int main() {
     for (uint32_t t = 7200041; t <= 7510000; t += 41) m.onBusFrame(t, t - 5);
     m.onPumpPress(PUMP_2CUP, 7500000);
     m.resolvePump(7508000);
-    assert(m.context().machine_on_ms == 300000);
+    assert(m.context().machine_on_ms == 304100);
     assert(m.context().machine_on_flags == 0);
     printf("a stall while off does not hide the next power-on OK\n");
   }
@@ -653,7 +653,7 @@ int main() {
     for (uint32_t t = 110071; t <= 200000; t += 41) m.onBusFrame(t, t - 5);
     m.onPumpPress(PUMP_2CUP, 190000);
     m.resolvePump(198000);
-    assert(m.context().machine_on_ms == 160000);
+    assert(m.context().machine_on_ms == 164100);
     printf("a frame gap over 10 s across a blocked loop is not a power-on OK\n");
   }
   {
@@ -666,18 +666,23 @@ int main() {
     m.onPumpPress(PUMP_2CUP, 120000);
     m.resolvePump(128000);
     assert(m.context().machine_on_flags == MACHINE_ON_LOWER_BOUND);
-    // Switched on 9 s after watching started: still a lower bound (not a full
-    // gap witnessed); 11 s after: exact.
+    // The operator's strip (2026-11-22): board and machine powered by one
+    // switch. The board starts watching at ~2 s, after the init burst; the
+    // bus is frame-silent until +4.1 s. Watched silence >= 1 s: a power-up,
+    // exact, counted from 4.1 s before the first frame -- i.e. from 0.
     MachineContextTracker a, b;
     a.watchBusAgain(2000);
-    a.onBusFrame(11000, 10995);
+    a.onBusFrame(4100, 4095);                   // first frame: 2.1 s watched
+    for (uint32_t t = 4141; t <= 21000; t += 41) a.onBusFrame(t, t - 5);
     a.onPumpPress(PUMP_2CUP, 20000); a.resolvePump(20500);
-    assert(a.context().machine_on_flags == MACHINE_ON_LOWER_BOUND);
+    assert(a.context().machine_on_flags == 0 && a.context().machine_on_ms == 20000);
+    // Frames within half a second of starting to watch: already running.
     b.watchBusAgain(2000);
-    b.onBusFrame(13100, 13095);
+    b.onBusFrame(2500, 2495);
+    for (uint32_t t = 2541; t <= 21000; t += 41) b.onBusFrame(t, t - 5);
     b.onPumpPress(PUMP_2CUP, 20000); b.resolvePump(20500);
-    assert(b.context().machine_on_flags == 0 && b.context().machine_on_ms == 6900);
-    printf("boot ordering and the 10 s watch threshold OK\n");
+    assert(b.context().machine_on_flags == MACHINE_ON_LOWER_BOUND && b.context().machine_on_ms == 17500);
+    printf("boot ordering, and power-up vs already running OK\n");
   }
   {
     // millis() wrapping between frames: unsigned arithmetic still sees a
@@ -694,7 +699,7 @@ int main() {
     }
     m.onPumpPress(PUMP_2CUP, back + 30000);
     m.resolvePump(back + 38000);
-    assert(m.context().machine_on_ms == 30000);
+    assert(m.context().machine_on_ms == 34100);
     printf("millis wrap OK\n");
   }
 

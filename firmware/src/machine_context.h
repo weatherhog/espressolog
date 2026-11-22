@@ -183,25 +183,43 @@ public:
   // adds nothing to it (reviews 2026-11-22: a flag for "the board was blind"
   // lingered while the machine was off and hid the next real power-on, and
   // missed stalls just under 10 s).
-  //   Systematically ~4 s late: power-on starts with a ~1.1 s init burst the
-  // decoder rejects and ~3 s of bus silence while U2.4 shows
-  // (docs/machine-display-bus.md), so the first COUNTED frame is the blank
-  // at about +4.1 s -- and a frame is stamped when polled, so a power-on
-  // during a blocked loop is anchored at the end of the block.
-  //   Lower bound: if this board had not WATCHED the bus stay silent for a
-  // full gap since it started watching -- boot or watchBusAgain() -- the
-  // machine may have been on before; the time is then measured from that
-  // first frame and flagged MACHINE_ON_LOWER_BOUND.
+  //   THE POWER-ON SHAPE (docs/machine-display-bus.md, power-on table, two
+  // boots byte-identical): rails up at 0; a ~1.1 s initialisation burst the
+  // decoder rejects; then ~3 s with NO transactions while U2.4 shows; the
+  // first counted frame at +4.1 s. A running machine sends a frame every
+  // ~41 ms and is never frame-silent for a second. So:
+  //   - First frame since watching started (boot, watchBusAgain), after at
+  //     least POWERUP_SILENCE_MS of WATCHED frame silence: a power-up, seen
+  //     whole or in part -- including the board and machine powered up
+  //     together by one switch, where the board starts watching only after
+  //     its own ~2 s boot and misses the burst (operator, 2026-11-22). The
+  //     on-time counts from STARTUP_MS before that frame: exact.
+  //   - First frame with less silence watched: the machine was already
+  //     running; counted from that frame, flagged MACHINE_ON_LOWER_BOUND.
+  //   - Later, a frame after more than MACHINE_OFF_GAP_MS of witnessed
+  //     silence: switched off and on again; exact, from STARTUP_MS before.
+  //     (Mid-session the threshold stays long: there is no "just started
+  //     watching" to anchor a shorter one.)
+  // A frame is stamped when polled, so a power-on during a blocked loop is
+  // anchored at the end of the block, too late by the block.
   static constexpr uint32_t MACHINE_OFF_GAP_MS = 10000;
+  static constexpr uint32_t POWERUP_SILENCE_MS = 1000;
+  static constexpr uint32_t STARTUP_MS = 4100;   // rails up to first frame
   void onBusFrame(uint32_t now_ms, uint32_t prev_poll_ms) {
     if (!bus_seen) {
-      bus_on_since_ms = now_ms;
-      bus_lower_bound = (int32_t)(prev_poll_ms - watch_since_ms) <= (int32_t)MACHINE_OFF_GAP_MS;
+      const int32_t watched = (int32_t)(prev_poll_ms - watch_since_ms);
+      if (watched >= (int32_t)POWERUP_SILENCE_MS) {
+        bus_on_since_ms = now_ms - STARTUP_MS;   // a power-up
+        bus_lower_bound = false;
+      } else {
+        bus_on_since_ms = now_ms;                // already running
+        bus_lower_bound = true;
+      }
       bus_seen = true;
     } else if ((uint32_t)(prev_poll_ms - last_bus_ms) > MACHINE_OFF_GAP_MS) {
       // Unsigned: last_bus_ms was set at a poll no later than prev_poll_ms,
       // and a signed compare would miss a power-on after 24.8 days off.
-      bus_on_since_ms = now_ms;          // watched it go quiet: off, then on again
+      bus_on_since_ms = now_ms - STARTUP_MS;     // watched it go quiet: off, then on again
       bus_lower_bound = false;
     }
     last_bus_ms = now_ms;

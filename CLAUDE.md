@@ -1843,18 +1843,23 @@ and run predate the edit. The run is re-derived at every server start. **Header 
 `setpoint_dc`, `machine_on_ms`, `machine_on_flags` and `pump_idle_ms`
 (125 → 134 bytes): how long the machine had been on, and the pump idle, at
 this shot's pump press — for the first-shot warm-up question (0f). On-time
-comes from the display bus coming alive after >10 s of silence (the machine
-is switched off between sessions); flag bit 0 marks it a lower bound when
-the bus was already live as the board started watching. Idle time is the
+comes from the display bus: after power-on it is frame-silent until +4.1 s
+(init burst, then `U2.4` on the glass), while a running machine sends a
+frame every 41 ms. So the first frame after ≥ 1 s of watched silence since
+the board started watching is a power-up — including board and machine on
+one switched strip, where the board misses the burst (operator,
+2026-11-22) — counted from 4.1 s before that frame (firmware 0.15.1); a
+later frame after > 10 s of watched silence is a power cycle, counted the
+same way; flag bit 0 marks a lower bound when frames came at once. Idle time is the
 gap to the last flowmeter pulse before the press, so it needs the flow tap.
 Stored as `machine_on_s`, `machine_on_lower_bound` and the long-empty
 `s_since_flush` (migration 015) — which now means time since the last
 COUNTED flowmeter pulse: any pump run (a shot, a flush, a hot-water draw,
 steam if it pumps -- not established), and any noise the glitch filter
 lets through, not just a flush. **Known limits:** a
-board and machine powered up together are always flagged lower bound; the
-on-time runs ~4 s short (the power-on init burst and the `U2.4` silence come
-before the first counted frame); a power cycle counts only if the board's
+board that takes longer than ~3 s to start watching misses the power-up's
+silence too and flags a lower bound (0.15.0 flagged every shared power-up
+that way, and its exact values run ~4.1 s short); a power cycle counts only if the board's
 polls WATCHED the bus stay silent for over 10 s, so an off period polls did
 not witness -- e.g. switched off just before a long upload or selftest and
 back on during it -- keeps the older on-time; unplugging and

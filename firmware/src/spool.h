@@ -107,7 +107,7 @@ typedef struct __attribute__((packed)) {
   // ms from the machine being switched on (its display bus coming alive after
   // >10 s of silence) to this shot's pump press; 0xFFFFFFFF = not known
   // (display tap off, no press, or the newest frame more than 10 s before
-  // first drip). About 4 s short: see MachineContextTracker::onBusFrame. machine_on_flags bit 0: a LOWER BOUND only,
+  // first drip). Rules and limits: MachineContextTracker::onBusFrame. machine_on_flags bit 0: a LOWER BOUND only,
   // the bus was already live when this board started watching it.
   uint32_t machine_on_ms;
   uint8_t  machine_on_flags;

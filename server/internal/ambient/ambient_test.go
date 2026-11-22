@@ -243,6 +243,16 @@ func TestAMissingHumidityIsFilledFromTheHour(t *testing.T) {
 	}
 }
 
+// Review 2026-11-22: a state of "inf" or "nan" is not a reading.
+func TestNonFiniteStatesAreNotReadings(t *testing.T) {
+	for _, v := range []string{"inf", "-Inf", "nan"} {
+		list := []histEntry{{EntityID: tempID, State: v, LastChanged: "2026-11-22T08:00:00+00:00"}}
+		if got := lastAtOrBefore(list, shotAt); got != nil {
+			t.Errorf("%q read as %v", v, *got)
+		}
+	}
+}
+
 func TestNothingAnywhereIsNoneNotAnError(t *testing.T) {
 	srv := newFake(t, `[]`, nil).serve()
 	defer srv.Close()

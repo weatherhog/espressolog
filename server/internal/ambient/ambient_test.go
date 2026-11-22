@@ -32,6 +32,9 @@ type fakeHA struct {
 	history string
 	stats   map[string][]map[string]any
 	units   map[string]string
+	noClass map[string]bool
+	rh      bool      // the client is configured with the RH entity
+	statsAt time.Time // the moment whose hour the statistics call must ask for
 }
 
 func (f *fakeHA) serve() *httptest.Server {
@@ -55,8 +58,11 @@ func (f *fakeHA) serve() *httptest.Server {
 			w.Write([]byte(`{"message":"Entity not found."}`))
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]any{"entity_id": id, "state": "21.0",
-			"attributes": map[string]string{"unit_of_measurement": unit}})
+		attrs := map[string]string{"unit_of_measurement": unit, "state_class": "measurement"}
+		if f.noClass[id] {
+			delete(attrs, "state_class")
+		}
+		json.NewEncoder(w).Encode(map[string]any{"entity_id": id, "state": "21.0", "attributes": attrs})
 	})
 	mux.HandleFunc("/api/history/period/", func(w http.ResponseWriter, r *http.Request) {
 		if !auth(w, r) {
@@ -75,6 +81,9 @@ func (f *fakeHA) serve() *httptest.Server {
 		}
 		if !strings.Contains(q.Get("filter_entity_id"), tempID) {
 			t.Errorf("history query without the temperature entity: %s", r.URL.RawQuery)
+		}
+		if f.rh && !strings.Contains(q.Get("filter_entity_id"), rhID) {
+			t.Errorf("history query without the humidity entity: %s", r.URL.RawQuery)
 		}
 		w.Write([]byte(f.history))
 	})
@@ -105,12 +114,23 @@ func (f *fakeHA) serve() *httptest.Server {
 		if m == nil || m["type"] != "recorder/statistics_during_period" {
 			return
 		}
-		hour := shotAt.Truncate(time.Hour)
+		at := f.statsAt
+		if at.IsZero() {
+			at = shotAt
+		}
+		hour := at.Truncate(time.Hour)
 		if m["start_time"] != hour.Format(time.RFC3339) || m["end_time"] != hour.Add(time.Hour).Format(time.RFC3339) {
 			t.Errorf("statistics window %v..%v, want the hour containing the shot", m["start_time"], m["end_time"])
 		}
 		if m["period"] != "hour" {
 			t.Errorf("statistics period %v", m["period"])
+		}
+		if ty, _ := m["types"].([]any); len(ty) != 1 || ty[0] != "mean" {
+			t.Errorf("statistics types %v, want [mean]", m["types"])
+		}
+		ids, _ := m["statistic_ids"].([]any)
+		if len(ids) == 0 || ids[0] != tempID || (f.rh && (len(ids) < 2 || ids[1] != rhID)) {
+			t.Errorf("statistic_ids %v", m["statistic_ids"])
 		}
 		if u, _ := m["units"].(map[string]any); u["temperature"] != "°C" {
 			t.Errorf("statistics units %v, want temperature °C", m["units"])
@@ -126,16 +146,24 @@ func (f *fakeHA) serve() *httptest.Server {
 
 func newFake(t *testing.T, history string, stats map[string][]map[string]any) *fakeHA {
 	return &fakeHA{t: t, history: history, stats: stats,
-		units: map[string]string{tempID: "°C", rhID: "%"}}
+		units: map[string]string{tempID: "°C", rhID: "%"}, noClass: map[string]bool{}}
 }
+
+// The shots in these tests are a day old unless a test says otherwise, so
+// the hourly fallback is allowed.
+var testNow = shotAt.Add(24 * time.Hour)
 
 func client(srv *httptest.Server, rh bool) *Client {
 	cfg := Config{URL: srv.URL, Token: token, TempEntity: tempID}
 	if rh {
 		cfg.RHEntity = rhID
 	}
-	return New(cfg)
+	c := New(cfg)
+	c.Now = func() time.Time { return testNow }
+	return c
 }
+
+func (f *fakeHA) serveFor(rh bool) *httptest.Server { f.rh = rh; return f.serve() }
 
 func TestStateIsTheValueInForceAtTheShot(t *testing.T) {
 	history := `[
@@ -144,7 +172,7 @@ func TestStateIsTheValueInForceAtTheShot(t *testing.T) {
 	  {"entity_id":"sensor.room_temperature","state":"23.0","last_changed":"2026-11-22T08:10:00+00:00"}],
 	 [{"entity_id":"sensor.room_humidity","state":"48","last_changed":"2026-11-22T06:00:00+00:00"}]
 	]`
-	srv := newFake(t, history, nil).serve()
+	srv := newFake(t, history, nil).serveFor(true)
 	defer srv.Close()
 	r, err := client(srv, true).At(context.Background(), shotAt)
 	if err != nil {
@@ -177,7 +205,7 @@ func TestUnavailableAtTheShotFallsBackToTheHour(t *testing.T) {
 func TestPurgedHistoryFallsBackToTheHourlyMean(t *testing.T) {
 	srv := newFake(t, `[]`, map[string][]map[string]any{
 		tempID: {{"mean": 20.3}}, rhID: {{"mean": 51.2}},
-	}).serve()
+	}).serveFor(true)
 	defer srv.Close()
 	r, err := client(srv, true).At(context.Background(), shotAt)
 	if err != nil {
@@ -192,7 +220,7 @@ func TestPurgedHistoryFallsBackToTheHourlyMean(t *testing.T) {
 // the humidity from the hour's mean instead of dropping it.
 func TestAMissingHumidityIsFilledFromTheHour(t *testing.T) {
 	history := `[[{"entity_id":"sensor.room_temperature","state":"21.4","last_changed":"2026-11-22T08:00:00+00:00"}]]`
-	srv := newFake(t, history, map[string][]map[string]any{rhID: {{"mean": 50.0}}}).serve()
+	srv := newFake(t, history, map[string][]map[string]any{rhID: {{"mean": 50.0}}}).serveFor(true)
 	defer srv.Close()
 	r, err := client(srv, true).At(context.Background(), shotAt)
 	if err != nil {
@@ -224,22 +252,68 @@ func TestABadTokenIsAnErrorNotNone(t *testing.T) {
 	}
 }
 
-// Review 2026-11-22: a typo in an entity id, or a sensor in the wrong unit,
-// stops the worker before it writes anything.
-func TestValidateRefusesAMissingEntityOrAWrongUnit(t *testing.T) {
-	f := newFake(t, `[]`, nil)
+// Reviews 2026-11-22: a typo in an entity id, a sensor in the wrong unit,
+// one without long-term statistics, or a statistics connection that gives
+// no mean all stop the worker before it writes anything.
+func TestValidateRefusesWhatWouldWriteNoneAcrossTheArchive(t *testing.T) {
+	f := newFake(t, `[]`, map[string][]map[string]any{tempID: {{"mean": 20.0}}})
+	f.statsAt = testNow.Add(-25 * time.Hour)
 	srv := f.serve()
 	defer srv.Close()
-	if err := client(srv, true).Validate(context.Background()); err != nil {
+	if err := client(srv, false).Validate(context.Background()); err != nil {
 		t.Errorf("good configuration refused: %v", err)
 	}
-	bad := New(Config{URL: srv.URL, Token: token, TempEntity: "sensor.room_temprature"})
+	bad := client(srv, false)
+	bad.cfg.TempEntity = "sensor.room_temprature"
 	if err := bad.Validate(context.Background()); err == nil || !strings.Contains(err.Error(), "does not exist") {
 		t.Errorf("typo accepted: %v", err)
+	}
+	f.noClass[tempID] = true
+	if err := client(srv, false).Validate(context.Background()); err == nil || !strings.Contains(err.Error(), "state_class") {
+		t.Errorf("a sensor without statistics accepted: %v", err)
+	}
+	f.noClass[tempID] = false
+	f.stats = nil
+	if err := client(srv, false).Validate(context.Background()); err == nil || !strings.Contains(err.Error(), "probe") {
+		t.Errorf("no hourly mean accepted: %v", err)
 	}
 	f.units[tempID] = "°F"
 	if err := client(srv, false).Validate(context.Background()); err == nil {
 		t.Error("a sensor in °F accepted")
+	}
+}
+
+// Review 2026-11-22: a shot younger than its hour's summary, missing a value,
+// is retried -- not written 'none' because the hour's mean does not exist yet.
+func TestARecentShotMissingAValueIsRetriedNotNone(t *testing.T) {
+	srv := newFake(t, `[]`, nil).serve()
+	defer srv.Close()
+	c := client(srv, false)
+	c.Now = func() time.Time { return shotAt.Add(30 * time.Minute) }
+	if _, err := c.At(context.Background(), shotAt); !errors.Is(err, ErrTooRecent) {
+		t.Errorf("err = %v, want ErrTooRecent", err)
+	}
+}
+
+func TestHealthChangesOnlyOnEvidence(t *testing.T) {
+	cases := []struct {
+		from Health
+		r    PassResult
+		to   Health
+		logs bool
+	}{
+		{Working, PassResult{Tried: 0}, Working, false},
+		{Failing, PassResult{Tried: 0}, Failing, false}, // all in backoff: not "working again"
+		{Working, PassResult{Tried: 3, Failed: 3, LastErr: errors.New("x")}, Failing, true},
+		{Failing, PassResult{Tried: 3, Failed: 3}, Failing, false},
+		{Failing, PassResult{Tried: 3, Filled: 1, Failed: 2}, Working, true},
+		{Working, PassResult{Tried: 3, Filled: 1, Failed: 2}, Working, false},
+	}
+	for i, c := range cases {
+		to, msg := Next(c.from, c.r)
+		if to != c.to || (msg != "") != c.logs {
+			t.Errorf("case %d: %v -> %v %q, want %v logs=%v", i, c.from, to, msg, c.to, c.logs)
+		}
 	}
 }
 
@@ -286,9 +360,9 @@ func TestAFailingShotDoesNotStallTheOthers(t *testing.T) {
 	}
 	now := shotAt
 	w := &Worker{St: fs, HL: &fakeLooker{bad: map[time.Time]bool{at(2): true}}, Now: func() time.Time { return now }}
-	filled, tried, err := w.Pass(context.Background())
-	if err == nil || filled != 5 || tried != 5 {
-		t.Errorf("filled=%d tried=%d err=%v; want 5 filled (one no_clock), 5 tried, the error reported", filled, tried, err)
+	r := w.Pass(context.Background())
+	if r.LastErr == nil || r.Filled != 5 || r.Tried != 5 || r.Failed != 1 {
+		t.Errorf("%+v; want 5 filled (one no_clock), 5 tried, 1 failed, the error reported", r)
 	}
 	if fs.set[5] != SourceNoClock || fs.set[6] != SourceState {
 		t.Errorf("set=%v; want 5 no_clock and 6 (behind the failing 2) filled", fs.set)
@@ -298,12 +372,12 @@ func TestAFailingShotDoesNotStallTheOthers(t *testing.T) {
 	}
 	// Within its backoff the failing shot is not tried again.
 	now = shotAt.Add(30 * time.Second)
-	if _, tried, _ := w.Pass(context.Background()); tried != 0 {
-		t.Errorf("retried within the backoff: tried=%d", tried)
+	if r := w.Pass(context.Background()); r.Tried != 0 {
+		t.Errorf("retried within the backoff: %+v", r)
 	}
 	now = shotAt.Add(2 * time.Minute)
-	if _, tried, _ := w.Pass(context.Background()); tried != 1 {
-		t.Errorf("not retried after the backoff: tried=%d", tried)
+	if r := w.Pass(context.Background()); r.Tried != 1 {
+		t.Errorf("not retried after the backoff: %+v", r)
 	}
 }
 

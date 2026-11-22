@@ -78,7 +78,11 @@ were opened by another record, leaving 69 shots in 32 sessions.)
   no ambient temperature then (ambient_c NULL throughout, 2026-11-20). From
   2026-11-22 the server fills it from a room thermometer in Home Assistant
   (CLAUDE.md, Architecture). A first look that day, from the thermometer's
-  hourly means over the 28 sessions with two shots or more: the first-shot
+  hourly means read straight from Home Assistant's statistics (not the
+  server's stored values, which did not exist yet), over the 28 main
+  sessions with two shots or more as this script found them on 2026-11-22
+  (0a.6 only, after the exclusions of 2026-11-20 to 22 -- not the 30 of the
+  2026-11-20 run), by an ad-hoc query not kept in the repo: the first-shot
   gap was 0.178 g/s in the colder half (19.7 C up to the median) against
   0.129 in the warmer (up to 24.1 C), r = -0.18 -- the direction a warm-up
   cause predicts, and well within chance; humidity r = -0.11.

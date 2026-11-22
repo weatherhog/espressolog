@@ -744,10 +744,13 @@ worker fills `ambient_c` / `ambient_rh` after ingest: the state in force at
 pour time while Home Assistant still has it (~10 days), else the mean of
 that hour from its long-term statistics, which is how the archive gets
 filled; `ambient_source` says which (`'no_clock'` for a shot recorded
-without clock time, whose `started_at` is its upload time). It checks the
-sensors exist and report °C and % before writing anything, retries a
-failing shot with backoff without stalling the others, and an unreachable
-Home Assistant costs time, not data; ingest never waits on it. Configured only by the
+without clock time, whose `started_at` is its upload time). "State in
+force" is the sensor's last *reported* value, however old. Before writing,
+and again every hour, it checks the sensors exist, report °C and %, keep
+long-term statistics, and that a past hour's mean comes back over the
+WebSocket; it retries a failing shot with backoff without stalling the
+others, retries a shot under ~2 h old rather than writing `'none'`, and an
+unreachable Home Assistant costs time, not data; ingest never waits on it. Configured only by the
 environment file on the server box (`server/deploy/espressolog.env.example`);
 the URL, token and entity ids are not in this repo. The sensor is a room
 thermometer ~5 m from the machine, so it reads the room, not the machine.

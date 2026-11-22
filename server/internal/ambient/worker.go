@@ -2,6 +2,8 @@ package ambient
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"time"
 
@@ -38,6 +40,11 @@ type Looker interface {
 	At(ctx context.Context, t time.Time) (Reading, error)
 }
 
+// Revalidate is how often the sensors are checked again while running: a
+// sensor renamed or switched to another unit stops the writes within an
+// hour (review 2026-11-22).
+const Revalidate = time.Hour
+
 // Worker fills ambient readings. Ingest never waits on it: a shot is stored
 // first and gets its room reading afterwards (invariant 6), and an outage of
 // Home Assistant costs time, not data.
@@ -46,6 +53,7 @@ type Worker struct {
 	HL    Looker
 	Now   func() time.Time
 	retry map[int64]backoff
+	noted map[int64]bool // shots whose failure (or bad started_at) was logged
 }
 
 type backoff struct {
@@ -53,9 +61,43 @@ type backoff struct {
 	wait time.Duration
 }
 
-// Run validates the configuration, then fills readings until ctx ends. It
-// logs when its state changes (working, failing, recovered), not on every
-// pass, and backs off while every lookup fails.
+// PassResult is what one pass did.
+type PassResult struct {
+	Filled, Tried, Failed int
+	LastErr               error
+}
+
+// Health is the worker's logged state.
+type Health int
+
+const (
+	Working Health = iota
+	Failing
+)
+
+// Next decides the state after a pass, and what to log. Pure, for tests.
+// A pass that tried nothing (everything pending is in its backoff, or
+// nothing is pending) changes nothing: it is not evidence either way
+// (review 2026-11-22: it read as "working again" while Home Assistant was
+// down). Working again needs a shot actually filled.
+func Next(h Health, r PassResult) (Health, string) {
+	switch {
+	case r.Tried == 0:
+		return h, ""
+	case r.Filled == 0 && r.Failed > 0:
+		if h == Working {
+			return Failing, fmt.Sprintf("ambient: lookups failing (%v); backing off", r.LastErr)
+		}
+		return Failing, ""
+	case r.Filled > 0 && h == Failing:
+		return Working, "ambient: lookups working again"
+	}
+	return h, ""
+}
+
+// Run validates the configuration, then fills readings until ctx ends,
+// re-validating every Revalidate. It logs when its state changes, not on
+// every pass, and backs off while every lookup fails.
 func (w *Worker) Run(ctx context.Context) {
 	if w.Now == nil {
 		w.Now = time.Now
@@ -69,95 +111,128 @@ func (w *Worker) Run(ctx context.Context) {
 			return true
 		}
 	}
-	// Nothing is written until the sensors are known to exist with the
-	// right units.
-	logged := ""
 	for {
-		err := w.HL.Validate(ctx)
-		if err == nil {
-			break
-		}
-		if msg := err.Error(); msg != logged {
-			log.Printf("ambient: not starting: %v (retrying)", err)
-			logged = msg
-		}
-		wait = min(wait*2, MaxInterval)
-		if !sleep() {
-			return
-		}
-	}
-	log.Printf("ambient: Home Assistant sensors checked; filling room readings")
-	wait = Interval
-	failing := false
-	for {
-		n, tried, err := w.Pass(ctx)
-		switch {
-		case err != nil || (tried > 0 && n == 0):
-			if !failing {
-				log.Printf("ambient: lookups failing (%v); backing off", err)
-				failing = true
+		// Nothing is written until the sensors check out -- at start, and
+		// again every Revalidate.
+		logged := ""
+		for {
+			err := w.HL.Validate(ctx)
+			if err == nil {
+				break
+			}
+			if msg := err.Error(); msg != logged {
+				log.Printf("ambient: not writing: %v (retrying)", err)
+				logged = msg
 			}
 			wait = min(wait*2, MaxInterval)
-		default:
-			if failing {
-				log.Printf("ambient: lookups working again")
-				failing = false
+			if !sleep() {
+				return
 			}
-			if n > 0 {
-				log.Printf("ambient: filled %d shot(s)", n)
-			}
-			wait = Interval
 		}
-		if !sleep() {
-			return
+		log.Printf("ambient: Home Assistant sensors checked; filling room readings")
+		validated := w.Now()
+		wait = Interval
+		health := Working
+		for w.Now().Sub(validated) < Revalidate {
+			r := w.Pass(ctx)
+			var msg string
+			prev := health
+			health, msg = Next(health, r)
+			if msg != "" {
+				log.Print(msg)
+			}
+			if prev == Failing && health == Working {
+				// The outage is over: shots it pushed back should not wait out
+				// backoffs of up to RetryMax.
+				w.retry = map[int64]backoff{}
+			}
+			if r.Filled > 0 {
+				log.Printf("ambient: filled %d shot(s)", r.Filled)
+			}
+			if health == Failing {
+				wait = min(wait*2, MaxInterval)
+			} else {
+				wait = Interval
+			}
+			if !sleep() {
+				return
+			}
 		}
 	}
 }
 
-// Pass makes up to Batch lookups among the pending shots that are due, and
-// returns how many it filled, how many it tried, and the last lookup error.
-// A failing shot is skipped for its backoff, and the pass goes on.
-func (w *Worker) Pass(ctx context.Context) (filled, tried int, lastErr error) {
+// Pass makes up to Batch lookups among the pending shots that are due.
+// A failing shot is skipped for its backoff, and the pass goes on; its first
+// failure is logged once, so a shot that keeps failing is never silent
+// (review 2026-11-22). ErrTooRecent is not a failure: the shot waits.
+func (w *Worker) Pass(ctx context.Context) (r PassResult) {
 	if w.retry == nil {
 		w.retry = map[int64]backoff{}
+	}
+	if w.noted == nil {
+		w.noted = map[int64]bool{}
 	}
 	if w.Now == nil {
 		w.Now = time.Now
 	}
 	pending, err := w.St.ShotsNeedingAmbient(Scan)
 	if err != nil {
-		return 0, 0, err
+		r.LastErr = err
+		r.Failed = 1
+		r.Tried = 1
+		return r
 	}
 	now := w.Now()
 	for _, p := range pending {
-		if tried >= Batch {
+		if r.Tried >= Batch {
 			break
 		}
 		if b, ok := w.retry[p.ID]; ok && now.Before(b.next) {
 			continue
 		}
-		if !p.ClockValid {
-			if err := w.St.SetAmbient(p.ID, nil, nil, SourceNoClock); err != nil {
-				return filled, tried, err
+		if p.BadTime {
+			if !w.noted[p.ID] {
+				log.Printf("ambient: shot %d: started_at does not parse; skipped", p.ID)
+				w.noted[p.ID] = true
 			}
-			filled++
 			continue
 		}
-		tried++
-		r, err := w.HL.At(ctx, p.StartedAt)
+		if !p.ClockValid {
+			if err := w.St.SetAmbient(p.ID, nil, nil, SourceNoClock); err != nil {
+				r.LastErr = err
+				return r
+			}
+			r.Filled++
+			continue
+		}
+		r.Tried++
+		reading, err := w.HL.At(ctx, p.StartedAt)
 		if err != nil {
 			b := w.retry[p.ID]
+			if errors.Is(err, ErrTooRecent) {
+				b.wait, b.next = RetryMin*15, now.Add(RetryMin*15)
+				w.retry[p.ID] = b
+				r.Tried--
+				continue
+			}
 			b.wait = min(max(b.wait*2, RetryMin), RetryMax)
 			b.next = now.Add(b.wait)
 			w.retry[p.ID] = b
-			lastErr = err
+			if !w.noted[p.ID] {
+				log.Printf("ambient: shot %d: %v (retrying with backoff)", p.ID, err)
+				w.noted[p.ID] = true
+			}
+			r.Failed++
+			r.LastErr = err
 			continue
 		}
-		if err := w.St.SetAmbient(p.ID, r.TempC, r.RH, r.Source); err != nil {
-			return filled, tried, err
+		if err := w.St.SetAmbient(p.ID, reading.TempC, reading.RH, reading.Source); err != nil {
+			r.LastErr = err
+			return r
 		}
 		delete(w.retry, p.ID)
-		filled++
+		delete(w.noted, p.ID)
+		r.Filled++
 	}
-	return filled, tried, lastErr
+	return r
 }

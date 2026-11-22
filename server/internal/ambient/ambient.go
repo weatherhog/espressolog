@@ -7,9 +7,10 @@
 //
 // Two sources, tried in this order:
 //
-//	SourceState  the last recorded state at or before the moment, from the
-//	             REST history API. Exact, but Home Assistant purges raw
-//	             states after its recorder's purge_keep_days (10 by default).
+//	SourceState  the state in force at the moment -- the sensor's last
+//	             REPORTED value, however long ago -- from the REST history
+//	             API. Home Assistant purges raw states after its recorder's
+//	             purge_keep_days (10 by default).
 //	SourceHourly the mean of the hour containing the moment, from the
 //	             long-term statistics (WebSocket recorder/statistics_during_period),
 //	             which Home Assistant keeps indefinitely for any sensor with a
@@ -81,13 +82,23 @@ type Reading struct {
 	Source string
 }
 
+// ErrTooRecent: a value is missing for a moment whose hour has not been
+// summarised yet, so the hour's mean cannot exist yet either. Not a final
+// "none": the caller retries later (review 2026-11-22).
+var ErrTooRecent = errors.New("too recent for the hour's mean")
+
+// RecentWindow is how long after a moment its hour's mean may still be
+// missing: the hour itself, plus slack for the statistics run.
+const RecentWindow = 2 * time.Hour
+
 type Client struct {
 	cfg  Config
 	http *http.Client
+	Now  func() time.Time
 }
 
 func New(cfg Config) *Client {
-	return &Client{cfg: cfg, http: &http.Client{Timeout: 15 * time.Second}}
+	return &Client{cfg: cfg, http: &http.Client{Timeout: 15 * time.Second}, Now: time.Now}
 }
 
 func (c *Client) entities() []string {
@@ -97,12 +108,30 @@ func (c *Client) entities() []string {
 	return []string{c.cfg.TempEntity, c.cfg.RHEntity}
 }
 
-// Validate checks once, before anything is written, that the configured
-// entities exist and report the units the columns hold: °C and %. Without
-// it a typo in an entity id reads as "no data" -- empty history, empty
-// statistics -- and would mark every shot 'none' for good (review
-// 2026-11-22).
+// Validate checks, before anything is written and again every hour, that
+// the configured entities exist, report the units the columns hold (°C and
+// %), keep long-term statistics (a state_class -- without one the hour's
+// mean never exists), and that the statistics WebSocket answers with a mean
+// for a past hour. Without it a typo in an entity id, a sensor without
+// statistics or a proxy that blocks WebSockets reads as "no data" and would
+// mark every older shot 'none' for good (reviews 2026-11-22).
 func (c *Client) Validate(ctx context.Context) error {
+	if err := c.validateStates(ctx); err != nil {
+		return err
+	}
+	probe := c.Now().Add(-25 * time.Hour)
+	h, err := c.hourly(ctx, probe)
+	if err != nil {
+		return fmt.Errorf("statistics probe: %w", err)
+	}
+	if h.TempC == nil {
+		return fmt.Errorf("statistics probe: no hourly mean for %s at %s -- does it keep long-term statistics?",
+			c.cfg.TempEntity, probe.UTC().Truncate(time.Hour).Format(time.RFC3339))
+	}
+	return nil
+}
+
+func (c *Client) validateStates(ctx context.Context) error {
 	want := map[string]string{c.cfg.TempEntity: "°C"}
 	if c.cfg.RHEntity != "" {
 		want[c.cfg.RHEntity] = "%"
@@ -120,7 +149,8 @@ func (c *Client) Validate(ctx context.Context) error {
 		}
 		var st struct {
 			Attributes struct {
-				Unit string `json:"unit_of_measurement"`
+				Unit       string `json:"unit_of_measurement"`
+				StateClass string `json:"state_class"`
 			} `json:"attributes"`
 		}
 		err = json.NewDecoder(resp.Body).Decode(&st)
@@ -134,15 +164,18 @@ func (c *Client) Validate(ctx context.Context) error {
 			return fmt.Errorf("entity %s: %w", id, err)
 		case st.Attributes.Unit != unit:
 			return fmt.Errorf("entity %s reports %q, want %q", id, st.Attributes.Unit, unit)
+		case st.Attributes.StateClass == "":
+			return fmt.Errorf("entity %s has no state_class, so Home Assistant keeps no hourly means for it", id)
 		}
 	}
 	return nil
 }
 
 // At returns the reading for moment t. An error means Home Assistant could
-// not be asked (network, auth, a malformed answer); the caller retries later.
-// Each value comes from the exact state where there is one, else from the
-// hour's mean; Source names where the TEMPERATURE came from.
+// not be asked (network, auth, a malformed answer) or ErrTooRecent; the
+// caller retries later. Each value comes from the state in force where
+// there is one, else from the hour's mean; Source names where the
+// TEMPERATURE came from.
 func (c *Client) At(ctx context.Context, t time.Time) (Reading, error) {
 	r, err := c.state(ctx, t)
 	if err != nil {
@@ -152,8 +185,17 @@ func (c *Client) At(ctx context.Context, t time.Time) (Reading, error) {
 		r.Source = SourceState
 	}
 	if r.TempC == nil || (r.RH == nil && c.cfg.RHEntity != "") {
+		if c.Now().Sub(t) < RecentWindow {
+			return Reading{}, ErrTooRecent
+		}
 		h, err := c.hourly(ctx, t)
 		if err != nil {
+			if r.TempC != nil {
+				// The temperature is in hand; only the humidity fallback
+				// failed. Keep what there is rather than retrying the shot
+				// for ever (review 2026-11-22).
+				return r, nil
+			}
 			return Reading{}, err
 		}
 		if r.TempC == nil && h.TempC != nil {

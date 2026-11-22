@@ -1191,6 +1191,29 @@ func TestSetAmbientWritesOnce(t *testing.T) {
 	}
 }
 
+// A shot recorded without clock time is reported as such: its started_at is
+// the upload time, so the room then says nothing about the pour.
+func TestShotsNeedingAmbientReportsClockValidity(t *testing.T) {
+	st := openTestStore(t)
+	raw, rec := pumpRecordWith(t, 410, record.Pump2Cup, 8200, func(h *record.Header) {
+		h.TimeValid = 0
+	}, nil)
+	res, err := st.Ingest("aa:bb:cc:dd:ee:03", rec, raw, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := st.ShotsNeedingAmbient(10)
+	if err != nil || len(p) != 1 || p[0].ID != res.ShotID || p[0].ClockValid || p[0].BadTime {
+		t.Errorf("pending = %+v, %v; want the shot with ClockValid false", p, err)
+	}
+	if _, err := st.db.Exec(`UPDATE shot SET started_at = 'not a time' WHERE id = ?`, res.ShotID); err != nil {
+		t.Fatal(err)
+	}
+	if p, err := st.ShotsNeedingAmbient(10); err != nil || len(p) != 1 || !p[0].BadTime {
+		t.Errorf("pending = %+v, %v; want BadTime, not an error", p, err)
+	}
+}
+
 // A record excluded at ingest — a placement (a cup set back after weighing,
 // shot 180), a reject (a knock, a flat abort under 5 g) or a legacy fault —
 // is stored excluded and must not take the dose from the real shot pulled

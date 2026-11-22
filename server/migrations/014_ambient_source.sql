@@ -3,17 +3,21 @@
 -- 2026-11-22, when the server started reading the room sensor from Home
 -- Assistant (internal/ambient):
 --
---   'ha_state'   the last recorded state at or before started_at -- exact;
---                Home Assistant keeps raw states ~10 days, so live shots
+--   'ha_state'   the state in force at started_at -- the sensor's last
+--                REPORTED value, however long before; Home Assistant keeps
+--                raw states ~10 days, so live shots
 --   'ha_hourly'  the mean of the hour containing started_at, from Home
 --                Assistant's long-term statistics -- how older shots and
 --                the archive get filled; coarser, a room moves little
 --                within an hour
 --   'none'       Home Assistant answered and had no temperature for that
---                moment (ambient_rh may still be set). Only written after
---                the worker checked at startup that the configured sensors
---                exist and report degrees C and %, so a typo in the
---                configuration cannot write it across the archive
+--                moment (ambient_rh may still be set). Only written while
+--                the worker's check holds -- at start and hourly: the
+--                sensors exist, report degrees C and %, keep long-term
+--                statistics, and a past hour's mean comes back -- so a typo
+--                in the configuration cannot write it across the archive.
+--                A shot under ~2 h old that is missing a value is retried,
+--                not written 'none': its hour has no mean yet
 --   'no_clock'   the board had no clock time when it recorded the shot, so
 --                started_at is the UPLOAD time and the room then says
 --                nothing about the pour; not looked up

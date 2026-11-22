@@ -1027,14 +1027,19 @@ type AmbientPending struct {
 	StartedAt time.Time
 	// ClockValid is false when the board had no clock time for the shot, so
 	// StartedAt is the upload time (Ingest) and says nothing about the pour.
+	// (Ingest also uses the upload time for time_valid = 1 with a zero
+	// timestamp; the firmware never writes that, and it is not caught here.)
 	ClockValid bool
+	// BadTime: started_at does not parse; StartedAt is zero. Reported, not an
+	// error, so one bad row cannot stop every other lookup.
+	BadTime bool
 }
 
 // ShotsNeedingAmbient returns up to limit shots that have not been looked up
 // in Home Assistant yet (ambient_source IS NULL), newest first so a shot
 // just pulled is filled before the archive backfill. A row whose started_at
-// does not parse is logged and skipped, never an error: one bad row must not
-// stop every other lookup (review 2026-11-22).
+// does not parse comes back with BadTime set, never as an error: one bad row
+// must not stop every other lookup (review 2026-11-22).
 func (s *Store) ShotsNeedingAmbient(limit int) ([]AmbientPending, error) {
 	rows, err := s.db.Query(`SELECT id, started_at,
 	                                NOT EXISTS (SELECT 1 FROM ingest_record ir
@@ -1054,8 +1059,7 @@ func (s *Store) ShotsNeedingAmbient(limit int) ([]AmbientPending, error) {
 			return nil, err
 		}
 		if p.StartedAt, err = time.Parse(time.RFC3339, ts); err != nil {
-			log.Printf("ambient: shot %d: started_at %q does not parse; skipped", p.ID, ts)
-			continue
+			p.StartedAt, p.BadTime = time.Time{}, true
 		}
 		out = append(out, p)
 	}

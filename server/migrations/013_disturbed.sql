@@ -20,5 +20,6 @@
 -- also a placement is still excluded as a placement). The samples stay raw
 -- (invariant 3), so the disturbance is still visible in the curve. Nothing
 -- is backfilled: older rows were judged by hand, and the worst of them were
--- excluded on 2026-11-21 (65, 81, 200, 201, 205).
+-- excluded by hand: 200, 201 on 2026-11-20; 81, 205 on 2026-11-21; 65 on
+-- 2026-11-22.
 ALTER TABLE shot ADD COLUMN disturbed INTEGER;

@@ -719,11 +719,16 @@ int main() {
     // before the first frame, and a frame 25+ days after the watch start
     // (a signed difference would read it as no silence).
     using MCT = MachineContextTracker;
-    assert(MCT::firstFrameSilence(1499, 1000, 0) == 499);
-    assert(MCT::firstFrameSilence(1500, 1000, 0) == MCT::POWERUP_SILENCE_MS);
-    assert(MCT::firstFrameSilence(5000, 1000, 3) == 0);          // edges dropped before it
-    assert(MCT::firstFrameSilence(1000 + 2200000000u, 1000, 0) == 2200000000u);
-    assert(MCT::firstFrameSilence(100, 0xFFFFFF00u, 0) == 356);   // millis wrapped
+    assert(MCT::firstFrameSilence(1499, 1000, false) == 499);
+    assert(MCT::firstFrameSilence(1500, 1000, false) == MCT::POWERUP_SILENCE_MS);
+    assert(MCT::firstFrameSilence(5000, 1000, true) == 0);       // an edge dropped before it
+    // A drop AFTER the first frame (same stall) does not count; before does.
+    assert(!MCT::droppedBefore(false, 0, 4100000));
+    assert(!MCT::droppedBefore(true, 4300000, 4100000));
+    assert(MCT::droppedBefore(true, 1100000, 4100000));
+    assert(MCT::droppedBefore(true, 0xFFFFFF00u, 100));          // across a micros wrap
+    assert(MCT::firstFrameSilence(1000 + 2200000000u, 1000, false) == 2200000000u);
+    assert(MCT::firstFrameSilence(100, 0xFFFFFF00u, false) == 356);   // millis wrapped
     printf("boot ordering, and power-up vs already running OK\n");
   }
   {

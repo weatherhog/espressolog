@@ -99,12 +99,22 @@ static constexpr uint16_t DBUS_RING = 512;      // 511 usable slots: ~50 ms of a
 static volatile DbusEdge dbus_ring[DBUS_RING];
 static volatile uint16_t dbus_head = 0, dbus_tail = 0;
 static volatile uint32_t dbus_dropped = 0;
+// v6 (0.15.1): when the ring FIRST dropped an edge since the tap was
+// enabled. The ring keeps the oldest edges and drops the newest, so only a
+// drop BEFORE the first decoded frame can have cost the bus frames ahead of
+// it; this time is what tells the two apart (review 2026-11-22).
+static volatile bool     dbus_have_drop = false;
+static volatile uint32_t dbus_first_drop_us = 0;
 static uint32_t dbus_frames = 0;
 
 static void IRAM_ATTR dbusIsr() {
   uint16_t h = dbus_head;
   uint16_t nxt = (uint16_t)((h + 1) % DBUS_RING);
-  if (nxt == dbus_tail) { dbus_dropped++; return; }   // consumer stalled
+  if (nxt == dbus_tail) {                         // consumer stalled
+    if (!dbus_have_drop) { dbus_have_drop = true; dbus_first_drop_us = micros(); }
+    dbus_dropped++;
+    return;
+  }
   dbus_ring[h].t_us = micros();
   dbus_ring[h].bit  = gpio_get_level((gpio_num_t)DISPLAY_DATA_PIN) ? 1 : 0;
   dbus_head = nxt;
@@ -130,8 +140,8 @@ static MachineContextTracker machine_ctx;
 static uint32_t frames_seen = 0;      // dbus_frames as machineContextPoll last saw it
 static uint32_t dbus_watch_ms = 0;    // millis() when the tap was last switched on (not micros:
                                       // a 71-minute wrap broke the silence judgement)
-static bool     dbus_first_noted = false;   // drops recorded at the first decoded frame
-static uint32_t dbus_drops_at_first = 0;    // dbus_dropped then (pollDisplay)
+static bool     dbus_first_noted = false;   // the first decoded frame has been examined
+static bool     dbus_drop_before_first = false;  // an edge was dropped before it (pollDisplay)
 static uint32_t ctx_last_poll_ms = 0; // when machineContextPoll last ran
 
 static void displaySetEnabled(bool on) {
@@ -142,9 +152,10 @@ static void displaySetEnabled(bool on) {
     pinMode(DISPLAY_DATA_PIN, INPUT);
     dbus_head = dbus_tail = 0;
     dbus_frames = dbus_dropped = 0;
-    frames_seen = 0;
+    frames_seen = 0;   // else the zeroing above reads as a new frame (review 2026-11-22)
+    dbus_have_drop = false;
     dbus_first_noted = false;
-    dbus_drops_at_first = 0;   // else the zeroing above reads as a new frame (review 2026-11-22)
+    dbus_drop_before_first = false;
     display_bus.beginCapture();   // drop the in-progress frame; see display.h
     attachInterrupt(digitalPinToInterrupt(DISPLAY_CLK_PIN), dbusIsr, RISING);
   }
@@ -170,13 +181,14 @@ static void pollDisplay() {
     if (display_bus.feedEdge(e.t_us, e.bit)) dbus_frames++;
   }
   if (display_bus.poll(micros())) dbus_frames++;   // bus went quiet mid-frame
-  // v6: the drops up to the drain that produced the FIRST frame -- the only
-  // ones that can have cost it frames before it. Later drops (BLE/WiFi
-  // bring-up in setup()) say nothing about it (review 2026-11-22).
+  // v6: was an edge dropped BEFORE the first decoded frame? Only such a drop
+  // can have cost the bus frames ahead of it; drops after it -- even in the
+  // same un-drained stall -- say nothing about it (reviews 2026-11-22).
   uint32_t first_us;
   if (!dbus_first_noted && display_bus.firstFrameUs(&first_us)) {
     dbus_first_noted = true;
-    dbus_drops_at_first = dbus_dropped;
+    dbus_drop_before_first =
+        MachineContextTracker::droppedBefore(dbus_have_drop, dbus_first_drop_us, first_us);
   }
 }
 
@@ -199,12 +211,14 @@ static void machineContextPoll() {
       // difference here cannot wrap.
       const uint32_t frame_ms = now - (micros() - first_us) / 1000;
       const uint32_t silence =
-          MachineContextTracker::firstFrameSilence(frame_ms, dbus_watch_ms, dbus_drops_at_first);
+          MachineContextTracker::firstFrameSilence(frame_ms, dbus_watch_ms, dbus_drop_before_first);
       machine_ctx.onFirstFrame(frame_ms, silence, now);
-      Serial.printf("# machine: first display frame %lu ms after watching started, %lu edges dropped before it -> %s\n",
-                    (unsigned long)(frame_ms - dbus_watch_ms), (unsigned long)dbus_drops_at_first,
-                    silence >= MachineContextTracker::POWERUP_SILENCE_MS
-                    ? "switched on (on-time exact)" : "already running, or frames lost (on-time a lower bound)");
+      Serial.printf("# machine: first display frame %lu ms after watching started%s -> %s\n",
+                    (unsigned long)(frame_ms - dbus_watch_ms),
+                    dbus_drop_before_first ? ", edges dropped before it" : "",
+                    silence >= MachineContextTracker::POWERUP_SILENCE_MS ? "switched on (on-time exact)"
+                    : dbus_drop_before_first ? "frames lost (on-time a lower bound)"
+                    : "already running (on-time a lower bound)");
     } else {
       machine_ctx.onBusFrame(now, prev);
     }

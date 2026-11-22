@@ -383,8 +383,9 @@ type Header struct {
 	// v5. The brew setpoint last dialled in on the display, decidegrees;
 	// TempNone on an older record or when the record does not say (Setpoint).
 	SetpointDc int16
-	// v6 (firmware 0.15.0): ms from the machine being switched on to this
-	// shot's pump press, flags (MachineOnLowerBound), and ms the pump had
+	// v6 (firmware 0.15.0): ms from the machine's first counted display frame
+	// -- raw; it was powered ~4.1 s before that -- to this shot's pump press,
+	// flags (MachineOnLowerBound), and ms the pump had
 	// stood idle before it. MachineOnNone / PumpIdleNone on an older record
 	// or when the board could not say (MachineOn, PumpIdle).
 	MachineOnMs    uint32
@@ -492,7 +493,8 @@ func detectorAtLeast(v string, min int) bool {
 }
 
 // MachineOn returns how long the machine had been on at this shot's pump
-// press (v6), and whether that is only a lower bound. ok is false when the
+// press (v6), raw from its first counted display frame (add ~4.1 s for the
+// time since power-on), and whether that is only a lower bound. ok is false when the
 // record does not say -- older than v6, the display tap off, no press.
 func (h *Header) MachineOn() (d time.Duration, lowerBound, ok bool) {
 	if h.FormatVersion < 6 || h.RecordType != TypeShot || h.MachineOnMs == MachineOnNone {

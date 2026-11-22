@@ -1851,10 +1851,11 @@ board and machine on one switched strip, where the board misses the burst
 (operator, 2026-11-22; firmware 0.15.1 switches the tap on first thing in
 `setup()` and logs the silence it saw) — and a later frame after > 10 s of
 watched silence is a power cycle; flag bit 0 marks a lower bound when
-frames came sooner, or when the display ring dropped edges before the
-first frame was decoded (its time then is not the bus's first; setup()
-drains the ring, and the boot log line reports the count — drops after the
-first frame do not count). **Stored raw**
+frames came sooner, or when the display ring dropped an edge before the
+first frame (its time then is not the bus's first). The ISR stamps its
+first drop, so drops after the frame's edges were queued — even in the
+same un-drained stall — do not count; setup() drains the ring, and the boot
+log line says which case it saw. **Stored raw**
 (invariant 3): from the first counted frame, so the machine had been on
 **~4.1 s longer** (±0.1 s when nothing was dropped) — add it in analysis;
 0.15.0 and 0.15.1 values are on the same footing. A running bus that drops

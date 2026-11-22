@@ -566,7 +566,7 @@ func v2BuildRecord(t *testing.T, boilerDc int16, timerDl uint16, touched bool) (
 		t.Fatal(err)
 	}
 	raw := buf.Bytes()
-	for i := 125 - 4; i < 125; i++ {
+	for i := 134 - 4; i < 134; i++ {
 		raw[i] = 0
 	}
 	binary.LittleEndian.PutUint32(raw[134-4:], crc32.ChecksumIEEE(raw))
@@ -711,7 +711,7 @@ func v2BuildFlowRecord(t *testing.T, seq uint32, flowTap bool, n int) ([]byte, *
 		t.Fatal(err)
 	}
 	raw := buf.Bytes()
-	for i := 125 - 4; i < 125; i++ {
+	for i := 134 - 4; i < 134; i++ {
 		raw[i] = 0
 	}
 	binary.LittleEndian.PutUint32(raw[134-4:], crc32.ChecksumIEEE(raw))

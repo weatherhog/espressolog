@@ -106,13 +106,14 @@ typedef struct __attribute__((packed)) {
   // --- format v6: warm-up (2026-11-22) ---
   // ms from the machine being switched on (its display bus coming alive after
   // >10 s of silence) to this shot's pump press; 0xFFFFFFFF = not known
-  // (display tap off, no press). machine_on_flags bit 0: a LOWER BOUND only,
+  // (display tap off, no press, or no frame within 10 s before first drip). machine_on_flags bit 0: a LOWER BOUND only,
   // the bus was already live when this board started watching it.
   uint32_t machine_on_ms;
   uint8_t  machine_on_flags;
   // ms from the previous pump run's last flowmeter pulse to this shot's pump
   // press: how long the pump stood idle; 0xFFFFFFFF = not known (flow tap
-  // off, no earlier pulse logged, pulses lost in between).
+  // off, no earlier pulse logged, pulses lost in between, or under 1 s --
+  // PulseLog::idleBefore).
   uint32_t pump_idle_ms;
   // weighing-only (zero for shots):
   int32_t  grams_mg;

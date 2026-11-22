@@ -242,7 +242,7 @@ CREATE TABLE shot (
                                         -- 2026-10-27.
   stopped_by        TEXT CHECK (stopped_by IN
                       ('manual','board_timer','auto_weight','fault') OR stopped_by IS NULL),
-  s_since_flush     REAL,               -- brew temp proxy on a single boiler
+  s_since_flush     REAL,               -- brew temp proxy on a single boiler (from 015: idle since ANY pump run)
   yield_at_stop_g   REAL,
   yield_final_g     REAL,               -- after drips settle (0a.7: the frozen peak if disturbed, see 013)
   settle_offset_g   REAL,               -- final − at_stop. THE PHASE-1 CALIBRATION.

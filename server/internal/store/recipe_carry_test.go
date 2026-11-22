@@ -55,7 +55,7 @@ func shotAt(t *testing.T, seq uint32, at time.Time, touched bool) (*record.Recor
 		t.Fatal(err)
 	}
 	raw := buf.Bytes()
-	for i := 125 - 4; i < 125; i++ {
+	for i := 134 - 4; i < 134; i++ {
 		raw[i] = 0
 	}
 	binary.LittleEndian.PutUint32(raw[134-4:], crc32.ChecksumIEEE(raw))

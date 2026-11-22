@@ -141,6 +141,12 @@ int main() {
     PulseLog w;                                                 // a wrapped ring keeps the newest
     for (uint32_t i = 0; i < 2 * PulseLog::N; i++) w.push(100000 + i * 20);
     assert(w.idleBefore(200000, &idle) && idle == 200000 - (100000 + (2 * PulseLog::N - 1) * 20));
+    // Review 2026-11-22: a pulse under a second before the press may be this
+    // run's own (a stall across the press) -- not known, not "0.04 s idle".
+    PulseLog r;
+    for (uint32_t t = 1000; t < 3000; t += 50) r.push(t);
+    for (uint32_t t = 39000; t < 41000; t += 40) r.push(t);   // pump already running
+    assert(!r.idleBefore(39960 + 40, &idle));
     printf("idle time before a press OK\n");
   }
 

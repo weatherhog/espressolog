@@ -15,8 +15,15 @@
 --
 -- s_since_flush (001, NULL until now) is filled from the same record:
 -- seconds from the previous pump run's last flowmeter pulse -- a shot, a
--- flush or a hot-water draw -- to this shot's press. NULL: the flow tap off,
--- no earlier pulse logged since it was enabled, or pulses lost in between.
--- Raw durations, nothing derived (invariant 3).
+-- flush or a hot-water draw; despite the name, ANY pump run -- to this
+-- shot's press. NULL: the flow tap off, no earlier pulse logged since it was
+-- enabled, pulses lost in between, or under 1 s (a loop() stall across the
+-- press can put the run's own pulses before it, so a short idle is not
+-- trusted). Raw durations, nothing derived (invariant 3).
+--
+-- Known limits: a board and machine powered up together always read as a
+-- lower bound; a power cycle while the board's loop was blocked > 10 s is
+-- not seen (the older on-time is kept); and a missed start press (CLAUDE.md,
+-- first_drip_ms limits) attributes another press, and both fields with it.
 ALTER TABLE shot ADD COLUMN machine_on_s REAL;
 ALTER TABLE shot ADD COLUMN machine_on_lower_bound INTEGER;

@@ -609,6 +609,20 @@ int main() {
     assert(m.context().machine_on_ms == MACHINE_ON_NONE);
     printf("no live bus at the shot gives unknown on-time OK\n");
   }
+  {
+    // Review 2026-11-22: a loop() blocked for 20 s (selftest, an upload)
+    // with the machine on must not read as off-and-on -- the board was blind.
+    MachineContextTracker m;
+    m.watchBusAgain(0);
+    for (uint32_t t = 60000; t <= 200000; t += 41) m.onBusFrame(t);
+    m.noteBlind();                                   // the poll after the stall
+    for (uint32_t t = 220000; t <= 400000; t += 41) m.onBusFrame(t);
+    m.onPumpPress(PUMP_2CUP, 390000);
+    m.resolvePump(398000);
+    assert(m.context().machine_on_ms == 330000);     // still from 60 s, not 220 s
+    assert(m.context().machine_on_flags == 0);
+    printf("a blind spell is not a power-on OK\n");
+  }
 
   printf("\nall machine context tests passed\n");
   return 0;

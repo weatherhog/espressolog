@@ -127,13 +127,18 @@ static MachineContextTracker machine_ctx;
 // the open question depends on.
 //
 // Interrupt detached before the ring is zeroed, for the same race reason.
+static uint32_t frames_seen = 0;      // dbus_frames as machineContextPoll last saw it
+static uint32_t ctx_last_poll_ms = 0; // when machineContextPoll last ran
+
 static void displaySetEnabled(bool on) {
+  const bool was_on = display_on;
   if (display_on) detachInterrupt(digitalPinToInterrupt(DISPLAY_CLK_PIN));
   if (on) {
     pinMode(DISPLAY_CLK_PIN, INPUT);
     pinMode(DISPLAY_DATA_PIN, INPUT);
     dbus_head = dbus_tail = 0;
     dbus_frames = dbus_dropped = 0;
+    frames_seen = 0;   // else the zeroing above reads as a new frame (review 2026-11-22)
     display_bus.beginCapture();   // drop the in-progress frame; see display.h
     attachInterrupt(digitalPinToInterrupt(DISPLAY_CLK_PIN), dbusIsr, RISING);
   }
@@ -141,8 +146,10 @@ static void displaySetEnabled(bool on) {
   // Off, on or re-attached: the machine may have been edited while nothing
   // watched, so a remembered setpoint is no longer the machine's.
   machine_ctx.forgetSetpoint();
-  // And whether the machine was switched on while nothing watched (v6).
-  machine_ctx.watchBusAgain(millis());
+  // And whether the machine was switched on while nothing watched (v6) --
+  // only when the tap actually changed: `display on` while on (the counter
+  // reset) must not turn an exact on-time into a lower bound.
+  if (on != was_on) machine_ctx.watchBusAgain(millis());
 }
 
 static void pollDisplay() {
@@ -158,11 +165,17 @@ static void pollDisplay() {
 
 static void machineContextPoll() {
   if (!display_on) return;
-  // v6: any decoded frame means the machine is on (onBusFrame).
-  static uint32_t frames_seen = 0;
+  // v6: any decoded frame means the machine is on (onBusFrame). Frames are
+  // decoded when polled, so a loop() blocked for longer than the power-off
+  // gap (selftest, a drive sweep, a slow upload) would read as off-and-on:
+  // tell the tracker the board was blind instead (review 2026-11-22).
+  const uint32_t now = millis();
+  if (ctx_last_poll_ms != 0 && now - ctx_last_poll_ms > MachineContextTracker::MACHINE_OFF_GAP_MS)
+    machine_ctx.noteBlind();
+  ctx_last_poll_ms = now;
   if (dbus_frames != frames_seen) {
     frames_seen = dbus_frames;
-    machine_ctx.onBusFrame(millis());
+    machine_ctx.onBusFrame(now);
   }
   machine_ctx.onReading(display_bus.reading(), display_bus.setpointTouched());
 }

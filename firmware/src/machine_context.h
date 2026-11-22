@@ -181,6 +181,8 @@ public:
   // first frame and flagged MACHINE_ON_LOWER_BOUND.
   static constexpr uint32_t MACHINE_OFF_GAP_MS = 10000;
   void onBusFrame(uint32_t now_ms) {
+    const bool blind = blind_pending;
+    blind_pending = false;
     if (!bus_seen) {
       bus_on_since_ms = now_ms;
       // Watching only since boot/re-enable: a machine already running then
@@ -188,10 +190,13 @@ public:
       // a full gap first.
       bus_lower_bound = (uint32_t)(now_ms - watch_since_ms) <= MACHINE_OFF_GAP_MS;
       bus_seen = true;
-    } else if ((uint32_t)(now_ms - last_bus_ms) > MACHINE_OFF_GAP_MS) {
+    } else if ((uint32_t)(now_ms - last_bus_ms) > MACHINE_OFF_GAP_MS && !blind) {
       bus_on_since_ms = now_ms;          // switched off and on again
       bus_lower_bound = false;
     }
+    // A gap the board was blind for (noteBlind) is not evidence of a power
+    // cycle: keep the on-time. KNOWN LIMIT: a machine really switched off and
+    // on within such a blind spell keeps the older, too-long on-time.
     last_bus_ms = now_ms;
   }
   // The display tap was switched or re-attached, or the board just booted:
@@ -200,11 +205,9 @@ public:
     bus_seen = false;
     watch_since_ms = now_ms;
   }
-  // The machine has been switched off long enough that the next frame will
-  // be a power-on: true when no frame for MACHINE_OFF_GAP_MS.
-  bool busSilent(uint32_t now_ms) const {
-    return !bus_seen || (uint32_t)(now_ms - last_bus_ms) > MACHINE_OFF_GAP_MS;
-  }
+  // The board could not watch the bus for longer than the off gap (loop()
+  // blocked): the next frame's gap says nothing about the machine.
+  void noteBlind() { blind_pending = true; }
 
   // Call when the detector reaches POURING. Takes the temperature from
   // before the pump started, which is the only time it is readable, and
@@ -372,6 +375,7 @@ private:
   uint32_t confirm_ms = 0;
   // v6 on-time state (onBusFrame).
   bool     bus_seen = false;
+  bool     blind_pending = false;
   bool     bus_lower_bound = true;
   uint32_t bus_on_since_ms = 0;
   uint32_t last_bus_ms = 0;

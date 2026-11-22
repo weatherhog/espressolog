@@ -1848,7 +1848,15 @@ is switched off between sessions); flag bit 0 marks it a lower bound when
 the bus was already live as the board started watching. Idle time is the
 gap to the last flowmeter pulse before the press, so it needs the flow tap.
 Stored as `machine_on_s`, `machine_on_lower_bound` and the long-empty
-`s_since_flush` (migration 015). **The server decodes v1 to v6** — older records
+`s_since_flush` (migration 015) — which now means idle since ANY pump run
+(a shot, a flush, a hot-water draw), not since a flush. **Known limits:** a
+board and machine powered up together are always flagged lower bound; a
+machine switched off and on while the board's loop was blocked > 10 s
+keeps the older on-time (a blocked loop is treated as blind, not as a
+power cycle); an idle under 1 s is reported unknown (a stall across the
+press can put the run's own pulses before it); and under the pump-press
+limits below (a missed start press) both fields describe the press that
+was attributed, not the real one. **The server decodes v1 to v6** — older records
 exist spooled and as fixtures, and losing one to a format bump would violate
 invariant 6. An older record reports the newer fields as "the machine did
 not say", which is the same thing a current record written with the display

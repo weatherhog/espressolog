@@ -715,6 +715,15 @@ int main() {
     for (uint32_t t = 5041; t <= 21000; t += 41) k.onBusFrame(t, t - 5);
     k.onPumpPress(PUMP_2CUP, 20000); k.resolvePump(20500);
     assert(k.context().machine_on_flags == MACHINE_ON_LOWER_BOUND);
+    // The firmware's judgement (firstFrameSilence): the 0.5 s edge, drops
+    // before the first frame, and a frame 25+ days after the watch start
+    // (a signed difference would read it as no silence).
+    using MCT = MachineContextTracker;
+    assert(MCT::firstFrameSilence(1499, 1000, 0) == 499);
+    assert(MCT::firstFrameSilence(1500, 1000, 0) == MCT::POWERUP_SILENCE_MS);
+    assert(MCT::firstFrameSilence(5000, 1000, 3) == 0);          // edges dropped before it
+    assert(MCT::firstFrameSilence(1000 + 2200000000u, 1000, 0) == 2200000000u);
+    assert(MCT::firstFrameSilence(100, 0xFFFFFF00u, 0) == 356);   // millis wrapped
     printf("boot ordering, and power-up vs already running OK\n");
   }
   {

@@ -20,9 +20,11 @@ static constexpr uint32_t PUMP_LEAD_NONE = 0xFFFFFFFF;
 // when this shot's pump started. 0xFFFFFFFF = not known.
 static constexpr uint32_t MACHINE_ON_NONE = 0xFFFFFFFF;
 static constexpr uint32_t PUMP_IDLE_NONE  = 0xFFFFFFFF;
-// machine_on_flags bit 0: machine_on_ms is only a LOWER BOUND -- the display
-// bus was already live when this board started watching it (the board booted,
-// or the display tap was switched on, into a running machine).
+// machine_on_flags bit 0: machine_on_ms is only a LOWER BOUND -- the first
+// display frame came within POWERUP_SILENCE_MS (0.5 s) of this board starting
+// to watch (it booted, or the tap was switched on, into a running machine),
+// or the ISR ring dropped edges before that frame so its time is not the
+// bus's first (MachineContextTracker::onFirstFrame).
 static constexpr uint8_t  MACHINE_ON_LOWER_BOUND = 0x01;
 
 // v4: the flowmeter pulses between the lever press and first drip.
@@ -71,9 +73,10 @@ struct MachineContext {
   // pour — still blinking, or cut off by the pump's timer — so this shot's
   // setpoint is unknown, not "the last one".
   bool     setpoint_pending     = false;
-  // v6: ms from the machine being switched on to this shot's pump press
-  // (the display bus came alive after being silent; MACHINE_ON_NONE = not
-  // known, e.g. the display tap off or no press), and machine_on_flags.
+  // v6: ms from the machine's first counted display frame (~4.1 s after it
+  // was powered; MachineContextTracker::onFirstFrame) to this shot's pump
+  // press; MACHINE_ON_NONE = not known, e.g. the display tap off or no
+  // press. And machine_on_flags.
   uint32_t machine_on_ms        = MACHINE_ON_NONE;
   uint8_t  machine_on_flags     = 0;
   // v6: ms from the previous pump run's last flowmeter pulse to this shot's
@@ -226,6 +229,14 @@ public:
     last_bus_ms = poll_ms;
   }
   bool busSeen() const { return bus_seen; }
+  // The silence to judge a first frame on: frame_ms − watch_ms (unsigned:
+  // the frame is never before the watch start, and a signed difference
+  // would read a 25-day wait as none), or 0 when the ISR ring dropped edges
+  // before the frame -- its time is then not the bus's first. Pure, for
+  // the host tests; the firmware passes its result to onFirstFrame().
+  static uint32_t firstFrameSilence(uint32_t frame_ms, uint32_t watch_ms, uint32_t drops_before) {
+    return drops_before ? 0 : frame_ms - watch_ms;
+  }
   void onBusFrame(uint32_t now_ms, uint32_t prev_poll_ms) {
     if (!bus_seen) {
       // Without a frame timestamp (host tests, or a caller with none): judge

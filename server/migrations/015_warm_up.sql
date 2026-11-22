@@ -15,10 +15,11 @@
 --                          adds it. NULL: not known -- display
 --                          tap off, no press seen, the bus not live within
 --                          10 s of first drip, or an older record.
---   machine_on_lower_bound 1: the bus was already live when the board
---                          started watching (it booted, or the display tap
---                          was switched on, into a running machine), so
---                          machine_on_s is only "at least". NULL with it.
+--   machine_on_lower_bound 1: machine_on_s is only "at least" -- the first
+--                          frame came within 0.5 s of the board starting to
+--                          watch (it booted, or the tap was switched on,
+--                          into a running machine), or edges were dropped
+--                          before it. NULL with machine_on_s.
 --
 -- s_since_flush (001, NULL until now) is filled from the same record:
 -- seconds from the last COUNTED flowmeter pulse -- any pump run (a shot, a
@@ -31,7 +32,9 @@
 --
 -- Known limits: on firmware 0.15.0 a board and machine powered up together
 -- read as a lower bound (0.15.1 judges the power-up silence on the frame's
--- own time); a J5 first plugged into a running machine reads as a power-up; a power cycle counts only when the board's polls watched the
+-- own time); a J5 first plugged into a running machine reads as a power-up,
+-- and so would a running bus dropping frames for 0.5 s or more right at
+-- watch start (such dropouts are known, their cause is not); a power cycle counts only when the board's polls watched the
 -- bus stay silent for over 10 s, so an off period they did not witness (e.g.
 -- off just before a long upload, on again during it) is not seen; a J5 re-plug without a `display` command is not seen either; and a
 -- missed start press or a manual stop-and-restart (CLAUDE.md, first_drip_ms

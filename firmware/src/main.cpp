@@ -130,7 +130,8 @@ static MachineContextTracker machine_ctx;
 static uint32_t frames_seen = 0;      // dbus_frames as machineContextPoll last saw it
 static uint32_t dbus_watch_ms = 0;    // millis() when the tap was last switched on (not micros:
                                       // a 71-minute wrap broke the silence judgement)
-static uint32_t dbus_dropped_seen = 0; // dbus_dropped when the first frame was judged
+static bool     dbus_first_noted = false;   // drops recorded at the first decoded frame
+static uint32_t dbus_drops_at_first = 0;    // dbus_dropped then (pollDisplay)
 static uint32_t ctx_last_poll_ms = 0; // when machineContextPoll last ran
 
 static void displaySetEnabled(bool on) {
@@ -142,7 +143,8 @@ static void displaySetEnabled(bool on) {
     dbus_head = dbus_tail = 0;
     dbus_frames = dbus_dropped = 0;
     frames_seen = 0;
-    dbus_dropped_seen = 0;   // else the zeroing above reads as a new frame (review 2026-11-22)
+    dbus_first_noted = false;
+    dbus_drops_at_first = 0;   // else the zeroing above reads as a new frame (review 2026-11-22)
     display_bus.beginCapture();   // drop the in-progress frame; see display.h
     attachInterrupt(digitalPinToInterrupt(DISPLAY_CLK_PIN), dbusIsr, RISING);
   }
@@ -168,6 +170,14 @@ static void pollDisplay() {
     if (display_bus.feedEdge(e.t_us, e.bit)) dbus_frames++;
   }
   if (display_bus.poll(micros())) dbus_frames++;   // bus went quiet mid-frame
+  // v6: the drops up to the drain that produced the FIRST frame -- the only
+  // ones that can have cost it frames before it. Later drops (BLE/WiFi
+  // bring-up in setup()) say nothing about it (review 2026-11-22).
+  uint32_t first_us;
+  if (!dbus_first_noted && display_bus.firstFrameUs(&first_us)) {
+    dbus_first_noted = true;
+    dbus_drops_at_first = dbus_dropped;
+  }
 }
 
 
@@ -185,20 +195,16 @@ static void machineContextPoll() {
       // The first frame since watching started, judged on its OWN time
       // (0.15.1): a power-up is frame-silent until +4.1 s, a running
       // machine is not. Logged so one boot on the strip shows the margin.
-      // In millis, which wraps after 49 days; the frame is at most a loop
-      // stall old, so the micros difference here cannot wrap.
+      // In millis; the frame is at most a setup()/stall old, so the micros
+      // difference here cannot wrap.
       const uint32_t frame_ms = now - (micros() - first_us) / 1000;
-      const int32_t silence = (int32_t)(frame_ms - dbus_watch_ms);
-      // Edges dropped by the ISR ring before this frame: frames may have been
-      // lost, so its time is not the bus's first -- not judged a power-up.
-      const uint32_t dropped = dbus_dropped;
-      const bool lost = dropped != dbus_dropped_seen;
-      dbus_dropped_seen = dropped;
-      machine_ctx.onFirstFrame(frame_ms, lost ? 0 : (silence > 0 ? (uint32_t)silence : 0), now);
-      Serial.printf("# machine: first display frame %ld ms after watching started, %lu edges dropped -> %s\n",
-                    (long)silence, (unsigned long)dropped,
-                    !lost && silence >= (int32_t)MachineContextTracker::POWERUP_SILENCE_MS
-                    ? "switched on (on-time exact)" : "already running or frames lost (on-time a lower bound)");
+      const uint32_t silence =
+          MachineContextTracker::firstFrameSilence(frame_ms, dbus_watch_ms, dbus_drops_at_first);
+      machine_ctx.onFirstFrame(frame_ms, silence, now);
+      Serial.printf("# machine: first display frame %lu ms after watching started, %lu edges dropped before it -> %s\n",
+                    (unsigned long)(frame_ms - dbus_watch_ms), (unsigned long)dbus_drops_at_first,
+                    silence >= MachineContextTracker::POWERUP_SILENCE_MS
+                    ? "switched on (on-time exact)" : "already running, or frames lost (on-time a lower bound)");
     } else {
       machine_ctx.onBusFrame(now, prev);
     }

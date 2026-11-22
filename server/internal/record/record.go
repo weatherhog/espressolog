@@ -108,9 +108,10 @@ const (
 	// record decodes to.
 	MachineOnNone = 0xFFFFFFFF
 	PumpIdleNone  = 0xFFFFFFFF
-	// MachineOnLowerBound (machine_on_flags bit 0): the display bus was
-	// already live when the board started watching it, so machine_on_ms is
-	// only a lower bound.
+	// MachineOnLowerBound (machine_on_flags bit 0): machine_on_ms is only a
+	// lower bound -- the first display frame came within 0.5 s of the board
+	// starting to watch (a running machine), or edges were dropped before it
+	// (firmware machine_context.h).
 	MachineOnLowerBound = 0x01
 
 	// PrePulsesNone is pre_pulse_total's "not captured".

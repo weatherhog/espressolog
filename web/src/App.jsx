@@ -270,6 +270,12 @@ export default function App() {
               ["Temp", s.brew_temp_c != null ? `${s.brew_temp_c} °C` : null],
               ["Ratio", s.ratio ? `1:${s.ratio.toFixed(2)}` : null],
               ["Settle", s.settle_offset_g != null ? `+${s.settle_offset_g.toFixed(1)} g` : null],
+              // Room temperature/humidity, filled from Home Assistant after
+              // ingest (migration 014); "~" marks an hourly mean, not the
+              // reading at pour time.
+              ["Room", s.ambient_c != null
+                ? `${s.ambient_source === "ha_hourly" ? "~" : ""}${s.ambient_c.toFixed(1)} °C${s.ambient_rh != null ? ` · ${Math.round(s.ambient_rh)} %` : ""}`
+                : null],
               ["Rating", s.overall != null ? `${s.overall}/10` : null],
               ["Balance", s.balance],
             ].filter(([, v]) => v != null);

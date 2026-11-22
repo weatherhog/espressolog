@@ -91,6 +91,9 @@ var ErrTooRecent = errors.New("too recent for the hour's mean")
 // missing: the hour itself, plus slack for the statistics run.
 const RecentWindow = 2 * time.Hour
 
+// ProbeWindow is how far back Validate looks for any hourly mean.
+const ProbeWindow = 48 * time.Hour
+
 type Client struct {
 	cfg  Config
 	http *http.Client
@@ -119,14 +122,17 @@ func (c *Client) Validate(ctx context.Context) error {
 	if err := c.validateStates(ctx); err != nil {
 		return err
 	}
-	probe := c.Now().Add(-25 * time.Hour)
-	h, err := c.hourly(ctx, probe)
+	// Any hour of the last two days will do: one hour with no data (the
+	// sensor or Home Assistant down then) must not stop the writer, or blame
+	// the configuration for it (review 2026-11-22).
+	end := c.Now().UTC().Truncate(time.Hour)
+	h, err := c.means(ctx, end.Add(-ProbeWindow), end)
 	if err != nil {
 		return fmt.Errorf("statistics probe: %w", err)
 	}
 	if h.TempC == nil {
-		return fmt.Errorf("statistics probe: no hourly mean for %s at %s -- does it keep long-term statistics?",
-			c.cfg.TempEntity, probe.UTC().Truncate(time.Hour).Format(time.RFC3339))
+		return fmt.Errorf("statistics probe: no hourly mean for %s in the last %v -- "+
+			"a long outage of the sensor, or it keeps no long-term statistics", c.cfg.TempEntity, ProbeWindow)
 	}
 	return nil
 }
@@ -190,12 +196,11 @@ func (c *Client) At(ctx context.Context, t time.Time) (Reading, error) {
 		}
 		h, err := c.hourly(ctx, t)
 		if err != nil {
-			if r.TempC != nil {
-				// The temperature is in hand; only the humidity fallback
-				// failed. Keep what there is rather than retrying the shot
-				// for ever (review 2026-11-22).
-				return r, nil
-			}
+			// Even with the temperature in hand: a stored NULL humidity
+			// cannot be told from "Home Assistant had none", and a lasting
+			// WebSocket failure is caught by the hourly Validate anyway, so
+			// the shot is retried rather than written short (review
+			// 2026-11-22).
 			return Reading{}, err
 		}
 		if r.TempC == nil && h.TempC != nil {
@@ -288,6 +293,13 @@ func lastAtOrBefore(list []histEntry, t time.Time) *float64 {
 // hourly asks the WebSocket API for the long-term statistics mean of the
 // hour containing t.
 func (c *Client) hourly(ctx context.Context, t time.Time) (Reading, error) {
+	hour := t.UTC().Truncate(time.Hour)
+	return c.means(ctx, hour, hour.Add(time.Hour))
+}
+
+// means returns, per entity, the first hourly mean in [start, end) that is
+// not null.
+func (c *Client) means(ctx context.Context, start, end time.Time) (Reading, error) {
 	wsURL := "ws" + strings.TrimPrefix(c.cfg.URL, "http") + "/api/websocket"
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
@@ -335,12 +347,11 @@ func (c *Client) hourly(ctx context.Context, t time.Time) (Reading, error) {
 	if typeOf(m) != "auth_ok" {
 		return Reading{}, errors.New("statistics: authentication refused")
 	}
-	hour := t.UTC().Truncate(time.Hour)
 	if err := write(map[string]any{
 		"id":            1,
 		"type":          "recorder/statistics_during_period",
-		"start_time":    hour.Format(time.RFC3339),
-		"end_time":      hour.Add(time.Hour).Format(time.RFC3339),
+		"start_time":    start.UTC().Format(time.RFC3339),
+		"end_time":      end.UTC().Format(time.RFC3339),
 		"statistic_ids": c.entities(),
 		"period":        "hour",
 		"types":         []string{"mean"},
@@ -367,14 +378,17 @@ func (c *Client) hourly(ctx context.Context, t time.Time) (Reading, error) {
 		if err := json.Unmarshal(m["result"], &res); err != nil {
 			return Reading{}, fmt.Errorf("statistics: %w", err)
 		}
-		var r Reading
-		if rows := res[c.cfg.TempEntity]; len(rows) > 0 {
-			r.TempC = rows[0].Mean
-		}
-		if c.cfg.RHEntity != "" {
-			if rows := res[c.cfg.RHEntity]; len(rows) > 0 {
-				r.RH = rows[0].Mean
+		first := func(id string) *float64 {
+			for _, row := range res[id] {
+				if row.Mean != nil {
+					return row.Mean
+				}
 			}
+			return nil
+		}
+		r := Reading{TempC: first(c.cfg.TempEntity)}
+		if c.cfg.RHEntity != "" {
+			r.RH = first(c.cfg.RHEntity)
 		}
 		return r, nil
 	}

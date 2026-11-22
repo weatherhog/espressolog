@@ -35,6 +35,10 @@ type fakeHA struct {
 	noClass map[string]bool
 	rh      bool      // the client is configured with the RH entity
 	statsAt time.Time // the moment whose hour the statistics call must ask for
+	// statsFrom/statsTo, when set, are the window the call must ask for
+	// instead (Validate's probe).
+	statsFrom, statsTo time.Time
+	wsFail             bool // drop the WebSocket before answering
 }
 
 func (f *fakeHA) serve() *httptest.Server {
@@ -88,6 +92,10 @@ func (f *fakeHA) serve() *httptest.Server {
 		w.Write([]byte(f.history))
 	})
 	mux.HandleFunc("/api/websocket", func(w http.ResponseWriter, r *http.Request) {
+		if f.wsFail {
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
 		c, err := websocket.Accept(w, r, nil)
 		if err != nil {
 			return
@@ -119,8 +127,12 @@ func (f *fakeHA) serve() *httptest.Server {
 			at = shotAt
 		}
 		hour := at.Truncate(time.Hour)
-		if m["start_time"] != hour.Format(time.RFC3339) || m["end_time"] != hour.Add(time.Hour).Format(time.RFC3339) {
-			t.Errorf("statistics window %v..%v, want the hour containing the shot", m["start_time"], m["end_time"])
+		from, to := hour, hour.Add(time.Hour)
+		if !f.statsFrom.IsZero() {
+			from, to = f.statsFrom, f.statsTo
+		}
+		if m["start_time"] != from.Format(time.RFC3339) || m["end_time"] != to.Format(time.RFC3339) {
+			t.Errorf("statistics window %v..%v, want %v..%v", m["start_time"], m["end_time"], from, to)
 		}
 		if m["period"] != "hour" {
 			t.Errorf("statistics period %v", m["period"])
@@ -256,8 +268,11 @@ func TestABadTokenIsAnErrorNotNone(t *testing.T) {
 // one without long-term statistics, or a statistics connection that gives
 // no mean all stop the worker before it writes anything.
 func TestValidateRefusesWhatWouldWriteNoneAcrossTheArchive(t *testing.T) {
-	f := newFake(t, `[]`, map[string][]map[string]any{tempID: {{"mean": 20.0}}})
-	f.statsAt = testNow.Add(-25 * time.Hour)
+	// The probe asks for the last 48 h and takes ANY non-null mean: here the
+	// first hours are empty (an outage then), the third has one.
+	f := newFake(t, `[]`, map[string][]map[string]any{tempID: {{"mean": nil}, {"mean": nil}, {"mean": 20.0}}})
+	f.statsTo = testNow.Truncate(time.Hour)
+	f.statsFrom = f.statsTo.Add(-ProbeWindow)
 	srv := f.serve()
 	defer srv.Close()
 	if err := client(srv, false).Validate(context.Background()); err != nil {
@@ -305,6 +320,8 @@ func TestHealthChangesOnlyOnEvidence(t *testing.T) {
 		{Working, PassResult{Tried: 0}, Working, false},
 		{Failing, PassResult{Tried: 0}, Failing, false}, // all in backoff: not "working again"
 		{Working, PassResult{Tried: 3, Failed: 3, LastErr: errors.New("x")}, Failing, true},
+		{Working, PassResult{Tried: 1, Failed: 1}, Working, false},            // one stuck shot is not an outage
+		{Failing, PassResult{Tried: 2, Failed: 2, Marked: 1}, Failing, false}, // a no_clock mark is no evidence
 		{Failing, PassResult{Tried: 3, Failed: 3}, Failing, false},
 		{Failing, PassResult{Tried: 3, Filled: 1, Failed: 2}, Working, true},
 		{Working, PassResult{Tried: 3, Filled: 1, Failed: 2}, Working, false},
@@ -361,8 +378,8 @@ func TestAFailingShotDoesNotStallTheOthers(t *testing.T) {
 	now := shotAt
 	w := &Worker{St: fs, HL: &fakeLooker{bad: map[time.Time]bool{at(2): true}}, Now: func() time.Time { return now }}
 	r := w.Pass(context.Background())
-	if r.LastErr == nil || r.Filled != 5 || r.Tried != 5 || r.Failed != 1 {
-		t.Errorf("%+v; want 5 filled (one no_clock), 5 tried, 1 failed, the error reported", r)
+	if r.LastErr == nil || r.Filled != 4 || r.Marked != 1 || r.Tried != 5 || r.Failed != 1 {
+		t.Errorf("%+v; want 4 filled, 1 marked no_clock, 5 tried, 1 failed, the error reported", r)
 	}
 	if fs.set[5] != SourceNoClock || fs.set[6] != SourceState {
 		t.Errorf("set=%v; want 5 no_clock and 6 (behind the failing 2) filled", fs.set)
@@ -378,6 +395,64 @@ func TestAFailingShotDoesNotStallTheOthers(t *testing.T) {
 	now = shotAt.Add(2 * time.Minute)
 	if r := w.Pass(context.Background()); r.Tried != 1 {
 		t.Errorf("not retried after the backoff: %+v", r)
+	}
+}
+
+// Review 2026-11-22: with the temperature in hand, a failed humidity lookup
+// is retried, not written short.
+func TestAFailedHumidityLookupIsRetriedNotWrittenShort(t *testing.T) {
+	f := newFake(t, `[[{"entity_id":"sensor.room_temperature","state":"21.4","last_changed":"2026-11-22T08:00:00+00:00"}]]`, nil)
+	f.wsFail = true
+	srv := f.serveFor(true)
+	defer srv.Close()
+	if _, err := client(srv, true).At(context.Background(), shotAt); err == nil {
+		t.Error("a failed humidity lookup was written short instead of retried")
+	}
+}
+
+// tooRecentLooker says ErrTooRecent once, then fails for real.
+type tooRecentLooker struct{ n int }
+
+func (l *tooRecentLooker) Validate(context.Context) error { return nil }
+func (l *tooRecentLooker) At(context.Context, time.Time) (Reading, error) {
+	l.n++
+	if l.n == 1 {
+		return Reading{}, ErrTooRecent
+	}
+	return Reading{}, errors.New("unreachable")
+}
+
+// Review 2026-11-22: waiting out ErrTooRecent is not a failure and does not
+// start the backoff -- the first real failure after it backs off RetryMin.
+func TestTooRecentIsAWaitNotABackoff(t *testing.T) {
+	fs := &fakeStore{set: map[int64]string{}, pending: []store.AmbientPending{{ID: 1, StartedAt: shotAt, ClockValid: true}}}
+	now := shotAt
+	w := &Worker{St: fs, HL: &tooRecentLooker{}, Now: func() time.Time { return now }}
+	if r := w.Pass(context.Background()); r.Tried != 0 || r.Failed != 0 {
+		t.Errorf("too recent counted: %+v", r)
+	}
+	now = now.Add(RecentRetry)
+	if r := w.Pass(context.Background()); r.Failed != 1 {
+		t.Errorf("real failure not counted: %+v", r)
+	}
+	if b := w.retry[1]; b.wait != RetryMin {
+		t.Errorf("first backoff after a too-recent wait = %v, want %v", b.wait, RetryMin)
+	}
+}
+
+// failingStore fails every write.
+type failingStore struct{ fakeStore }
+
+func (f *failingStore) SetAmbient(int64, *float64, *float64, string) error {
+	return errors.New("database is locked")
+}
+
+// Review 2026-11-22: a write that fails is a failure, so it is logged.
+func TestAFailedWriteCountsAsAFailure(t *testing.T) {
+	fs := &failingStore{fakeStore{set: map[int64]string{}, pending: []store.AmbientPending{{ID: 1, StartedAt: shotAt, ClockValid: true}}}}
+	w := &Worker{St: fs, HL: &fakeLooker{}, Now: func() time.Time { return shotAt }}
+	if r := w.Pass(context.Background()); r.Failed != 1 || r.LastErr == nil {
+		t.Errorf("%+v; want the write counted as a failure", r)
 	}
 }
 

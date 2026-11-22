@@ -11,18 +11,22 @@
 --                the archive get filled; coarser, a room moves little
 --                within an hour
 --   'none'       Home Assistant answered and had no temperature for that
---                moment (ambient_rh may still be set). Only written while
---                the worker's check holds -- at start and hourly: the
---                sensors exist, report degrees C and %, keep long-term
---                statistics, and a past hour's mean comes back -- so a typo
---                in the configuration cannot write it across the archive.
+--                moment (ambient_rh may still be set). The worker checks at
+--                start, and about hourly after, that the sensors exist,
+--                report degrees C and %, keep long-term statistics, and that
+--                an hourly mean of the last 48 h comes back -- so a typo in
+--                the configuration cannot write it across the archive. (A
+--                sensor renamed between two checks can still put 'none' on
+--                shots pulled in that hour; the SQL below undoes it.)
 --                A shot under ~2 h old that is missing a value is retried,
 --                not written 'none': its hour has no mean yet
 --   'no_clock'   the board had no clock time when it recorded the shot, so
 --                started_at is the UPLOAD time and the room then says
 --                nothing about the pour; not looked up
---   NULL         not asked yet, or Home Assistant could not answer; the
---                worker retries
+--   NULL         not asked yet; or Home Assistant could not answer (the
+--                worker retries); or the shot is under ~2 h old and its
+--                hour has no mean yet (retried every 15 min); or its
+--                started_at does not parse (logged once, never filled)
 --
 -- To look a shot up again (a sensor swapped, a 'none' worth retrying):
 --   UPDATE shot SET ambient_c = NULL, ambient_rh = NULL,

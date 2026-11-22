@@ -26,6 +26,9 @@ const (
 	// (review 2026-11-22).
 	RetryMin = time.Minute
 	RetryMax = 6 * time.Hour
+	// RecentRetry: how soon a shot too young for its hour's mean is tried
+	// again (ErrTooRecent).
+	RecentRetry = 15 * time.Minute
 )
 
 // Store is what the worker needs from store.Store.
@@ -41,8 +44,9 @@ type Looker interface {
 }
 
 // Revalidate is how often the sensors are checked again while running: a
-// sensor renamed or switched to another unit stops the writes within an
-// hour (review 2026-11-22).
+// sensor renamed or switched to another unit stops the writes within about
+// an hour -- the check runs between passes, so it can come up to one
+// backed-off sleep plus one pass late (review 2026-11-22).
 const Revalidate = time.Hour
 
 // Worker fills ambient readings. Ingest never waits on it: a shot is stored
@@ -61,10 +65,12 @@ type backoff struct {
 	wait time.Duration
 }
 
-// PassResult is what one pass did.
+// PassResult is what one pass did. Filled counts Home Assistant answers
+// written; Marked counts shots written without asking it (no_clock), which
+// say nothing about whether it works (review 2026-11-22).
 type PassResult struct {
-	Filled, Tried, Failed int
-	LastErr               error
+	Filled, Marked, Tried, Failed int
+	LastErr                       error
 }
 
 // Health is the worker's logged state.
@@ -80,11 +86,17 @@ const (
 // nothing is pending) changes nothing: it is not evidence either way
 // (review 2026-11-22: it read as "working again" while Home Assistant was
 // down). Working again needs a shot actually filled.
+//
+//	One shot that keeps failing while nothing else is tried is not an
+//
+// outage: it has its own backoff, and treating it as one slowed every new
+// shot to the 10-minute interval (review 2026-11-22). So Failing needs more
+// than one failure in a pass with no fill.
 func Next(h Health, r PassResult) (Health, string) {
 	switch {
 	case r.Tried == 0:
 		return h, ""
-	case r.Filled == 0 && r.Failed > 0:
+	case r.Filled == 0 && r.Failed > 1:
 		if h == Working {
 			return Failing, fmt.Sprintf("ambient: lookups failing (%v); backing off", r.LastErr)
 		}
@@ -146,8 +158,8 @@ func (w *Worker) Run(ctx context.Context) {
 				// backoffs of up to RetryMax.
 				w.retry = map[int64]backoff{}
 			}
-			if r.Filled > 0 {
-				log.Printf("ambient: filled %d shot(s)", r.Filled)
+			if r.Filled+r.Marked > 0 {
+				log.Printf("ambient: filled %d shot(s), %d without clock time", r.Filled, r.Marked)
 			}
 			if health == Failing {
 				wait = min(wait*2, MaxInterval)
@@ -199,10 +211,14 @@ func (w *Worker) Pass(ctx context.Context) (r PassResult) {
 		}
 		if !p.ClockValid {
 			if err := w.St.SetAmbient(p.ID, nil, nil, SourceNoClock); err != nil {
+				// A write that fails is a failure: counted, so it is logged
+				// and backed off (review 2026-11-22).
+				r.Tried++
+				r.Failed++
 				r.LastErr = err
 				return r
 			}
-			r.Filled++
+			r.Marked++
 			continue
 		}
 		r.Tried++
@@ -210,7 +226,9 @@ func (w *Worker) Pass(ctx context.Context) (r PassResult) {
 		if err != nil {
 			b := w.retry[p.ID]
 			if errors.Is(err, ErrTooRecent) {
-				b.wait, b.next = RetryMin*15, now.Add(RetryMin*15)
+				// Not a failure, and not the start of a backoff: only the
+				// next try moves (review 2026-11-22).
+				b.next = now.Add(RecentRetry)
 				w.retry[p.ID] = b
 				r.Tried--
 				continue
@@ -227,6 +245,7 @@ func (w *Worker) Pass(ctx context.Context) (r PassResult) {
 			continue
 		}
 		if err := w.St.SetAmbient(p.ID, reading.TempC, reading.RH, reading.Source); err != nil {
+			r.Failed++
 			r.LastErr = err
 			return r
 		}

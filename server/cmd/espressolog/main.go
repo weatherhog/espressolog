@@ -6,9 +6,9 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -75,7 +75,12 @@ func runAmbientCheck() int {
 		fmt.Printf("check FAILED: %v\n", err)
 		return 1
 	}
-	fmt.Printf("check ok: %s / %s exist, units right, statistics answer\n", cfg.TempEntity, cfg.RHEntity)
+	ents := cfg.TempEntity
+	if cfg.RHEntity != "" {
+		ents += " and " + cfg.RHEntity
+	}
+	fmt.Printf("check ok: %s: exist, units right, statistics answer\n", ents)
+	rc := 0
 	show := func(p *float64) string {
 		if p == nil {
 			return "-"
@@ -86,9 +91,10 @@ func runAmbientCheck() int {
 		r, err := c.At(ctx, at)
 		if err != nil {
 			fmt.Printf("%s: error: %v\n", at.UTC().Format(time.RFC3339), err)
+			rc = 1
 			continue
 		}
 		fmt.Printf("%s: %s C, %s %%RH (%s)\n", at.UTC().Format(time.RFC3339), show(r.TempC), show(r.RH), r.Source)
 	}
-	return 0
+	return rc
 }

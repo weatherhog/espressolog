@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -284,7 +285,9 @@ func lastAtOrBefore(list []histEntry, t time.Time) *float64 {
 		return nil
 	}
 	v, err := strconv.ParseFloat(in.State, 64)
-	if err != nil {
+	// ParseFloat accepts "inf" and "nan": stored, +Inf would make the JSON
+	// shot list unencodable (review 2026-11-22).
+	if err != nil || math.IsInf(v, 0) || math.IsNaN(v) {
 		return nil
 	}
 	return &v

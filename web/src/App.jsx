@@ -270,6 +270,17 @@ export default function App() {
               ["Temp", s.brew_temp_c != null ? `${s.brew_temp_c} °C` : null],
               ["Ratio", s.ratio ? `1:${s.ratio.toFixed(2)}` : null],
               ["Settle", s.settle_offset_g != null ? `+${s.settle_offset_g.toFixed(1)} g` : null],
+              // Room temperature and humidity, filled from Home Assistant
+              // after ingest (migration 014). ambient_source says where the
+              // TEMPERATURE came from -- " ·hourly" (as Dose's " ·scale")
+              // marks the hour's mean rather than the sensor's last reported
+              // value at the shot's start.
+              // The humidity has no source of its own, so it claims none,
+              // and shows even when there was no temperature.
+              ["Room", s.ambient_c != null
+                ? `${s.ambient_c.toFixed(1)} °C${s.ambient_source === "ha_hourly" ? " ·hourly" : ""}`
+                : null],
+              ["RH", s.ambient_rh != null ? `${Math.round(s.ambient_rh)} %` : null],
               ["Rating", s.overall != null ? `${s.overall}/10` : null],
               ["Balance", s.balance],
             ].filter(([, v]) => v != null);

@@ -183,6 +183,11 @@ public:
   // adds nothing to it (reviews 2026-11-22: a flag for "the board was blind"
   // lingered while the machine was off and hid the next real power-on, and
   // missed stalls just under 10 s).
+  //   Systematically ~4 s late: power-on starts with a ~1.1 s init burst the
+  // decoder rejects and ~3 s of bus silence while U2.4 shows
+  // (docs/machine-display-bus.md), so the first COUNTED frame is the blank
+  // at about +4.1 s -- and a frame is stamped when polled, so a power-on
+  // during a blocked loop is anchored at the end of the block.
   //   Lower bound: if this board had not WATCHED the bus stay silent for a
   // full gap since it started watching -- boot or watchBusAgain() -- the
   // machine may have been on before; the time is then measured from that
@@ -193,7 +198,9 @@ public:
       bus_on_since_ms = now_ms;
       bus_lower_bound = (int32_t)(prev_poll_ms - watch_since_ms) <= (int32_t)MACHINE_OFF_GAP_MS;
       bus_seen = true;
-    } else if ((int32_t)(prev_poll_ms - last_bus_ms) > (int32_t)MACHINE_OFF_GAP_MS) {
+    } else if ((uint32_t)(prev_poll_ms - last_bus_ms) > MACHINE_OFF_GAP_MS) {
+      // Unsigned: last_bus_ms was set at a poll no later than prev_poll_ms,
+      // and a signed compare would miss a power-on after 24.8 days off.
       bus_on_since_ms = now_ms;          // watched it go quiet: off, then on again
       bus_lower_bound = false;
     }

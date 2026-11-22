@@ -106,7 +106,8 @@ typedef struct __attribute__((packed)) {
   // --- format v6: warm-up (2026-11-22) ---
   // ms from the machine being switched on (its display bus coming alive after
   // >10 s of silence) to this shot's pump press; 0xFFFFFFFF = not known
-  // (display tap off, no press, or no frame within 10 s before first drip). machine_on_flags bit 0: a LOWER BOUND only,
+  // (display tap off, no press, or the newest frame more than 10 s before
+  // first drip). About 4 s short: see MachineContextTracker::onBusFrame. machine_on_flags bit 0: a LOWER BOUND only,
   // the bus was already live when this board started watching it.
   uint32_t machine_on_ms;
   uint8_t  machine_on_flags;

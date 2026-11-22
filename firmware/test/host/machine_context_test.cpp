@@ -643,17 +643,55 @@ int main() {
     printf("a stall while off does not hide the next power-on OK\n");
   }
   {
-    // Review 2026-11-22: a stall just under 10 s with the machine on is not
-    // a power cycle either (the frame gap can exceed the poll gap).
+    // A frame gap over 10 s across a blocked loop: the last poll before the
+    // block came 0 ms after the previous frame, so the WITNESSED gap is tiny
+    // and it is not a power cycle, whatever the block's length.
     MachineContextTracker m;
     m.watchBusAgain(0);
     for (uint32_t t = 30000; t <= 100000; t += 41) m.onBusFrame(t, t - 5);
-    m.onBusFrame(110030, 100030);                   // 9.99 s poll gap, frame gap 10.03 s
+    m.onBusFrame(110030, 100030);                   // block from 100.03 s to 110.03 s
     for (uint32_t t = 110071; t <= 200000; t += 41) m.onBusFrame(t, t - 5);
     m.onPumpPress(PUMP_2CUP, 190000);
     m.resolvePump(198000);
     assert(m.context().machine_on_ms == 160000);
-    printf("a stall just under 10 s is not a power-on OK\n");
+    printf("a frame gap over 10 s across a blocked loop is not a power-on OK\n");
+  }
+  {
+    // The real boot path: the first poll has prev_poll_ms = 0, before
+    // watch_since (setup() ran at ~2 s). A frame then is a lower bound.
+    MachineContextTracker m;
+    m.watchBusAgain(2000);
+    m.onBusFrame(2100, 0);
+    for (uint32_t t = 2141; t <= 130000; t += 41) m.onBusFrame(t, t - 5);
+    m.onPumpPress(PUMP_2CUP, 120000);
+    m.resolvePump(128000);
+    assert(m.context().machine_on_flags == MACHINE_ON_LOWER_BOUND);
+    // Switched on 9 s after watching started: still a lower bound (not a full
+    // gap witnessed); 11 s after: exact.
+    MachineContextTracker a, b;
+    a.watchBusAgain(2000);
+    a.onBusFrame(11000, 10995);
+    a.onPumpPress(PUMP_2CUP, 20000); a.resolvePump(20500);
+    assert(a.context().machine_on_flags == MACHINE_ON_LOWER_BOUND);
+    b.watchBusAgain(2000);
+    b.onBusFrame(13100, 13095);
+    b.onPumpPress(PUMP_2CUP, 20000); b.resolvePump(20500);
+    assert(b.context().machine_on_flags == 0 && b.context().machine_on_ms == 6900);
+    printf("boot ordering and the 10 s watch threshold OK\n");
+  }
+  {
+    // millis() wrapping between frames: unsigned arithmetic still sees a
+    // witnessed 20 s silence as a power cycle.
+    MachineContextTracker m;
+    m.watchBusAgain(0xFFFF0000u);
+    m.onBusFrame(0xFFFF0000u + 20000, 0xFFFF0000u + 19995);         // first frame, exact
+    m.onBusFrame(0xFFFF0000u + 20041, 0xFFFF0000u + 20036);
+    const uint32_t back = 0xFFFF0000u + 20041 + 60000;              // wraps past 0
+    m.onBusFrame(back, back - 5);
+    m.onPumpPress(PUMP_2CUP, back + 30000);
+    m.resolvePump(back + 38000);
+    assert(m.context().machine_on_ms == 30000);
+    printf("millis wrap OK\n");
   }
 
   printf("\nall machine context tests passed\n");

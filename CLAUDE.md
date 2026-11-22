@@ -1848,12 +1848,16 @@ is switched off between sessions); flag bit 0 marks it a lower bound when
 the bus was already live as the board started watching. Idle time is the
 gap to the last flowmeter pulse before the press, so it needs the flow tap.
 Stored as `machine_on_s`, `machine_on_lower_bound` and the long-empty
-`s_since_flush` (migration 015) — which now means idle since ANY pump run
-(a shot, a flush, a hot-water draw), not since a flush. **Known limits:** a
-board and machine powered up together are always flagged lower bound; a
-power cycle counts only if the board's polls WATCHED the bus stay silent
-for over 10 s, so a machine switched off and on within one blocked loop
-(selftest, a drive sweep) keeps the older on-time; unplugging and
+`s_since_flush` (migration 015) — which now means time since the last
+COUNTED flowmeter pulse: any pump run (a shot, a flush, a hot-water draw,
+steam if it pumps -- not established), and any noise the glitch filter
+lets through, not just a flush. **Known limits:** a
+board and machine powered up together are always flagged lower bound; the
+on-time runs ~4 s short (the power-on init burst and the `U2.4` silence come
+before the first counted frame); a power cycle counts only if the board's
+polls WATCHED the bus stay silent for over 10 s, so an off period polls did
+not witness -- e.g. switched off just before a long upload or selftest and
+back on during it -- keeps the older on-time; unplugging and
 re-plugging J5 without a `display` command is not seen (a re-plug into a
 running machine after 10 s reads as an exact power-on); an idle under 1 s
 is reported unknown (a stall across the press can put the run's own

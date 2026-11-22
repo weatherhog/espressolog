@@ -273,7 +273,8 @@ export default function App() {
               // Room temperature and humidity, filled from Home Assistant
               // after ingest (migration 014). ambient_source says where the
               // TEMPERATURE came from -- " ·hourly" (as Dose's " ·scale")
-              // marks the hour's mean rather than the reading at pour time.
+              // marks the hour's mean rather than the sensor's last reported
+              // value at the shot's start.
               // The humidity has no source of its own, so it claims none,
               // and shows even when there was no temperature.
               ["Room", s.ambient_c != null

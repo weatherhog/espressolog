@@ -28,8 +28,9 @@ import (
 func shotAt(t *testing.T, seq uint32, at time.Time, touched bool) (*record.Record, time.Time) {
 	t.Helper()
 	h := record.Header{
-		Magic: record.Magic, FormatVersion: 5, RecordType: record.TypeShot,
-		HeaderLen: 125, SetpointDc: record.TempNone, BootID: 0xfeed0002, Seq: seq,
+		Magic: record.Magic, FormatVersion: 6, RecordType: record.TypeShot,
+		HeaderLen: 134, SetpointDc: record.TempNone,
+		MachineOnMs: record.MachineOnNone, PumpIdleMs: record.PumpIdleNone, BootID: 0xfeed0002, Seq: seq,
 		PumpLine: record.PumpNone, PumpLeadMs: record.PumpLeadNone,
 		PrePulseTotal:   record.PrePulsesNone,
 		StartedAtUnixMs: uint64(at.UnixMilli()), TimeValid: 1,
@@ -57,7 +58,7 @@ func shotAt(t *testing.T, seq uint32, at time.Time, touched bool) (*record.Recor
 	for i := 125 - 4; i < 125; i++ {
 		raw[i] = 0
 	}
-	binary.LittleEndian.PutUint32(raw[125-4:], crc32.ChecksumIEEE(raw))
+	binary.LittleEndian.PutUint32(raw[134-4:], crc32.ChecksumIEEE(raw))
 	rec, err := record.Decode(raw)
 	if err != nil {
 		t.Fatalf("built record does not decode: %v", err)

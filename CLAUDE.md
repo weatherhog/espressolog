@@ -798,9 +798,9 @@ server/            Go
   cmd/espressolog/
   internal/{ambient,api,live,record,store,web}/
                    ambient = room temp/humidity from Home Assistant
-                   record = on-flash wire format (v1-v5 decode)
+                   record = on-flash wire format (v1-v6 decode)
                    web    = embed.FS for the built PWA
-  migrations/0*.sql         14 migrations; 001_init.sql is the base
+  migrations/0*.sql         15 migrations; 001_init.sql is the base
 web/               Vite + React PWA
   src/ · prototype/
 analysis/          Jupyter notebooks, reads the SQLite file
@@ -1839,7 +1839,16 @@ pump-on run from the pulse train into `preinfusion_run_s`
 (`'flow'`). Anything copied from an earlier shot is `'carried'`, anything
 typed or cleared `'user'` (migration 012). **A shot that recorded an edit
 is not a carry source** unless a human typed its value: its display value
-and run predate the edit. The run is re-derived at every server start. **The server decodes v1 to v5** — older records
+and run predate the edit. The run is re-derived at every server start. **Header format v6** (firmware 0.15.0, 2026-11-22) added, after
+`setpoint_dc`, `machine_on_ms`, `machine_on_flags` and `pump_idle_ms`
+(125 → 134 bytes): how long the machine had been on, and the pump idle, at
+this shot's pump press — for the first-shot warm-up question (0f). On-time
+comes from the display bus coming alive after >10 s of silence (the machine
+is switched off between sessions); flag bit 0 marks it a lower bound when
+the bus was already live as the board started watching. Idle time is the
+gap to the last flowmeter pulse before the press, so it needs the flow tap.
+Stored as `machine_on_s`, `machine_on_lower_bound` and the long-empty
+`s_since_flush` (migration 015). **The server decodes v1 to v6** — older records
 exist spooled and as fixtures, and losing one to a format bump would violate
 invariant 6. An older record reports the newer fields as "the machine did
 not say", which is the same thing a current record written with the display

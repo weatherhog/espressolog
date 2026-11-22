@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The fixtures are real records captured from the device (fw 0.4.0-stage4,
@@ -131,8 +132,11 @@ func buildV2(t *testing.T, mutate func(*headerV2)) []byte {
 // these drifts from spool.h the device and the server disagree about every
 // field after the first one that moved.
 func TestHeaderLengths(t *testing.T) {
-	if got := binary.Size(Header{}); got != headerLenV5 {
-		t.Fatalf("binary.Size(Header) = %d, want %d", got, headerLenV5)
+	if got := binary.Size(Header{}); got != headerLenV6 {
+		t.Fatalf("binary.Size(Header) = %d, want %d", got, headerLenV6)
+	}
+	if got := binary.Size(headerV5{}); got != headerLenV5 {
+		t.Fatalf("binary.Size(headerV5) = %d, want %d", got, headerLenV5)
 	}
 	if got := binary.Size(headerV4{}); got != headerLenV4 {
 		t.Fatalf("binary.Size(headerV4) = %d, want %d", got, headerLenV4)
@@ -366,7 +370,7 @@ func TestDecodeV4PrePulses(t *testing.T) {
 // a v5 one that saw no edit, say "not known" — never 0 degrees.
 func TestDecodeV5Setpoint(t *testing.T) {
 	build := func(setpointDc int16) []byte {
-		h := Header{
+		h := headerV5{
 			Magic: Magic, FormatVersion: 5, RecordType: TypeShot, HeaderLen: headerLenV5,
 			StopMs: 21000, YieldFinalMg: 36000, SampleCount: 1,
 			BoilerTempStartDc: 950, PumpLine: Pump2Cup, PumpLeadMs: 8200,
@@ -478,5 +482,58 @@ func TestDecodeRejectsVersionLengthMismatch(t *testing.T) {
 	raw := buildV2(t, func(h *headerV2) { h.HeaderLen = headerLenV1 })
 	if _, err := Decode(raw); err == nil {
 		t.Fatal("accepted v2 record declaring a v1 header length")
+	}
+}
+
+// A v6 record carries the warm-up fields; a v5 record says "not known" for
+// them -- never "on for 0 s".
+func TestDecodeV6WarmUp(t *testing.T) {
+	build := func(onMs uint32, flags uint8, idleMs uint32) []byte {
+		h := Header{
+			Magic: Magic, FormatVersion: 6, RecordType: TypeShot, HeaderLen: headerLenV6,
+			StopMs: 21000, YieldFinalMg: 36000, SampleCount: 1, SetpointDc: TempNone,
+			PumpLine: Pump2Cup, PumpLeadMs: 8200, PrePulseTotal: PrePulsesNone,
+			MachineOnMs: onMs, MachineOnFlags: flags, PumpIdleMs: idleMs,
+		}
+		var buf bytes.Buffer
+		if err := binary.Write(&buf, binary.LittleEndian, &h); err != nil {
+			t.Fatal(err)
+		}
+		if err := binary.Write(&buf, binary.LittleEndian, []Sample{{TempDc: TempNone}}); err != nil {
+			t.Fatal(err)
+		}
+		raw := buf.Bytes()
+		binary.LittleEndian.PutUint32(raw[headerLenV6-4:], crc32.ChecksumIEEE(raw))
+		return raw
+	}
+	r, err := Decode(build(300000, 0, 25000))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d, lb, ok := r.Header.MachineOn(); !ok || lb || d != 300*time.Second {
+		t.Errorf("v6 machine on = %v %v %v, want 5m0s exact", d, lb, ok)
+	}
+	if d, ok := r.Header.PumpIdle(); !ok || d != 25*time.Second {
+		t.Errorf("v6 pump idle = %v %v, want 25s", d, ok)
+	}
+	if r.Header.YieldFinalMg != 36000 || r.Header.SampleCount != 1 {
+		t.Error("fields after the v6 block moved")
+	}
+	r, err = Decode(build(119000, MachineOnLowerBound, PumpIdleNone))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, lb, ok := r.Header.MachineOn(); !ok || !lb {
+		t.Error("a lower bound lost its flag")
+	}
+	if _, ok := r.Header.PumpIdle(); ok {
+		t.Error("PumpIdleNone read as known")
+	}
+	r, err = Decode(build(MachineOnNone, 0, PumpIdleNone))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, ok := r.Header.MachineOn(); ok {
+		t.Error("MachineOnNone read as known")
 	}
 }

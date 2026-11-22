@@ -11,6 +11,7 @@ import (
 	"hash/crc32"
 	"regexp"
 	"strconv"
+	"time"
 )
 
 // ErrNewerFormat marks a record that looks well-formed but was written in a
@@ -57,7 +58,7 @@ const (
 	// version in headerLens, because v1 records exist both spooled on
 	// devices and as fixtures, and a format bump must never strand a shot
 	// (invariant 6).
-	FormatVersion = 5
+	FormatVersion = 6
 
 	TypeShot     = 1
 	TypeWeighing = 2
@@ -101,6 +102,16 @@ const (
 	headerLenV3 = 118 // v2 + pump_line (uint8) + pump_lead_ms (uint32)
 	headerLenV4 = 123 // v3 + pre_pulse_total (u16) + flags (u8) + count (u16); offsets in a tail
 	headerLenV5 = 125 // v4 + setpoint_dc (i16)
+	headerLenV6 = 134 // v5 + machine_on_ms (u32) + machine_on_flags (u8) + pump_idle_ms (u32)
+
+	// MachineOnNone / PumpIdleNone: "not known" (v6), and what an older
+	// record decodes to.
+	MachineOnNone = 0xFFFFFFFF
+	PumpIdleNone  = 0xFFFFFFFF
+	// MachineOnLowerBound (machine_on_flags bit 0): the display bus was
+	// already live when the board started watching it, so machine_on_ms is
+	// only a lower bound.
+	MachineOnLowerBound = 0x01
 
 	// PrePulsesNone is pre_pulse_total's "not captured".
 	PrePulsesNone = 0xFFFF
@@ -126,7 +137,7 @@ const (
 )
 
 // headerLens maps a format version to its on-wire header size.
-var headerLens = map[uint8]int{1: headerLenV1, 2: headerLenV2, 3: headerLenV3, 4: headerLenV4, 5: headerLenV5}
+var headerLens = map[uint8]int{1: headerLenV1, 2: headerLenV2, 3: headerLenV3, 4: headerLenV4, 5: headerLenV5, 6: headerLenV6}
 
 // headerV1 is the v1 layout, kept verbatim so old records still decode.
 // v2 inserted two fields in the middle, so the two cannot share a struct.
@@ -279,7 +290,9 @@ type headerV4 struct {
 // canonical in-memory form: an older record decodes into it with the fields
 // it predates left at their "not available" values. binary.Read consumes it
 // sequentially, so Go struct alignment never enters into it.
-type Header struct {
+// headerV5 is the v5 layout (firmware 0.12.0-0.14.x), kept verbatim so v5
+// records still decode; v6 appended warm-up fields after setpoint_dc.
+type headerV5 struct {
 	Magic           uint32
 	FormatVersion   uint8
 	RecordType      uint8
@@ -325,6 +338,61 @@ type Header struct {
 	StableMs    uint32
 	SampleCount uint16
 	Crc32       uint32
+}
+
+type Header struct {
+	Magic           uint32
+	FormatVersion   uint8
+	RecordType      uint8
+	HeaderLen       uint16
+	BootID          uint32
+	Seq             uint32
+	StartedAtUnixMs uint64
+	StartedAtMillis uint32
+	TzOffsetMin     int16
+	TimeValid       uint8
+	ScaleRole       uint8
+	ScaleMac        [6]byte
+	Flags           uint8
+	DetectorVersion [8]byte
+	FirmwareVersion [16]byte
+	StopMs          uint32
+	YieldAtStopMg   int32
+	YieldFinalMg    int32
+	SettleOffsetMg  int32
+	PeakFlowMgps    int32
+	MeanFlowMgps    int32
+	FlowWinStartMs  uint32
+	FlowWinEndMs    uint32
+	// v2. BoilerTempStartDc is TempNone and MachineTimerDl is 0 on a v1
+	// record — the same values the firmware writes when the display bus is
+	// off, so a consumer needs no version check of its own.
+	BoilerTempStartDc int16
+	MachineTimerDl    uint16
+	// v3. PumpLine is PumpNone and PumpLeadMs is PumpLeadNone on a v1 or v2
+	// record — the same values the firmware writes when it saw no press.
+	PumpLine   uint8
+	PumpLeadMs uint32
+	// v4. PrePulseTotal is PrePulsesNone on an older record — "not
+	// captured", the same thing a v4 record says with no press or the flow
+	// tap off.
+	PrePulseTotal uint16
+	PrePulseFlags uint8
+	PrePulseCount uint16 // offsets in the record's tail, after the samples
+	// v5. The brew setpoint last dialled in on the display, decidegrees;
+	// TempNone on an older record or when the record does not say (Setpoint).
+	SetpointDc int16
+	// v6 (firmware 0.15.0): ms from the machine being switched on to this
+	// shot's pump press, flags (MachineOnLowerBound), and ms the pump had
+	// stood idle before it. MachineOnNone / PumpIdleNone on an older record
+	// or when the board could not say (MachineOn, PumpIdle).
+	MachineOnMs    uint32
+	MachineOnFlags uint8
+	PumpIdleMs     uint32
+	GramsMg        int32
+	StableMs       uint32
+	SampleCount    uint16
+	Crc32          uint32
 }
 
 // Sample mirrors sample_t.
@@ -420,6 +488,25 @@ func detectorAtLeast(v string, min int) bool {
 		return major > 0 || m[2] > "a"
 	}
 	return n >= min
+}
+
+// MachineOn returns how long the machine had been on at this shot's pump
+// press (v6), and whether that is only a lower bound. ok is false when the
+// record does not say -- older than v6, the display tap off, no press.
+func (h *Header) MachineOn() (d time.Duration, lowerBound, ok bool) {
+	if h.FormatVersion < 6 || h.RecordType != TypeShot || h.MachineOnMs == MachineOnNone {
+		return 0, false, false
+	}
+	return time.Duration(h.MachineOnMs) * time.Millisecond, h.MachineOnFlags&MachineOnLowerBound != 0, true
+}
+
+// PumpIdle returns how long the pump had stood idle before this shot's
+// press (v6). ok is false when the record does not say.
+func (h *Header) PumpIdle() (time.Duration, bool) {
+	if h.FormatVersion < 6 || h.RecordType != TypeShot || h.PumpIdleMs == PumpIdleNone {
+		return 0, false
+	}
+	return time.Duration(h.PumpIdleMs) * time.Millisecond, true
 }
 
 // Setpoint returns the brew setpoint the machine's display last showed being
@@ -518,7 +605,8 @@ func Decode(raw []byte) (*Record, error) {
 			PumpLeadMs:        PumpLeadNone,
 			PrePulseTotal:     PrePulsesNone,
 			SetpointDc:        TempNone,
-			GramsMg:           v1.GramsMg, StableMs: v1.StableMs,
+			MachineOnMs:       MachineOnNone, PumpIdleMs: PumpIdleNone,
+			GramsMg: v1.GramsMg, StableMs: v1.StableMs,
 			SampleCount: v1.SampleCount, Crc32: v1.Crc32,
 		}
 	case 2:
@@ -543,7 +631,8 @@ func Decode(raw []byte) (*Record, error) {
 			PumpLeadMs:    PumpLeadNone,
 			PrePulseTotal: PrePulsesNone,
 			SetpointDc:    TempNone,
-			GramsMg:       v2.GramsMg, StableMs: v2.StableMs,
+			MachineOnMs:   MachineOnNone, PumpIdleMs: PumpIdleNone,
+			GramsMg: v2.GramsMg, StableMs: v2.StableMs,
 			SampleCount: v2.SampleCount, Crc32: v2.Crc32,
 		}
 	case 3:
@@ -567,7 +656,8 @@ func Decode(raw []byte) (*Record, error) {
 			// v3 predates the pre-drip pulse train: "not captured".
 			PrePulseTotal: PrePulsesNone,
 			SetpointDc:    TempNone,
-			GramsMg:       v3.GramsMg, StableMs: v3.StableMs,
+			MachineOnMs:   MachineOnNone, PumpIdleMs: PumpIdleNone,
+			GramsMg: v3.GramsMg, StableMs: v3.StableMs,
 			SampleCount: v3.SampleCount, Crc32: v3.Crc32,
 		}
 	case 4:
@@ -591,13 +681,39 @@ func Decode(raw []byte) (*Record, error) {
 			PrePulseTotal: v4.PrePulseTotal, PrePulseFlags: v4.PrePulseFlags,
 			PrePulseCount: v4.PrePulseCount,
 			// v4 predates the display setpoint: "not seen".
-			SetpointDc: TempNone,
-			GramsMg:    v4.GramsMg, StableMs: v4.StableMs,
+			SetpointDc:  TempNone,
+			MachineOnMs: MachineOnNone, PumpIdleMs: PumpIdleNone,
+			GramsMg: v4.GramsMg, StableMs: v4.StableMs,
 			SampleCount: v4.SampleCount, Crc32: v4.Crc32,
 		}
 	case 5:
-		if err := binary.Read(bytes.NewReader(raw), binary.LittleEndian, &h); err != nil {
+		var v5 headerV5
+		if err := binary.Read(bytes.NewReader(raw), binary.LittleEndian, &v5); err != nil {
 			return nil, fmt.Errorf("header v5: %w", err)
+		}
+		h = Header{
+			Magic: v5.Magic, FormatVersion: v5.FormatVersion, RecordType: v5.RecordType,
+			HeaderLen: v5.HeaderLen, BootID: v5.BootID, Seq: v5.Seq,
+			StartedAtUnixMs: v5.StartedAtUnixMs, StartedAtMillis: v5.StartedAtMillis,
+			TzOffsetMin: v5.TzOffsetMin, TimeValid: v5.TimeValid, ScaleRole: v5.ScaleRole,
+			ScaleMac: v5.ScaleMac, Flags: v5.Flags,
+			DetectorVersion: v5.DetectorVersion, FirmwareVersion: v5.FirmwareVersion,
+			StopMs: v5.StopMs, YieldAtStopMg: v5.YieldAtStopMg, YieldFinalMg: v5.YieldFinalMg,
+			SettleOffsetMg: v5.SettleOffsetMg, PeakFlowMgps: v5.PeakFlowMgps,
+			MeanFlowMgps: v5.MeanFlowMgps, FlowWinStartMs: v5.FlowWinStartMs,
+			FlowWinEndMs:      v5.FlowWinEndMs,
+			BoilerTempStartDc: v5.BoilerTempStartDc, MachineTimerDl: v5.MachineTimerDl,
+			PumpLine: v5.PumpLine, PumpLeadMs: v5.PumpLeadMs,
+			PrePulseTotal: v5.PrePulseTotal, PrePulseFlags: v5.PrePulseFlags,
+			PrePulseCount: v5.PrePulseCount, SetpointDc: v5.SetpointDc,
+			// v5 predates the warm-up fields: "not known".
+			MachineOnMs: MachineOnNone, PumpIdleMs: PumpIdleNone,
+			GramsMg: v5.GramsMg, StableMs: v5.StableMs,
+			SampleCount: v5.SampleCount, Crc32: v5.Crc32,
+		}
+	case 6:
+		if err := binary.Read(bytes.NewReader(raw), binary.LittleEndian, &h); err != nil {
+			return nil, fmt.Errorf("header v6: %w", err)
 		}
 	}
 

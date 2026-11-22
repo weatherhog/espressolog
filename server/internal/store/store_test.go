@@ -538,8 +538,9 @@ func TestIngestDoesNotInheritFromTheFuture(t *testing.T) {
 func v2BuildRecord(t *testing.T, boilerDc int16, timerDl uint16, touched bool) ([]byte, *record.Record) {
 	t.Helper()
 	h := record.Header{
-		Magic: record.Magic, FormatVersion: 5, RecordType: record.TypeShot,
-		HeaderLen: 125, SetpointDc: record.TempNone, BootID: 0xfeed0001, Seq: 1,
+		Magic: record.Magic, FormatVersion: 6, RecordType: record.TypeShot,
+		HeaderLen: 134, SetpointDc: record.TempNone,
+		MachineOnMs: record.MachineOnNone, PumpIdleMs: record.PumpIdleNone, BootID: 0xfeed0001, Seq: 1,
 		PumpLine: record.PumpNone, PumpLeadMs: record.PumpLeadNone,
 		PrePulseTotal:   record.PrePulsesNone,
 		StartedAtUnixMs: uint64(time.Now().UnixMilli()), TimeValid: 1,
@@ -568,7 +569,7 @@ func v2BuildRecord(t *testing.T, boilerDc int16, timerDl uint16, touched bool) (
 	for i := 125 - 4; i < 125; i++ {
 		raw[i] = 0
 	}
-	binary.LittleEndian.PutUint32(raw[125-4:], crc32.ChecksumIEEE(raw))
+	binary.LittleEndian.PutUint32(raw[134-4:], crc32.ChecksumIEEE(raw))
 
 	rec, err := record.Decode(raw)
 	if err != nil {
@@ -668,8 +669,9 @@ func TestIngestLeavesMachineSignalsNullWhenUnavailable(t *testing.T) {
 func v2BuildFlowRecord(t *testing.T, seq uint32, flowTap bool, n int) ([]byte, *record.Record) {
 	t.Helper()
 	h := record.Header{
-		Magic: record.Magic, FormatVersion: 5, RecordType: record.TypeShot,
-		HeaderLen: 125, SetpointDc: record.TempNone, BootID: 0xfeed0002, Seq: seq,
+		Magic: record.Magic, FormatVersion: 6, RecordType: record.TypeShot,
+		HeaderLen: 134, SetpointDc: record.TempNone,
+		MachineOnMs: record.MachineOnNone, PumpIdleMs: record.PumpIdleNone, BootID: 0xfeed0002, Seq: seq,
 		PumpLine: record.PumpNone, PumpLeadMs: record.PumpLeadNone,
 		PrePulseTotal:   record.PrePulsesNone,
 		StartedAtUnixMs: uint64(time.Now().UnixMilli()), TimeValid: 1,
@@ -712,7 +714,7 @@ func v2BuildFlowRecord(t *testing.T, seq uint32, flowTap bool, n int) ([]byte, *
 	for i := 125 - 4; i < 125; i++ {
 		raw[i] = 0
 	}
-	binary.LittleEndian.PutUint32(raw[125-4:], crc32.ChecksumIEEE(raw))
+	binary.LittleEndian.PutUint32(raw[134-4:], crc32.ChecksumIEEE(raw))
 
 	rec, err := record.Decode(raw)
 	if err != nil {
@@ -809,8 +811,9 @@ func pumpRecord(t *testing.T, seq uint32, line uint8, leadMs uint32) ([]byte, *r
 func pumpRecordWith(t *testing.T, seq uint32, line uint8, leadMs uint32, mutate func(*record.Header), offsets []uint16) ([]byte, *record.Record) {
 	t.Helper()
 	h := record.Header{
-		Magic: record.Magic, FormatVersion: 5, RecordType: record.TypeShot,
-		HeaderLen: 125, SetpointDc: record.TempNone, BootID: 0xfeed0003, Seq: seq,
+		Magic: record.Magic, FormatVersion: 6, RecordType: record.TypeShot,
+		HeaderLen: 134, SetpointDc: record.TempNone,
+		MachineOnMs: record.MachineOnNone, PumpIdleMs: record.PumpIdleNone, BootID: 0xfeed0003, Seq: seq,
 		StartedAtUnixMs: uint64(time.Now().UnixMilli()) + uint64(seq), TimeValid: 1,
 		StopMs: 21000, YieldAtStopMg: 35800, YieldFinalMg: 36000,
 		PeakFlowMgps: 2100, MeanFlowMgps: 1710,
@@ -845,7 +848,7 @@ func pumpRecordWith(t *testing.T, seq uint32, line uint8, leadMs uint32, mutate 
 		}
 	}
 	raw := buf.Bytes()
-	binary.LittleEndian.PutUint32(raw[125-4:], crc32.ChecksumIEEE(raw))
+	binary.LittleEndian.PutUint32(raw[134-4:], crc32.ChecksumIEEE(raw))
 	rec, err := record.Decode(raw)
 	if err != nil {
 		t.Fatalf("built record does not decode: %v", err)
@@ -1188,6 +1191,38 @@ func TestSetAmbientWritesOnce(t *testing.T) {
 	}
 	if p, _ := st.ShotsNeedingAmbient(10); len(p) != 0 {
 		t.Errorf("still pending: %+v", p)
+	}
+}
+
+// v6 warm-up fields land in machine_on_s / machine_on_lower_bound /
+// s_since_flush; "not known" is NULL, never 0 (migration 015).
+func TestIngestWarmUp(t *testing.T) {
+	st := openTestStore(t)
+	cases := []struct {
+		onMs, idleMs uint32
+		flags        uint8
+		on, lb, idle sql.NullFloat64
+	}{
+		{300000, 25000, 0, sql.NullFloat64{Float64: 300, Valid: true}, sql.NullFloat64{Float64: 0, Valid: true}, sql.NullFloat64{Float64: 25, Valid: true}},
+		{119000, record.PumpIdleNone, record.MachineOnLowerBound, sql.NullFloat64{Float64: 119, Valid: true}, sql.NullFloat64{Float64: 1, Valid: true}, sql.NullFloat64{}},
+		{record.MachineOnNone, record.PumpIdleNone, 0, sql.NullFloat64{}, sql.NullFloat64{}, sql.NullFloat64{}},
+	}
+	for i, c := range cases {
+		raw, rec := pumpRecordWith(t, uint32(420+i), record.Pump2Cup, 8200, func(h *record.Header) {
+			h.MachineOnMs, h.MachineOnFlags, h.PumpIdleMs = c.onMs, c.flags, c.idleMs
+		}, nil)
+		res, err := st.Ingest("aa:bb:cc:dd:ee:03", rec, raw, time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		var on, lb, idle sql.NullFloat64
+		if err := st.db.QueryRow(`SELECT machine_on_s, machine_on_lower_bound, s_since_flush FROM shot WHERE id = ?`,
+			res.ShotID).Scan(&on, &lb, &idle); err != nil {
+			t.Fatal(err)
+		}
+		if on != c.on || lb != c.lb || idle != c.idle {
+			t.Errorf("case %d: on=%v lb=%v idle=%v, want %v %v %v", i, on, lb, idle, c.on, c.lb, c.idle)
+		}
 	}
 }
 

@@ -1,0 +1,22 @@
+-- Warm-up (spool format v6, firmware 0.15.0, 2026-11-22): for the finding
+-- that the first shot of a session flows slower (CLAUDE.md, 0f), each shot
+-- now says how warm the machine could be.
+--
+--   machine_on_s           seconds from the machine being switched on to
+--                          this shot's pump press. The board sees the
+--                          display bus come alive after >10 s of silence
+--                          (the machine is switched off between sessions,
+--                          operator 2026-11-22). NULL: not known -- display
+--                          tap off, no press seen, or an older record.
+--   machine_on_lower_bound 1: the bus was already live when the board
+--                          started watching (it booted, or the display tap
+--                          was switched on, into a running machine), so
+--                          machine_on_s is only "at least". NULL with it.
+--
+-- s_since_flush (001, NULL until now) is filled from the same record:
+-- seconds from the previous pump run's last flowmeter pulse -- a shot, a
+-- flush or a hot-water draw -- to this shot's press. NULL: the flow tap off,
+-- no earlier pulse logged since it was enabled, or pulses lost in between.
+-- Raw durations, nothing derived (invariant 3).
+ALTER TABLE shot ADD COLUMN machine_on_s REAL;
+ALTER TABLE shot ADD COLUMN machine_on_lower_bound INTEGER;

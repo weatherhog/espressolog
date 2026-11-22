@@ -3,10 +3,13 @@
 -- now says how warm the machine could be.
 --
 --   machine_on_s           seconds from the machine being switched on to
---                          this shot's pump press. The board sees the
---                          display bus come alive after >10 s of silence
---                          (the machine is switched off between sessions,
---                          operator 2026-11-22). Raw, from the first counted
+--                          this shot's pump press, as the board saw it on
+--                          the display bus: from 0.15.1 the first frame
+--                          >= 0.5 s after it started watching (a running
+--                          machine sends one every 41 ms), or later a frame
+--                          after > 10 s of witnessed silence (the machine is
+--                          switched off between sessions, operator
+--                          2026-11-22). Raw, from the first counted
 --                          frame: the machine had been on ~4.1 s longer (the
 --                          init burst and U2.4 silence precede it); analysis
 --                          adds it. NULL: not known -- display

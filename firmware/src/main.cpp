@@ -128,7 +128,9 @@ static MachineContextTracker machine_ctx;
 //
 // Interrupt detached before the ring is zeroed, for the same race reason.
 static uint32_t frames_seen = 0;      // dbus_frames as machineContextPoll last saw it
-static uint32_t dbus_watch_us = 0;    // micros() when the tap was last switched on
+static uint32_t dbus_watch_ms = 0;    // millis() when the tap was last switched on (not micros:
+                                      // a 71-minute wrap broke the silence judgement)
+static uint32_t dbus_dropped_seen = 0; // dbus_dropped when the first frame was judged
 static uint32_t ctx_last_poll_ms = 0; // when machineContextPoll last ran
 
 static void displaySetEnabled(bool on) {
@@ -139,9 +141,9 @@ static void displaySetEnabled(bool on) {
     pinMode(DISPLAY_DATA_PIN, INPUT);
     dbus_head = dbus_tail = 0;
     dbus_frames = dbus_dropped = 0;
-    frames_seen = 0;   // else the zeroing above reads as a new frame (review 2026-11-22)
+    frames_seen = 0;
+    dbus_dropped_seen = 0;   // else the zeroing above reads as a new frame (review 2026-11-22)
     display_bus.beginCapture();   // drop the in-progress frame; see display.h
-    dbus_watch_us = micros();
     attachInterrupt(digitalPinToInterrupt(DISPLAY_CLK_PIN), dbusIsr, RISING);
   }
   display_on = on;
@@ -151,7 +153,11 @@ static void displaySetEnabled(bool on) {
   // And whether the machine was switched on while nothing watched (v6) --
   // only when the tap actually changed: `display on` while on (the counter
   // reset) must not turn an exact on-time into a lower bound.
-  if (on != was_on) machine_ctx.watchBusAgain(millis());
+  // The watch start is moved only on a real change, for the same reason.
+  if (on != was_on) {
+    dbus_watch_ms = millis();
+    machine_ctx.watchBusAgain(dbus_watch_ms);
+  }
 }
 
 static void pollDisplay() {
@@ -179,12 +185,20 @@ static void machineContextPoll() {
       // The first frame since watching started, judged on its OWN time
       // (0.15.1): a power-up is frame-silent until +4.1 s, a running
       // machine is not. Logged so one boot on the strip shows the margin.
-      const int32_t silence = (int32_t)(first_us - dbus_watch_us) / 1000;
+      // In millis, which wraps after 49 days; the frame is at most a loop
+      // stall old, so the micros difference here cannot wrap.
       const uint32_t frame_ms = now - (micros() - first_us) / 1000;
-      machine_ctx.onFirstFrame(frame_ms, silence > 0 ? (uint32_t)silence : 0);
-      Serial.printf("# machine: first display frame %ld ms after watching started -> %s\n",
-                    (long)silence, silence >= (int32_t)MachineContextTracker::POWERUP_SILENCE_MS
-                    ? "switched on (on-time exact)" : "already running (on-time a lower bound)");
+      const int32_t silence = (int32_t)(frame_ms - dbus_watch_ms);
+      // Edges dropped by the ISR ring before this frame: frames may have been
+      // lost, so its time is not the bus's first -- not judged a power-up.
+      const uint32_t dropped = dbus_dropped;
+      const bool lost = dropped != dbus_dropped_seen;
+      dbus_dropped_seen = dropped;
+      machine_ctx.onFirstFrame(frame_ms, lost ? 0 : (silence > 0 ? (uint32_t)silence : 0), now);
+      Serial.printf("# machine: first display frame %ld ms after watching started, %lu edges dropped -> %s\n",
+                    (long)silence, (unsigned long)dropped,
+                    !lost && silence >= (int32_t)MachineContextTracker::POWERUP_SILENCE_MS
+                    ? "switched on (on-time exact)" : "already running or frames lost (on-time a lower bound)");
     } else {
       machine_ctx.onBusFrame(now, prev);
     }
@@ -1428,7 +1442,10 @@ void setup() {
     p.end();
   }
   if (display_pref) displaySetEnabled(true);
-  delay(2000);   // native USB CDC needs a moment before the first lines land
+  // native USB CDC needs a moment before the first lines land. Drain the
+  // display ring meanwhile (0.15.1): the machine's power-on burst would fill
+  // it and the frames from +4.1 s would be dropped until loop() starts.
+  for (uint32_t t0 = millis(); millis() - t0 < 2000; delay(5)) pollDisplay();
   Serial.printf("# espressolog %s (detector %s)\n", FIRMWARE_VERSION, DETECTOR_VERSION);
 
   // 4th arg: our partition is labeled "littlefs", not the wrapper's default "spiffs"
@@ -1459,8 +1476,11 @@ void setup() {
   }
 
   sample_queue = xQueueCreate(64, sizeof(ScaleSample));
+  pollDisplay();
   scales.begin(sample_queue);
+  pollDisplay();
   net.begin(&spool);
+  pollDisplay();
 
   {
     Preferences p;

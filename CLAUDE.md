@@ -1851,9 +1851,14 @@ board and machine on one switched strip, where the board misses the burst
 (operator, 2026-11-22; firmware 0.15.1 switches the tap on first thing in
 `setup()` and logs the silence it saw) — and a later frame after > 10 s of
 watched silence is a power cycle; flag bit 0 marks a lower bound when
-frames came sooner. **Stored raw** (invariant 3): from the first counted
-frame, so the machine had been on **~4.1 s longer** (±0.1 s) — add it in
-analysis; 0.15.0 and 0.15.1 values are on the same footing. Idle time is the
+frames came sooner, or when the display ring dropped edges before the
+first frame (its time then is not the bus's first; setup() drains the ring
+so this should be rare, and the boot log line says). **Stored raw**
+(invariant 3): from the first counted frame, so the machine had been on
+**~4.1 s longer** (±0.1 s when nothing was dropped) — add it in analysis;
+0.15.0 and 0.15.1 values are on the same footing. A running bus that drops
+frames for ≥ 0.5 s right at watch start would read as a power-up (such
+dropouts are known, their cause is not). Idle time is the
 gap to the last flowmeter pulse before the press, so it needs the flow tap.
 Stored as `machine_on_s`, `machine_on_lower_bound` and the long-empty
 `s_since_flush` (migration 015) — which now means time since the last

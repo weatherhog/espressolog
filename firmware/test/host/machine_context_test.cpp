@@ -673,13 +673,13 @@ int main() {
     // not flagged; raw, from the first counted frame (analysis adds ~4.1 s).
     MachineContextTracker a, b;
     a.watchBusAgain(2000);
-    a.onBusFrame(4100, 4095);                   // first frame: 2.1 s watched
+    a.onFirstFrame(4100, 2100, 4100);           // first frame: 2.1 s after watching
     for (uint32_t t = 4141; t <= 21000; t += 41) a.onBusFrame(t, t - 5);
     a.onPumpPress(PUMP_2CUP, 20000); a.resolvePump(20500);
     assert(a.context().machine_on_flags == 0 && a.context().machine_on_ms == 15900);
     // Frames within 0.2 s of starting to watch: already running.
     b.watchBusAgain(2000);
-    b.onBusFrame(2200, 2195);
+    b.onFirstFrame(2200, 200, 2200);
     for (uint32_t t = 2241; t <= 21000; t += 41) b.onBusFrame(t, t - 5);
     b.onPumpPress(PUMP_2CUP, 20000); b.resolvePump(20500);
     assert(b.context().machine_on_flags == MACHINE_ON_LOWER_BOUND && b.context().machine_on_ms == 17800);
@@ -688,16 +688,33 @@ int main() {
     // "silent for 3.8 s since watching started at 0.3 s".
     MachineContextTracker f;
     f.watchBusAgain(300);
-    f.onFirstFrame(4100, 3800);
+    f.onFirstFrame(4100, 3800, 4105);
     for (uint32_t t = 4141; t <= 21000; t += 41) f.onBusFrame(t, t - 5);
     f.onPumpPress(PUMP_2CUP, 20000); f.resolvePump(20500);
     assert(f.context().machine_on_flags == 0 && f.context().machine_on_ms == 15900);
     MachineContextTracker g;                     // the same, with frames 40 ms in
     g.watchBusAgain(300);
-    g.onFirstFrame(340, 40);
+    g.onFirstFrame(340, 40, 345);
     for (uint32_t t = 381; t <= 21000; t += 41) g.onBusFrame(t, t - 5);
     g.onPumpPress(PUMP_2CUP, 20000); g.resolvePump(20500);
     assert(g.context().machine_on_flags == MACHINE_ON_LOWER_BOUND);
+    // Review 2026-11-22: the first frame polled late (setup() slow): the
+    // blind time between the frame and its poll is not witnessed silence,
+    // so the next frames do not read as a power cycle.
+    MachineContextTracker h;
+    h.watchBusAgain(300);
+    h.onFirstFrame(340, 40, 15000);              // polled 14.7 s after the frame
+    for (uint32_t t = 15041; t <= 30000; t += 41) h.onBusFrame(t, t - 5);
+    h.onPumpPress(PUMP_2CUP, 29000); h.resolvePump(29500);
+    assert(h.context().machine_on_flags == MACHINE_ON_LOWER_BOUND && h.context().machine_on_ms == 28660);
+    // Frames lost before the first one (silence passed as 0): not a power-up.
+    MachineContextTracker k;
+    k.watchBusAgain(300);
+    k.onFirstFrame(5000, 0, 5005);
+    assert(k.busSeen());
+    for (uint32_t t = 5041; t <= 21000; t += 41) k.onBusFrame(t, t - 5);
+    k.onPumpPress(PUMP_2CUP, 20000); k.resolvePump(20500);
+    assert(k.context().machine_on_flags == MACHINE_ON_LOWER_BOUND);
     printf("boot ordering, and power-up vs already running OK\n");
   }
   {

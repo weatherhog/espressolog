@@ -193,14 +193,18 @@ public:
   //     seen whole or in part -- including board and machine powered up by
   //     one switched strip, where the board misses the burst (operator,
   //     2026-11-22). Not flagged. Judged on the FRAME'S OWN TIME (the
-  //     decoder's, from the ISR edge stamps), not when loop() got to it, so
-  //     a slow setup() does not hide the silence; and the tap is enabled
-  //     first thing in setup() so watching starts well before +4.1 s.
+  //     decoder's, from the ISR edge stamps), not when loop() got to it;
+  //     the tap is enabled first thing in setup() and the ring is drained
+  //     through setup(), so the +4.1 s frames are not lost to a ring full of
+  //     the init burst. If edges WERE dropped before the first frame, its
+  //     time is not trusted and the shot is flagged a lower bound.
   //   - sooner: the machine was already running; MACHINE_ON_LOWER_BOUND.
   //   Later frames -- onBusFrame(): one after more than MACHINE_OFF_GAP_MS
   // of witnessed silence is a power cycle. The threshold stays long because
   // a running bus has dropped frames for seconds for causes not yet
-  // identified (CLAUDE.md, 0e) -- the 0.5 s rule is safe only at watch start.
+  // identified (CLAUDE.md, 0e). KNOWN LIMIT: such a dropout of 0.5 s or more
+  // starting right at watch start would read a running machine as a
+  // power-up; nothing shows it has happened, nothing rules it out.
   //   RAW, invariant 3: machine_on counts from the first COUNTED frame. The
   // machine was powered ~STARTUP_MS before it (0.1 s or so either way:
   // skip_first can spend the first frame on the watch-start path); analysis
@@ -211,19 +215,24 @@ public:
   static constexpr uint32_t POWERUP_SILENCE_MS = 500;
   static constexpr uint32_t STARTUP_MS = 4100;   // documentation: rails up to first frame
   // The first frame since watching started, at its own time frame_ms;
-  // silence_ms since watching started. Returns silence_ms for the log.
-  void onFirstFrame(uint32_t frame_ms, uint32_t silence_ms) {
+  // silence_ms since watching started (0 when frames may have been lost);
+  // poll_ms when it was polled. last_bus_ms is the POLL time, as everywhere
+  // else, so the blind time between the frame and its poll never counts as
+  // witnessed silence (review 2026-11-22).
+  void onFirstFrame(uint32_t frame_ms, uint32_t silence_ms, uint32_t poll_ms) {
     bus_on_since_ms = frame_ms;
     bus_lower_bound = silence_ms < POWERUP_SILENCE_MS;
     bus_seen = true;
-    last_bus_ms = frame_ms;
+    last_bus_ms = poll_ms;
   }
   bool busSeen() const { return bus_seen; }
   void onBusFrame(uint32_t now_ms, uint32_t prev_poll_ms) {
     if (!bus_seen) {
-      // Without a frame timestamp: judge on the last poll that saw none.
+      // Without a frame timestamp (host tests, or a caller with none): judge
+      // on the last poll that saw none -- which counts blind loop time as
+      // silence, so the firmware always uses onFirstFrame() instead.
       const int32_t watched = (int32_t)(prev_poll_ms - watch_since_ms);
-      onFirstFrame(now_ms, watched > 0 ? (uint32_t)watched : 0);
+      onFirstFrame(now_ms, watched > 0 ? (uint32_t)watched : 0, now_ms);
       return;
     } else if ((uint32_t)(prev_poll_ms - last_bus_ms) > MACHINE_OFF_GAP_MS) {
       // Unsigned: last_bus_ms was set at a poll no later than prev_poll_ms,

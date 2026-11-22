@@ -161,6 +161,7 @@ void DisplayBus::beginCapture() {
   count         = 0;      // also drops any half-frame left by a detach
   have_edge     = false;  // and the stale timestamp that would have stamped it
   skip_first    = true;
+  have_first    = false;
   last_blank_us = 0;
   last_onset_us = 0;
   have_onset    = false;
@@ -179,6 +180,16 @@ bool DisplayBus::finishFrame(uint32_t t_us) {
   size_t n = count;
   count = 0;
   if (n == 0) return false;
+  // v6: the first bus ACTIVITY since beginCapture() -- any frame of a
+  // recognised length (66, 67 or 133 bits), digits or keyscan, decodable or
+  // not, and including the one skip_first spends. The power-on sequence
+  // sends only 1-, 48- and (clamped) 564-bit frames, so none of it counts;
+  // and a running machine whose digits fail to decode still shows its
+  // keyscan reads every 41 ms (review 2026-11-22).
+  if (!have_first && (n == MERGED_FRAME_BITS || n == BUTTON_FRAME_BITS || n == DIGIT_FRAME_BITS)) {
+    have_first = true;
+    first_us = t_us;
+  }
   if (skip_first) {
     // Spend the guard only on a frame that WOULD have been decoded. The
     // power-on activity is full of one-bit blips (32-33 of them: 32 clock

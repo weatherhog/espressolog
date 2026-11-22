@@ -13,12 +13,13 @@
 #include "live_display.h"
 #include "machine_io.h"
 #include "brew_guard.h"
+#include "display_watch.h"
 #include "drive_bench.h"
 #include <soc/gpio_reg.h>
 #include <esp_timer.h>
 #include <driver/gpio.h>
 
-const char* FIRMWARE_VERSION = "0.15.0";
+const char* FIRMWARE_VERSION = "0.15.1";
 const char* DETECTOR_VERSION = "0a.7";
 
 static ScaleManager scales;
@@ -128,6 +129,9 @@ static MachineContextTracker machine_ctx;
 //
 // Interrupt detached before the ring is zeroed, for the same race reason.
 static uint32_t frames_seen = 0;      // dbus_frames as machineContextPoll last saw it
+static uint32_t dbus_watch_ms = 0;    // millis() when the tap was last switched on (not micros:
+                                      // a 71-minute wrap broke the silence judgement)
+static DisplayWatch dwatch;            // v6: the first-activity judgement (display_watch.h)
 static uint32_t ctx_last_poll_ms = 0; // when machineContextPoll last ran
 
 static void displaySetEnabled(bool on) {
@@ -139,6 +143,7 @@ static void displaySetEnabled(bool on) {
     dbus_head = dbus_tail = 0;
     dbus_frames = dbus_dropped = 0;
     frames_seen = 0;   // else the zeroing above reads as a new frame (review 2026-11-22)
+    dwatch.enable(millis());   // every enable: the ring was just cleared
     display_bus.beginCapture();   // drop the in-progress frame; see display.h
     attachInterrupt(digitalPinToInterrupt(DISPLAY_CLK_PIN), dbusIsr, RISING);
   }
@@ -149,17 +154,28 @@ static void displaySetEnabled(bool on) {
   // And whether the machine was switched on while nothing watched (v6) --
   // only when the tap actually changed: `display on` while on (the counter
   // reset) must not turn an exact on-time into a lower bound.
-  if (on != was_on) machine_ctx.watchBusAgain(millis());
+  // The watch start is moved only on a real change, for the same reason.
+  if (on != was_on) {
+    dbus_watch_ms = millis();
+    machine_ctx.watchBusAgain(dbus_watch_ms);
+  }
 }
 
 static void pollDisplay() {
   if (!display_on) return;
+  const uint32_t drain_start = millis();
   while (dbus_tail != dbus_head) {
     DbusEdge e = { dbus_ring[dbus_tail].t_us, dbus_ring[dbus_tail].bit };
     dbus_tail = (uint16_t)((dbus_tail + 1) % DBUS_RING);
     if (display_bus.feedEdge(e.t_us, e.bit)) dbus_frames++;
   }
   if (display_bus.poll(micros())) dbus_frames++;   // bus went quiet mid-frame
+  // v6: feed the first-activity judgement once per drain (display_watch.h).
+  uint32_t first_us = 0;
+  const bool have_first = display_bus.firstFrameUs(&first_us);
+  const uint32_t now = millis();
+  dwatch.afterDrain(drain_start, now, dbus_dropped, have_first,
+                    have_first ? now - (micros() - first_us) / 1000 : 0);
 }
 
 
@@ -172,7 +188,19 @@ static void machineContextPoll() {
   ctx_last_poll_ms = now;
   if (dbus_frames != frames_seen) {
     frames_seen = dbus_frames;
-    machine_ctx.onBusFrame(now, prev);
+    if (!machine_ctx.busSeen() && dwatch.first_noted) {
+      // The first frame since watching started, judged on its OWN time
+      // (0.15.1): a power-up is frame-silent until +4.1 s, a running
+      // machine is not. Logged so one boot on the strip shows the margin.
+      // Judged in pollDisplay(), where the drops are known (display_watch.h).
+      machine_ctx.onFirstFrame(dwatch.first_frame_ms, dwatch.first_silence, now);
+      Serial.printf("# machine: first display activity %lu ms after watching started, %lu ms of whole capture before it -> %s\n",
+                    (unsigned long)(dwatch.first_frame_ms - dbus_watch_ms), (unsigned long)dwatch.first_silence,
+                    dwatch.first_silence >= MachineContextTracker::POWERUP_SILENCE_MS
+                    ? "switched on (on-time exact)" : "already running, or not enough seen (on-time a lower bound)");
+    } else {
+      machine_ctx.onBusFrame(now, prev);
+    }
   }
   machine_ctx.onReading(display_bus.reading(), display_bus.setpointTouched());
 }
@@ -1401,7 +1429,22 @@ void setup() {
   driveRelease();
   Serial.begin(115200);
   Serial0.begin(115200);   // UART bridge (COM port): debug log + CLI
-  delay(2000);   // native USB CDC needs a moment before the first lines land
+  // The display tap goes on FIRST (0.15.1), before the 2 s USB wait and the
+  // storage/BLE/WiFi bring-up: the machine's power-up is recognised by its
+  // frame silence until +4.1 s after rails up, and on a shared power strip
+  // the board must be watching before then (machine_context.h onFirstFrame).
+  bool display_pref;
+  {
+    Preferences p;
+    p.begin("espl", true);
+    display_pref = p.getBool("display", false);
+    p.end();
+  }
+  if (display_pref) displaySetEnabled(true);
+  // native USB CDC needs a moment before the first lines land. Drain the
+  // display ring meanwhile (0.15.1): the machine's power-on burst would fill
+  // it and the frames from +4.1 s would be dropped until loop() starts.
+  for (uint32_t t0 = millis(); millis() - t0 < 2000; delay(5)) pollDisplay();
   Serial.printf("# espressolog %s (detector %s)\n", FIRMWARE_VERSION, DETECTOR_VERSION);
 
   // 4th arg: our partition is labeled "littlefs", not the wrapper's default "spiffs"
@@ -1432,8 +1475,11 @@ void setup() {
   }
 
   sample_queue = xQueueCreate(64, sizeof(ScaleSample));
+  pollDisplay();
   scales.begin(sample_queue);
+  pollDisplay();
   net.begin(&spool);
+  pollDisplay();
 
   {
     Preferences p;
@@ -1442,7 +1488,7 @@ void setup() {
     bool fl = p.getBool("flow", false);
     bool sw = p.getBool("switches", false);
     p.end();
-    if (on) displaySetEnabled(true);
+    // `on` (display) was acted on first thing in setup(); here it is only reported.
     if (fl) flowSetEnabled(true);
     if (sw) switchesSetEnabled(true);
     Serial.printf("# display bus %s (clk=GPIO%u data=GPIO%u)\n",

@@ -108,9 +108,11 @@ const (
 	// record decodes to.
 	MachineOnNone = 0xFFFFFFFF
 	PumpIdleNone  = 0xFFFFFFFF
-	// MachineOnLowerBound (machine_on_flags bit 0): the display bus was
-	// already live when the board started watching it, so machine_on_ms is
-	// only a lower bound.
+	// MachineOnLowerBound (machine_on_flags bit 0): machine_on_ms is only a
+	// lower bound -- the first display frame after the board started watching
+	// came within 0.5 s of whole capture (a running machine, or edges dropped
+	// too close before it). A later power cycle is never flagged (firmware
+	// machine_context.h).
 	MachineOnLowerBound = 0x01
 
 	// PrePulsesNone is pre_pulse_total's "not captured".
@@ -382,8 +384,9 @@ type Header struct {
 	// v5. The brew setpoint last dialled in on the display, decidegrees;
 	// TempNone on an older record or when the record does not say (Setpoint).
 	SetpointDc int16
-	// v6 (firmware 0.15.0): ms from the machine being switched on to this
-	// shot's pump press, flags (MachineOnLowerBound), and ms the pump had
+	// v6 (firmware 0.15.0): ms from the machine's first counted display frame
+	// -- raw; it was powered ~4.1 s before that -- to this shot's pump press,
+	// flags (MachineOnLowerBound), and ms the pump had
 	// stood idle before it. MachineOnNone / PumpIdleNone on an older record
 	// or when the board could not say (MachineOn, PumpIdle).
 	MachineOnMs    uint32
@@ -491,7 +494,8 @@ func detectorAtLeast(v string, min int) bool {
 }
 
 // MachineOn returns how long the machine had been on at this shot's pump
-// press (v6), and whether that is only a lower bound. ok is false when the
+// press (v6), raw from its first counted display frame (add ~4.1 s for the
+// time since power-on), and whether that is only a lower bound. ok is false when the
 // record does not say -- older than v6, the display tap off, no press.
 func (h *Header) MachineOn() (d time.Duration, lowerBound, ok bool) {
 	if h.FormatVersion < 6 || h.RecordType != TypeShot || h.MachineOnMs == MachineOnNone {

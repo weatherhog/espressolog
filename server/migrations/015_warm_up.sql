@@ -2,19 +2,26 @@
 -- that the first shot of a session flows slower (CLAUDE.md, 0f), each shot
 -- now says how warm the machine could be.
 --
---   machine_on_s           seconds from the machine being switched on to
---                          this shot's pump press. The board sees the
---                          display bus come alive after >10 s of silence
---                          (the machine is switched off between sessions,
---                          operator 2026-11-22); ~4 s short, as the first
---                          counted frame follows the power-on init burst
---                          and the U2.4 silence. NULL: not known -- display
+--   machine_on_s           seconds from the machine's first counted display
+--                          frame (~4.1 s after power-on) to this shot's pump
+--                          press, as the board saw it on
+--                          the display bus: from 0.15.1 the first frame
+--                          after >= 0.5 s of whole capture (a running
+--                          machine sends one every 41 ms), or later a frame
+--                          after > 10 s of witnessed silence (the machine is
+--                          switched off between sessions, operator
+--                          2026-11-22). Raw, from the first counted
+--                          frame: the machine had been on ~4.1 s longer (the
+--                          init burst and U2.4 silence precede it); analysis
+--                          adds it. NULL: not known -- display
 --                          tap off, no press seen, the bus not live within
 --                          10 s of first drip, or an older record.
---   machine_on_lower_bound 1: the bus was already live when the board
---                          started watching (it booted, or the display tap
---                          was switched on, into a running machine), so
---                          machine_on_s is only "at least". NULL with it.
+--   machine_on_lower_bound 1: machine_on_s is only "at least" -- the first
+--                          frame after the board started watching came
+--                          within 0.5 s of whole capture (a running machine,
+--                          or edges dropped too close before it); a later
+--                          power cycle is never flagged. NULL with
+--                          machine_on_s.
 --
 -- s_since_flush (001, NULL until now) is filled from the same record:
 -- seconds from the last COUNTED flowmeter pulse -- any pump run (a shot, a
@@ -25,8 +32,11 @@
 -- press can put the run's own pulses before it, so a short idle is not
 -- trusted). Raw durations, nothing derived (invariant 3).
 --
--- Known limits: a board and machine powered up together always read as a
--- lower bound; a power cycle counts only when the board's polls watched the
+-- Known limits: on firmware 0.15.0 a board and machine powered up together
+-- read as a lower bound (0.15.1 judges the power-up silence on the frame's
+-- own time); a J5 first plugged into a running machine reads as a power-up,
+-- and so would a running bus dropping frames for 0.5 s or more right at
+-- watch start (such dropouts are known, their cause is not); a power cycle counts only when the board's polls watched the
 -- bus stay silent for over 10 s, so an off period they did not witness (e.g.
 -- off just before a long upload, on again during it) is not seen; a J5 re-plug without a `display` command is not seen either; and a
 -- missed start press or a manual stop-and-restart (CLAUDE.md, first_drip_ms

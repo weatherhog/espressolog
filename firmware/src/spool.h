@@ -21,7 +21,8 @@
 // the samples (see SPOOL_PRE_TAIL_BYTES). FORMAT VERSION 5 (firmware
 // 0.12.0) added setpoint_dc, the brew setpoint dialled on the front panel.
 // FORMAT VERSION 6 (firmware 0.15.0) added machine_on_ms, machine_on_flags
-// and pump_idle_ms: how long the machine had been on and the pump idle at
+// and pump_idle_ms: the machine's on-time (raw, from its first counted
+// display frame -- ~4.1 s after power-on) and the pump idle at
 // this shot's press, for the first-shot warm-up question. Older records still
 // exist, both spooled and as fixtures, so the server decodes EVERY version —
 // see server/internal/record. The original intent was that this struct would
@@ -104,11 +105,14 @@ typedef struct __attribute__((packed)) {
   // source when present; boiler_temp_start_dc is what the boiler showed.
   int16_t  setpoint_dc;
   // --- format v6: warm-up (2026-11-22) ---
-  // ms from the machine being switched on (its display bus coming alive after
-  // >10 s of silence) to this shot's pump press; 0xFFFFFFFF = not known
-  // (display tap off, no press, or the newest frame more than 10 s before
-  // first drip). About 4 s short: see MachineContextTracker::onBusFrame. machine_on_flags bit 0: a LOWER BOUND only,
-  // the bus was already live when this board started watching it.
+  // ms from the machine's first counted display frame -- ~4.1 s after it was
+  // powered, which analysis adds -- to this shot's pump press; 0xFFFFFFFF =
+  // not known (display tap off, no press, or the newest frame more than 10 s
+  // before first drip). Rules and limits: MachineContextTracker, onFirstFrame
+  // and onBusFrame. machine_on_flags bit 0: a LOWER BOUND only -- the first
+  // frame after watch start came within 0.5 s of whole capture (a running
+  // machine, or edges dropped too close before it). A later power cycle is
+  // never flagged.
   uint32_t machine_on_ms;
   uint8_t  machine_on_flags;
   // ms from the previous pump run's last flowmeter pulse to this shot's pump

@@ -20,9 +20,13 @@ static constexpr uint32_t PUMP_LEAD_NONE = 0xFFFFFFFF;
 // when this shot's pump started. 0xFFFFFFFF = not known.
 static constexpr uint32_t MACHINE_ON_NONE = 0xFFFFFFFF;
 static constexpr uint32_t PUMP_IDLE_NONE  = 0xFFFFFFFF;
-// machine_on_flags bit 0: machine_on_ms is only a LOWER BOUND -- the display
-// bus was already live when this board started watching it (the board booted,
-// or the display tap was switched on, into a running machine).
+// machine_on_flags bit 0: machine_on_ms is only a LOWER BOUND -- the first
+// display frame came within POWERUP_SILENCE_MS (0.5 s) of this board starting
+// to watch WITH WHOLE CAPTURE (it booted, or the tap was switched on, into a
+// running machine; or the display ring dropped edges too close before the
+// frame to rule out a missed earlier one). MachineContextTracker::onFirstFrame
+// and firstFrameSilence. Only the first frame after watch start is judged
+// this way; a later power cycle is never flagged.
 static constexpr uint8_t  MACHINE_ON_LOWER_BOUND = 0x01;
 
 // v4: the flowmeter pulses between the lever press and first drip.
@@ -71,9 +75,10 @@ struct MachineContext {
   // pour — still blinking, or cut off by the pump's timer — so this shot's
   // setpoint is unknown, not "the last one".
   bool     setpoint_pending     = false;
-  // v6: ms from the machine being switched on to this shot's pump press
-  // (the display bus came alive after being silent; MACHINE_ON_NONE = not
-  // known, e.g. the display tap off or no press), and machine_on_flags.
+  // v6: ms from the machine's first counted display frame (~4.1 s after it
+  // was powered; MachineContextTracker::onFirstFrame) to this shot's pump
+  // press; MACHINE_ON_NONE = not known, e.g. the display tap off or no
+  // press. And machine_on_flags.
   uint32_t machine_on_ms        = MACHINE_ON_NONE;
   uint8_t  machine_on_flags     = 0;
   // v6: ms from the previous pump run's last flowmeter pulse to this shot's
@@ -171,11 +176,11 @@ public:
     shown_setpoint_c = blinked_setpoint_c = INT16_MIN;
   }
 
-  // v6: MACHINE ON-TIME, from the display bus. The bus is silent while the
-  // machine is switched off (no frames at all, 2026-11-22), so the first
-  // frame after more than MACHINE_OFF_GAP_MS of silence is the machine being
-  // switched on. Call with millis() whenever a frame was decoded, and with
-  // the time of the PREVIOUS poll, which found no new frame.
+  // v6: MACHINE ON-TIME, from the display bus, which is silent while the
+  // machine is switched off (no frames at all, 2026-11-22). The first frame
+  // since watching started goes to onFirstFrame() (below); later frames to
+  // onBusFrame() with millis() and the time of the PREVIOUS poll, which
+  // found no new frame.
   //   Only WITNESSED silence counts: frames are decoded when loop() polls, so
   // a loop blocked for 10 s or more (selftest, a drive sweep, a slow upload)
   // looks like a silent bus without being one. The gap that matters is from
@@ -183,25 +188,74 @@ public:
   // adds nothing to it (reviews 2026-11-22: a flag for "the board was blind"
   // lingered while the machine was off and hid the next real power-on, and
   // missed stalls just under 10 s).
-  //   Systematically ~4 s late: power-on starts with a ~1.1 s init burst the
-  // decoder rejects and ~3 s of bus silence while U2.4 shows
-  // (docs/machine-display-bus.md), so the first COUNTED frame is the blank
-  // at about +4.1 s -- and a frame is stamped when polled, so a power-on
+  //   THE POWER-ON SHAPE (docs/machine-display-bus.md, power-on table, two
+  // boots byte-identical): rails up at 0; a ~1.1 s initialisation burst the
+  // decoder rejects; then ~3 s with NO transactions while U2.4 shows; the
+  // first counted frame at +4.1 s. A running machine sends a frame every
+  // ~41 ms. So, for the FIRST frame since watching started (boot,
+  // watchBusAgain) -- onFirstFrame():
+  //   - at least POWERUP_SILENCE_MS of whole capture before it: a power-up,
+  //     seen whole or in part -- including board and machine powered up by
+  //     one switched strip, where the board misses the burst (operator,
+  //     2026-11-22). Not flagged. Judged on the FRAME'S OWN TIME (the
+  //     decoder's, from the ISR edge stamps), not when loop() got to it;
+  //     the tap is enabled first thing in setup() and the ring is drained
+  //     through the 2 s wait and between bring-up steps (not during the
+  //     LittleFS mount), so the +4.1 s frames are not lost to a ring full of
+  //     the init burst. Silence counts only from when capture was whole:
+  //     the tap's enable, or the drain after the ring's latest drop -- so a
+  //     drop during the init burst does not hide the silence after it, and
+  //     a frame drained from a full ring is not mistaken for the first.
+  //   - sooner: the machine was already running; MACHINE_ON_LOWER_BOUND.
+  //   Later frames -- onBusFrame(): one after more than MACHINE_OFF_GAP_MS
+  // of witnessed silence is a power cycle. The threshold stays long because
+  // a running bus has dropped frames for seconds for causes not yet
+  // identified (CLAUDE.md, 0e). KNOWN LIMIT: such a dropout of 0.5 s or more
+  // starting right at watch start would read a running machine as a
+  // power-up; nothing shows it has happened, nothing rules it out.
+  //   RAW, invariant 3: machine_on counts from the first COUNTED frame. The
+  // machine was powered ~STARTUP_MS before it (0.1 s or so either way:
+  // skip_first can spend the first frame on the watch-start path); analysis
+  // adds it. 0.15.0 and 0.15.1 values are therefore on the same footing.
+  //   A frame is stamped when polled in onBusFrame(), so a power cycle
   // during a blocked loop is anchored at the end of the block.
-  //   Lower bound: if this board had not WATCHED the bus stay silent for a
-  // full gap since it started watching -- boot or watchBusAgain() -- the
-  // machine may have been on before; the time is then measured from that
-  // first frame and flagged MACHINE_ON_LOWER_BOUND.
   static constexpr uint32_t MACHINE_OFF_GAP_MS = 10000;
+  static constexpr uint32_t POWERUP_SILENCE_MS = 500;
+  static constexpr uint32_t STARTUP_MS = 4100;   // documentation: rails up to first frame
+  // The first frame since watching started, at its own time frame_ms;
+  // silence_ms since watching started (0 when frames may have been lost);
+  // poll_ms when it was polled. last_bus_ms is the POLL time, as everywhere
+  // else, so the blind time between the frame and its poll never counts as
+  // witnessed silence (review 2026-11-22).
+  void onFirstFrame(uint32_t frame_ms, uint32_t silence_ms, uint32_t poll_ms) {
+    bus_on_since_ms = frame_ms;
+    bus_lower_bound = silence_ms < POWERUP_SILENCE_MS;
+    bus_seen = true;
+    last_bus_ms = poll_ms;
+  }
+  bool busSeen() const { return bus_seen; }
+  // The silence to judge a first frame on: how long the bus was WATCHED
+  // WHOLE before it -- frame_ms − capture_ok_ms, where capture_ok_ms is the
+  // tap's enable or the drain that emptied the ring after its latest drop
+  // (main.cpp). A frame from before capture_ok_ms (drained from the ring
+  // after a later drop) gets 0. Signed, so a wait of 24.8 days or more also
+  // reads 0 -- a lower bound, the safe direction. Pure, for the host tests.
+  static uint32_t firstFrameSilence(uint32_t frame_ms, uint32_t capture_ok_ms) {
+    const int32_t d = (int32_t)(frame_ms - capture_ok_ms);
+    return d > 0 ? (uint32_t)d : 0;
+  }
   void onBusFrame(uint32_t now_ms, uint32_t prev_poll_ms) {
     if (!bus_seen) {
-      bus_on_since_ms = now_ms;
-      bus_lower_bound = (int32_t)(prev_poll_ms - watch_since_ms) <= (int32_t)MACHINE_OFF_GAP_MS;
-      bus_seen = true;
+      // No first-activity judgement was made (the firmware always makes one,
+      // onFirstFrame): poll time counts blind loop time as silence, so the
+      // only safe reading is "already running" -- a lower bound.
+      (void)prev_poll_ms;
+      onFirstFrame(now_ms, 0, now_ms);
+      return;
     } else if ((uint32_t)(prev_poll_ms - last_bus_ms) > MACHINE_OFF_GAP_MS) {
       // Unsigned: last_bus_ms was set at a poll no later than prev_poll_ms,
       // and a signed compare would miss a power-on after 24.8 days off.
-      bus_on_since_ms = now_ms;          // watched it go quiet: off, then on again
+      bus_on_since_ms = now_ms;                  // watched it go quiet: off, then on again
       bus_lower_bound = false;
     }
     last_bus_ms = now_ms;

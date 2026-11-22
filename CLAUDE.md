@@ -791,6 +791,7 @@ firmware/          PlatformIO, Arduino framework
     pulse_log.h             recent flowmeter pulse times: the pre-infusion pulse train, and (v6) pump idle time
     machine_io.{h,cpp}      switch poller, debounce, event queue
     machine_context.h       per-shot machine facts for the spool header
+    display_watch.h         power-up detection: whole-capture silence before first display activity
     brew_guard.{h,cpp}      invariant 2 — is the pump running?
     drive_bench.h           bench timing of the drive '221s (`drive` command)
   test/host/                host-compiled unit tests, no board needed
@@ -1841,20 +1842,39 @@ typed or cleared `'user'` (migration 012). **A shot that recorded an edit
 is not a carry source** unless a human typed its value: its display value
 and run predate the edit. The run is re-derived at every server start. **Header format v6** (firmware 0.15.0, 2026-11-22) added, after
 `setpoint_dc`, `machine_on_ms`, `machine_on_flags` and `pump_idle_ms`
-(125 → 134 bytes): how long the machine had been on, and the pump idle, at
-this shot's pump press — for the first-shot warm-up question (0f). On-time
-comes from the display bus coming alive after >10 s of silence (the machine
-is switched off between sessions); flag bit 0 marks it a lower bound when
-the bus was already live as the board started watching. Idle time is the
+(125 → 134 bytes): how long the machine had been on (from its first counted
+display frame, see below), and the pump idle, at this shot's pump press — for the first-shot warm-up question (0f). On-time
+comes from the display bus: after power-on it is frame-silent until +4.1 s
+(init burst, then `U2.4` on the glass), while a running machine sends a
+frame every 41 ms. So the first display activity (any frame of a
+recognised length) after ≥ 0.5 s of whole capture, judged on the frame's
+own timestamp, is a power-up — including
+board and machine on one switched strip, where the board misses the burst
+(operator, 2026-11-22; firmware 0.15.1 switches the tap on first thing in
+`setup()` and logs the silence it saw) — and a later frame after > 10 s of
+watched silence is a power cycle; flag bit 0 marks a lower bound when
+frames came sooner. Silence counts only from when capture was whole — the
+tap's enable, or the drain that emptied the display ring after its latest
+drop — so a drop during the init burst does not hide the silence after it,
+and a frame drained from a full ring is not taken for the first; setup()
+drains the ring, and the boot log line reports the whole-capture silence it
+judged. **Stored raw**
+(invariant 3): from the first counted frame, so the machine had been on
+**~4.1 s longer** (±0.1 s on the first-frame path; a later power cycle is
+stamped at poll time, so a loop stall across it shortens it unflagged) — add it in analysis;
+0.15.0 and 0.15.1 values are on the same footing. A running bus that drops
+frames for ≥ 0.5 s right at watch start would read as a power-up (such
+dropouts are known, their cause is not). Idle time is the
 gap to the last flowmeter pulse before the press, so it needs the flow tap.
 Stored as `machine_on_s`, `machine_on_lower_bound` and the long-empty
 `s_since_flush` (migration 015) — which now means time since the last
 COUNTED flowmeter pulse: any pump run (a shot, a flush, a hot-water draw,
 steam if it pumps -- not established), and any noise the glitch filter
-lets through, not just a flush. **Known limits:** a
-board and machine powered up together are always flagged lower bound; the
-on-time runs ~4 s short (the power-on init burst and the `U2.4` silence come
-before the first counted frame); a power cycle counts only if the board's
+lets through, not just a flush. **Known limits:** on
+0.15.0 a shared power-up was flagged a lower bound (it judged watched silence
+at poll time, after a ~2 s setup); a J5 plugged into a running machine for
+the first time ≥ 0.5 s after watching began reads as a power-up at plug
+time; a power cycle counts only if the board's
 polls WATCHED the bus stay silent for over 10 s, so an off period polls did
 not witness -- e.g. switched off just before a long upload or selftest and
 back on during it -- keeps the older on-time; unplugging and

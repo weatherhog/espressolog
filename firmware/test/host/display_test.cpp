@@ -318,6 +318,36 @@ int main() {
     printf("power-on init burst rejected OK\n");
   }
 
+  // 13b. v6 (0.15.1): the first ACTIVITY since beginCapture() -- a frame of
+  //      a recognised length, even the one skip_first spends -- is stamped
+  //      with its OWN time; nothing in the power-on burst counts as one.
+  //      Fed as edges, as the ISR does, so finishFrame() runs.
+  {
+    auto feed = [](DisplayBus& d, const char* frame, uint32_t t) {
+      size_t n = bits(frame);
+      uint8_t f[DisplayBus::MAX_BITS];
+      memcpy(f, scratch, n);
+      for (size_t i = 0; i < n; i++) { d.feedEdge(t, f[i]); t += 101; }
+      return d.poll(t + 50000);
+    };
+    DisplayBus d;
+    d.beginCapture();                              // watching from t = 0
+    uint32_t first;
+    uint32_t t = 1030000;                          // the init burst at +1.03 s
+    for (int i = 0; i < 564; i++) { d.feedEdge(t, 0); t += 101; }
+    d.poll(t + 50000);
+    assert(!d.firstFrameUs(&first));               // the burst is not a frame
+    assert(!feed(d, FRAME_95, 4100000));           // spent by skip_first -- but activity
+    assert(d.firstFrameUs(&first) && first > 4100000 && first < 4200000);
+    assert(feed(d, FRAME_95, 4300000));            // the first DECODED frame
+    assert(feed(d, FRAME_95, 4500000));
+    uint32_t again;
+    assert(d.firstFrameUs(&again) && again == first);   // the FIRST, kept
+    d.beginCapture();
+    assert(!d.firstFrameUs(&again));               // reset on a new capture
+    printf("first frame time, and the burst is not one OK\n");
+  }
+
   // 14. A blank display is NOT zero degrees. This is the bug that shipped
   //     in the first draft of 0.8.0: ' ' was skipped in the numeric
   //     accumulate, so "   " came out as a perfectly confident 0 C — and

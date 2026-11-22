@@ -221,6 +221,12 @@ public:
   // used to be flushed on the next attach stamped with the pre-detach
   // timestamp. Nobody had hit that; it is fixed here regardless.
   void beginCapture();
+  // v6 (0.15.1): the timestamp (micros) of the first bus ACTIVITY since
+  // beginCapture() -- the first frame of a recognised length, decodable or
+  // not; the frame's own time, not when it was polled -- for telling a
+  // machine powering up (frame-silent until +4.1 s) from one already
+  // running (a frame every 41 ms). False until there is one.
+  bool firstFrameUs(uint32_t* t_us) const { if (have_first) *t_us = first_us; return have_first; }
 
   // Exposed for the host test: decode one complete frame directly.
   bool decodeFrame(const uint8_t* bits, size_t n, uint32_t t_us);
@@ -243,6 +249,8 @@ private:
   Buttons  btn;
 
   uint32_t last_blank_us = 0;    // latest blank FRAME
+  bool     have_first = false;   // firstFrameUs()
+  uint32_t first_us = 0;
   uint32_t last_onset_us = 0;    // latest blank ONSET
   bool     have_onset = false;
   bool     prev_blank = false;   // was the previous decoded digit frame blank?

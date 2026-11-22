@@ -1841,8 +1841,8 @@ typed or cleared `'user'` (migration 012). **A shot that recorded an edit
 is not a carry source** unless a human typed its value: its display value
 and run predate the edit. The run is re-derived at every server start. **Header format v6** (firmware 0.15.0, 2026-11-22) added, after
 `setpoint_dc`, `machine_on_ms`, `machine_on_flags` and `pump_idle_ms`
-(125 → 134 bytes): how long the machine had been on, and the pump idle, at
-this shot's pump press — for the first-shot warm-up question (0f). On-time
+(125 → 134 bytes): how long the machine had been on (from its first counted
+display frame, see below), and the pump idle, at this shot's pump press — for the first-shot warm-up question (0f). On-time
 comes from the display bus: after power-on it is frame-silent until +4.1 s
 (init burst, then `U2.4` on the glass), while a running machine sends a
 frame every 41 ms. So the first frame ≥ 0.5 s after the board started
@@ -1851,13 +1851,15 @@ board and machine on one switched strip, where the board misses the burst
 (operator, 2026-11-22; firmware 0.15.1 switches the tap on first thing in
 `setup()` and logs the silence it saw) — and a later frame after > 10 s of
 watched silence is a power cycle; flag bit 0 marks a lower bound when
-frames came sooner, or when the display ring dropped an edge before the
-first frame (its time then is not the bus's first). The ISR stamps its
-first drop, so drops after the frame's edges were queued — even in the
-same un-drained stall — do not count; setup() drains the ring, and the boot
-log line says which case it saw. **Stored raw**
+frames came sooner. Silence counts only from when capture was whole — the
+tap's enable, or the drain that emptied the display ring after its latest
+drop — so a drop during the init burst does not hide the silence after it,
+and a frame drained from a full ring is not taken for the first; setup()
+drains the ring, and the boot log line reports the whole-capture silence it
+judged. **Stored raw**
 (invariant 3): from the first counted frame, so the machine had been on
-**~4.1 s longer** (±0.1 s when nothing was dropped) — add it in analysis;
+**~4.1 s longer** (±0.1 s on the first-frame path; a later power cycle is
+stamped at poll time, so a loop stall across it shortens it unflagged) — add it in analysis;
 0.15.0 and 0.15.1 values are on the same footing. A running bus that drops
 frames for ≥ 0.5 s right at watch start would read as a power-up (such
 dropouts are known, their cause is not). Idle time is the

@@ -715,20 +715,18 @@ int main() {
     for (uint32_t t = 5041; t <= 21000; t += 41) k.onBusFrame(t, t - 5);
     k.onPumpPress(PUMP_2CUP, 20000); k.resolvePump(20500);
     assert(k.context().machine_on_flags == MACHINE_ON_LOWER_BOUND);
-    // The firmware's judgement (firstFrameSilence): the 0.5 s edge, drops
-    // before the first frame, and a frame 25+ days after the watch start
-    // (a signed difference would read it as no silence).
+    // The firmware's judgement (firstFrameSilence): silence counts from when
+    // capture was whole (the enable, or the drain after the latest drop).
     using MCT = MachineContextTracker;
-    assert(MCT::firstFrameSilence(1499, 1000, false) == 499);
-    assert(MCT::firstFrameSilence(1500, 1000, false) == MCT::POWERUP_SILENCE_MS);
-    assert(MCT::firstFrameSilence(5000, 1000, true) == 0);       // an edge dropped before it
-    // A drop AFTER the first frame (same stall) does not count; before does.
-    assert(!MCT::droppedBefore(false, 0, 4100000));
-    assert(!MCT::droppedBefore(true, 4300000, 4100000));
-    assert(MCT::droppedBefore(true, 1100000, 4100000));
-    assert(MCT::droppedBefore(true, 0xFFFFFF00u, 100));          // across a micros wrap
-    assert(MCT::firstFrameSilence(1000 + 2200000000u, 1000, false) == 2200000000u);
-    assert(MCT::firstFrameSilence(100, 0xFFFFFF00u, false) == 356);   // millis wrapped
+    assert(MCT::firstFrameSilence(1499, 1000) == 499);
+    assert(MCT::firstFrameSilence(1500, 1000) == MCT::POWERUP_SILENCE_MS);
+    // Review 2026-11-22: a drop during the init burst (+1.08 s), drained at
+    // +1.2 s; the first frame at +4.1 s still has 2.9 s of whole capture.
+    assert(MCT::firstFrameSilence(4100, 1200) == 2900);
+    // A frame drained from a full ring, from before the latest drop's drain:
+    // nothing whole before it -- 0.
+    assert(MCT::firstFrameSilence(1000, 1200) == 0);
+    assert(MCT::firstFrameSilence(100, 0xFFFFFF00u) == 356);     // millis wrapped
     printf("boot ordering, and power-up vs already running OK\n");
   }
   {

@@ -22,10 +22,11 @@ static constexpr uint32_t MACHINE_ON_NONE = 0xFFFFFFFF;
 static constexpr uint32_t PUMP_IDLE_NONE  = 0xFFFFFFFF;
 // machine_on_flags bit 0: machine_on_ms is only a LOWER BOUND -- the first
 // display frame came within POWERUP_SILENCE_MS (0.5 s) of this board starting
-// to watch (it booted, or the tap was switched on, into a running machine),
-// or the ISR ring dropped an edge before that frame -- by the ISR's stamp of
-// its first drop -- so its time is not the bus's first
-// (MachineContextTracker::onFirstFrame, droppedBefore).
+// to watch WITH WHOLE CAPTURE (it booted, or the tap was switched on, into a
+// running machine; or the display ring dropped edges too close before the
+// frame to rule out a missed earlier one). MachineContextTracker::onFirstFrame
+// and firstFrameSilence. Only the first frame after watch start is judged
+// this way; a later power cycle is never flagged.
 static constexpr uint8_t  MACHINE_ON_LOWER_BOUND = 0x01;
 
 // v4: the flowmeter pulses between the lever press and first drip.
@@ -199,10 +200,12 @@ public:
   //     2026-11-22). Not flagged. Judged on the FRAME'S OWN TIME (the
   //     decoder's, from the ISR edge stamps), not when loop() got to it;
   //     the tap is enabled first thing in setup() and the ring is drained
-  //     through setup(), so the +4.1 s frames are not lost to a ring full of
-  //     the init burst. If the ring dropped an edge BEFORE the first frame
-  //     (the ISR stamps its first drop; drops after the frame's edges were
-  //     queued do not count), its time is not trusted: a lower bound.
+  //     through the 2 s wait and between bring-up steps (not during the
+  //     LittleFS mount), so the +4.1 s frames are not lost to a ring full of
+  //     the init burst. Silence counts only from when capture was whole:
+  //     the tap's enable, or the drain after the ring's latest drop -- so a
+  //     drop during the init burst does not hide the silence after it, and
+  //     a frame drained from a full ring is not mistaken for the first.
   //   - sooner: the machine was already running; MACHINE_ON_LOWER_BOUND.
   //   Later frames -- onBusFrame(): one after more than MACHINE_OFF_GAP_MS
   // of witnessed silence is a power cycle. The threshold stays long because
@@ -231,19 +234,15 @@ public:
     last_bus_ms = poll_ms;
   }
   bool busSeen() const { return bus_seen; }
-  // The silence to judge a first frame on: frame_ms − watch_ms (unsigned:
-  // the frame is never before the watch start, and a signed difference
-  // would read a 25-day wait as none), or 0 when the ISR ring dropped an
-  // edge before the frame -- its time is then not the bus's first. Pure, for
-  // the host tests; the firmware passes its result to onFirstFrame().
-  static uint32_t firstFrameSilence(uint32_t frame_ms, uint32_t watch_ms, bool dropped_before) {
-    return dropped_before ? 0 : frame_ms - watch_ms;
-  }
-  // Was the ring's first drop (if any) before the first frame's own time?
-  // The ring drops the newest edges, so a drop after the frame's edges were
-  // queued cannot have cost the bus frames ahead of it.
-  static bool droppedBefore(bool have_drop, uint32_t first_drop_us, uint32_t first_frame_us) {
-    return have_drop && (int32_t)(first_drop_us - first_frame_us) < 0;
+  // The silence to judge a first frame on: how long the bus was WATCHED
+  // WHOLE before it -- frame_ms − capture_ok_ms, where capture_ok_ms is the
+  // tap's enable or the drain that emptied the ring after its latest drop
+  // (main.cpp). A frame from before capture_ok_ms (drained from the ring
+  // after a later drop) gets 0. Signed, so a wait of 24.8 days or more also
+  // reads 0 -- a lower bound, the safe direction. Pure, for the host tests.
+  static uint32_t firstFrameSilence(uint32_t frame_ms, uint32_t capture_ok_ms) {
+    const int32_t d = (int32_t)(frame_ms - capture_ok_ms);
+    return d > 0 ? (uint32_t)d : 0;
   }
   void onBusFrame(uint32_t now_ms, uint32_t prev_poll_ms) {
     if (!bus_seen) {

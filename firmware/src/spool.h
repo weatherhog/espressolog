@@ -109,8 +109,9 @@ typedef struct __attribute__((packed)) {
   // not known (display tap off, no press, or the newest frame more than 10 s
   // before first drip). Rules and limits: MachineContextTracker, onFirstFrame
   // and onBusFrame. machine_on_flags bit 0: a LOWER BOUND only -- the first
-  // frame came within 0.5 s of this board starting to watch (the machine may
-  // have been on before), or edges were dropped before it.
+  // frame after watch start came within 0.5 s of whole capture (a running
+  // machine, or edges dropped too close before it). A later power cycle is
+  // never flagged.
   uint32_t machine_on_ms;
   uint8_t  machine_on_flags;
   // ms from the previous pump run's last flowmeter pulse to this shot's pump

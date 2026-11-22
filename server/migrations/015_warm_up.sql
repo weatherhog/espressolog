@@ -2,8 +2,9 @@
 -- that the first shot of a session flows slower (CLAUDE.md, 0f), each shot
 -- now says how warm the machine could be.
 --
---   machine_on_s           seconds from the machine being switched on to
---                          this shot's pump press, as the board saw it on
+--   machine_on_s           seconds from the machine's first counted display
+--                          frame (~4.1 s after power-on) to this shot's pump
+--                          press, as the board saw it on
 --                          the display bus: from 0.15.1 the first frame
 --                          >= 0.5 s after it started watching (a running
 --                          machine sends one every 41 ms), or later a frame
@@ -16,10 +17,11 @@
 --                          tap off, no press seen, the bus not live within
 --                          10 s of first drip, or an older record.
 --   machine_on_lower_bound 1: machine_on_s is only "at least" -- the first
---                          frame came within 0.5 s of the board starting to
---                          watch (it booted, or the tap was switched on,
---                          into a running machine), or edges were dropped
---                          before it. NULL with machine_on_s.
+--                          frame after the board started watching came
+--                          within 0.5 s of whole capture (a running machine,
+--                          or edges dropped too close before it); a later
+--                          power cycle is never flagged. NULL with
+--                          machine_on_s.
 --
 -- s_since_flush (001, NULL until now) is filled from the same record:
 -- seconds from the last COUNTED flowmeter pulse -- any pump run (a shot, a

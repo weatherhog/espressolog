@@ -791,6 +791,7 @@ firmware/          PlatformIO, Arduino framework
     pulse_log.h             recent flowmeter pulse times: the pre-infusion pulse train, and (v6) pump idle time
     machine_io.{h,cpp}      switch poller, debounce, event queue
     machine_context.h       per-shot machine facts for the spool header
+    display_watch.h         power-up detection: whole-capture silence before first display activity
     brew_guard.{h,cpp}      invariant 2 — is the pump running?
     drive_bench.h           bench timing of the drive '221s (`drive` command)
   test/host/                host-compiled unit tests, no board needed
@@ -1845,8 +1846,9 @@ and run predate the edit. The run is re-derived at every server start. **Header 
 display frame, see below), and the pump idle, at this shot's pump press — for the first-shot warm-up question (0f). On-time
 comes from the display bus: after power-on it is frame-silent until +4.1 s
 (init burst, then `U2.4` on the glass), while a running machine sends a
-frame every 41 ms. So the first frame ≥ 0.5 s after the board started
-watching, judged on the frame's own timestamp, is a power-up — including
+frame every 41 ms. So the first display activity (any frame of a
+recognised length) after ≥ 0.5 s of whole capture, judged on the frame's
+own timestamp, is a power-up — including
 board and machine on one switched strip, where the board misses the burst
 (operator, 2026-11-22; firmware 0.15.1 switches the tap on first thing in
 `setup()` and logs the silence it saw) — and a later frame after > 10 s of

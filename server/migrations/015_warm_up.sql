@@ -6,7 +6,7 @@
 --                          frame (~4.1 s after power-on) to this shot's pump
 --                          press, as the board saw it on
 --                          the display bus: from 0.15.1 the first frame
---                          >= 0.5 s after it started watching (a running
+--                          after >= 0.5 s of whole capture (a running
 --                          machine sends one every 41 ms), or later a frame
 --                          after > 10 s of witnessed silence (the machine is
 --                          switched off between sessions, operator

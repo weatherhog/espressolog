@@ -318,8 +318,9 @@ int main() {
     printf("power-on init burst rejected OK\n");
   }
 
-  // 13b. v6 (0.15.1): the first frame since beginCapture() is timestamped
-  //      with its OWN time, and nothing in the power-on burst counts as one.
+  // 13b. v6 (0.15.1): the first ACTIVITY since beginCapture() -- a frame of
+  //      a recognised length, even the one skip_first spends -- is stamped
+  //      with its OWN time; nothing in the power-on burst counts as one.
   //      Fed as edges, as the ISR does, so finishFrame() runs.
   {
     auto feed = [](DisplayBus& d, const char* frame, uint32_t t) {
@@ -336,9 +337,9 @@ int main() {
     for (int i = 0; i < 564; i++) { d.feedEdge(t, 0); t += 101; }
     d.poll(t + 50000);
     assert(!d.firstFrameUs(&first));               // the burst is not a frame
-    assert(!feed(d, FRAME_95, 4100000));           // spent by skip_first
-    assert(feed(d, FRAME_95, 4300000));            // the first counted frame
-    assert(d.firstFrameUs(&first) && first > 4300000 && first < 4400000);
+    assert(!feed(d, FRAME_95, 4100000));           // spent by skip_first -- but activity
+    assert(d.firstFrameUs(&first) && first > 4100000 && first < 4200000);
+    assert(feed(d, FRAME_95, 4300000));            // the first DECODED frame
     assert(feed(d, FRAME_95, 4500000));
     uint32_t again;
     assert(d.firstFrameUs(&again) && again == first);   // the FIRST, kept

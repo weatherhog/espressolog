@@ -7,6 +7,7 @@
 // would have silently poisoned the first real field data in these columns.
 #undef NDEBUG   // these suites assert with bare assert(); see the Makefile
 #include "../../src/machine_context.h"
+#include "../../src/display_watch.h"
 #include <cstdio>
 #include <cassert>
 
@@ -552,7 +553,8 @@ int main() {
     // 360 s, first drip at 368 s: on for 300 s, exact.
     MachineContextTracker m;
     m.watchBusAgain(0);
-    for (uint32_t t = 60000; t <= 370000; t += 41) m.onBusFrame(t, t - 5);
+    m.onFirstFrame(60000, 60000, 60000);
+    for (uint32_t t = 60041; t <= 370000; t += 41) m.onBusFrame(t, t - 5);
     m.onPumpPress(PUMP_2CUP, 360000, 25000);
     m.resolvePump(368000);
     const MachineContext& c = m.context();
@@ -567,7 +569,8 @@ int main() {
     // the time counts from that first frame and is only a lower bound.
     MachineContextTracker m;
     m.watchBusAgain(0);
-    for (uint32_t t = 200; t <= 130000; t += 41) m.onBusFrame(t, t - 5);
+    m.onFirstFrame(200, 200, 200);
+    for (uint32_t t = 241; t <= 130000; t += 41) m.onBusFrame(t, t - 5);
     m.onPumpPress(PUMP_2CUP, 120000);
     m.resolvePump(128000);
     assert(m.context().machine_on_ms == 119800);
@@ -580,7 +583,8 @@ int main() {
     // and it is exact even though the first session was a lower bound.
     MachineContextTracker m;
     m.watchBusAgain(0);
-    for (uint32_t t = 500; t <= 600000; t += 41) m.onBusFrame(t, t - 5);          // first session
+    m.onFirstFrame(500, 500, 500);
+    for (uint32_t t = 541; t <= 600000; t += 41) m.onBusFrame(t, t - 5);          // first session
     for (uint32_t t = 900000; t <= 1100000; t += 41) m.onBusFrame(t, t - 5);      // 5 min off, back on
     m.onPumpPress(PUMP_1CUP, 1050000);
     m.resolvePump(1058000);
@@ -592,7 +596,8 @@ int main() {
     // A short dropout of frames (5 s, under the 10 s gap) is not a power-on.
     MachineContextTracker m;
     m.watchBusAgain(0);
-    for (uint32_t t = 30000; t <= 100000; t += 41) m.onBusFrame(t, t - 5);
+    m.onFirstFrame(30000, 30000, 30000);
+    for (uint32_t t = 30041; t <= 100000; t += 41) m.onBusFrame(t, t - 5);
     for (uint32_t t = 105000; t <= 200000; t += 41) m.onBusFrame(t, t - 5);
     m.onPumpPress(PUMP_2CUP, 190000);
     m.resolvePump(198000);
@@ -604,7 +609,8 @@ int main() {
     // not live at t=0, so on-time is unknown rather than stale.
     MachineContextTracker m;
     m.watchBusAgain(0);
-    for (uint32_t t = 30000; t <= 100000; t += 41) m.onBusFrame(t, t - 5);
+    m.onFirstFrame(30000, 30000, 30000);
+    for (uint32_t t = 30041; t <= 100000; t += 41) m.onBusFrame(t, t - 5);
     m.onPumpPress(PUMP_2CUP, 400000);
     m.resolvePump(408000);
     assert(m.context().machine_on_ms == MACHINE_ON_NONE);
@@ -615,7 +621,8 @@ int main() {
     // with the machine on must not read as off-and-on -- the board was blind.
     MachineContextTracker m;
     m.watchBusAgain(0);
-    for (uint32_t t = 60000; t <= 200000; t += 41) m.onBusFrame(t, t - 5);
+    m.onFirstFrame(60000, 60000, 60000);
+    for (uint32_t t = 60041; t <= 200000; t += 41) m.onBusFrame(t, t - 5);
     // loop() blocked from 200 s to 220 s: the first poll after it (220 s)
     // decodes the frames buffered meanwhile; the poll before it was 200 s.
     m.onBusFrame(220000, 199990);
@@ -632,7 +639,8 @@ int main() {
     // hid it), exact.
     MachineContextTracker m;
     m.watchBusAgain(0);
-    for (uint32_t t = 60000; t <= 200000; t += 41) m.onBusFrame(t, t - 5);
+    m.onFirstFrame(60000, 60000, 60000);
+    for (uint32_t t = 60041; t <= 200000; t += 41) m.onBusFrame(t, t - 5);
     // machine off at 200 s; polls keep running (and one stall happens, which
     // does not matter: polls before and after it still see no frame).
     m.onBusFrame(7200000, 7199995);                 // switched on at 7200 s
@@ -649,7 +657,8 @@ int main() {
     // and it is not a power cycle, whatever the block's length.
     MachineContextTracker m;
     m.watchBusAgain(0);
-    for (uint32_t t = 30000; t <= 100000; t += 41) m.onBusFrame(t, t - 5);
+    m.onFirstFrame(30000, 30000, 30000);
+    for (uint32_t t = 30041; t <= 100000; t += 41) m.onBusFrame(t, t - 5);
     m.onBusFrame(110030, 100030);                   // block from 100.03 s to 110.03 s
     for (uint32_t t = 110071; t <= 200000; t += 41) m.onBusFrame(t, t - 5);
     m.onPumpPress(PUMP_2CUP, 190000);
@@ -658,12 +667,12 @@ int main() {
     printf("a frame gap over 10 s across a blocked loop is not a power-on OK\n");
   }
   {
-    // The real boot path: the first poll has prev_poll_ms = 0, before
-    // watch_since (setup() ran at ~2 s). A frame then is a lower bound.
+    // The poll-time fallback (onBusFrame for a first frame, which the
+    // firmware never takes): always a lower bound, whatever the silence.
     MachineContextTracker m;
     m.watchBusAgain(2000);
-    m.onBusFrame(2100, 0);
-    for (uint32_t t = 2141; t <= 130000; t += 41) m.onBusFrame(t, t - 5);
+    m.onBusFrame(9000, 8995);
+    for (uint32_t t = 9041; t <= 130000; t += 41) m.onBusFrame(t, t - 5);
     m.onPumpPress(PUMP_2CUP, 120000);
     m.resolvePump(128000);
     assert(m.context().machine_on_flags == MACHINE_ON_LOWER_BOUND);
@@ -727,6 +736,42 @@ int main() {
     // nothing whole before it -- 0.
     assert(MCT::firstFrameSilence(1000, 1200) == 0);
     assert(MCT::firstFrameSilence(100, 0xFFFFFF00u) == 356);     // millis wrapped
+    // DisplayWatch (display_watch.h): the ring bookkeeping main.cpp feeds per
+    // drain. Times in ms; drain(start, end, dropped, have_first, first_ms).
+    {
+      // Power-up seen whole: enabled at 300, first activity at 4100.
+      DisplayWatch w; w.enable(300);
+      w.afterDrain(4000, 4001, 0, false, 0);
+      w.afterDrain(4110, 4111, 0, true, 4100);
+      assert(w.first_noted && w.first_frame_ms == 4100 && w.first_silence == 3800);
+      // Review 2026-11-22: a drop during the init burst (~1.08 s), drained at
+      // 1.2 s, frames at 4.1 s: 2.9 s of whole capture -- still a power-up.
+      DisplayWatch b; b.enable(300);
+      b.afterDrain(1200, 1201, 37, false, 0);           // the drain that saw the drop
+      assert(b.capture_ok_ms == 1201);
+      b.afterDrain(4110, 4111, 37, true, 4100);
+      assert(b.first_silence == 4100 - 1201);
+      // A running machine, ring full at the first drain: the frames drained
+      // are the oldest (near the enable) -- judged against the enable, not
+      // the drain: a lower bound.
+      DisplayWatch r; r.enable(300);
+      r.afterDrain(2500, 2501, 900, true, 340);
+      assert(r.first_silence == 40 && r.capture_ok_ms == 2501);
+      // Review 2026-11-22: a frame from edges that arrived DURING the drain
+      // that noticed a drop came after it -- whole only from the drain start.
+      DisplayWatch d; d.enable(300);
+      d.afterDrain(5000, 5010, 12, true, 5004);
+      assert(d.first_silence == 4);
+      // `display on` again: the ring was cleared, whole capture restarts.
+      DisplayWatch e; e.enable(300);
+      e.afterDrain(1000, 1001, 0, false, 0);
+      e.enable(4050);
+      e.afterDrain(4110, 4111, 0, true, 4100);
+      assert(e.first_silence == 50);
+      // Judged once: later drains do not re-judge.
+      e.afterDrain(9000, 9001, 0, true, 8000);
+      assert(e.first_frame_ms == 4100);
+    }
     printf("boot ordering, and power-up vs already running OK\n");
   }
   {

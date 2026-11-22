@@ -13,6 +13,7 @@
 #include "live_display.h"
 #include "machine_io.h"
 #include "brew_guard.h"
+#include "display_watch.h"
 #include "drive_bench.h"
 #include <soc/gpio_reg.h>
 #include <esp_timer.h>
@@ -130,17 +131,7 @@ static MachineContextTracker machine_ctx;
 static uint32_t frames_seen = 0;      // dbus_frames as machineContextPoll last saw it
 static uint32_t dbus_watch_ms = 0;    // millis() when the tap was last switched on (not micros:
                                       // a 71-minute wrap broke the silence judgement)
-// v6 (0.15.1): since when every edge has been captured -- the tap's enable,
-// or the drain that emptied the ring after its latest drop. Silence before
-// the first frame counts only from here: the ring drops the NEWEST edges, so
-// everything after this drain was seen (reviews 2026-11-22: a drop during
-// the power-on init burst, long before the first frame, had read as
-// "frames lost").
-static uint32_t dbus_capture_ok_ms = 0;
-static uint32_t dbus_dropped_seen = 0;      // dbus_dropped at that drain
-static bool     dbus_first_noted = false;   // the first decoded frame has been judged
-static uint32_t dbus_first_silence = 0;     // its silence (pollDisplay)
-static uint32_t dbus_first_frame_ms = 0;    // its own time, in millis
+static DisplayWatch dwatch;            // v6: the first-activity judgement (display_watch.h)
 static uint32_t ctx_last_poll_ms = 0; // when machineContextPoll last ran
 
 static void displaySetEnabled(bool on) {
@@ -152,8 +143,7 @@ static void displaySetEnabled(bool on) {
     dbus_head = dbus_tail = 0;
     dbus_frames = dbus_dropped = 0;
     frames_seen = 0;   // else the zeroing above reads as a new frame (review 2026-11-22)
-    dbus_dropped_seen = 0;
-    dbus_first_noted = false;
+    dwatch.enable(millis());   // every enable: the ring was just cleared
     display_bus.beginCapture();   // drop the in-progress frame; see display.h
     attachInterrupt(digitalPinToInterrupt(DISPLAY_CLK_PIN), dbusIsr, RISING);
   }
@@ -167,36 +157,25 @@ static void displaySetEnabled(bool on) {
   // The watch start is moved only on a real change, for the same reason.
   if (on != was_on) {
     dbus_watch_ms = millis();
-    dbus_capture_ok_ms = dbus_watch_ms;
     machine_ctx.watchBusAgain(dbus_watch_ms);
   }
 }
 
 static void pollDisplay() {
   if (!display_on) return;
+  const uint32_t drain_start = millis();
   while (dbus_tail != dbus_head) {
     DbusEdge e = { dbus_ring[dbus_tail].t_us, dbus_ring[dbus_tail].bit };
     dbus_tail = (uint16_t)((dbus_tail + 1) % DBUS_RING);
     if (display_bus.feedEdge(e.t_us, e.bit)) dbus_frames++;
   }
   if (display_bus.poll(micros())) dbus_frames++;   // bus went quiet mid-frame
-  // v6: judge the first decoded frame against the capture-ok time as it
-  // stood BEFORE this drain: the edges drained now are the oldest, from
-  // before any drop this drain is about to notice.
-  uint32_t first_us;
-  if (!dbus_first_noted && display_bus.firstFrameUs(&first_us)) {
-    dbus_first_noted = true;
-    dbus_first_frame_ms = millis() - (micros() - first_us) / 1000;
-    dbus_first_silence =
-        MachineContextTracker::firstFrameSilence(dbus_first_frame_ms, dbus_capture_ok_ms);
-  }
-  // Edges dropped since the last drain: the ring is empty now, so capture is
-  // whole again from here.
-  const uint32_t dropped = dbus_dropped;
-  if (dropped != dbus_dropped_seen) {
-    dbus_dropped_seen = dropped;
-    dbus_capture_ok_ms = millis();
-  }
+  // v6: feed the first-activity judgement once per drain (display_watch.h).
+  uint32_t first_us = 0;
+  const bool have_first = display_bus.firstFrameUs(&first_us);
+  const uint32_t now = millis();
+  dwatch.afterDrain(drain_start, now, dbus_dropped, have_first,
+                    have_first ? now - (micros() - first_us) / 1000 : 0);
 }
 
 
@@ -209,16 +188,15 @@ static void machineContextPoll() {
   ctx_last_poll_ms = now;
   if (dbus_frames != frames_seen) {
     frames_seen = dbus_frames;
-    uint32_t first_us;
-    if (!machine_ctx.busSeen() && display_bus.firstFrameUs(&first_us)) {
+    if (!machine_ctx.busSeen() && dwatch.first_noted) {
       // The first frame since watching started, judged on its OWN time
       // (0.15.1): a power-up is frame-silent until +4.1 s, a running
       // machine is not. Logged so one boot on the strip shows the margin.
-      (void)first_us;   // judged in pollDisplay(), where the drops are known
-      machine_ctx.onFirstFrame(dbus_first_frame_ms, dbus_first_silence, now);
-      Serial.printf("# machine: first display frame %lu ms after watching started, %lu ms of whole capture before it -> %s\n",
-                    (unsigned long)(dbus_first_frame_ms - dbus_watch_ms), (unsigned long)dbus_first_silence,
-                    dbus_first_silence >= MachineContextTracker::POWERUP_SILENCE_MS
+      // Judged in pollDisplay(), where the drops are known (display_watch.h).
+      machine_ctx.onFirstFrame(dwatch.first_frame_ms, dwatch.first_silence, now);
+      Serial.printf("# machine: first display activity %lu ms after watching started, %lu ms of whole capture before it -> %s\n",
+                    (unsigned long)(dwatch.first_frame_ms - dbus_watch_ms), (unsigned long)dwatch.first_silence,
+                    dwatch.first_silence >= MachineContextTracker::POWERUP_SILENCE_MS
                     ? "switched on (on-time exact)" : "already running, or not enough seen (on-time a lower bound)");
     } else {
       machine_ctx.onBusFrame(now, prev);
@@ -1510,7 +1488,7 @@ void setup() {
     bool fl = p.getBool("flow", false);
     bool sw = p.getBool("switches", false);
     p.end();
-    (void)on;   // the display tap was switched on first thing in setup()
+    // `on` (display) was acted on first thing in setup(); here it is only reported.
     if (fl) flowSetEnabled(true);
     if (sw) switchesSetEnabled(true);
     Serial.printf("# display bus %s (clk=GPIO%u data=GPIO%u)\n",

@@ -21,7 +21,8 @@
 // the samples (see SPOOL_PRE_TAIL_BYTES). FORMAT VERSION 5 (firmware
 // 0.12.0) added setpoint_dc, the brew setpoint dialled on the front panel.
 // FORMAT VERSION 6 (firmware 0.15.0) added machine_on_ms, machine_on_flags
-// and pump_idle_ms: how long the machine had been on and the pump idle at
+// and pump_idle_ms: the machine's on-time (raw, from its first counted
+// display frame -- ~4.1 s after power-on) and the pump idle at
 // this shot's press, for the first-shot warm-up question. Older records still
 // exist, both spooled and as fixtures, so the server decodes EVERY version —
 // see server/internal/record. The original intent was that this struct would

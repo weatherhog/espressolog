@@ -194,7 +194,7 @@ public:
   // first counted frame at +4.1 s. A running machine sends a frame every
   // ~41 ms. So, for the FIRST frame since watching started (boot,
   // watchBusAgain) -- onFirstFrame():
-  //   - at least POWERUP_SILENCE_MS after watching started: a power-up,
+  //   - at least POWERUP_SILENCE_MS of whole capture before it: a power-up,
   //     seen whole or in part -- including board and machine powered up by
   //     one switched strip, where the board misses the burst (operator,
   //     2026-11-22). Not flagged. Judged on the FRAME'S OWN TIME (the
@@ -246,11 +246,11 @@ public:
   }
   void onBusFrame(uint32_t now_ms, uint32_t prev_poll_ms) {
     if (!bus_seen) {
-      // Without a frame timestamp (host tests, or a caller with none): judge
-      // on the last poll that saw none -- which counts blind loop time as
-      // silence, so the firmware always uses onFirstFrame() instead.
-      const int32_t watched = (int32_t)(prev_poll_ms - watch_since_ms);
-      onFirstFrame(now_ms, watched > 0 ? (uint32_t)watched : 0, now_ms);
+      // No first-activity judgement was made (the firmware always makes one,
+      // onFirstFrame): poll time counts blind loop time as silence, so the
+      // only safe reading is "already running" -- a lower bound.
+      (void)prev_poll_ms;
+      onFirstFrame(now_ms, 0, now_ms);
       return;
     } else if ((uint32_t)(prev_poll_ms - last_bus_ms) > MACHINE_OFF_GAP_MS) {
       // Unsigned: last_bus_ms was set at a poll no later than prev_poll_ms,

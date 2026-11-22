@@ -174,29 +174,29 @@ public:
   // v6: MACHINE ON-TIME, from the display bus. The bus is silent while the
   // machine is switched off (no frames at all, 2026-11-22), so the first
   // frame after more than MACHINE_OFF_GAP_MS of silence is the machine being
-  // switched on. Call with millis() whenever a frame was decoded.
-  //   Lower bound: if this board had not been watching the bus for that
-  // long -- the first frame since boot or since watchBusAgain() -- the
+  // switched on. Call with millis() whenever a frame was decoded, and with
+  // the time of the PREVIOUS poll, which found no new frame.
+  //   Only WITNESSED silence counts: frames are decoded when loop() polls, so
+  // a loop blocked for 10 s or more (selftest, a drive sweep, a slow upload)
+  // looks like a silent bus without being one. The gap that matters is from
+  // the last frame to the last poll that still saw none -- a blocked loop
+  // adds nothing to it (reviews 2026-11-22: a flag for "the board was blind"
+  // lingered while the machine was off and hid the next real power-on, and
+  // missed stalls just under 10 s).
+  //   Lower bound: if this board had not WATCHED the bus stay silent for a
+  // full gap since it started watching -- boot or watchBusAgain() -- the
   // machine may have been on before; the time is then measured from that
   // first frame and flagged MACHINE_ON_LOWER_BOUND.
   static constexpr uint32_t MACHINE_OFF_GAP_MS = 10000;
-  void onBusFrame(uint32_t now_ms) {
-    const bool blind = blind_pending;
-    blind_pending = false;
+  void onBusFrame(uint32_t now_ms, uint32_t prev_poll_ms) {
     if (!bus_seen) {
       bus_on_since_ms = now_ms;
-      // Watching only since boot/re-enable: a machine already running then
-      // looks the same as one switched on, unless the bus stayed silent for
-      // a full gap first.
-      bus_lower_bound = (uint32_t)(now_ms - watch_since_ms) <= MACHINE_OFF_GAP_MS;
+      bus_lower_bound = (int32_t)(prev_poll_ms - watch_since_ms) <= (int32_t)MACHINE_OFF_GAP_MS;
       bus_seen = true;
-    } else if ((uint32_t)(now_ms - last_bus_ms) > MACHINE_OFF_GAP_MS && !blind) {
-      bus_on_since_ms = now_ms;          // switched off and on again
+    } else if ((int32_t)(prev_poll_ms - last_bus_ms) > (int32_t)MACHINE_OFF_GAP_MS) {
+      bus_on_since_ms = now_ms;          // watched it go quiet: off, then on again
       bus_lower_bound = false;
     }
-    // A gap the board was blind for (noteBlind) is not evidence of a power
-    // cycle: keep the on-time. KNOWN LIMIT: a machine really switched off and
-    // on within such a blind spell keeps the older, too-long on-time.
     last_bus_ms = now_ms;
   }
   // The display tap was switched or re-attached, or the board just booted:
@@ -205,9 +205,6 @@ public:
     bus_seen = false;
     watch_since_ms = now_ms;
   }
-  // The board could not watch the bus for longer than the off gap (loop()
-  // blocked): the next frame's gap says nothing about the machine.
-  void noteBlind() { blind_pending = true; }
 
   // Call when the detector reaches POURING. Takes the temperature from
   // before the pump started, which is the only time it is readable, and
@@ -375,7 +372,6 @@ private:
   uint32_t confirm_ms = 0;
   // v6 on-time state (onBusFrame).
   bool     bus_seen = false;
-  bool     blind_pending = false;
   bool     bus_lower_bound = true;
   uint32_t bus_on_since_ms = 0;
   uint32_t last_bus_ms = 0;

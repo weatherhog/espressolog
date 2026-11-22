@@ -22,8 +22,11 @@
 -- trusted). Raw durations, nothing derived (invariant 3).
 --
 -- Known limits: a board and machine powered up together always read as a
--- lower bound; a power cycle while the board's loop was blocked > 10 s is
--- not seen (the older on-time is kept); and a missed start press (CLAUDE.md,
--- first_drip_ms limits) attributes another press, and both fields with it.
+-- lower bound; a power cycle counts only when the board's polls watched the
+-- bus stay silent for over 10 s, so one inside a single blocked loop is not
+-- seen; a J5 re-plug without a `display` command is not seen either; and a
+-- missed start press or a manual stop-and-restart (CLAUDE.md, first_drip_ms
+-- limits) attributes another press, and both fields with it -- after a
+-- stop-and-restart s_since_flush is the pre-infusion pause.
 ALTER TABLE shot ADD COLUMN machine_on_s REAL;
 ALTER TABLE shot ADD COLUMN machine_on_lower_bound INTEGER;

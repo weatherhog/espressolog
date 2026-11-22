@@ -286,10 +286,6 @@ type headerV4 struct {
 	Crc32             uint32
 }
 
-// Header mirrors the CURRENT spool_header_t field-for-field, and is also the
-// canonical in-memory form: an older record decodes into it with the fields
-// it predates left at their "not available" values. binary.Read consumes it
-// sequentially, so Go struct alignment never enters into it.
 // headerV5 is the v5 layout (firmware 0.12.0-0.14.x), kept verbatim so v5
 // records still decode; v6 appended warm-up fields after setpoint_dc.
 type headerV5 struct {
@@ -340,6 +336,10 @@ type headerV5 struct {
 	Crc32       uint32
 }
 
+// Header mirrors the CURRENT spool_header_t field-for-field, and is also the
+// canonical in-memory form: an older record decodes into it with the fields
+// it predates left at their "not available" values. binary.Read consumes it
+// sequentially, so Go struct alignment never enters into it.
 type Header struct {
 	Magic           uint32
 	FormatVersion   uint8

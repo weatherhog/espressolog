@@ -552,7 +552,7 @@ int main() {
     // 360 s, first drip at 368 s: on for 300 s, exact.
     MachineContextTracker m;
     m.watchBusAgain(0);
-    for (uint32_t t = 60000; t <= 370000; t += 41) m.onBusFrame(t);
+    for (uint32_t t = 60000; t <= 370000; t += 41) m.onBusFrame(t, t - 5);
     m.onPumpPress(PUMP_2CUP, 360000, 25000);
     m.resolvePump(368000);
     const MachineContext& c = m.context();
@@ -566,7 +566,7 @@ int main() {
     // the time counts from that first frame and is only a lower bound.
     MachineContextTracker m;
     m.watchBusAgain(0);
-    for (uint32_t t = 1000; t <= 130000; t += 41) m.onBusFrame(t);
+    for (uint32_t t = 1000; t <= 130000; t += 41) m.onBusFrame(t, t - 5);
     m.onPumpPress(PUMP_2CUP, 120000);
     m.resolvePump(128000);
     assert(m.context().machine_on_ms == 119000);
@@ -579,8 +579,8 @@ int main() {
     // and it is exact even though the first session was a lower bound.
     MachineContextTracker m;
     m.watchBusAgain(0);
-    for (uint32_t t = 500; t <= 600000; t += 41) m.onBusFrame(t);          // first session
-    for (uint32_t t = 900000; t <= 1100000; t += 41) m.onBusFrame(t);      // 5 min off, back on
+    for (uint32_t t = 500; t <= 600000; t += 41) m.onBusFrame(t, t - 5);          // first session
+    for (uint32_t t = 900000; t <= 1100000; t += 41) m.onBusFrame(t, t - 5);      // 5 min off, back on
     m.onPumpPress(PUMP_1CUP, 1050000);
     m.resolvePump(1058000);
     assert(m.context().machine_on_ms == 150000);
@@ -591,8 +591,8 @@ int main() {
     // A short dropout of frames (5 s, under the 10 s gap) is not a power-on.
     MachineContextTracker m;
     m.watchBusAgain(0);
-    for (uint32_t t = 30000; t <= 100000; t += 41) m.onBusFrame(t);
-    for (uint32_t t = 105000; t <= 200000; t += 41) m.onBusFrame(t);
+    for (uint32_t t = 30000; t <= 100000; t += 41) m.onBusFrame(t, t - 5);
+    for (uint32_t t = 105000; t <= 200000; t += 41) m.onBusFrame(t, t - 5);
     m.onPumpPress(PUMP_2CUP, 190000);
     m.resolvePump(198000);
     assert(m.context().machine_on_ms == 160000);
@@ -603,7 +603,7 @@ int main() {
     // not live at t=0, so on-time is unknown rather than stale.
     MachineContextTracker m;
     m.watchBusAgain(0);
-    for (uint32_t t = 30000; t <= 100000; t += 41) m.onBusFrame(t);
+    for (uint32_t t = 30000; t <= 100000; t += 41) m.onBusFrame(t, t - 5);
     m.onPumpPress(PUMP_2CUP, 400000);
     m.resolvePump(408000);
     assert(m.context().machine_on_ms == MACHINE_ON_NONE);
@@ -614,14 +614,46 @@ int main() {
     // with the machine on must not read as off-and-on -- the board was blind.
     MachineContextTracker m;
     m.watchBusAgain(0);
-    for (uint32_t t = 60000; t <= 200000; t += 41) m.onBusFrame(t);
-    m.noteBlind();                                   // the poll after the stall
-    for (uint32_t t = 220000; t <= 400000; t += 41) m.onBusFrame(t);
+    for (uint32_t t = 60000; t <= 200000; t += 41) m.onBusFrame(t, t - 5);
+    // loop() blocked from 200 s to 220 s: the first poll after it (220 s)
+    // decodes the frames buffered meanwhile; the poll before it was 200 s.
+    m.onBusFrame(220000, 199990);
+    for (uint32_t t = 220041; t <= 400000; t += 41) m.onBusFrame(t, t - 5);
     m.onPumpPress(PUMP_2CUP, 390000);
     m.resolvePump(398000);
     assert(m.context().machine_on_ms == 330000);     // still from 60 s, not 220 s
     assert(m.context().machine_on_flags == 0);
-    printf("a blind spell is not a power-on OK\n");
+    printf("a blocked loop is not a power-on OK\n");
+  }
+  {
+    // Review 2026-11-22: the loop blocked while the machine was OFF, then a
+    // real power-on hours later -- it must count (a lingering "blind" flag
+    // hid it), exact.
+    MachineContextTracker m;
+    m.watchBusAgain(0);
+    for (uint32_t t = 60000; t <= 200000; t += 41) m.onBusFrame(t, t - 5);
+    // machine off at 200 s; polls keep running (and one stall happens, which
+    // does not matter: polls before and after it still see no frame).
+    m.onBusFrame(7200000, 7199995);                 // switched on at 7200 s
+    for (uint32_t t = 7200041; t <= 7510000; t += 41) m.onBusFrame(t, t - 5);
+    m.onPumpPress(PUMP_2CUP, 7500000);
+    m.resolvePump(7508000);
+    assert(m.context().machine_on_ms == 300000);
+    assert(m.context().machine_on_flags == 0);
+    printf("a stall while off does not hide the next power-on OK\n");
+  }
+  {
+    // Review 2026-11-22: a stall just under 10 s with the machine on is not
+    // a power cycle either (the frame gap can exceed the poll gap).
+    MachineContextTracker m;
+    m.watchBusAgain(0);
+    for (uint32_t t = 30000; t <= 100000; t += 41) m.onBusFrame(t, t - 5);
+    m.onBusFrame(110030, 100030);                   // 9.99 s poll gap, frame gap 10.03 s
+    for (uint32_t t = 110071; t <= 200000; t += 41) m.onBusFrame(t, t - 5);
+    m.onPumpPress(PUMP_2CUP, 190000);
+    m.resolvePump(198000);
+    assert(m.context().machine_on_ms == 160000);
+    printf("a stall just under 10 s is not a power-on OK\n");
   }
 
   printf("\nall machine context tests passed\n");

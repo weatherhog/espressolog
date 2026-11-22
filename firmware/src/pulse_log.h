@@ -101,7 +101,9 @@ public:
     }
     if (!found || best < RUNNING_MS) return false;
     const uint32_t last = press_ms - best;
-    if (have_gap && (uint32_t)(gap_ms - last) <= best) return false;
+    // Slack as in extract(): a loss is noticed by the next drain, which can
+    // come after the press.
+    if (have_gap && (uint32_t)(gap_ms - last) <= best + GAP_SLACK_MS) return false;
     *idle_ms = best;
     return true;
   }

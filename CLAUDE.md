@@ -788,7 +788,7 @@ firmware/          PlatformIO, Arduino framework
     net.{h,cpp}             WiFi, WebSocket, HTTP POST
     display.{h,cpp}         J5 bus decode, blink discrimination
     live_display.h          when the display goes out on the live stream (PWA only)
-    pulse_log.h             recent flowmeter pulse times, for the pre-infusion pulse train
+    pulse_log.h             recent flowmeter pulse times: the pre-infusion pulse train, and (v6) pump idle time
     machine_io.{h,cpp}      switch poller, debounce, event queue
     machine_context.h       per-shot machine facts for the spool header
     brew_guard.{h,cpp}      invariant 2 — is the pump running?
@@ -1851,12 +1851,17 @@ Stored as `machine_on_s`, `machine_on_lower_bound` and the long-empty
 `s_since_flush` (migration 015) — which now means idle since ANY pump run
 (a shot, a flush, a hot-water draw), not since a flush. **Known limits:** a
 board and machine powered up together are always flagged lower bound; a
-machine switched off and on while the board's loop was blocked > 10 s
-keeps the older on-time (a blocked loop is treated as blind, not as a
-power cycle); an idle under 1 s is reported unknown (a stall across the
-press can put the run's own pulses before it); and under the pump-press
-limits below (a missed start press) both fields describe the press that
-was attributed, not the real one. **The server decodes v1 to v6** — older records
+power cycle counts only if the board's polls WATCHED the bus stay silent
+for over 10 s, so a machine switched off and on within one blocked loop
+(selftest, a drive sweep) keeps the older on-time; unplugging and
+re-plugging J5 without a `display` command is not seen (a re-plug into a
+running machine after 10 s reads as an exact power-on); an idle under 1 s
+is reported unknown (a stall across the press can put the run's own
+pulses before it); `selftest` clears the pulse log, so idle after it is
+unknown until the next pump run; and under the pump-press limits below
+(a missed start press, a manual stop-and-restart) both fields describe
+the press that was attributed -- after a stop-and-restart the idle time
+is the pre-infusion pause, not the real idle. **The server decodes v1 to v6** — older records
 exist spooled and as fixtures, and losing one to a format bump would violate
 invariant 6. An older record reports the newer fields as "the machine did
 not say", which is the same thing a current record written with the display

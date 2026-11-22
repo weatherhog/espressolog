@@ -165,17 +165,14 @@ static void pollDisplay() {
 
 static void machineContextPoll() {
   if (!display_on) return;
-  // v6: any decoded frame means the machine is on (onBusFrame). Frames are
-  // decoded when polled, so a loop() blocked for longer than the power-off
-  // gap (selftest, a drive sweep, a slow upload) would read as off-and-on:
-  // tell the tracker the board was blind instead (review 2026-11-22).
+  // v6: any decoded frame means the machine is on (onBusFrame), which also
+  // needs the previous poll's time: only silence a poll witnessed counts.
   const uint32_t now = millis();
-  if (ctx_last_poll_ms != 0 && now - ctx_last_poll_ms > MachineContextTracker::MACHINE_OFF_GAP_MS)
-    machine_ctx.noteBlind();
+  const uint32_t prev = ctx_last_poll_ms;
   ctx_last_poll_ms = now;
   if (dbus_frames != frames_seen) {
     frames_seen = dbus_frames;
-    machine_ctx.onBusFrame(now);
+    machine_ctx.onBusFrame(now, prev);
   }
   machine_ctx.onReading(display_bus.reading(), display_bus.setpointTouched());
 }
@@ -656,6 +653,9 @@ static void runSelfTest(Stream& out, uint32_t pulses, uint32_t hz) {
   uint32_t dropped = flow_dropped - d0;
   pinMode(SELFTEST_PIN, INPUT);         // high-impedance again, measurement taken
   noteLoopBlocked();                    // this block was not a loop() stall
+  // Its synthetic pulses are not a pump run: a shot's idle time (v6) must
+  // not be measured from them (review 2026-11-22).
+  pulse_log.clear(millis());
   out.printf("# selftest: expected %lu, counted %lu (%+ld), glitches %lu, ring drops %lu\n",
              (unsigned long)pulses, (unsigned long)counted,
              (long)counted - (long)pulses, (unsigned long)glitch, (unsigned long)dropped);

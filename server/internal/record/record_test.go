@@ -536,4 +536,30 @@ func TestDecodeV6WarmUp(t *testing.T) {
 	if _, _, ok := r.Header.MachineOn(); ok {
 		t.Error("MachineOnNone read as known")
 	}
+	// And a v5 record -- no warm-up fields on the wire -- decodes them as
+	// "not known", never "on for 0 s".
+	v5 := headerV5{Magic: Magic, FormatVersion: 5, RecordType: TypeShot, HeaderLen: headerLenV5,
+		StopMs: 21000, YieldFinalMg: 36000, SampleCount: 1, SetpointDc: TempNone,
+		PrePulseTotal: PrePulsesNone}
+	var buf bytes.Buffer
+	if err := binary.Write(&buf, binary.LittleEndian, &v5); err != nil {
+		t.Fatal(err)
+	}
+	if err := binary.Write(&buf, binary.LittleEndian, []Sample{{TempDc: TempNone}}); err != nil {
+		t.Fatal(err)
+	}
+	raw := buf.Bytes()
+	binary.LittleEndian.PutUint32(raw[headerLenV5-4:], crc32.ChecksumIEEE(raw))
+	if r, err = Decode(raw); err != nil {
+		t.Fatal(err)
+	}
+	if r.Header.MachineOnMs != MachineOnNone || r.Header.PumpIdleMs != PumpIdleNone {
+		t.Errorf("v5 decoded warm-up fields %d / %d, want the None values", r.Header.MachineOnMs, r.Header.PumpIdleMs)
+	}
+	if _, _, ok := r.Header.MachineOn(); ok {
+		t.Error("a v5 record claims an on-time")
+	}
+	if _, ok := r.Header.PumpIdle(); ok {
+		t.Error("a v5 record claims an idle time")
+	}
 }

@@ -125,6 +125,31 @@ int main() {
     printf("8. gaps count only near the window, and never flip sign OK\n");
   }
 
+  // v6: idle time before a press = gap to the newest pulse strictly before it.
+  {
+    PulseLog p;
+    for (uint32_t t = 1000; t < 3000; t += 50) p.push(t);       // a flush, last pulse 2950
+    for (uint32_t t = 40100; t < 41000; t += 50) p.push(t);     // this shot's pump, already logged
+    uint32_t idle = 0;
+    assert(p.idleBefore(40000, &idle) && idle == 40000 - 2950);
+    PulseLog e;                                                 // nothing logged: not known
+    assert(!e.idleBefore(40000, &idle));
+    PulseLog g;                                                 // pulses lost after the flush
+    for (uint32_t t = 1000; t < 3000; t += 50) g.push(t);
+    g.markGap(20000);
+    assert(!g.idleBefore(40000, &idle));
+    PulseLog w;                                                 // a wrapped ring keeps the newest
+    for (uint32_t i = 0; i < 2 * PulseLog::N; i++) w.push(100000 + i * 20);
+    assert(w.idleBefore(200000, &idle) && idle == 200000 - (100000 + (2 * PulseLog::N - 1) * 20));
+    // Review 2026-11-22: a pulse under a second before the press may be this
+    // run's own (a stall across the press) -- not known, not "0.04 s idle".
+    PulseLog r;
+    for (uint32_t t = 1000; t < 3000; t += 50) r.push(t);
+    for (uint32_t t = 39000; t < 41000; t += 40) r.push(t);   // pump already running
+    assert(!r.idleBefore(39960 + 40, &idle));
+    printf("idle time before a press OK\n");
+  }
+
   printf("\nall pulse log tests passed\n");
   return 0;
 }

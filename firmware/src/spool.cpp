@@ -129,6 +129,9 @@ String Spool::writeShot(const ShotResult& r, const String& scale_mac,
   h.pre_pulse_flags      = mc.pre_pulse_flags;
   h.pre_pulse_count      = mc.pre_pulse_count > PRE_PULSES_MAX ? PRE_PULSES_MAX : mc.pre_pulse_count;
   h.setpoint_dc          = mc.setpoint_dc;
+  h.machine_on_ms        = mc.machine_on_ms;
+  h.machine_on_flags     = mc.machine_on_flags;
+  h.pump_idle_ms         = mc.pump_idle_ms;
   // The tail: the offsets, then 0xFFFF padding to a whole 10 bytes. Static,
   // not on the loop task's stack. Little-endian, like every other field.
   static uint16_t tail[PRE_PULSES_MAX + 4];
@@ -164,6 +167,8 @@ String Spool::writeWeighing(uint8_t role, const WeighingDetector::Event& ev, con
   h.pump_lead_ms = PUMP_LEAD_NONE;   // a weighing has no pump start; never "0 ms"
   h.pre_pulse_total = PRE_PULSES_NONE;
   h.setpoint_dc = INT16_MIN;
+  h.machine_on_ms = MACHINE_ON_NONE;
+  h.pump_idle_ms  = PUMP_IDLE_NONE;
   h.grams_mg = ev.grams_mg;
   h.stable_ms = ev.stable_ms;
   h.sample_count = 0;
@@ -229,7 +234,7 @@ bool Spool::dump(const String& name, Stream& out) {
     out.printf("# %s: not a record\n", path.c_str());
     f.close(); return false;
   }
-  if (p.header_len != SPOOL_HEADER_LEN_V5) {
+  if (p.header_len != SPOOL_HEADER_LEN_V6) {
     // Refuse rather than misread. Parsing an older file with the current
     // struct shifts every field past the first one that moved and reports a
     // CRC mismatch, which looks like corruption instead of a version
@@ -264,6 +269,11 @@ bool Spool::dump(const String& name, Stream& out) {
                  (unsigned long)h.pump_lead_ms);
     if (h.setpoint_dc == INT16_MIN) out.println("# setpoint=not seen");
     else out.printf("# setpoint=%d C (dialled on the display)\n", h.setpoint_dc / 10);
+    if (h.machine_on_ms == MACHINE_ON_NONE) out.println("# machine_on=unknown");
+    else out.printf("# machine_on=%lu s%s\n", (unsigned long)(h.machine_on_ms / 1000),
+                    (h.machine_on_flags & MACHINE_ON_LOWER_BOUND) ? " (at least)" : "");
+    if (h.pump_idle_ms == PUMP_IDLE_NONE) out.println("# pump_idle=unknown");
+    else out.printf("# pump_idle=%lu s\n", (unsigned long)(h.pump_idle_ms / 1000));
     if (h.pre_pulse_total == PRE_PULSES_NONE)
       out.println("# pre_pulses=not captured");
     else

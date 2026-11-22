@@ -788,7 +788,7 @@ firmware/          PlatformIO, Arduino framework
     net.{h,cpp}             WiFi, WebSocket, HTTP POST
     display.{h,cpp}         J5 bus decode, blink discrimination
     live_display.h          when the display goes out on the live stream (PWA only)
-    pulse_log.h             recent flowmeter pulse times, for the pre-infusion pulse train
+    pulse_log.h             recent flowmeter pulse times: the pre-infusion pulse train, and (v6) pump idle time
     machine_io.{h,cpp}      switch poller, debounce, event queue
     machine_context.h       per-shot machine facts for the spool header
     brew_guard.{h,cpp}      invariant 2 — is the pump running?
@@ -798,9 +798,9 @@ server/            Go
   cmd/espressolog/
   internal/{ambient,api,live,record,store,web}/
                    ambient = room temp/humidity from Home Assistant
-                   record = on-flash wire format (v1-v5 decode)
+                   record = on-flash wire format (v1-v6 decode)
                    web    = embed.FS for the built PWA
-  migrations/0*.sql         14 migrations; 001_init.sql is the base
+  migrations/0*.sql         15 migrations; 001_init.sql is the base
 web/               Vite + React PWA
   src/ · prototype/
 analysis/          Jupyter notebooks, reads the SQLite file
@@ -1839,7 +1839,33 @@ pump-on run from the pulse train into `preinfusion_run_s`
 (`'flow'`). Anything copied from an earlier shot is `'carried'`, anything
 typed or cleared `'user'` (migration 012). **A shot that recorded an edit
 is not a carry source** unless a human typed its value: its display value
-and run predate the edit. The run is re-derived at every server start. **The server decodes v1 to v5** — older records
+and run predate the edit. The run is re-derived at every server start. **Header format v6** (firmware 0.15.0, 2026-11-22) added, after
+`setpoint_dc`, `machine_on_ms`, `machine_on_flags` and `pump_idle_ms`
+(125 → 134 bytes): how long the machine had been on, and the pump idle, at
+this shot's pump press — for the first-shot warm-up question (0f). On-time
+comes from the display bus coming alive after >10 s of silence (the machine
+is switched off between sessions); flag bit 0 marks it a lower bound when
+the bus was already live as the board started watching. Idle time is the
+gap to the last flowmeter pulse before the press, so it needs the flow tap.
+Stored as `machine_on_s`, `machine_on_lower_bound` and the long-empty
+`s_since_flush` (migration 015) — which now means time since the last
+COUNTED flowmeter pulse: any pump run (a shot, a flush, a hot-water draw,
+steam if it pumps -- not established), and any noise the glitch filter
+lets through, not just a flush. **Known limits:** a
+board and machine powered up together are always flagged lower bound; the
+on-time runs ~4 s short (the power-on init burst and the `U2.4` silence come
+before the first counted frame); a power cycle counts only if the board's
+polls WATCHED the bus stay silent for over 10 s, so an off period polls did
+not witness -- e.g. switched off just before a long upload or selftest and
+back on during it -- keeps the older on-time; unplugging and
+re-plugging J5 without a `display` command is not seen (a re-plug into a
+running machine after 10 s reads as an exact power-on); an idle under 1 s
+is reported unknown (a stall across the press can put the run's own
+pulses before it); `selftest` clears the pulse log, so idle after it is
+unknown until the next pump run; and under the pump-press limits below
+(a missed start press, a manual stop-and-restart) both fields describe
+the press that was attributed -- after a stop-and-restart the idle time
+is the pre-infusion pause, not the real idle. **The server decodes v1 to v6** — older records
 exist spooled and as fixtures, and losing one to a format bump would violate
 invariant 6. An older record reports the newer fields as "the machine did
 not say", which is the same thing a current record written with the display

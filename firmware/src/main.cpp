@@ -18,7 +18,7 @@
 #include <esp_timer.h>
 #include <driver/gpio.h>
 
-const char* FIRMWARE_VERSION = "0.14.0";
+const char* FIRMWARE_VERSION = "0.15.0";
 const char* DETECTOR_VERSION = "0a.7";
 
 static ScaleManager scales;
@@ -127,13 +127,18 @@ static MachineContextTracker machine_ctx;
 // the open question depends on.
 //
 // Interrupt detached before the ring is zeroed, for the same race reason.
+static uint32_t frames_seen = 0;      // dbus_frames as machineContextPoll last saw it
+static uint32_t ctx_last_poll_ms = 0; // when machineContextPoll last ran
+
 static void displaySetEnabled(bool on) {
+  const bool was_on = display_on;
   if (display_on) detachInterrupt(digitalPinToInterrupt(DISPLAY_CLK_PIN));
   if (on) {
     pinMode(DISPLAY_CLK_PIN, INPUT);
     pinMode(DISPLAY_DATA_PIN, INPUT);
     dbus_head = dbus_tail = 0;
     dbus_frames = dbus_dropped = 0;
+    frames_seen = 0;   // else the zeroing above reads as a new frame (review 2026-11-22)
     display_bus.beginCapture();   // drop the in-progress frame; see display.h
     attachInterrupt(digitalPinToInterrupt(DISPLAY_CLK_PIN), dbusIsr, RISING);
   }
@@ -141,6 +146,10 @@ static void displaySetEnabled(bool on) {
   // Off, on or re-attached: the machine may have been edited while nothing
   // watched, so a remembered setpoint is no longer the machine's.
   machine_ctx.forgetSetpoint();
+  // And whether the machine was switched on while nothing watched (v6) --
+  // only when the tap actually changed: `display on` while on (the counter
+  // reset) must not turn an exact on-time into a lower bound.
+  if (on != was_on) machine_ctx.watchBusAgain(millis());
 }
 
 static void pollDisplay() {
@@ -156,6 +165,15 @@ static void pollDisplay() {
 
 static void machineContextPoll() {
   if (!display_on) return;
+  // v6: any decoded frame means the machine is on (onBusFrame), which also
+  // needs the previous poll's time: only silence a poll witnessed counts.
+  const uint32_t now = millis();
+  const uint32_t prev = ctx_last_poll_ms;
+  ctx_last_poll_ms = now;
+  if (dbus_frames != frames_seen) {
+    frames_seen = dbus_frames;
+    machine_ctx.onBusFrame(now, prev);
+  }
   machine_ctx.onReading(display_bus.reading(), display_bus.setpointTouched());
 }
 
@@ -527,7 +545,11 @@ static void pollSwitches() {
       brew_guard.onRelease(e.line, e.pressed_at_ms);
       // And remember it for the shot record (spool v3): which lever started
       // the pump, and when. Same filter, same reason.
-      machine_ctx.onPumpPress(pumpLineForSwitch(e.line), e.pressed_at_ms);
+      // v6: and how long the pump had stood idle before it, while the flow
+      // tap is on to say (the pulse log is empty otherwise).
+      uint32_t idle_ms = PUMP_IDLE_NONE;
+      if (!flow_on || !pulse_log.idleBefore(e.pressed_at_ms, &idle_ms)) idle_ms = PUMP_IDLE_NONE;
+      machine_ctx.onPumpPress(pumpLineForSwitch(e.line), e.pressed_at_ms, idle_ms);
     }
     reportSwitch(e);
   }
@@ -631,6 +653,9 @@ static void runSelfTest(Stream& out, uint32_t pulses, uint32_t hz) {
   uint32_t dropped = flow_dropped - d0;
   pinMode(SELFTEST_PIN, INPUT);         // high-impedance again, measurement taken
   noteLoopBlocked();                    // this block was not a loop() stall
+  // Its synthetic pulses are not a pump run: a shot's idle time (v6) must
+  // not be measured from them (review 2026-11-22).
+  pulse_log.clear(millis());
   out.printf("# selftest: expected %lu, counted %lu (%+ld), glitches %lu, ring drops %lu\n",
              (unsigned long)pulses, (unsigned long)counted,
              (long)counted - (long)pulses, (unsigned long)glitch, (unsigned long)dropped);

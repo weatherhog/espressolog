@@ -1,0 +1,36 @@
+-- Warm-up (spool format v6, firmware 0.15.0, 2026-11-22): for the finding
+-- that the first shot of a session flows slower (CLAUDE.md, 0f), each shot
+-- now says how warm the machine could be.
+--
+--   machine_on_s           seconds from the machine being switched on to
+--                          this shot's pump press. The board sees the
+--                          display bus come alive after >10 s of silence
+--                          (the machine is switched off between sessions,
+--                          operator 2026-11-22); ~4 s short, as the first
+--                          counted frame follows the power-on init burst
+--                          and the U2.4 silence. NULL: not known -- display
+--                          tap off, no press seen, the bus not live within
+--                          10 s of first drip, or an older record.
+--   machine_on_lower_bound 1: the bus was already live when the board
+--                          started watching (it booted, or the display tap
+--                          was switched on, into a running machine), so
+--                          machine_on_s is only "at least". NULL with it.
+--
+-- s_since_flush (001, NULL until now) is filled from the same record:
+-- seconds from the last COUNTED flowmeter pulse -- any pump run (a shot, a
+-- flush, a hot-water draw; steam if it pumps, not established), or noise the
+-- glitch filter let through; despite the name, not only a flush -- to this
+-- shot's press. NULL: the flow tap off, no earlier pulse logged since it was
+-- enabled, pulses lost in between, or under 1 s (a loop() stall across the
+-- press can put the run's own pulses before it, so a short idle is not
+-- trusted). Raw durations, nothing derived (invariant 3).
+--
+-- Known limits: a board and machine powered up together always read as a
+-- lower bound; a power cycle counts only when the board's polls watched the
+-- bus stay silent for over 10 s, so an off period they did not witness (e.g.
+-- off just before a long upload, on again during it) is not seen; a J5 re-plug without a `display` command is not seen either; and a
+-- missed start press or a manual stop-and-restart (CLAUDE.md, first_drip_ms
+-- limits) attributes another press, and both fields with it -- after a
+-- stop-and-restart s_since_flush is the pre-infusion pause.
+ALTER TABLE shot ADD COLUMN machine_on_s REAL;
+ALTER TABLE shot ADD COLUMN machine_on_lower_bound INTEGER;

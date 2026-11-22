@@ -17,6 +17,7 @@ class PulseLog {
 public:
   static constexpr uint16_t N = 512;
   static constexpr uint32_t GAP_SLACK_MS = 2000;
+  static constexpr uint32_t RUNNING_MS = 1000;   // idleBefore(): see there
 
   void push(uint32_t ms) {
     ring[head] = ms;
@@ -75,6 +76,36 @@ public:
     const bool gapped = have_gap && (uint32_t)(gap_ms - from_ms) <= span + GAP_SLACK_MS;
     *complete = !overwritten && !gapped;
     return total;
+  }
+
+  // v6: how long the flowmeter had been silent before press_ms -- the newest
+  // pulse strictly before it, i.e. the end of the previous pump run. False
+  // (not known) when no pulse before it is logged, or a gap (clear(),
+  // markGap()) lies between that pulse and the press: pulses may be missing
+  // there, so the idle time could be shorter than it looks. A ring that has
+  // wrapped still holds its newest entries, which is all this needs.
+  //   Also false when that pulse is within RUNNING_MS of the press: press_ms
+  // is the first POLL that saw the lever, and pulses carry their interrupt
+  // time, so after a loop() stall across the press the new run's own first
+  // pulses sit just before it (review 2026-11-22). An idle under a second
+  // is not told apart from that and is reported as not known.
+  bool idleBefore(uint32_t press_ms, uint32_t* idle_ms) const {
+    const uint16_t oldest = (uint16_t)((head + N - count) % N);
+    bool found = false;
+    uint32_t best = 0;
+    for (uint16_t i = 0; i < count; i++) {
+      uint32_t t = ring[(oldest + i) % N];
+      uint32_t before = press_ms - t;               // unsigned: wrap-safe
+      if (t == press_ms || (int32_t)before <= 0) continue;   // at or after the press
+      if (!found || before < best) { found = true; best = before; }
+    }
+    if (!found || best < RUNNING_MS) return false;
+    const uint32_t last = press_ms - best;
+    // Slack as in extract(): a loss is noticed by the next drain, which can
+    // come after the press.
+    if (have_gap && (uint32_t)(gap_ms - last) <= best + GAP_SLACK_MS) return false;
+    *idle_ms = best;
+    return true;
   }
 
 private:

@@ -1021,6 +1021,68 @@ func (s *Store) queryJSON(query string, args ...any) ([]map[string]any, error) {
 	return out, rows.Err()
 }
 
+// AmbientPending is one shot still waiting for its room reading.
+type AmbientPending struct {
+	ID        int64
+	StartedAt time.Time
+	// ClockValid is false when the board had no clock time for the shot, so
+	// StartedAt is the upload time (Ingest) and says nothing about the pour.
+	// (Ingest also uses the upload time for time_valid = 1 with a zero
+	// timestamp; the firmware never writes that, and it is not caught here.)
+	ClockValid bool
+	// BadTime: started_at does not parse; StartedAt is zero. Reported, not an
+	// error, so one bad row cannot stop every other lookup.
+	BadTime bool
+}
+
+// ShotsNeedingAmbient returns up to limit shots that have not been looked up
+// in Home Assistant yet (ambient_source IS NULL), newest first so a shot
+// just pulled is filled before the archive backfill. A row whose started_at
+// does not parse comes back with BadTime set, never as an error: one bad row
+// must not stop every other lookup (review 2026-11-22).
+func (s *Store) ShotsNeedingAmbient(limit int) ([]AmbientPending, error) {
+	rows, err := s.db.Query(`SELECT id, started_at,
+	                                NOT EXISTS (SELECT 1 FROM ingest_record ir
+	                                             WHERE ir.shot_id = shot.id AND ir.time_valid = 0)
+	                           FROM shot
+	                          WHERE ambient_source IS NULL
+	                          ORDER BY started_at DESC, id DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []AmbientPending
+	for rows.Next() {
+		var p AmbientPending
+		var ts string
+		if err := rows.Scan(&p.ID, &ts, &p.ClockValid); err != nil {
+			return nil, err
+		}
+		if p.StartedAt, err = time.Parse(time.RFC3339, ts); err != nil {
+			p.StartedAt, p.BadTime = time.Time{}, true
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// SetAmbient stores a room reading and where it came from. Only a row not
+// looked up yet is written, so a concurrent or repeated lookup cannot
+// overwrite an earlier answer.
+func (s *Store) SetAmbient(id int64, tempC, rh *float64, source string) error {
+	_, err := s.db.Exec(`UPDATE shot SET ambient_c = ?, ambient_rh = ?, ambient_source = ?
+	                     WHERE id = ? AND ambient_source IS NULL`,
+		nullFloat(tempC), nullFloat(rh), source, id)
+	return err
+}
+
+func nullFloat(v *float64) any {
+	if v == nil {
+		return nil
+	}
+	return *v
+}
+
 // Healthy pings the database.
 func (s *Store) Healthy() error {
 	var one int

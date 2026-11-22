@@ -737,6 +737,24 @@ to lose a shot. The ESP32 owns the radio and the timing.
 and the flash spool already handles retries. MQTT arrives in Phase 1 when
 there's a command path to carry.
 
+**Room temperature and humidity are READ from Home Assistant** (from
+2026-11-22, migration 014, `internal/ambient`) — the one path INTO this
+system from Home Assistant, which the diagram above does not draw. A server
+worker fills `ambient_c` / `ambient_rh` after ingest: the state in force at
+pour time while Home Assistant still has it (~10 days), else the mean of
+that hour from its long-term statistics, which is how the archive gets
+filled; `ambient_source` says which (`'no_clock'` for a shot recorded
+without clock time, whose `started_at` is its upload time). "State in
+force" is the sensor's last *reported* value, however old. Before writing,
+and again every hour, it checks the sensors exist, report °C and %, keep
+long-term statistics, and that a past hour's mean comes back over the
+WebSocket; it retries a failing shot with backoff without stalling the
+others, retries a shot under ~2 h old rather than writing `'none'`, and an
+unreachable Home Assistant costs time, not data; ingest never waits on it. Configured only by the
+environment file on the server box (`server/deploy/espressolog.env.example`);
+the URL, token and entity ids are not in this repo. The sensor is a room
+thermometer ~5 m from the machine, so it reads the room, not the machine.
+
 **Home Assistant consumes, never stores.** Publish 4–5 summary entities
 over MQTT discovery for glanceable status and notifications. HA's
 entity-plus-recorder model cannot represent a shot object with a 350-point
@@ -778,10 +796,11 @@ firmware/          PlatformIO, Arduino framework
   test/host/                host-compiled unit tests, no board needed
 server/            Go
   cmd/espressolog/
-  internal/{api,live,record,store,web}/
+  internal/{ambient,api,live,record,store,web}/
+                   ambient = room temp/humidity from Home Assistant
                    record = on-flash wire format (v1-v5 decode)
                    web    = embed.FS for the built PWA
-  migrations/0*.sql         13 migrations; 001_init.sql is the base
+  migrations/0*.sql         14 migrations; 001_init.sql is the base
 web/               Vite + React PWA
   src/ · prototype/
 analysis/          Jupyter notebooks, reads the SQLite file

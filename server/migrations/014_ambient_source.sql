@@ -1,0 +1,39 @@
+-- Where shot.ambient_c / ambient_rh came from. The columns have existed since
+-- 001 ("add a sensor later if you care") and were NULL on every row until
+-- 2026-11-22, when the server started reading the room sensor from Home
+-- Assistant (internal/ambient):
+--
+--   'ha_state'   the state in force at started_at -- the sensor's last
+--                REPORTED value, however long before; Home Assistant keeps
+--                raw states ~10 days, so live shots
+--   'ha_hourly'  the mean of the hour containing started_at, from Home
+--                Assistant's long-term statistics -- how older shots and
+--                the archive get filled; coarser, a room moves little
+--                within an hour
+--   'none'       Home Assistant answered and had no temperature for that
+--                moment (ambient_rh may still be set). The worker checks at
+--                start, and about hourly after, that the sensors exist,
+--                report degrees C and %, keep long-term statistics, and that
+--                an hourly mean of the last 48 h comes back -- so a typo in
+--                the configuration cannot write it across the archive. (A
+--                sensor renamed between two checks can still put 'none' on
+--                shots pulled in that hour; the SQL below undoes it.)
+--                A shot under ~2 h old that is missing a value is retried,
+--                not written 'none': its hour has no mean yet
+--   'no_clock'   the board had no clock time when it recorded the shot, so
+--                started_at is the UPLOAD time and the room then says
+--                nothing about the pour; not looked up
+--   NULL         not asked yet; or Home Assistant could not answer (the
+--                worker retries); or the shot is under ~2 h old and its
+--                hour has no mean yet (retried every 15 min); or its
+--                started_at does not parse (logged once, never filled)
+--
+-- To look a shot up again (a sensor swapped, a 'none' worth retrying):
+--   UPDATE shot SET ambient_c = NULL, ambient_rh = NULL,
+--                   ambient_source = NULL WHERE id = ...;
+--
+-- The sensor is a room thermometer ~5 m from the machine (operator,
+-- 2026-11-22): room temperature, not the air at the machine, which warms
+-- while it runs. Which sensor is server configuration, not schema.
+ALTER TABLE shot ADD COLUMN ambient_source TEXT
+  CHECK (ambient_source IN ('ha_state', 'ha_hourly', 'none', 'no_clock'));

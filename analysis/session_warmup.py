@@ -75,8 +75,18 @@ were opened by another record, leaving 69 shots in 32 sessions.)
   after looking (the 0f snapshot boundary), and a Fisher test on the sign
   counts gives ~0.19. So "it grew" is a candidate, not a finding. If it
   holds, a colder kitchen in October and November would fit a machine
-  warm-up cause, and so would anything else seasonal; the archive records
-  no ambient temperature (ambient_c is NULL throughout).
+  warm-up cause, and so would anything else seasonal; the archive recorded
+  no ambient temperature then (ambient_c NULL throughout, 2026-11-20). From
+  2026-11-22 the server fills it from a room thermometer in Home Assistant
+  (CLAUDE.md, Architecture). A first look that day, from the thermometer's
+  hourly means read straight from Home Assistant's statistics (not the
+  server's stored values, which did not exist yet), over the 28 main
+  sessions with two shots or more as this script found them on 2026-11-22
+  (0a.6 only, after the exclusions of 2026-11-20 to 22 -- not the 30 of the
+  2026-11-20 run), by an ad-hoc query not kept in the repo: the first-shot
+  gap was 0.178 g/s in the colder half (19.7 C up to the median) against
+  0.129 in the warmer (up to 24.1 C), r = -0.18 -- the direction a warm-up
+  cause predicts, and well within chance; humidity r = -0.11.
 
   ONE CONFOUND NOT RULED OUT: first shots average 0.2 g more ground dose
   (18.13 vs 17.93 g). Whether that moves flow measurably is untested.

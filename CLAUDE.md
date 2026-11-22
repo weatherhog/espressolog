@@ -1385,17 +1385,26 @@ above**: on that snapshot the script finds no significant effect
 **It is concentrated after 2026-09-30**: `--split 2026-09-30` gives
 +0.07 g/s before, not significant, and +0.27 g/s in 11 of 12 sessions from
 that date — but a test of one period against the other gives only
-p ~0.05, on a split date chosen after looking, so **"it grew" is a
+p ~0.05 (~0.067 on the 2026-11-22 re-run), on a split date chosen after looking, so **"it grew" is a
 candidate, not a finding**. **Cause unknown** — grinder
 first grind and machine warm-up both fit, and first shots also carry 0.2 g
 more dose, untested. Separating grinder from machine needs an intervention
 (a blank flush before the first shot on some days, a dumped dose on others),
-not more of the same data — **or, without wasting beans, flush-first days
-against ordinary days**: if the flush fixes the first shot it is the
-machine, if not, by elimination, the grinder or something else.
-**Re-run 2026-11-22 with 0a.7 pooled** (disturbed shots out, after the hand
-exclusions of 2026-11-21): 67 shots, 32 sessions, later faster in 22 of 28,
-**+0.15 g/s, p ~0.01** — unchanged.
+not more of the same data. **The zero-waste test is the warm-up time**: the
+machine is switched off between sessions and normally warmed up a couple of
+minutes, so first shots after ~2 min on some mornings and after 10 min or
+more on others test the machine directly (one blank flush is weaker: a slow
+shot after it does not rule the machine out). The dumped dose is the only
+direct grinder test, and the operator declined it as wasteful.
+**Re-run 2026-11-22 with 0a.7 pooled** (disturbed shots out; one 0a.7 shot
+in the pool so far): 67 shots, 32 sessions, later faster in 22 of 28,
+**+0.15 g/s, p ~0.01** — the finding stands, a little weaker (was 23 of 30,
+p ~0.0075); periods differ now p ~0.067, so "it grew" is weaker still.
+**Pooling is not exact**: 0a.7 also keeps a grip out of the yield of
+unflagged lift-terminated shots, which moves their mean flow (shot 62:
+1.932 → 1.888 g/s); 0a.6 alone and the pool without the four affected
+shots give the same answer (+0.153 and +0.158 g/s). Re-check as 0a.7
+shots accumulate.
 
 ---
 
@@ -1682,8 +1691,8 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   still excluded as one.
   **Up to 0a.6 an object set down while settling entered the peak and the
   yield** — at the end of settling, or at a lift: shot 205 (2026-11-21)
-  stored 37.8 g as 49.41 g, shot 81 37.4 as 43.5 — both, with 200/201,
-  excluded by hand that day. **Replaying every stored shot through 0a.7**
+  stored 37.8 g as 49.41 g, shot 81 37.4 as 43.5 — both excluded by hand
+  that day (200/201 the day before). **Replaying every stored shot through 0a.7**
   flags 17 records — 16 already excluded, plus shot 65, excluded the same
   day — and changes ten yields (12, 17, 62, 65, 81, 106, 167, 192, 197,
   205); every one of the clean shots among them moves toward the flat
@@ -1708,8 +1717,10 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   says. **0a.7 is its own stratum unless a script says otherwise**:
   `analysis/overshoot.py` and the 0f notebook filter on
   `detector_version = '0a.6'`; `analysis/session_warmup.py` pools 0a.6 and
-  0a.7 from 2026-11-22, because mean flow is computed the same way on both,
-  and leaves disturbed shots out. **Deploy the server before flashing 0.14.0**: the format
+  0a.7 from 2026-11-22 and leaves disturbed shots out — not because the
+  two compute mean flow identically (a grip kept out of an unflagged
+  lift-terminated yield moves it), but because the result does not move
+  either way; its docstring has the check. **Deploy the server before flashing 0.14.0**: the format
   is unchanged, so an older server accepts the record and silently drops
   the bit.
 

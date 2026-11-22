@@ -17,7 +17,8 @@ WHAT A SESSION IS
   position.
 
   A session whose FIRST RECORD is not a clean shot -- a drip under 5 g, a
-  reject, a shot from another stratum -- is reported on its own line and
+  reject, a shot from another stratum or detector, a shot flagged
+  disturbed -- is reported on its own line and
   left out of the main result: its first clean shot was not the first time
   the machine ran. Even so, "first" can only mean "first shot the scale saw":
   a flush with no cup on the scale, or a ground and dumped dose, leaves no
@@ -85,20 +86,39 @@ were opened by another record, leaving 69 shots in 32 sessions.)
   the display reads 95) both fit. The 3rd-shot row cannot say whether it
   keeps fading past shot 2: it is unpaired, and its 7 sessions are a
   different mix from rows 1 and 2.
-  Separating them needs an intervention, not more of the same data: a blank
-  flush before the first shot on some days, a ground and dumped dose on
-  others.
+  Separating them needs an intervention, not more of the same data. The
+  zero-waste one is the WARM-UP TIME: the machine is switched off between
+  sessions and normally warmed up a couple of minutes, so first shots after
+  ~2 min on some mornings and after 10 min or more on others test the
+  machine directly. A blank flush is weaker -- one flush may not bring the
+  group to equilibrium, so a slow shot after it does not rule the machine
+  out. A ground and dumped dose is the only direct grinder test; the
+  operator declined it as wasteful (2026-11-22).
 
 UPDATE 2026-11-22: detectors 0a.6 AND 0a.7 pooled (see DETECTORS), disturbed
-shots left out, after the hand exclusions of 2026-11-21 (65, 81, 200, 201,
-205). Live server: 67 clean shots in 32 sessions, later faster in 22 of 28,
-+0.153 g/s, p ~0.010; 12.1 % -> 13.8 % of the variance. The finding stands.
-Shot 208 (0a.7, disturbed after its stop, so its flow is in fact sound) is
-left out because the row alone cannot say which phase it was disturbed in;
-that leaves its session's first shot, 207, unpaired.
+shots left out. Since the 2026-11-20 run: 200/201 were excluded that day,
+81 and 205 on 2026-11-21, 65 on 2026-11-22, and shots 206-208 were pulled.
+Live server: 67 clean shots in 32 sessions, ONE of them 0a.7 (207), later
+faster in 22 of 28 (was 23 of 30), +0.153 g/s, p ~0.010 (was ~0.0075);
+13.8 % of the variance (was 12.1 %), sigma cut 7.2 % (was 6.3 %). Split:
+before +0.068 (11 of 16, p ~0.37), from 2026-09-30 +0.267 (11 of 12,
+p ~0.0026), periods differ p ~0.067 (was ~0.048) -- "it grew" is weaker
+still. Shot 208 (0a.7, disturbed after its stop, so its flow is in fact
+sound) is left out because the row alone cannot say which phase it was
+disturbed in; that leaves its session's first shot, 207, unpaired.
 
-NO ID EXCLUSIONS, unlike overshoot.py. 25/26 and 200/201 are excluded = 1
-in the database. Shot 37 is kept: its knock (19.44 s) falls in the stop
+POOLING IS NOT EXACT. 0a.7 also differs on LIFT-TERMINATED shots it does
+not flag: while settling the peak follows only readings under 0.5 g above
+it, so a grip press of 0.5-5 g before a lift stays out of yield_final_g --
+and the flow window ends at 80 % of that yield, so mean_flow_gps moves too
+(replayed shot 62: 1.932 -> 1.888 g/s). The 0a.6 rows keep the grip. On
+2026-11-22 it does not matter: 0a.6 alone gives the same +0.153 g/s, 22 of
+28, and dropping the four clean shots whose yield 0a.7 changes (17, 62,
+192, 197) gives +0.158 g/s, 20 of 25, p ~0.011. Re-check as 0a.7 shots
+accumulate; the header line prints how many are in.
+
+NO ID EXCLUSIONS, unlike overshoot.py. 25/26, 200/201 (2026-11-20) and 65,
+81, 205 (2026-11-21/22) are excluded = 1 in the database. Shot 37 is kept: its knock (19.44 s) falls in the stop
 window and its slow lift in the settle window, which pulls yield_final_g to
 33.8 g from ~35.9 g, the settle peak. The flow window ends at 80 % of yield_final_g
 (detector.cpp computeFlowWindow), so its mean_flow_gps reads ~0.02 g/s low
@@ -119,15 +139,16 @@ SENSITIVITY_GAPS = [30, 60, 120, 240]
 PERMUTATIONS = 20000
 SEED = 1
 
-# One stratum, as CLAUDE.md 0f asks: one bean, one dial, one epoch, one
-# detector version. Pooling detector versions inflates sigma for no reason.
+# One stratum, as CLAUDE.md 0f asks: one bean, one dial, one epoch. Detector
+# versions are pooled below, which CLAUDE.md warns against by default.
 STRATUM = {"bean_name": "Moonwalker", "grind_dial": 7.9, "grind_epoch_id": 1}
-# Detector versions pooled. 0a.6 and 0a.7 compute mean_flow_gps the same way:
-# 0a.7 changed nothing in the pour, only what a jump onto the scale does
-# while settling (CLAUDE.md, "disturbed"), and that reaches mean flow only
-# through yield_final_g -- so a disturbed shot is left out instead (its
-# mean flow is not to be trusted unless its curve is read, which this script
-# does not do). Anything older than 0a.6 changed the stop rule and stays out.
+# Detector versions pooled: 0a.6 and 0a.7 run the same pour logic. They
+# differ while settling, which reaches mean_flow_gps through yield_final_g:
+# on a shot 0a.7 flags disturbed (left out here -- and only 0a.7 can set the
+# flag, so it filters nothing on 0a.6 rows), and on an unflagged
+# lift-terminated shot whose grip 0a.7 keeps out of the yield. The docstring's
+# 2026-11-22 update shows the latter does not move the result yet. Anything
+# older than 0a.6 changed the stop rule and stays out.
 DETECTORS = {"0a.6", "0a.7"}
 MIN_YIELD_G = 15
 
@@ -277,8 +298,13 @@ def main():
     allsess = sessions(rows, args.gap_min)
     main_sess = [s for ok, s in allsess if ok]
     opened_other = [s for ok, s in allsess if not ok]
+    by_det = {}
+    for s in main_sess:
+        for r in s:
+            by_det[r["detector_version"]] = by_det.get(r["detector_version"], 0) + 1
     print(f"session gap > {args.gap_min} min, stratum {STRATUM}, "
-          f"detectors {sorted(DETECTORS)}, disturbed shots left out\n")
+          f"detectors {sorted(DETECTORS)}, disturbed shots left out")
+    print(f"main-session shots by detector: {dict(sorted(by_det.items()))}\n")
     table(main_sess)
     print()
     line("main (sessions opened by a clean shot)", main_sess)

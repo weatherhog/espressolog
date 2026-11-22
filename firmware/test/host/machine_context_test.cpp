@@ -688,6 +688,10 @@ int main() {
     m.onBusFrame(0xFFFF0000u + 20041, 0xFFFF0000u + 20036);
     const uint32_t back = 0xFFFF0000u + 20041 + 60000;              // wraps past 0
     m.onBusFrame(back, back - 5);
+    for (uint32_t t = back + 41; t != back + 40000; t += 41) {   // machine stays on
+      m.onBusFrame(t, t - 5);
+      if ((uint32_t)(t - back) > 39900) break;
+    }
     m.onPumpPress(PUMP_2CUP, back + 30000);
     m.resolvePump(back + 38000);
     assert(m.context().machine_on_ms == 30000);

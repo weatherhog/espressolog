@@ -6,14 +6,26 @@
 --   'ha_state'   the last recorded state at or before started_at -- exact;
 --                Home Assistant keeps raw states ~10 days, so live shots
 --   'ha_hourly'  the mean of the hour containing started_at, from Home
---                Assistant's long-term statistics -- how the archive was
---                backfilled; coarser, a room moves little within an hour
---   'none'       Home Assistant answered and had nothing for that moment
---   NULL         not asked yet (or Home Assistant could not be reached;
---                the worker retries)
+--                Assistant's long-term statistics -- how older shots and
+--                the archive get filled; coarser, a room moves little
+--                within an hour
+--   'none'       Home Assistant answered and had no temperature for that
+--                moment (ambient_rh may still be set). Only written after
+--                the worker checked at startup that the configured sensors
+--                exist and report degrees C and %, so a typo in the
+--                configuration cannot write it across the archive
+--   'no_clock'   the board had no clock time when it recorded the shot, so
+--                started_at is the UPLOAD time and the room then says
+--                nothing about the pour; not looked up
+--   NULL         not asked yet, or Home Assistant could not answer; the
+--                worker retries
+--
+-- To look a shot up again (a sensor swapped, a 'none' worth retrying):
+--   UPDATE shot SET ambient_c = NULL, ambient_rh = NULL,
+--                   ambient_source = NULL WHERE id = ...;
 --
 -- The sensor is a room thermometer ~5 m from the machine (operator,
 -- 2026-11-22): room temperature, not the air at the machine, which warms
 -- while it runs. Which sensor is server configuration, not schema.
 ALTER TABLE shot ADD COLUMN ambient_source TEXT
-  CHECK (ambient_source IN ('ha_state', 'ha_hourly', 'none'));
+  CHECK (ambient_source IN ('ha_state', 'ha_hourly', 'none', 'no_clock'));

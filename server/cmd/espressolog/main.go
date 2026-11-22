@@ -32,7 +32,7 @@ func main() {
 	// ingest. Configured by environment only (deploy/espressolog.env.example);
 	// without it the worker does not run and the columns stay NULL.
 	if cfg, ok := ambient.ConfigFromEnv(); ok {
-		go ambient.Run(context.Background(), st, ambient.New(cfg))
+		go (&ambient.Worker{St: st, HL: ambient.New(cfg)}).Run(context.Background())
 		log.Printf("ambient: reading %s from Home Assistant", cfg.TempEntity)
 	} else {
 		log.Printf("ambient: not configured (ESPRESSOLOG_HA_URL/_TOKEN/_TEMP); room readings off")

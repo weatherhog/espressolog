@@ -21,21 +21,62 @@ const (
 	token  = "test-token"
 )
 
-// fakeHA serves the two Home Assistant APIs the client uses. history is the
-// JSON body for /api/history/period; stats is the "result" of the
-// statistics call (nil: none).
-func fakeHA(t *testing.T, history string, stats map[string][]map[string]any) *httptest.Server {
-	t.Helper()
+var shotAt = time.Date(2026, 11, 22, 8, 9, 30, 0, time.UTC)
+
+// fakeHA serves the three Home Assistant APIs the client uses and checks the
+// requests' shape: history is the body for /api/history/period, stats the
+// "result" of the statistics call, units the unit_of_measurement each
+// entity reports on /api/states (missing: 404).
+type fakeHA struct {
+	t       *testing.T
+	history string
+	stats   map[string][]map[string]any
+	units   map[string]string
+}
+
+func (f *fakeHA) serve() *httptest.Server {
+	t := f.t
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/history/period/", func(w http.ResponseWriter, r *http.Request) {
+	auth := func(w http.ResponseWriter, r *http.Request) bool {
 		if r.Header.Get("Authorization") != "Bearer "+token {
 			w.WriteHeader(http.StatusUnauthorized)
+			return false
+		}
+		return true
+	}
+	mux.HandleFunc("/api/states/", func(w http.ResponseWriter, r *http.Request) {
+		if !auth(w, r) {
 			return
 		}
-		if !strings.Contains(r.URL.Query().Get("filter_entity_id"), tempID) {
+		id := strings.TrimPrefix(r.URL.Path, "/api/states/")
+		unit, ok := f.units[id]
+		if !ok {
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(`{"message":"Entity not found."}`))
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{"entity_id": id, "state": "21.0",
+			"attributes": map[string]string{"unit_of_measurement": unit}})
+	})
+	mux.HandleFunc("/api/history/period/", func(w http.ResponseWriter, r *http.Request) {
+		if !auth(w, r) {
+			return
+		}
+		start := strings.TrimPrefix(r.URL.Path, "/api/history/period/")
+		if want := shotAt.Add(-StateLookback).Format(time.RFC3339); start != want {
+			t.Errorf("history start %q, want %q", start, want)
+		}
+		q := r.URL.Query()
+		if q.Get("end_time") != shotAt.Format(time.RFC3339) {
+			t.Errorf("history end_time %q", q.Get("end_time"))
+		}
+		if _, ok := q["no_attributes"]; !ok {
+			t.Error("history without no_attributes")
+		}
+		if !strings.Contains(q.Get("filter_entity_id"), tempID) {
 			t.Errorf("history query without the temperature entity: %s", r.URL.RawQuery)
 		}
-		w.Write([]byte(history))
+		w.Write([]byte(f.history))
 	})
 	mux.HandleFunc("/api/websocket", func(w http.ResponseWriter, r *http.Request) {
 		c, err := websocket.Accept(w, r, nil)
@@ -64,13 +105,28 @@ func fakeHA(t *testing.T, history string, stats map[string][]map[string]any) *ht
 		if m == nil || m["type"] != "recorder/statistics_during_period" {
 			return
 		}
-		res := stats
+		hour := shotAt.Truncate(time.Hour)
+		if m["start_time"] != hour.Format(time.RFC3339) || m["end_time"] != hour.Add(time.Hour).Format(time.RFC3339) {
+			t.Errorf("statistics window %v..%v, want the hour containing the shot", m["start_time"], m["end_time"])
+		}
+		if m["period"] != "hour" {
+			t.Errorf("statistics period %v", m["period"])
+		}
+		if u, _ := m["units"].(map[string]any); u["temperature"] != "°C" {
+			t.Errorf("statistics units %v, want temperature °C", m["units"])
+		}
+		res := f.stats
 		if res == nil {
 			res = map[string][]map[string]any{}
 		}
 		send(map[string]any{"id": m["id"], "type": "result", "success": true, "result": res})
 	})
 	return httptest.NewServer(mux)
+}
+
+func newFake(t *testing.T, history string, stats map[string][]map[string]any) *fakeHA {
+	return &fakeHA{t: t, history: history, stats: stats,
+		units: map[string]string{tempID: "°C", rhID: "%"}}
 }
 
 func client(srv *httptest.Server, rh bool) *Client {
@@ -81,33 +137,47 @@ func client(srv *httptest.Server, rh bool) *Client {
 	return New(cfg)
 }
 
-var shotAt = time.Date(2026, 11, 22, 8, 9, 30, 0, time.UTC)
-
-func TestStateIsTheLastValueAtOrBeforeTheShot(t *testing.T) {
+func TestStateIsTheValueInForceAtTheShot(t *testing.T) {
 	history := `[
 	 [{"entity_id":"sensor.room_temperature","state":"21.0","last_changed":"2026-11-22T07:00:00+00:00"},
-	  {"entity_id":"sensor.room_temperature","state":"unavailable","last_changed":"2026-11-22T07:30:00+00:00"},
-	  {"entity_id":"sensor.room_temperature","state":"21.4","last_changed":"2026-11-22T08:05:00+00:00"},
+	  {"entity_id":"sensor.room_temperature","state":"21.4","last_changed":"2026-11-22T08:05:00.123456+00:00"},
 	  {"entity_id":"sensor.room_temperature","state":"23.0","last_changed":"2026-11-22T08:10:00+00:00"}],
 	 [{"entity_id":"sensor.room_humidity","state":"48","last_changed":"2026-11-22T06:00:00+00:00"}]
 	]`
-	srv := fakeHA(t, history, nil)
+	srv := newFake(t, history, nil).serve()
 	defer srv.Close()
 	r, err := client(srv, true).At(context.Background(), shotAt)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Source != SourceState || r.TempC == nil || *r.TempC != 21.4 || r.RH == nil || *r.RH != 48 {
-		t.Errorf("got %+v temp=%v rh=%v, want ha_state 21.4 / 48 (the 08:10 value is after the shot, 'unavailable' is skipped)",
+	if r.Source != SourceState || deref(r.TempC) != 21.4 || deref(r.RH) != 48.0 {
+		t.Errorf("got %+v temp=%v rh=%v, want ha_state 21.4 / 48 (08:10 is after the shot)",
 			r, deref(r.TempC), deref(r.RH))
 	}
 }
 
+// Review 2026-11-22: a sensor unavailable AT the shot must not pass its last
+// numeric value, hours old, off as exact -- it falls back to the hour's mean.
+func TestUnavailableAtTheShotFallsBackToTheHour(t *testing.T) {
+	history := `[
+	 [{"entity_id":"sensor.room_temperature","state":"21.0","last_changed":"2026-11-22T03:00:00+00:00"},
+	  {"entity_id":"sensor.room_temperature","state":"unavailable","last_changed":"2026-11-22T03:30:00+00:00"}]
+	]`
+	srv := newFake(t, history, map[string][]map[string]any{tempID: {{"mean": 20.3}}}).serve()
+	defer srv.Close()
+	r, err := client(srv, false).At(context.Background(), shotAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Source != SourceHourly || deref(r.TempC) != 20.3 {
+		t.Errorf("got %+v temp=%v, want ha_hourly 20.3, not the stale 21.0", r, deref(r.TempC))
+	}
+}
+
 func TestPurgedHistoryFallsBackToTheHourlyMean(t *testing.T) {
-	srv := fakeHA(t, `[]`, map[string][]map[string]any{
-		tempID: {{"start": 0, "mean": 20.3}},
-		rhID:   {{"start": 0, "mean": 51.2}},
-	})
+	srv := newFake(t, `[]`, map[string][]map[string]any{
+		tempID: {{"mean": 20.3}}, rhID: {{"mean": 51.2}},
+	}).serve()
 	defer srv.Close()
 	r, err := client(srv, true).At(context.Background(), shotAt)
 	if err != nil {
@@ -118,24 +188,58 @@ func TestPurgedHistoryFallsBackToTheHourlyMean(t *testing.T) {
 	}
 }
 
+// Review 2026-11-22: a temperature from history and no humidity there takes
+// the humidity from the hour's mean instead of dropping it.
+func TestAMissingHumidityIsFilledFromTheHour(t *testing.T) {
+	history := `[[{"entity_id":"sensor.room_temperature","state":"21.4","last_changed":"2026-11-22T08:00:00+00:00"}]]`
+	srv := newFake(t, history, map[string][]map[string]any{rhID: {{"mean": 50.0}}}).serve()
+	defer srv.Close()
+	r, err := client(srv, true).At(context.Background(), shotAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Source != SourceState || deref(r.TempC) != 21.4 || deref(r.RH) != 50.0 {
+		t.Errorf("got %+v temp=%v rh=%v, want ha_state 21.4 with rh 50 from the hour", r, deref(r.TempC), deref(r.RH))
+	}
+}
+
 func TestNothingAnywhereIsNoneNotAnError(t *testing.T) {
-	srv := fakeHA(t, `[]`, nil)
+	srv := newFake(t, `[]`, nil).serve()
 	defer srv.Close()
 	r, err := client(srv, false).At(context.Background(), shotAt)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Source != SourceNone || r.TempC != nil || r.RH != nil {
-		t.Errorf("got %+v, want none with no values", r)
+	if r.Source != SourceNone || r.TempC != nil {
+		t.Errorf("got %+v, want none", r)
 	}
 }
 
 func TestABadTokenIsAnErrorNotNone(t *testing.T) {
-	srv := fakeHA(t, `[]`, nil)
+	srv := newFake(t, `[]`, nil).serve()
 	defer srv.Close()
 	c := New(Config{URL: srv.URL, Token: "wrong", TempEntity: tempID})
 	if _, err := c.At(context.Background(), shotAt); err == nil {
 		t.Error("a refused token must be an error, so the shot is retried rather than marked none")
+	}
+}
+
+// Review 2026-11-22: a typo in an entity id, or a sensor in the wrong unit,
+// stops the worker before it writes anything.
+func TestValidateRefusesAMissingEntityOrAWrongUnit(t *testing.T) {
+	f := newFake(t, `[]`, nil)
+	srv := f.serve()
+	defer srv.Close()
+	if err := client(srv, true).Validate(context.Background()); err != nil {
+		t.Errorf("good configuration refused: %v", err)
+	}
+	bad := New(Config{URL: srv.URL, Token: token, TempEntity: "sensor.room_temprature"})
+	if err := bad.Validate(context.Background()); err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Errorf("typo accepted: %v", err)
+	}
+	f.units[tempID] = "°F"
+	if err := client(srv, false).Validate(context.Background()); err == nil {
+		t.Error("a sensor in °F accepted")
 	}
 }
 
@@ -145,10 +249,13 @@ type fakeStore struct {
 }
 
 func (f *fakeStore) ShotsNeedingAmbient(limit int) ([]store.AmbientPending, error) {
-	if len(f.pending) > limit {
-		return f.pending[:limit], nil
+	var out []store.AmbientPending
+	for _, p := range f.pending {
+		if _, done := f.set[p.ID]; !done && len(out) < limit {
+			out = append(out, p)
+		}
 	}
-	return f.pending, nil
+	return out, nil
 }
 
 func (f *fakeStore) SetAmbient(id int64, _, _ *float64, source string) error {
@@ -156,31 +263,53 @@ func (f *fakeStore) SetAmbient(id int64, _, _ *float64, source string) error {
 	return nil
 }
 
-type fakeLooker struct{ failAfter int }
+// fakeLooker fails for the shot ids in bad, answers 21 °C otherwise.
+type fakeLooker struct{ bad map[time.Time]bool }
 
-func (f *fakeLooker) At(context.Context, time.Time) (Reading, error) {
-	if f.failAfter == 0 {
+func (f *fakeLooker) Validate(context.Context) error { return nil }
+func (f *fakeLooker) At(_ context.Context, t time.Time) (Reading, error) {
+	if f.bad[t] {
 		return Reading{}, errors.New("unreachable")
 	}
-	f.failAfter--
 	v := 21.0
 	return Reading{TempC: &v, Source: SourceState}, nil
 }
 
-func TestAPassStopsAtTheFirstErrorWithoutMarkingTheRest(t *testing.T) {
+// Review 2026-11-22: one shot that always fails must not stall the rest --
+// it is skipped for its backoff and the pass goes on; a shot without clock
+// time is marked, not looked up.
+func TestAFailingShotDoesNotStallTheOthers(t *testing.T) {
 	fs := &fakeStore{set: map[int64]string{}}
-	for i := int64(1); i <= 5; i++ {
-		fs.pending = append(fs.pending, store.AmbientPending{ID: i})
+	at := func(i int) time.Time { return shotAt.Add(-time.Duration(i) * time.Hour) }
+	for i := 1; i <= 6; i++ {
+		fs.pending = append(fs.pending, store.AmbientPending{ID: int64(i), StartedAt: at(i), ClockValid: i != 5})
 	}
-	n, err := Pass(context.Background(), fs, &fakeLooker{failAfter: 2})
-	if err == nil || n != 2 || len(fs.set) != 2 {
-		t.Errorf("n=%d err=%v set=%v; want 2 filled, then the error, nothing else marked", n, err, fs.set)
+	now := shotAt
+	w := &Worker{St: fs, HL: &fakeLooker{bad: map[time.Time]bool{at(2): true}}, Now: func() time.Time { return now }}
+	filled, tried, err := w.Pass(context.Background())
+	if err == nil || filled != 5 || tried != 5 {
+		t.Errorf("filled=%d tried=%d err=%v; want 5 filled (one no_clock), 5 tried, the error reported", filled, tried, err)
+	}
+	if fs.set[5] != SourceNoClock || fs.set[6] != SourceState {
+		t.Errorf("set=%v; want 5 no_clock and 6 (behind the failing 2) filled", fs.set)
+	}
+	if _, ok := fs.set[2]; ok {
+		t.Error("the failing shot was marked")
+	}
+	// Within its backoff the failing shot is not tried again.
+	now = shotAt.Add(30 * time.Second)
+	if _, tried, _ := w.Pass(context.Background()); tried != 0 {
+		t.Errorf("retried within the backoff: tried=%d", tried)
+	}
+	now = shotAt.Add(2 * time.Minute)
+	if _, tried, _ := w.Pass(context.Background()); tried != 1 {
+		t.Errorf("not retried after the backoff: tried=%d", tried)
 	}
 }
 
-func deref(p *float64) any {
+func deref(p *float64) float64 {
 	if p == nil {
-		return nil
+		return -1
 	}
 	return *p
 }

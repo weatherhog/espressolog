@@ -37,10 +37,13 @@ import (
 const (
 	SourceState  = "ha_state"
 	SourceHourly = "ha_hourly"
-	// SourceNone: Home Assistant answered and had nothing for that moment.
-	// Recorded so the worker does not ask again; a network error is NOT
-	// this, and is retried.
+	// SourceNone: Home Assistant answered and had no temperature for that
+	// moment (a humidity may still be returned). Recorded so the worker does
+	// not ask again; a network error is NOT this, and is retried.
 	SourceNone = "none"
+	// SourceNoClock: the shot was recorded without clock time, so its
+	// started_at is the upload time; not looked up.
+	SourceNoClock = "no_clock"
 )
 
 // StateLookback is how far before the moment the history query starts. Home
@@ -94,8 +97,52 @@ func (c *Client) entities() []string {
 	return []string{c.cfg.TempEntity, c.cfg.RHEntity}
 }
 
+// Validate checks once, before anything is written, that the configured
+// entities exist and report the units the columns hold: °C and %. Without
+// it a typo in an entity id reads as "no data" -- empty history, empty
+// statistics -- and would mark every shot 'none' for good (review
+// 2026-11-22).
+func (c *Client) Validate(ctx context.Context) error {
+	want := map[string]string{c.cfg.TempEntity: "°C"}
+	if c.cfg.RHEntity != "" {
+		want[c.cfg.RHEntity] = "%"
+	}
+	for id, unit := range want {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+			c.cfg.URL+"/api/states/"+url.PathEscape(id), nil)
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Authorization", "Bearer "+c.cfg.Token)
+		resp, err := c.http.Do(req)
+		if err != nil {
+			return err
+		}
+		var st struct {
+			Attributes struct {
+				Unit string `json:"unit_of_measurement"`
+			} `json:"attributes"`
+		}
+		err = json.NewDecoder(resp.Body).Decode(&st)
+		resp.Body.Close()
+		switch {
+		case resp.StatusCode == http.StatusNotFound:
+			return fmt.Errorf("entity %s does not exist", id)
+		case resp.StatusCode != http.StatusOK:
+			return fmt.Errorf("entity %s: HTTP %d", id, resp.StatusCode)
+		case err != nil:
+			return fmt.Errorf("entity %s: %w", id, err)
+		case st.Attributes.Unit != unit:
+			return fmt.Errorf("entity %s reports %q, want %q", id, st.Attributes.Unit, unit)
+		}
+	}
+	return nil
+}
+
 // At returns the reading for moment t. An error means Home Assistant could
 // not be asked (network, auth, a malformed answer); the caller retries later.
+// Each value comes from the exact state where there is one, else from the
+// hour's mean; Source names where the TEMPERATURE came from.
 func (c *Client) At(ctx context.Context, t time.Time) (Reading, error) {
 	r, err := c.state(ctx, t)
 	if err != nil {
@@ -103,17 +150,23 @@ func (c *Client) At(ctx context.Context, t time.Time) (Reading, error) {
 	}
 	if r.TempC != nil {
 		r.Source = SourceState
-		return r, nil
 	}
-	r, err = c.hourly(ctx, t)
-	if err != nil {
-		return Reading{}, err
+	if r.TempC == nil || (r.RH == nil && c.cfg.RHEntity != "") {
+		h, err := c.hourly(ctx, t)
+		if err != nil {
+			return Reading{}, err
+		}
+		if r.TempC == nil && h.TempC != nil {
+			r.TempC, r.Source = h.TempC, SourceHourly
+		}
+		if r.RH == nil {
+			r.RH = h.RH
+		}
 	}
-	if r.TempC != nil {
-		r.Source = SourceHourly
-		return r, nil
+	if r.TempC == nil {
+		r.Source = SourceNone
 	}
-	return Reading{Source: SourceNone}, nil
+	return r, nil
 }
 
 type histEntry struct {
@@ -165,23 +218,29 @@ func (c *Client) state(ctx context.Context, t time.Time) (Reading, error) {
 	return r, nil
 }
 
-// lastAtOrBefore returns the last numeric state whose last_changed is at or
-// before t. "unavailable"/"unknown" states are skipped, not taken as zero.
+// lastAtOrBefore returns the value of the state IN FORCE at t -- the last
+// entry whose last_changed is at or before t -- or nil when that state is
+// not a number ("unavailable", "unknown"). An older numeric value is NOT
+// reached back for: a sensor that went unavailable hours before the shot
+// would pass a stale reading off as exact (review 2026-11-22); the caller
+// falls back to the hour's mean instead.
 func lastAtOrBefore(list []histEntry, t time.Time) *float64 {
-	var out *float64
-	for _, e := range list {
-		at, err := time.Parse(time.RFC3339Nano, e.LastChanged)
+	var in *histEntry
+	for i := range list {
+		at, err := time.Parse(time.RFC3339Nano, list[i].LastChanged)
 		if err != nil || at.After(t) {
 			continue
 		}
-		v, err := strconv.ParseFloat(e.State, 64)
-		if err != nil {
-			continue
-		}
-		vv := v
-		out = &vv
+		in = &list[i]
 	}
-	return out
+	if in == nil {
+		return nil
+	}
+	v, err := strconv.ParseFloat(in.State, 64)
+	if err != nil {
+		return nil
+	}
+	return &v
 }
 
 // hourly asks the WebSocket API for the long-term statistics mean of the
@@ -243,6 +302,8 @@ func (c *Client) hourly(ctx context.Context, t time.Time) (Reading, error) {
 		"statistic_ids": c.entities(),
 		"period":        "hour",
 		"types":         []string{"mean"},
+		// Ask for the columns' own units; Home Assistant converts.
+		"units": map[string]string{"temperature": "°C"},
 	}); err != nil {
 		return Reading{}, err
 	}

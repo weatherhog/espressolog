@@ -1021,18 +1021,25 @@ func (s *Store) queryJSON(query string, args ...any) ([]map[string]any, error) {
 	return out, rows.Err()
 }
 
-// Healthy pings the database.
 // AmbientPending is one shot still waiting for its room reading.
 type AmbientPending struct {
 	ID        int64
 	StartedAt time.Time
+	// ClockValid is false when the board had no clock time for the shot, so
+	// StartedAt is the upload time (Ingest) and says nothing about the pour.
+	ClockValid bool
 }
 
 // ShotsNeedingAmbient returns up to limit shots that have not been looked up
 // in Home Assistant yet (ambient_source IS NULL), newest first so a shot
-// just pulled is filled before the archive backfill.
+// just pulled is filled before the archive backfill. A row whose started_at
+// does not parse is logged and skipped, never an error: one bad row must not
+// stop every other lookup (review 2026-11-22).
 func (s *Store) ShotsNeedingAmbient(limit int) ([]AmbientPending, error) {
-	rows, err := s.db.Query(`SELECT id, started_at FROM shot
+	rows, err := s.db.Query(`SELECT id, started_at,
+	                                NOT EXISTS (SELECT 1 FROM ingest_record ir
+	                                             WHERE ir.shot_id = shot.id AND ir.time_valid = 0)
+	                           FROM shot
 	                          WHERE ambient_source IS NULL
 	                          ORDER BY started_at DESC, id DESC LIMIT ?`, limit)
 	if err != nil {
@@ -1043,11 +1050,12 @@ func (s *Store) ShotsNeedingAmbient(limit int) ([]AmbientPending, error) {
 	for rows.Next() {
 		var p AmbientPending
 		var ts string
-		if err := rows.Scan(&p.ID, &ts); err != nil {
+		if err := rows.Scan(&p.ID, &ts, &p.ClockValid); err != nil {
 			return nil, err
 		}
 		if p.StartedAt, err = time.Parse(time.RFC3339, ts); err != nil {
-			return nil, fmt.Errorf("shot %d: started_at %q: %w", p.ID, ts, err)
+			log.Printf("ambient: shot %d: started_at %q does not parse; skipped", p.ID, ts)
+			continue
 		}
 		out = append(out, p)
 	}
@@ -1071,6 +1079,7 @@ func nullFloat(v *float64) any {
 	return *v
 }
 
+// Healthy pings the database.
 func (s *Store) Healthy() error {
 	var one int
 	return s.db.QueryRow("SELECT 1").Scan(&one)

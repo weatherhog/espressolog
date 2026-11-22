@@ -89,6 +89,14 @@ were opened by another record, leaving 69 shots in 32 sessions.)
   flush before the first shot on some days, a ground and dumped dose on
   others.
 
+UPDATE 2026-11-22: detectors 0a.6 AND 0a.7 pooled (see DETECTORS), disturbed
+shots left out, after the hand exclusions of 2026-11-21 (65, 81, 200, 201,
+205). Live server: 67 clean shots in 32 sessions, later faster in 22 of 28,
++0.153 g/s, p ~0.010; 12.1 % -> 13.8 % of the variance. The finding stands.
+Shot 208 (0a.7, disturbed after its stop, so its flow is in fact sound) is
+left out because the row alone cannot say which phase it was disturbed in;
+that leaves its session's first shot, 207, unpaired.
+
 NO ID EXCLUSIONS, unlike overshoot.py. 25/26 and 200/201 are excluded = 1
 in the database. Shot 37 is kept: its knock (19.44 s) falls in the stop
 window and its slow lift in the settle window, which pulls yield_final_g to
@@ -113,20 +121,28 @@ SEED = 1
 
 # One stratum, as CLAUDE.md 0f asks: one bean, one dial, one epoch, one
 # detector version. Pooling detector versions inflates sigma for no reason.
-STRATUM = {"bean_name": "Moonwalker", "grind_dial": 7.9, "grind_epoch_id": 1,
-           "detector_version": "0a.6"}
+STRATUM = {"bean_name": "Moonwalker", "grind_dial": 7.9, "grind_epoch_id": 1}
+# Detector versions pooled. 0a.6 and 0a.7 compute mean_flow_gps the same way:
+# 0a.7 changed nothing in the pour, only what a jump onto the scale does
+# while settling (CLAUDE.md, "disturbed"), and that reaches mean flow only
+# through yield_final_g -- so a disturbed shot is left out instead (its
+# mean flow is not to be trusted unless its curve is read, which this script
+# does not do). Anything older than 0a.6 changed the stop rule and stays out.
+DETECTORS = {"0a.6", "0a.7"}
 MIN_YIELD_G = 15
 
 FIELDS = ["id", "started_at", "excluded", "bean_name", "grind_dial",
           "grind_epoch_id", "detector_version", "yield_final_g", "total_s",
-          "mean_flow_gps", "dose_ground_g"]
+          "mean_flow_gps", "dose_ground_g", "disturbed"]
 
 
 def load_db(path):
     conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
-    return [dict(r) for r in conn.execute(
-        f"SELECT {', '.join(FIELDS)} FROM v_shot")]
+    have = {r[1] for r in conn.execute("PRAGMA table_info(v_shot)")}
+    # A database older than a column (disturbed: migration 013) reads NULL.
+    cols = [c if c in have else f"NULL AS {c}" for c in FIELDS]
+    return [dict(r) for r in conn.execute(f"SELECT {', '.join(cols)} FROM v_shot")]
 
 
 def load_api(base):
@@ -144,6 +160,8 @@ def ts(row):
 
 def is_clean(row):
     return (not row["excluded"]
+            and not row["disturbed"]
+            and row["detector_version"] in DETECTORS
             and all(row[k] == v for k, v in STRATUM.items())
             and (row["yield_final_g"] or 0) >= MIN_YIELD_G
             and row["total_s"] and row["mean_flow_gps"])
@@ -259,7 +277,8 @@ def main():
     allsess = sessions(rows, args.gap_min)
     main_sess = [s for ok, s in allsess if ok]
     opened_other = [s for ok, s in allsess if not ok]
-    print(f"session gap > {args.gap_min} min, stratum {STRATUM}\n")
+    print(f"session gap > {args.gap_min} min, stratum {STRATUM}, "
+          f"detectors {sorted(DETECTORS)}, disturbed shots left out\n")
     table(main_sess)
     print()
     line("main (sessions opened by a clean shot)", main_sess)

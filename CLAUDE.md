@@ -1390,7 +1390,12 @@ candidate, not a finding**. **Cause unknown** — grinder
 first grind and machine warm-up both fit, and first shots also carry 0.2 g
 more dose, untested. Separating grinder from machine needs an intervention
 (a blank flush before the first shot on some days, a dumped dose on others),
-not more of the same data.
+not more of the same data — **or, without wasting beans, flush-first days
+against ordinary days**: if the flush fixes the first shot it is the
+machine, if not, by elimination, the grinder or something else.
+**Re-run 2026-11-22 with 0a.7 pooled** (disturbed shots out, after the hand
+exclusions of 2026-11-21): 67 shots, 32 sessions, later faster in 22 of 28,
+**+0.15 g/s, p ~0.01** — unchanged.
 
 ---
 
@@ -1700,10 +1705,11 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   it low, flagged — main took the last weight. **During the pour,** an object that creeps on or lands in steps of
   5 g or less is not seen; and **the lift paths are unchanged** —
   a lift during settling still overwrites `stop_ms` as the table above
-  says. **0a.7 is its own stratum**: `analysis/overshoot.py`,
-  `analysis/session_warmup.py` and the 0f notebook filter on
-  `detector_version = '0a.6'`, so 0a.7 shots do not enter them until a
-  script says so. **Deploy the server before flashing 0.14.0**: the format
+  says. **0a.7 is its own stratum unless a script says otherwise**:
+  `analysis/overshoot.py` and the 0f notebook filter on
+  `detector_version = '0a.6'`; `analysis/session_warmup.py` pools 0a.6 and
+  0a.7 from 2026-11-22, because mean flow is computed the same way on both,
+  and leaves disturbed shots out. **Deploy the server before flashing 0.14.0**: the format
   is unchanged, so an older server accepts the record and silently drops
   the bit.
 

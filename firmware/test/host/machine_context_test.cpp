@@ -545,6 +545,71 @@ int main() {
     printf("the dialled setpoint is the value that blinked twice; ramps, tails, misreads, steam and SET UP are not taken OK\n");
   }
 
+  // ---- v6: machine on-time and pump idle time (2026-11-22) ----
+  {
+    // Board booted at 0 with the machine OFF; machine switched on at 60 s
+    // (first frame after a silent bus, well past the 10 s gap). A press at
+    // 360 s, first drip at 368 s: on for 300 s, exact.
+    MachineContextTracker m;
+    m.watchBusAgain(0);
+    for (uint32_t t = 60000; t <= 370000; t += 41) m.onBusFrame(t);
+    m.onPumpPress(PUMP_2CUP, 360000, 25000);
+    m.resolvePump(368000);
+    const MachineContext& c = m.context();
+    assert(c.machine_on_ms == 300000);
+    assert(c.machine_on_flags == 0);
+    assert(c.pump_idle_ms == 25000);
+    printf("on-time from a cold start: %u ms, exact OK\n", (unsigned)c.machine_on_ms);
+  }
+  {
+    // Board booted into a machine already on (frames from 1 s after boot):
+    // the time counts from that first frame and is only a lower bound.
+    MachineContextTracker m;
+    m.watchBusAgain(0);
+    for (uint32_t t = 1000; t <= 130000; t += 41) m.onBusFrame(t);
+    m.onPumpPress(PUMP_2CUP, 120000);
+    m.resolvePump(128000);
+    assert(m.context().machine_on_ms == 119000);
+    assert(m.context().machine_on_flags == MACHINE_ON_LOWER_BOUND);
+    assert(m.context().pump_idle_ms == PUMP_IDLE_NONE);   // the default: not known
+    printf("on-time into a running machine is a lower bound OK\n");
+  }
+  {
+    // Switched off and on again within one boot: the second power-on counts,
+    // and it is exact even though the first session was a lower bound.
+    MachineContextTracker m;
+    m.watchBusAgain(0);
+    for (uint32_t t = 500; t <= 600000; t += 41) m.onBusFrame(t);          // first session
+    for (uint32_t t = 900000; t <= 1100000; t += 41) m.onBusFrame(t);      // 5 min off, back on
+    m.onPumpPress(PUMP_1CUP, 1050000);
+    m.resolvePump(1058000);
+    assert(m.context().machine_on_ms == 150000);
+    assert(m.context().machine_on_flags == 0);
+    printf("a second power-on in one boot is exact OK\n");
+  }
+  {
+    // A short dropout of frames (5 s, under the 10 s gap) is not a power-on.
+    MachineContextTracker m;
+    m.watchBusAgain(0);
+    for (uint32_t t = 30000; t <= 100000; t += 41) m.onBusFrame(t);
+    for (uint32_t t = 105000; t <= 200000; t += 41) m.onBusFrame(t);
+    m.onPumpPress(PUMP_2CUP, 190000);
+    m.resolvePump(198000);
+    assert(m.context().machine_on_ms == 160000);
+    printf("a 5 s frame dropout is not a power-on OK\n");
+  }
+  {
+    // No frames for minutes before the shot (display tap off): the bus is
+    // not live at t=0, so on-time is unknown rather than stale.
+    MachineContextTracker m;
+    m.watchBusAgain(0);
+    for (uint32_t t = 30000; t <= 100000; t += 41) m.onBusFrame(t);
+    m.onPumpPress(PUMP_2CUP, 400000);
+    m.resolvePump(408000);
+    assert(m.context().machine_on_ms == MACHINE_ON_NONE);
+    printf("no live bus at the shot gives unknown on-time OK\n");
+  }
+
   printf("\nall machine context tests passed\n");
   return 0;
 }

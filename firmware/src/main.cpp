@@ -18,7 +18,7 @@
 #include <esp_timer.h>
 #include <driver/gpio.h>
 
-const char* FIRMWARE_VERSION = "0.14.0";
+const char* FIRMWARE_VERSION = "0.15.0";
 const char* DETECTOR_VERSION = "0a.7";
 
 static ScaleManager scales;
@@ -141,6 +141,8 @@ static void displaySetEnabled(bool on) {
   // Off, on or re-attached: the machine may have been edited while nothing
   // watched, so a remembered setpoint is no longer the machine's.
   machine_ctx.forgetSetpoint();
+  // And whether the machine was switched on while nothing watched (v6).
+  machine_ctx.watchBusAgain(millis());
 }
 
 static void pollDisplay() {
@@ -156,6 +158,12 @@ static void pollDisplay() {
 
 static void machineContextPoll() {
   if (!display_on) return;
+  // v6: any decoded frame means the machine is on (onBusFrame).
+  static uint32_t frames_seen = 0;
+  if (dbus_frames != frames_seen) {
+    frames_seen = dbus_frames;
+    machine_ctx.onBusFrame(millis());
+  }
   machine_ctx.onReading(display_bus.reading(), display_bus.setpointTouched());
 }
 
@@ -527,7 +535,11 @@ static void pollSwitches() {
       brew_guard.onRelease(e.line, e.pressed_at_ms);
       // And remember it for the shot record (spool v3): which lever started
       // the pump, and when. Same filter, same reason.
-      machine_ctx.onPumpPress(pumpLineForSwitch(e.line), e.pressed_at_ms);
+      // v6: and how long the pump had stood idle before it, while the flow
+      // tap is on to say (the pulse log is empty otherwise).
+      uint32_t idle_ms = PUMP_IDLE_NONE;
+      if (!flow_on || !pulse_log.idleBefore(e.pressed_at_ms, &idle_ms)) idle_ms = PUMP_IDLE_NONE;
+      machine_ctx.onPumpPress(pumpLineForSwitch(e.line), e.pressed_at_ms, idle_ms);
     }
     reportSwitch(e);
   }

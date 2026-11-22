@@ -77,6 +77,29 @@ public:
     return total;
   }
 
+  // v6: how long the flowmeter had been silent before press_ms -- the newest
+  // pulse strictly before it, i.e. the end of the previous pump run. False
+  // (not known) when no pulse before it is logged, or a gap (clear(),
+  // markGap()) lies between that pulse and the press: pulses may be missing
+  // there, so the idle time could be shorter than it looks. A ring that has
+  // wrapped still holds its newest entries, which is all this needs.
+  bool idleBefore(uint32_t press_ms, uint32_t* idle_ms) const {
+    const uint16_t oldest = (uint16_t)((head + N - count) % N);
+    bool found = false;
+    uint32_t best = 0;
+    for (uint16_t i = 0; i < count; i++) {
+      uint32_t t = ring[(oldest + i) % N];
+      uint32_t before = press_ms - t;               // unsigned: wrap-safe
+      if (t == press_ms || (int32_t)before <= 0) continue;   // at or after the press
+      if (!found || before < best) { found = true; best = before; }
+    }
+    if (!found) return false;
+    const uint32_t last = press_ms - best;
+    if (have_gap && (uint32_t)(gap_ms - last) <= best) return false;
+    *idle_ms = best;
+    return true;
+  }
+
 private:
   uint32_t ring[N] = {};
   uint16_t head = 0;

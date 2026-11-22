@@ -16,6 +16,15 @@
 enum PumpLine : uint8_t { PUMP_NONE = 0, PUMP_1CUP = 1, PUMP_2CUP = 2, PUMP_WATER = 3 };
 static constexpr uint32_t PUMP_LEAD_NONE = 0xFFFFFFFF;
 
+// v6: how long the machine had been on, and how long the pump had been idle,
+// when this shot's pump started. 0xFFFFFFFF = not known.
+static constexpr uint32_t MACHINE_ON_NONE = 0xFFFFFFFF;
+static constexpr uint32_t PUMP_IDLE_NONE  = 0xFFFFFFFF;
+// machine_on_flags bit 0: machine_on_ms is only a LOWER BOUND -- the display
+// bus was already live when this board started watching it (the board booted,
+// or the display tap was switched on, into a running machine).
+static constexpr uint8_t  MACHINE_ON_LOWER_BOUND = 0x01;
+
 // v4: the flowmeter pulses between the lever press and first drip.
 static constexpr uint16_t PRE_PULSES_MAX    = 256;
 static constexpr uint16_t PRE_PULSES_NONE   = 0xFFFF;   // pre_pulse_total: not captured
@@ -62,6 +71,16 @@ struct MachineContext {
   // pour — still blinking, or cut off by the pump's timer — so this shot's
   // setpoint is unknown, not "the last one".
   bool     setpoint_pending     = false;
+  // v6: ms from the machine being switched on to this shot's pump press
+  // (the display bus came alive after being silent; MACHINE_ON_NONE = not
+  // known, e.g. the display tap off or no press), and machine_on_flags.
+  uint32_t machine_on_ms        = MACHINE_ON_NONE;
+  uint8_t  machine_on_flags     = 0;
+  // v6: ms from the previous pump run's last flowmeter pulse to this shot's
+  // pump press -- how long the pump had stood idle (a shot, a flush or a
+  // hot-water draw all run it). PUMP_IDLE_NONE = not known: the flow tap off,
+  // no pulse since it was enabled, or pulses lost in between.
+  uint32_t pump_idle_ms         = PUMP_IDLE_NONE;
 };
 
 // Gathers MachineContext across a shot. None of it is available at the
@@ -152,6 +171,41 @@ public:
     shown_setpoint_c = blinked_setpoint_c = INT16_MIN;
   }
 
+  // v6: MACHINE ON-TIME, from the display bus. The bus is silent while the
+  // machine is switched off (no frames at all, 2026-11-22), so the first
+  // frame after more than MACHINE_OFF_GAP_MS of silence is the machine being
+  // switched on. Call with millis() whenever a frame was decoded.
+  //   Lower bound: if this board had not been watching the bus for that
+  // long -- the first frame since boot or since watchBusAgain() -- the
+  // machine may have been on before; the time is then measured from that
+  // first frame and flagged MACHINE_ON_LOWER_BOUND.
+  static constexpr uint32_t MACHINE_OFF_GAP_MS = 10000;
+  void onBusFrame(uint32_t now_ms) {
+    if (!bus_seen) {
+      bus_on_since_ms = now_ms;
+      // Watching only since boot/re-enable: a machine already running then
+      // looks the same as one switched on, unless the bus stayed silent for
+      // a full gap first.
+      bus_lower_bound = (uint32_t)(now_ms - watch_since_ms) <= MACHINE_OFF_GAP_MS;
+      bus_seen = true;
+    } else if ((uint32_t)(now_ms - last_bus_ms) > MACHINE_OFF_GAP_MS) {
+      bus_on_since_ms = now_ms;          // switched off and on again
+      bus_lower_bound = false;
+    }
+    last_bus_ms = now_ms;
+  }
+  // The display tap was switched or re-attached, or the board just booted:
+  // what the bus did before is unknown from here on.
+  void watchBusAgain(uint32_t now_ms) {
+    bus_seen = false;
+    watch_since_ms = now_ms;
+  }
+  // The machine has been switched off long enough that the next frame will
+  // be a power-on: true when no frame for MACHINE_OFF_GAP_MS.
+  bool busSilent(uint32_t now_ms) const {
+    return !bus_seen || (uint32_t)(now_ms - last_bus_ms) > MACHINE_OFF_GAP_MS;
+  }
+
   // Call when the detector reaches POURING. Takes the temperature from
   // before the pump started, which is the only time it is readable, and
   // keeps whatever the timer has reached for this brew.
@@ -202,9 +256,11 @@ public:
   // Each press is remembered whether it STARTED the pump or stopped it: the
   // board latches, so the poller cannot tell the two apart. resolvePump()
   // sorts that out from the shot's own timing.
-  void onPumpPress(uint8_t line, uint32_t pressed_at_ms) {
+  // idle_ms (v6): how long the pump had stood idle before this press -- the
+  // caller's PulseLog::idleBefore(); PUMP_IDLE_NONE when not known.
+  void onPumpPress(uint8_t line, uint32_t pressed_at_ms, uint32_t idle_ms = PUMP_IDLE_NONE) {
     if (line == PUMP_NONE) return;
-    presses[press_head] = { line, pressed_at_ms };
+    presses[press_head] = { line, pressed_at_ms, idle_ms };
     press_head = (uint8_t)((press_head + 1) % N_PRESSES);
     if (press_count < N_PRESSES) press_count++;
   }
@@ -229,6 +285,9 @@ public:
   void resolvePump(uint32_t t0_ms) {
     mc.pump_line = PUMP_NONE;
     mc.pump_lead_ms = PUMP_LEAD_NONE;
+    mc.pump_idle_ms = PUMP_IDLE_NONE;
+    mc.machine_on_ms = MACHINE_ON_NONE;
+    mc.machine_on_flags = 0;
     bool found = false;
     uint32_t best_lead = 0;
     for (uint8_t i = 0; i < press_count; i++) {
@@ -240,6 +299,19 @@ public:
         best_lead = lead;
         mc.pump_line = p.line;
         mc.pump_lead_ms = lead;
+        mc.pump_idle_ms = p.idle_ms;
+        // On-time at the PRESS, from the bus: only while the machine is on
+        // (frames seen within the gap before t=0) and on since before it.
+        // Signed: t=0 is backdated to first drip, so the newest frame is
+        // normally AFTER it.
+        if (bus_seen && (int32_t)(t0_ms - last_bus_ms) <= (int32_t)MACHINE_OFF_GAP_MS
+            && (int32_t)(p.at_ms - bus_on_since_ms) >= 0) {
+          mc.machine_on_ms = p.at_ms - bus_on_since_ms;
+          mc.machine_on_flags = bus_lower_bound ? MACHINE_ON_LOWER_BOUND : 0;
+        } else {
+          mc.machine_on_ms = MACHINE_ON_NONE;
+          mc.machine_on_flags = 0;
+        }
       }
     }
   }
@@ -292,12 +364,18 @@ public:
   const MachineContext& context() const { return mc; }
 
 private:
-  struct Press { uint8_t line; uint32_t at_ms; };
+  struct Press { uint8_t line; uint32_t at_ms; uint32_t idle_ms; };
   static constexpr uint8_t N_PRESSES = 4;
   Press   presses[N_PRESSES] = {};
   uint8_t press_head = 0;
   uint8_t press_count = 0;
   uint32_t confirm_ms = 0;
+  // v6 on-time state (onBusFrame).
+  bool     bus_seen = false;
+  bool     bus_lower_bound = true;
+  uint32_t bus_on_since_ms = 0;
+  uint32_t last_bus_ms = 0;
+  uint32_t watch_since_ms = 0;
 
   MachineContext mc;
   int16_t  last_boiler_dc = INT16_MIN;

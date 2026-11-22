@@ -20,14 +20,16 @@
 // confirmation: three header fields, and the pulse offsets as a TAIL after
 // the samples (see SPOOL_PRE_TAIL_BYTES). FORMAT VERSION 5 (firmware
 // 0.12.0) added setpoint_dc, the brew setpoint dialled on the front panel.
-// Older records still
+// FORMAT VERSION 6 (firmware 0.15.0) added machine_on_ms, machine_on_flags
+// and pump_idle_ms: how long the machine had been on and the pump idle at
+// this shot's press, for the first-shot warm-up question. Older records still
 // exist, both spooled and as fixtures, so the server decodes EVERY version —
 // see server/internal/record. The original intent was that this struct would
 // never change; it changed because 0e and 0c produced facts the machine knows
 // and the logger did not.
 typedef struct __attribute__((packed)) {
   uint32_t magic;              // 'ESPL' = 0x4C505345
-  uint8_t  format_version;     // 5 — see the version note above
+  uint8_t  format_version;     // 6 — see the version note above
   uint8_t  record_type;        // 1 = shot, 2 = weighing
   uint16_t header_len;         // sizeof(spool_header_t); forward-compat skip
   uint32_t boot_id;            // + seq = idempotency key
@@ -101,6 +103,17 @@ typedef struct __attribute__((packed)) {
   // the display not decoding at pour start, or a weighing. THIS is brew_temp_c's
   // source when present; boiler_temp_start_dc is what the boiler showed.
   int16_t  setpoint_dc;
+  // --- format v6: warm-up (2026-11-22) ---
+  // ms from the machine being switched on (its display bus coming alive after
+  // >10 s of silence) to this shot's pump press; 0xFFFFFFFF = not known
+  // (display tap off, no press). machine_on_flags bit 0: a LOWER BOUND only,
+  // the bus was already live when this board started watching it.
+  uint32_t machine_on_ms;
+  uint8_t  machine_on_flags;
+  // ms from the previous pump run's last flowmeter pulse to this shot's pump
+  // press: how long the pump stood idle; 0xFFFFFFFF = not known (flow tap
+  // off, no earlier pulse logged, pulses lost in between).
+  uint32_t pump_idle_ms;
   // weighing-only (zero for shots):
   int32_t  grams_mg;
   uint32_t stable_ms;
@@ -128,10 +141,11 @@ typedef struct __attribute__((packed)) {
 #define SPOOL_HEADER_LEN_V2  113
 #define SPOOL_HEADER_LEN_V3  118
 #define SPOOL_HEADER_LEN_V4  123
-#define SPOOL_HEADER_LEN_V5  125   // == sizeof(spool_header_t)
-#define SPOOL_FORMAT_VERSION 5
-static_assert(sizeof(spool_header_t) == SPOOL_HEADER_LEN_V5,
-              "spool_header_t drifted from the v5 wire length the server decodes");
+#define SPOOL_HEADER_LEN_V5  125
+#define SPOOL_HEADER_LEN_V6  134   // == sizeof(spool_header_t)
+#define SPOOL_FORMAT_VERSION 6
+static_assert(sizeof(spool_header_t) == SPOOL_HEADER_LEN_V6,
+              "spool_header_t drifted from the v6 wire length the server decodes");
 // The v4 tail's size in bytes for `count` offsets: rounded up to whole
 // groups of 5 (10 bytes), padding entries 0xFFFF.
 static inline size_t SPOOL_PRE_TAIL_BYTES(uint16_t count) {

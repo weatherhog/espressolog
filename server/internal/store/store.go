@@ -1022,6 +1022,55 @@ func (s *Store) queryJSON(query string, args ...any) ([]map[string]any, error) {
 }
 
 // Healthy pings the database.
+// AmbientPending is one shot still waiting for its room reading.
+type AmbientPending struct {
+	ID        int64
+	StartedAt time.Time
+}
+
+// ShotsNeedingAmbient returns up to limit shots that have not been looked up
+// in Home Assistant yet (ambient_source IS NULL), newest first so a shot
+// just pulled is filled before the archive backfill.
+func (s *Store) ShotsNeedingAmbient(limit int) ([]AmbientPending, error) {
+	rows, err := s.db.Query(`SELECT id, started_at FROM shot
+	                          WHERE ambient_source IS NULL
+	                          ORDER BY started_at DESC, id DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []AmbientPending
+	for rows.Next() {
+		var p AmbientPending
+		var ts string
+		if err := rows.Scan(&p.ID, &ts); err != nil {
+			return nil, err
+		}
+		if p.StartedAt, err = time.Parse(time.RFC3339, ts); err != nil {
+			return nil, fmt.Errorf("shot %d: started_at %q: %w", p.ID, ts, err)
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// SetAmbient stores a room reading and where it came from. Only a row not
+// looked up yet is written, so a concurrent or repeated lookup cannot
+// overwrite an earlier answer.
+func (s *Store) SetAmbient(id int64, tempC, rh *float64, source string) error {
+	_, err := s.db.Exec(`UPDATE shot SET ambient_c = ?, ambient_rh = ?, ambient_source = ?
+	                     WHERE id = ? AND ambient_source IS NULL`,
+		nullFloat(tempC), nullFloat(rh), source, id)
+	return err
+}
+
+func nullFloat(v *float64) any {
+	if v == nil {
+		return nil
+	}
+	return *v
+}
+
 func (s *Store) Healthy() error {
 	var one int
 	return s.db.QueryRow("SELECT 1").Scan(&one)

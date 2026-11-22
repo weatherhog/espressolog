@@ -1155,6 +1155,42 @@ func TestIngestDisturbed(t *testing.T) {
 	}
 }
 
+// SetAmbient fills a shot once: a later lookup of the same shot (a
+// concurrent pass, a retry) cannot overwrite the first answer, and the shot
+// leaves ShotsNeedingAmbient.
+func TestSetAmbientWritesOnce(t *testing.T) {
+	st := openTestStore(t)
+	raw, rec := pumpRecordWith(t, 400, record.Pump2Cup, 8200, nil, nil)
+	res, err := st.Ingest("aa:bb:cc:dd:ee:03", rec, raw, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := st.ShotsNeedingAmbient(10)
+	if err != nil || len(p) != 1 || p[0].ID != res.ShotID {
+		t.Fatalf("pending = %+v, %v; want the new shot", p, err)
+	}
+	t1, rh := 21.4, 48.0
+	if err := st.SetAmbient(res.ShotID, &t1, &rh, "ha_state"); err != nil {
+		t.Fatal(err)
+	}
+	t2 := 30.0
+	if err := st.SetAmbient(res.ShotID, &t2, nil, "ha_hourly"); err != nil {
+		t.Fatal(err)
+	}
+	var c, r sql.NullFloat64
+	var src sql.NullString
+	if err := st.db.QueryRow(`SELECT ambient_c, ambient_rh, ambient_source FROM shot WHERE id = ?`,
+		res.ShotID).Scan(&c, &r, &src); err != nil {
+		t.Fatal(err)
+	}
+	if c.Float64 != 21.4 || r.Float64 != 48 || src.String != "ha_state" {
+		t.Errorf("got %v / %v / %v, want the first answer kept", c, r, src)
+	}
+	if p, _ := st.ShotsNeedingAmbient(10); len(p) != 0 {
+		t.Errorf("still pending: %+v", p)
+	}
+}
+
 // A record excluded at ingest — a placement (a cup set back after weighing,
 // shot 180), a reject (a knock, a flat abort under 5 g) or a legacy fault —
 // is stored excluded and must not take the dose from the real shot pulled

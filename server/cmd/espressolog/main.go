@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	espressolog "espressolog"
+	"espressolog/internal/ambient"
 	"espressolog/internal/api"
 	"espressolog/internal/live"
 	"espressolog/internal/store"
@@ -25,6 +27,16 @@ func main() {
 		log.Fatalf("store: %v", err)
 	}
 	defer st.Close()
+
+	// Room temperature and humidity from Home Assistant, filled after
+	// ingest. Configured by environment only (deploy/espressolog.env.example);
+	// without it the worker does not run and the columns stay NULL.
+	if cfg, ok := ambient.ConfigFromEnv(); ok {
+		go ambient.Run(context.Background(), st, ambient.New(cfg))
+		log.Printf("ambient: reading %s from Home Assistant", cfg.TempEntity)
+	} else {
+		log.Printf("ambient: not configured (ESPRESSOLOG_HA_URL/_TOKEN/_TEMP); room readings off")
+	}
 
 	// Raw-stream journal lives next to the database (StateDirectory on the LXC).
 	liveDir := filepath.Join(filepath.Dir(*dbPath), "live")

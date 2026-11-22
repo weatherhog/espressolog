@@ -10,6 +10,9 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
+# Optional settings (Home Assistant room sensor). The leading "-" means a
+# missing file is fine. Root-owned, mode 600: it holds an access token.
+EnvironmentFile=-/etc/espressolog/env
 ExecStart=/usr/local/bin/espressolog-server -addr :8080 -db /var/lib/espressolog/espressolog.db
 DynamicUser=yes
 StateDirectory=espressolog

@@ -171,11 +171,11 @@ public:
     shown_setpoint_c = blinked_setpoint_c = INT16_MIN;
   }
 
-  // v6: MACHINE ON-TIME, from the display bus. The bus is silent while the
-  // machine is switched off (no frames at all, 2026-11-22), so the first
-  // frame after more than MACHINE_OFF_GAP_MS of silence is the machine being
-  // switched on. Call with millis() whenever a frame was decoded, and with
-  // the time of the PREVIOUS poll, which found no new frame.
+  // v6: MACHINE ON-TIME, from the display bus, which is silent while the
+  // machine is switched off (no frames at all, 2026-11-22). The first frame
+  // since watching started goes to onFirstFrame() (below); later frames to
+  // onBusFrame() with millis() and the time of the PREVIOUS poll, which
+  // found no new frame.
   //   Only WITNESSED silence counts: frames are decoded when loop() polls, so
   // a loop blocked for 10 s or more (selftest, a drive sweep, a slow upload)
   // looks like a silent bus without being one. The gap that matters is from
@@ -187,39 +187,48 @@ public:
   // boots byte-identical): rails up at 0; a ~1.1 s initialisation burst the
   // decoder rejects; then ~3 s with NO transactions while U2.4 shows; the
   // first counted frame at +4.1 s. A running machine sends a frame every
-  // ~41 ms and is never frame-silent for a second. So:
-  //   - First frame since watching started (boot, watchBusAgain), after at
-  //     least POWERUP_SILENCE_MS of WATCHED frame silence: a power-up, seen
-  //     whole or in part -- including the board and machine powered up
-  //     together by one switch, where the board starts watching only after
-  //     its own ~2 s boot and misses the burst (operator, 2026-11-22). The
-  //     on-time counts from STARTUP_MS before that frame: exact.
-  //   - First frame with less silence watched: the machine was already
-  //     running; counted from that frame, flagged MACHINE_ON_LOWER_BOUND.
-  //   - Later, a frame after more than MACHINE_OFF_GAP_MS of witnessed
-  //     silence: switched off and on again; exact, from STARTUP_MS before.
-  //     (Mid-session the threshold stays long: there is no "just started
-  //     watching" to anchor a shorter one.)
-  // A frame is stamped when polled, so a power-on during a blocked loop is
-  // anchored at the end of the block, too late by the block.
+  // ~41 ms. So, for the FIRST frame since watching started (boot,
+  // watchBusAgain) -- onFirstFrame():
+  //   - at least POWERUP_SILENCE_MS after watching started: a power-up,
+  //     seen whole or in part -- including board and machine powered up by
+  //     one switched strip, where the board misses the burst (operator,
+  //     2026-11-22). Not flagged. Judged on the FRAME'S OWN TIME (the
+  //     decoder's, from the ISR edge stamps), not when loop() got to it, so
+  //     a slow setup() does not hide the silence; and the tap is enabled
+  //     first thing in setup() so watching starts well before +4.1 s.
+  //   - sooner: the machine was already running; MACHINE_ON_LOWER_BOUND.
+  //   Later frames -- onBusFrame(): one after more than MACHINE_OFF_GAP_MS
+  // of witnessed silence is a power cycle. The threshold stays long because
+  // a running bus has dropped frames for seconds for causes not yet
+  // identified (CLAUDE.md, 0e) -- the 0.5 s rule is safe only at watch start.
+  //   RAW, invariant 3: machine_on counts from the first COUNTED frame. The
+  // machine was powered ~STARTUP_MS before it (0.1 s or so either way:
+  // skip_first can spend the first frame on the watch-start path); analysis
+  // adds it. 0.15.0 and 0.15.1 values are therefore on the same footing.
+  //   A frame is stamped when polled in onBusFrame(), so a power cycle
+  // during a blocked loop is anchored at the end of the block.
   static constexpr uint32_t MACHINE_OFF_GAP_MS = 10000;
-  static constexpr uint32_t POWERUP_SILENCE_MS = 1000;
-  static constexpr uint32_t STARTUP_MS = 4100;   // rails up to first frame
+  static constexpr uint32_t POWERUP_SILENCE_MS = 500;
+  static constexpr uint32_t STARTUP_MS = 4100;   // documentation: rails up to first frame
+  // The first frame since watching started, at its own time frame_ms;
+  // silence_ms since watching started. Returns silence_ms for the log.
+  void onFirstFrame(uint32_t frame_ms, uint32_t silence_ms) {
+    bus_on_since_ms = frame_ms;
+    bus_lower_bound = silence_ms < POWERUP_SILENCE_MS;
+    bus_seen = true;
+    last_bus_ms = frame_ms;
+  }
+  bool busSeen() const { return bus_seen; }
   void onBusFrame(uint32_t now_ms, uint32_t prev_poll_ms) {
     if (!bus_seen) {
+      // Without a frame timestamp: judge on the last poll that saw none.
       const int32_t watched = (int32_t)(prev_poll_ms - watch_since_ms);
-      if (watched >= (int32_t)POWERUP_SILENCE_MS) {
-        bus_on_since_ms = now_ms - STARTUP_MS;   // a power-up
-        bus_lower_bound = false;
-      } else {
-        bus_on_since_ms = now_ms;                // already running
-        bus_lower_bound = true;
-      }
-      bus_seen = true;
+      onFirstFrame(now_ms, watched > 0 ? (uint32_t)watched : 0);
+      return;
     } else if ((uint32_t)(prev_poll_ms - last_bus_ms) > MACHINE_OFF_GAP_MS) {
       // Unsigned: last_bus_ms was set at a poll no later than prev_poll_ms,
       // and a signed compare would miss a power-on after 24.8 days off.
-      bus_on_since_ms = now_ms - STARTUP_MS;     // watched it go quiet: off, then on again
+      bus_on_since_ms = now_ms;                  // watched it go quiet: off, then on again
       bus_lower_bound = false;
     }
     last_bus_ms = now_ms;

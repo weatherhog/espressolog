@@ -161,6 +161,7 @@ void DisplayBus::beginCapture() {
   count         = 0;      // also drops any half-frame left by a detach
   have_edge     = false;  // and the stale timestamp that would have stamped it
   skip_first    = true;
+  have_first    = false;
   last_blank_us = 0;
   last_onset_us = 0;
   have_onset    = false;
@@ -191,7 +192,9 @@ bool DisplayBus::finishFrame(uint32_t t_us) {
       skip_first = false;
     return false;
   }
-  return decodeFrame(buf, n, t_us);
+  const bool decoded = decodeFrame(buf, n, t_us);
+  if (decoded && !have_first) { have_first = true; first_us = t_us; }
+  return decoded;
 }
 
 bool DisplayBus::feedEdge(uint32_t t_us, uint8_t data_bit) {

@@ -128,6 +128,7 @@ static MachineContextTracker machine_ctx;
 //
 // Interrupt detached before the ring is zeroed, for the same race reason.
 static uint32_t frames_seen = 0;      // dbus_frames as machineContextPoll last saw it
+static uint32_t dbus_watch_us = 0;    // micros() when the tap was last switched on
 static uint32_t ctx_last_poll_ms = 0; // when machineContextPoll last ran
 
 static void displaySetEnabled(bool on) {
@@ -140,6 +141,7 @@ static void displaySetEnabled(bool on) {
     dbus_frames = dbus_dropped = 0;
     frames_seen = 0;   // else the zeroing above reads as a new frame (review 2026-11-22)
     display_bus.beginCapture();   // drop the in-progress frame; see display.h
+    dbus_watch_us = micros();
     attachInterrupt(digitalPinToInterrupt(DISPLAY_CLK_PIN), dbusIsr, RISING);
   }
   display_on = on;
@@ -172,7 +174,20 @@ static void machineContextPoll() {
   ctx_last_poll_ms = now;
   if (dbus_frames != frames_seen) {
     frames_seen = dbus_frames;
-    machine_ctx.onBusFrame(now, prev);
+    uint32_t first_us;
+    if (!machine_ctx.busSeen() && display_bus.firstFrameUs(&first_us)) {
+      // The first frame since watching started, judged on its OWN time
+      // (0.15.1): a power-up is frame-silent until +4.1 s, a running
+      // machine is not. Logged so one boot on the strip shows the margin.
+      const int32_t silence = (int32_t)(first_us - dbus_watch_us) / 1000;
+      const uint32_t frame_ms = now - (micros() - first_us) / 1000;
+      machine_ctx.onFirstFrame(frame_ms, silence > 0 ? (uint32_t)silence : 0);
+      Serial.printf("# machine: first display frame %ld ms after watching started -> %s\n",
+                    (long)silence, silence >= (int32_t)MachineContextTracker::POWERUP_SILENCE_MS
+                    ? "switched on (on-time exact)" : "already running (on-time a lower bound)");
+    } else {
+      machine_ctx.onBusFrame(now, prev);
+    }
   }
   machine_ctx.onReading(display_bus.reading(), display_bus.setpointTouched());
 }
@@ -1401,6 +1416,18 @@ void setup() {
   driveRelease();
   Serial.begin(115200);
   Serial0.begin(115200);   // UART bridge (COM port): debug log + CLI
+  // The display tap goes on FIRST (0.15.1), before the 2 s USB wait and the
+  // storage/BLE/WiFi bring-up: the machine's power-up is recognised by its
+  // frame silence until +4.1 s after rails up, and on a shared power strip
+  // the board must be watching before then (machine_context.h onFirstFrame).
+  bool display_pref;
+  {
+    Preferences p;
+    p.begin("espl", true);
+    display_pref = p.getBool("display", false);
+    p.end();
+  }
+  if (display_pref) displaySetEnabled(true);
   delay(2000);   // native USB CDC needs a moment before the first lines land
   Serial.printf("# espressolog %s (detector %s)\n", FIRMWARE_VERSION, DETECTOR_VERSION);
 
@@ -1442,7 +1469,7 @@ void setup() {
     bool fl = p.getBool("flow", false);
     bool sw = p.getBool("switches", false);
     p.end();
-    if (on) displaySetEnabled(true);
+    (void)on;   // the display tap was switched on first thing in setup()
     if (fl) flowSetEnabled(true);
     if (sw) switchesSetEnabled(true);
     Serial.printf("# display bus %s (clk=GPIO%u data=GPIO%u)\n",

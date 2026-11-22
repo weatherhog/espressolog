@@ -104,11 +104,13 @@ typedef struct __attribute__((packed)) {
   // source when present; boiler_temp_start_dc is what the boiler showed.
   int16_t  setpoint_dc;
   // --- format v6: warm-up (2026-11-22) ---
-  // ms from the machine being switched on (its display bus coming alive after
-  // >10 s of silence) to this shot's pump press; 0xFFFFFFFF = not known
-  // (display tap off, no press, or the newest frame more than 10 s before
-  // first drip). Rules and limits: MachineContextTracker::onBusFrame. machine_on_flags bit 0: a LOWER BOUND only,
-  // the bus was already live when this board started watching it.
+  // ms from the machine's first counted display frame -- ~4.1 s after it was
+  // powered, which analysis adds -- to this shot's pump press; 0xFFFFFFFF =
+  // not known (display tap off, no press, or the newest frame more than 10 s
+  // before first drip). Rules and limits: MachineContextTracker, onFirstFrame
+  // and onBusFrame. machine_on_flags bit 0: a LOWER BOUND only -- frames came
+  // within 0.5 s of this board starting to watch, so the machine may have
+  // been on before.
   uint32_t machine_on_ms;
   uint8_t  machine_on_flags;
   // ms from the previous pump run's last flowmeter pulse to this shot's pump

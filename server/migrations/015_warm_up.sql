@@ -6,10 +6,10 @@
 --                          this shot's pump press. The board sees the
 --                          display bus come alive after >10 s of silence
 --                          (the machine is switched off between sessions,
---                          operator 2026-11-22). From firmware 0.15.1
---                          counted from 4.1 s before the first frame (the
---                          init burst and U2.4 silence precede it); 0.15.0
---                          values run ~4.1 s short. NULL: not known -- display
+--                          operator 2026-11-22). Raw, from the first counted
+--                          frame: the machine had been on ~4.1 s longer (the
+--                          init burst and U2.4 silence precede it); analysis
+--                          adds it. NULL: not known -- display
 --                          tap off, no press seen, the bus not live within
 --                          10 s of first drip, or an older record.
 --   machine_on_lower_bound 1: the bus was already live when the board
@@ -26,8 +26,9 @@
 -- press can put the run's own pulses before it, so a short idle is not
 -- trusted). Raw durations, nothing derived (invariant 3).
 --
--- Known limits: on 0.15.0 a board and machine powered up together always
--- read as a lower bound (0.15.1 recognises the power-up silence); a power cycle counts only when the board's polls watched the
+-- Known limits: on firmware 0.15.0 a board and machine powered up together
+-- read as a lower bound (0.15.1 judges the power-up silence on the frame's
+-- own time); a J5 first plugged into a running machine reads as a power-up; a power cycle counts only when the board's polls watched the
 -- bus stay silent for over 10 s, so an off period they did not witness (e.g.
 -- off just before a long upload, on again during it) is not seen; a J5 re-plug without a `display` command is not seen either; and a
 -- missed start press or a manual stop-and-restart (CLAUDE.md, first_drip_ms

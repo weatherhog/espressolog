@@ -556,20 +556,21 @@ int main() {
     m.onPumpPress(PUMP_2CUP, 360000, 25000);
     m.resolvePump(368000);
     const MachineContext& c = m.context();
-    assert(c.machine_on_ms == 304100);   // from 4.1 s before the first frame
+    assert(c.machine_on_ms == 300000);   // raw: from the first counted frame
     assert(c.machine_on_flags == 0);
     assert(c.pump_idle_ms == 25000);
     printf("on-time from a cold start: %u ms, exact OK\n", (unsigned)c.machine_on_ms);
   }
   {
-    // Board booted into a machine already on (frames from 1 s after boot):
+    // Board booted into a machine already on (frames 0.2 s after watching
+    // started -- a running bus sends one every 41 ms):
     // the time counts from that first frame and is only a lower bound.
     MachineContextTracker m;
     m.watchBusAgain(0);
-    for (uint32_t t = 1000; t <= 130000; t += 41) m.onBusFrame(t, t - 5);
+    for (uint32_t t = 200; t <= 130000; t += 41) m.onBusFrame(t, t - 5);
     m.onPumpPress(PUMP_2CUP, 120000);
     m.resolvePump(128000);
-    assert(m.context().machine_on_ms == 119000);
+    assert(m.context().machine_on_ms == 119800);
     assert(m.context().machine_on_flags == MACHINE_ON_LOWER_BOUND);
     assert(m.context().pump_idle_ms == PUMP_IDLE_NONE);   // the default: not known
     printf("on-time into a running machine is a lower bound OK\n");
@@ -583,7 +584,7 @@ int main() {
     for (uint32_t t = 900000; t <= 1100000; t += 41) m.onBusFrame(t, t - 5);      // 5 min off, back on
     m.onPumpPress(PUMP_1CUP, 1050000);
     m.resolvePump(1058000);
-    assert(m.context().machine_on_ms == 154100);
+    assert(m.context().machine_on_ms == 150000);
     assert(m.context().machine_on_flags == 0);
     printf("a second power-on in one boot is exact OK\n");
   }
@@ -595,7 +596,7 @@ int main() {
     for (uint32_t t = 105000; t <= 200000; t += 41) m.onBusFrame(t, t - 5);
     m.onPumpPress(PUMP_2CUP, 190000);
     m.resolvePump(198000);
-    assert(m.context().machine_on_ms == 164100);
+    assert(m.context().machine_on_ms == 160000);
     printf("a 5 s frame dropout is not a power-on OK\n");
   }
   {
@@ -621,7 +622,7 @@ int main() {
     for (uint32_t t = 220041; t <= 400000; t += 41) m.onBusFrame(t, t - 5);
     m.onPumpPress(PUMP_2CUP, 390000);
     m.resolvePump(398000);
-    assert(m.context().machine_on_ms == 334100);     // still from 60 s, not 220 s
+    assert(m.context().machine_on_ms == 330000);     // still from 60 s, not 220 s
     assert(m.context().machine_on_flags == 0);
     printf("a blocked loop is not a power-on OK\n");
   }
@@ -638,7 +639,7 @@ int main() {
     for (uint32_t t = 7200041; t <= 7510000; t += 41) m.onBusFrame(t, t - 5);
     m.onPumpPress(PUMP_2CUP, 7500000);
     m.resolvePump(7508000);
-    assert(m.context().machine_on_ms == 304100);
+    assert(m.context().machine_on_ms == 300000);
     assert(m.context().machine_on_flags == 0);
     printf("a stall while off does not hide the next power-on OK\n");
   }
@@ -653,7 +654,7 @@ int main() {
     for (uint32_t t = 110071; t <= 200000; t += 41) m.onBusFrame(t, t - 5);
     m.onPumpPress(PUMP_2CUP, 190000);
     m.resolvePump(198000);
-    assert(m.context().machine_on_ms == 164100);
+    assert(m.context().machine_on_ms == 160000);
     printf("a frame gap over 10 s across a blocked loop is not a power-on OK\n");
   }
   {
@@ -668,20 +669,35 @@ int main() {
     assert(m.context().machine_on_flags == MACHINE_ON_LOWER_BOUND);
     // The operator's strip (2026-11-22): board and machine powered by one
     // switch. The board starts watching at ~2 s, after the init burst; the
-    // bus is frame-silent until +4.1 s. Watched silence >= 1 s: a power-up,
-    // exact, counted from 4.1 s before the first frame -- i.e. from 0.
+    // bus is frame-silent until +4.1 s. Watched silence >= 0.5 s: a power-up,
+    // not flagged; raw, from the first counted frame (analysis adds ~4.1 s).
     MachineContextTracker a, b;
     a.watchBusAgain(2000);
     a.onBusFrame(4100, 4095);                   // first frame: 2.1 s watched
     for (uint32_t t = 4141; t <= 21000; t += 41) a.onBusFrame(t, t - 5);
     a.onPumpPress(PUMP_2CUP, 20000); a.resolvePump(20500);
-    assert(a.context().machine_on_flags == 0 && a.context().machine_on_ms == 20000);
-    // Frames within half a second of starting to watch: already running.
+    assert(a.context().machine_on_flags == 0 && a.context().machine_on_ms == 15900);
+    // Frames within 0.2 s of starting to watch: already running.
     b.watchBusAgain(2000);
-    b.onBusFrame(2500, 2495);
-    for (uint32_t t = 2541; t <= 21000; t += 41) b.onBusFrame(t, t - 5);
+    b.onBusFrame(2200, 2195);
+    for (uint32_t t = 2241; t <= 21000; t += 41) b.onBusFrame(t, t - 5);
     b.onPumpPress(PUMP_2CUP, 20000); b.resolvePump(20500);
-    assert(b.context().machine_on_flags == MACHINE_ON_LOWER_BOUND && b.context().machine_on_ms == 17500);
+    assert(b.context().machine_on_flags == MACHINE_ON_LOWER_BOUND && b.context().machine_on_ms == 17800);
+    // The firmware path: onFirstFrame with the frame's own time. A slow
+    // setup() polls late, but the frame stamped at +4.1 s still says
+    // "silent for 3.8 s since watching started at 0.3 s".
+    MachineContextTracker f;
+    f.watchBusAgain(300);
+    f.onFirstFrame(4100, 3800);
+    for (uint32_t t = 4141; t <= 21000; t += 41) f.onBusFrame(t, t - 5);
+    f.onPumpPress(PUMP_2CUP, 20000); f.resolvePump(20500);
+    assert(f.context().machine_on_flags == 0 && f.context().machine_on_ms == 15900);
+    MachineContextTracker g;                     // the same, with frames 40 ms in
+    g.watchBusAgain(300);
+    g.onFirstFrame(340, 40);
+    for (uint32_t t = 381; t <= 21000; t += 41) g.onBusFrame(t, t - 5);
+    g.onPumpPress(PUMP_2CUP, 20000); g.resolvePump(20500);
+    assert(g.context().machine_on_flags == MACHINE_ON_LOWER_BOUND);
     printf("boot ordering, and power-up vs already running OK\n");
   }
   {
@@ -699,7 +715,7 @@ int main() {
     }
     m.onPumpPress(PUMP_2CUP, back + 30000);
     m.resolvePump(back + 38000);
-    assert(m.context().machine_on_ms == 34100);
+    assert(m.context().machine_on_ms == 30000);
     printf("millis wrap OK\n");
   }
 

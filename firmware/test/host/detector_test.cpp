@@ -1056,14 +1056,15 @@ int main() {
     printf("a scale lost mid-pour cannot hold the shot open OK\n");
   }
   {
-    // Reviews of c85dcf8 and 7bfbbc7: a quiet pour is judged on what the
-    // scale saw BEFORE any short pending drop, which is trimmed, not taken
-    // for a lift (feed() takes any drop that lasts 2 s).
-    // kind 0: flat 1.2 s, lifted, lost 0.5 s later -> a valid flat stop
-    // kind 1: flat 1.5 s, then lost -> a valid flat stop
+    // Review of ba93901: a quiet pour is NOT classified from its last second
+    // -- jitter, drips, a lift and a reconnect's 0 g cannot be told apart
+    // there. Under 5 g it is a reject; anything else is a scale-lost FAULT
+    // (kept, excluded, keeps its dose), and a short pending drop is trimmed.
+    // kind 0: flat 1.2 s, lifted, lost 0.5 s later -> fault, dip trimmed
+    // kind 1: flat 1.5 s, then lost -> fault
     // kind 2: under 5 g, then lost -> a reject, not a fault
-    // kind 3: rising, a reconnect's 0 g, then lost -> a FAULT, not a lift
-    // kind 4: a choking 0.25 g/s pour, then lost -> a FAULT, not a stop
+    // kind 3: rising, a reconnect's 0 g, then lost -> fault, not a lift
+    // kind 4: a choking 0.25 g/s pour, then lost -> fault
     struct Q { const char* name; int kind; };
     for (const Q& q : {Q{"flat, lifted, lost", 0}, Q{"flat 1.5 s then lost", 1},
                        Q{"under 5 g then lost", 2}, Q{"rising, reconnect 0 g, lost", 3},
@@ -1093,17 +1094,15 @@ int main() {
              q.name, rr.valid, rr.fault, rr.stop_ms, rr.yield_final_mg, last,
              rr.samples[rr.sample_count - 1].weight_mg);
       assert(rr.samples[rr.sample_count - 1].weight_mg >= 0);   // a dip never stays in the curve
-      if (q.kind == 0 || q.kind == 1) {
-        assert(!rr.fault && rr.valid && rr.yield_final_mg == 36000);
-        assert(last - rr.stop_ms >= ShotDetector::QUIET_FLAT_MS && last - rr.stop_ms < 1200);
-        assert(rr.settle_offset_mg == rr.yield_final_mg - rr.yield_at_stop_mg);
-      } else if (q.kind == 2) {
+      if (q.kind == 2) {
         assert(!rr.fault && !rr.valid);
       } else {
         assert(rr.fault && !rr.valid);
+        assert(last == rr.stop_ms);                       // ends at the last kept sample
+        if (q.kind <= 1) assert(rr.yield_final_mg == 36000);   // the peak the scale saw
       }
     }
-    printf("a quiet pour is a stop, a reject or a fault by what the scale saw OK\n");
+    printf("a quiet pour is a reject or a scale-lost fault, never a guess OK\n");
   }
 
   printf("all scenarios passed\n");

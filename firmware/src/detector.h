@@ -82,9 +82,8 @@ struct ShotResult {
   //   finalizeLifted() (a lift DURING THE POUR) — the last retained sample.
   //     Not backdated.
   //   tick() on a pour whose scale went quiet (0a.8, 65 s on), a short
-  //     pending drop trimmed off first — a reject or a fault: as
-  //     finalizeLifted(); flat over the last QUIET_FLAT_MS: a flat stop
-  //     backdated QUIET_FLAT_MS (1 s), not STOP_WINDOW_MS.
+  //     pending drop trimmed off first — a reject or a scale-lost fault:
+  //     as finalizeLifted().
   //   finishLiftedSettling() (a lift WHILE SETTLING, from 0a.8) — whatever
   //     enterSettling() stored, from the flat or the truncated path, KEPT;
   //     yield_at_stop_mg too. The lift only ends settling early, after the
@@ -339,14 +338,7 @@ public:
   // gap at the end of settling then ended a normal shot early (review
   // 2026-11-23).
   static constexpr uint32_t SCALE_QUIET_MS = 3000;
-  // A pour the scale went quiet in counts as ended if its weight was flat
-  // over this much before the silence (tick()). Half the stop rule's 2 s:
-  // anything flat for 2 s already confirmed a stop in feed().
-  static constexpr uint32_t QUIET_FLAT_MS = 1000;
-  // ...within this: the stop rule's 0.3 g over 2 s is 0.15 g/s, so half
-  // the band over half the window (review of 7bfbbc7: the full 0.3 g over
-  // 1 s let a choking 0.25 g/s pour pass as stopped).
-  static constexpr int32_t QUIET_FLAT_DELTA_MG = STOP_DELTA_MG / 2;
+
   ShotState state() const { return st; }
   const ShotResult& result() const { return res; }
   int32_t flowNowMgps() const { return flow_now; }
@@ -397,7 +389,6 @@ private:
   bool finishShot();
   bool finalizeLifted();         // a lift DURING THE POUR: finalize at the peak, stop_ms = last kept sample
   bool finishLiftedSettling();   // 0a.8: a lift WHILE SETTLING keeps the recognised stop
-  bool finishQuietStop(int stop_i);   // 0a.8: a quiet pour that had gone flat
   // 0a.7: did this sample jump onto the scale (ShotResult::disturbed)?
   bool jumpsOntoScale(uint32_t t, int32_t w, int32_t prev_w, int32_t rel) const;
   bool risesLikeAPlacement() const;

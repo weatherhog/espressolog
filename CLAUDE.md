@@ -715,8 +715,8 @@ three.
   Bisected empirically 2026-08-27; only the first 8 MB is usable by firmware.
 
 PSRAM is used for one thing: two 20 KB held-shot buffers (from 0.16.0,
-`handleShotComplete()`), so a shot finishing while the pump runs can wait
-for a quiet machine while the detector's own buffer takes the next one.
+`handleShotComplete()`), so a finished shot can wait for a quiet machine
+while the detector's own buffer takes the next one.
 Without PSRAM a shot is written as it finishes. It's present because that's the cheap commodity
 module, not because we need it.
 
@@ -1537,31 +1537,32 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   routine BLE gap never counts): a pending lift past its hold, a settle
   past its window, or a pour 65 s on — when the shot would have
   force-stopped and settled by now, so a reconnect mid-pour cannot split
-  it. A quiet pour is decided by what the scale saw before it went quiet:
-  under 5 g a reject, flat over the last
-  `QUIET_FLAT_MS` (1 s) a flat stop **backdated 1 s, not 2** (the 2 s
-  stop never got to confirm), and only a weight still rising is **spooled
-  as a FAULT**, which the server excludes as `'fault: yield scale lost
-  mid-pour'` — its yield is only what the scale saw before the gap — but
-  which keeps its dose. Without it a scale switched
+  it. A quiet pour under 5 g is a reject; **any other quiet pour is
+  spooled as a FAULT**, which the server excludes as `'fault: yield scale
+  lost mid-pour'` but which keeps its dose — un-exclude a good one by hand.
+  **It is not classified further, on purpose**: the second before the
+  scale vanished cannot tell jitter, drips, a lift and a reconnect's 0 g
+  apart, and the rules tried (a pending drop as a lift, a flat tail as a
+  stop) each misfiled the neighbouring case across four review rounds on
+  2026-11-23. A short pending drop is trimmed off the curve. Without it a scale switched
   off with the cup, or one whose battery died mid-pour, held the shot open
   and blocked every spool write (invariant 6). `tick()` is never gated.
-  **What waits is the spool write, and only while the machine is busy:**
-  a finished shot — any path, the forced stop included — is written at once
-  if the machine is quiet (the `IDLE`/`ARMED` + `!machineBusy()` test that
-  gates weighings), as before; otherwise it is HELD in one of two PSRAM
-  slots (samples and machine context as they stood) and written at the
-  first quiet moment, oldest first. Past 5 min a held shot is written
-  regardless — but only between shots, never into a pour — so a stuck
-  guard cannot keep it for ever; with both slots full the oldest goes at
-  once (`handleShotComplete()`, invariant 2). Until 0.16.0 a flush started
-  in the 5 s settle window got a flash write mid-pump. A held shot is lost
-  if the board loses power before it is written; `reboot` writes them
-  first. Holding every shot was tried for one commit and put shots 0.15.1
-  had on flash in RAM. A quiet pour's short pending drop — a bump, a
-  reconnect's 0 g — is trimmed, never taken for a lift (`feed()` takes any
-  drop that lasts 2 s); its flat test is half the stop band (0.15 g over
-  1 s, the stop rule's rate).
+  **What waits is the spool write:** a finished shot — any path, the forced
+  stop included — is copied into one of two PSRAM hold slots (samples and
+  machine context as they stood) and written by `serviceHeldShots()`, which
+  runs after the machine polls: **in the same `loop()` pass if the machine
+  is quiet** (the `IDLE`/`ARMED` + `!machineBusy()` test that gates
+  weighings), else at the first quiet pass, oldest first. Deciding at
+  completion read the previous pass's switches, since completions happen in
+  the sample drain before the polls. Past 5 min a held shot is written
+  regardless — but only with the detector IDLE (ARMED with a busy guard is
+  a running pump) — so a stuck guard cannot keep it for ever; with both
+  slots full the oldest goes at once. A slot is freed only when its write
+  succeeded, and none is tried while the spool is unavailable
+  (`handleShotComplete()`, invariants 2 and 6). Until 0.16.0 a flush
+  started in the 5 s settle window got a flash write mid-pump. A held shot
+  is lost if the board loses power before it is written; `reboot` writes
+  them first.
   `replay` ticks too and skips
   the dose scale's lines, so it reproduces the quiet-scale endings a
   capture shows — not one the board made on its own clock (a stalled
@@ -1748,8 +1749,8 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   step guard into POURING.
 - **fault** — up to 0a.3, weight drops > 5 g mid-pour (cup removed); from
   0a.4 a lift ends the shot instead and nothing set it. **From 0a.8 it
-  means the yield scale went quiet mid-pour while the weight was still
-  rising** (`tick()`, 65 s on): spooled at the peak, excluded at ingest as
+  means the yield scale went quiet mid-pour** (`tick()`, 65 s on, 5 g or
+  more): spooled at the peak, excluded at ingest as
   `'fault: yield scale lost mid-pour'`, and — unlike every other ingest
   exclusion — it keeps its dose: the coffee was used
 - **disturbed** (detector **0a.7**, firmware 0.14.0) — something set on

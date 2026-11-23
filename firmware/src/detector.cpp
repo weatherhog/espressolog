@@ -201,24 +201,17 @@ void ShotDetector::enterSettling(uint32_t t, int32_t w_at_stop, uint32_t stop_t,
 //  - SETTLING past the settle window: finish on the last weight.
 //  - POURING, once MAX_SHOT_MS + SETTLE_MS has passed since t0 -- when the
 //    detector would have force-stopped and settled by now, so a reconnect
-//    mid-pour cannot split one shot in two. A drop still pending is NOT a
-//    lift: feed() takes any drop that lasts LIFT_HOLD_MS, so a pending one
-//    is shorter -- a bump, or the 0 g a reconnect injects just before the
-//    link went quiet again (review of 7bfbbc7: a lost scale at 25 g then
-//    stored a valid 25 g shot). It is trimmed off, and what the scale saw
-//    BEFORE it decides (reviews 2026-11-23):
-//      under 5 g -> a reject, as any sub-5 g record;
-//      flat over the last QUIET_FLAT_MS, within QUIET_FLAT_DELTA_MG -- the
-//        stop rule's rate, 0.15 g/s, not its 0.3 g band over half the
-//        window -> the pour had ended and the 2 s stop never got to
-//        confirm: a flat stop backdated QUIET_FLAT_MS (1 s, not 2),
-//        finished on the last kept weight (finishQuietStop());
-//      otherwise -> the scale was lost while the weight was still rising:
-//        a FAULT, not a shot. Its yield is only what the scale saw before
-//        the gap, and a valid record would carry that short yield and a
-//        wrong mean flow into every analysis. Still spooled (invariant 6);
-//        the server excludes it, but it keeps its dose -- the coffee was
-//        used. fault was otherwise unused from 0a.4.
+//    mid-pour cannot split one shot in two. Under 5 g it is a reject, as
+//    any sub-5 g record. Anything else is a FAULT, "yield scale lost
+//    mid-pour": spooled (invariant 6), excluded at ingest, and it keeps its
+//    dose -- the coffee was used. NOT A GUESS AT WHAT HAPPENED: the last
+//    second or two before the scale vanished cannot tell jitter, drips, a
+//    lift and a reconnect's 0 g apart, and four review rounds of rules that
+//    tried (2026-11-23: a pending drop as a lift, a flat tail as a stop) each
+//    misfiled the case next to the one they fixed. A good shot among these
+//    is un-excluded by hand. A short pending drop is trimmed off the curve
+//    first (feed() takes any drop that lasts LIFT_HOLD_MS, so a pending one
+//    is shorter). fault was otherwise unused from 0a.4.
 // tick() is never gated: it decides at once, and main defers only the
 // spool write while the pump runs (invariant 2). Gating tick() kept the
 // shot open, so a flush or the next shot fed into it (review of c85dcf8).
@@ -230,18 +223,8 @@ bool ShotDetector::tick(uint32_t now) {
   if ((int32_t)(now - last_t) < (int32_t)SCALE_QUIET_MS) return false;
   if (st == ShotState::POURING) {
     if ((int32_t)(now - t0) < (int32_t)(MAX_SHOT_MS + SETTLE_MS)) return false;
-    if (lift_since != 0) buf_count = lift_buf;     // a short drop: trimmed, not a lift
+    if (lift_since != 0) buf_count = lift_buf;     // a short drop: trimmed off the curve
     if (running_max < REJECT_MIN_MG) return finalizeLifted();   // a reject
-    if (buf_count > 0) {
-      const sample_t& last = buf[buf_count - 1];
-      for (int i = (int)buf_count - 2; i >= 0; i--) {
-        if ((uint32_t)(last.t_ms - buf[i].t_ms) < QUIET_FLAT_MS) continue;
-        int32_t delta = last.weight_mg - buf[i].weight_mg;
-        if (delta < QUIET_FLAT_DELTA_MG && delta > -QUIET_FLAT_DELTA_MG)
-          return finishQuietStop(i);               // the pour had ended
-        break;
-      }
-    }
     finalizeLifted();
     res.fault = true;    // yield scale lost mid-pour: kept, never a shot
     res.valid = false;
@@ -386,26 +369,6 @@ bool ShotDetector::finishLiftedSettling() {
   res.settle_offset_mg = res.truncated ? 0 : res.yield_final_mg - res.yield_at_stop_mg;
   res.fault = false;
   res.valid = running_max >= REJECT_MIN_MG;
-  res.sample_count = buf_count;
-  res.samples = buf;
-  res.placement = risesLikeAPlacement();
-  computeFlowWindow();
-  resetToIdle();
-  return true;
-}
-
-// A pour whose scale went quiet after a flat stretch (tick(), 0a.8): the
-// stop is buf[stop_i], QUIET_FLAT_MS before the last kept sample, and the
-// final yield is that last kept weight -- the samples are the evidence, not
-// last_w, which may be a trimmed dip.
-bool ShotDetector::finishQuietStop(int stop_i) {
-  res.stop_ms = buf[stop_i].t_ms;
-  res.yield_at_stop_mg = buf[stop_i].weight_mg;
-  res.truncated = false;
-  res.yield_final_mg = buf[buf_count - 1].weight_mg;
-  res.settle_offset_mg = res.yield_final_mg - res.yield_at_stop_mg;
-  res.fault = false;
-  res.valid = res.yield_final_mg >= REJECT_MIN_MG;
   res.sample_count = buf_count;
   res.samples = buf;
   res.placement = risesLikeAPlacement();

@@ -672,9 +672,9 @@ int main() {
     assert(r.valid && r.disturbed && !r.placement);
     assert(r.yield_final_mg > 35500 && r.yield_final_mg < 36800);
     // Never ended early. (With bursts the clock runs a third slower than the
-    // sample count, so the pour itself ends earlier in ms; a lift during
-    // settling overwrites stop_ms, as on 0a.6.)
-    if (!burst && !lift_at) assert(r.stop_ms > 16000 && r.stop_ms < 20500);
+    // sample count, so the pour itself ends earlier in ms.) From 0a.8 a lift
+    // during settling keeps the stop, so it is checked there too.
+    if (!burst) assert(r.stop_ms > 16000 && r.stop_ms < 20500);
     return r;
   };
   settleCase("wobbling 10 g hand", [](double s) {
@@ -794,6 +794,90 @@ int main() {
     assert(rr.truncated && rr.disturbed);
     assert(rr.yield_final_mg > 44000);               // pour kept counting (0a.6 behaviour)
     printf("a truncated shot is flagged, not frozen OK\n");
+  }
+  // The tail test migration 016 (v_shot_end) applies: a settle that ran its
+  // course ends >= STOP_WINDOW_MS + SETTLE_MS after stop_ms (SETTLE_MS after
+  // a forced stop); a lift ends sooner.
+  auto tailMs = [](const ShotResult& rr) -> uint32_t {
+    return rr.sample_count ? rr.samples[rr.sample_count - 1].t_ms - rr.stop_ms : 0;
+  };
+  {
+    // 0a.8: force-stopped at 60 s, then lifted while settling. The forced
+    // stop's stop_ms and yield_at_stop are kept; nothing settled, so the
+    // offset is 0 rather than the pour that kept running.
+    ShotDetector d;
+    uint32_t tt = 8500000;
+    bool fin = false;
+    for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+    for (int i = 0; i < 800 && !fin; i++, tt += 100) {
+      double s = i / 10.0;
+      double w = s < 62.0 ? 0.6 * s : -180.0;          // slow pour, lifted at 62 s
+      fin = d.feed(tt, (int32_t)llround(w * 1000.0));
+    }
+    assert(fin);
+    const ShotResult& rr = d.result();
+    printf("truncated then lifted: trunc=%d stop_ms=%u at_stop=%d final=%d settle=%d tail=%u\n",
+           rr.truncated, rr.stop_ms, rr.yield_at_stop_mg, rr.yield_final_mg,
+           rr.settle_offset_mg, tailMs(rr));
+    assert(rr.valid && rr.truncated);
+    assert(rr.stop_ms >= ShotDetector::MAX_SHOT_MS && rr.stop_ms < ShotDetector::MAX_SHOT_MS + 500);
+    assert(rr.yield_at_stop_mg > 35000 && rr.yield_at_stop_mg < 37000);   // 0.6 g/s x ~60 s
+    assert(rr.yield_final_mg >= rr.yield_at_stop_mg);
+    assert(rr.settle_offset_mg == 0);
+    assert(tailMs(rr) < ShotDetector::SETTLE_MS);
+    printf("a lift after a forced stop keeps the forced stop OK\n");
+  }
+  {
+    // Review 2026-11-23: one 0 g sample (a cup-scale reconnect) while
+    // settling is a dip, not a lift. Up to 0a.7 it ended the shot there.
+    for (bool dip : {false, true}) {
+      ShotDetector d;
+      uint32_t tt = 9500000;
+      bool fin = false;
+      for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+      for (int i = 0; i < 400 && !fin; i++, tt += 100) {
+        double s = i / 10.0;
+        double w = s < 18.0 ? 2.0 * s : 36.0 + (s - 18.0 < 6.0 ? 0.05 * (s - 18.0) : 0.3);
+        if (dip && i == 215) { tt += 1500; w = 0.0; }   // a gap, then the injected 0 g
+        fin = d.feed(tt, (int32_t)llround(w * 1000.0));
+      }
+      assert(fin);
+      const ShotResult& rr = d.result();
+      printf("settling %s: stop_ms=%u final=%d settle=%d tail=%u\n",
+             dip ? "with a 0 g dip" : "undisturbed", rr.stop_ms, rr.yield_final_mg,
+             rr.settle_offset_mg, tailMs(rr));
+      assert(rr.valid && !rr.disturbed && !rr.placement);
+      assert(rr.stop_ms >= 17500 && rr.stop_ms <= 18300);
+      assert(rr.yield_final_mg > 36000 && rr.yield_final_mg < 36500);
+      assert(rr.settle_offset_mg > 0 && rr.settle_offset_mg < 1000);
+      assert(tailMs(rr) >= ShotDetector::STOP_WINDOW_MS + ShotDetector::SETTLE_MS);
+    }
+    printf("a single dropped sample while settling is not a lift OK\n");
+  }
+  {
+    // The lift side of the tail test, and the lift's offset: drips before
+    // the lift only. Lifted 3 s into settling.
+    ShotDetector d;
+    uint32_t tt = 9700000;
+    bool fin = false;
+    for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+    for (int i = 0; i < 400 && !fin; i++, tt += 100) {
+      double s = i / 10.0;
+      double w = s < 18.0 ? 2.0 * s : 36.0 + (s - 18.0 < 6.0 ? 0.05 * (s - 18.0) : 0.3);
+      if (s >= 23.0) w = -180.0;
+      fin = d.feed(tt, (int32_t)llround(w * 1000.0));
+    }
+    assert(fin);
+    const ShotResult& rr = d.result();
+    printf("lifted 3 s into settling: stop_ms=%u settle=%d tail=%u last=%d\n",
+           rr.stop_ms, rr.settle_offset_mg, tailMs(rr),
+           rr.samples[rr.sample_count - 1].weight_mg);
+    assert(rr.stop_ms >= 17500 && rr.stop_ms <= 18300);
+    assert(rr.settle_offset_mg == rr.yield_final_mg - rr.yield_at_stop_mg);
+    assert(rr.settle_offset_mg > 0 && rr.settle_offset_mg < 1000);
+    assert(tailMs(rr) < ShotDetector::STOP_WINDOW_MS + ShotDetector::SETTLE_MS);
+    assert(rr.samples[rr.sample_count - 1].weight_mg > 30000);   // the dip is trimmed off
+    printf("a lift while settling is told apart by its tail OK\n");
   }
 
   printf("all scenarios passed\n");

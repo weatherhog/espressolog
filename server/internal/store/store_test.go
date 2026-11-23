@@ -1628,3 +1628,52 @@ func TestSetpointPendingStopsOnlyTheTemperatureCarry(t *testing.T) {
 		t.Errorf("a value typed on the pending shot did not carry: %v", temp)
 	}
 }
+
+// Migration 016: v_shot_end tells a settle that ran its full window from one
+// a lift ended, from the stored samples alone -- 7 s after a flat stop, 5 s
+// after a forced one (stop_ms >= 60000) -- and says NULL where it cannot.
+func TestShotEndView(t *testing.T) {
+	st := openTestStore(t)
+	for _, c := range []struct {
+		name     string
+		detector any
+		stopMs   int
+		lastMs   int // -1: no samples
+		wantTail sql.NullInt64
+		want     sql.NullInt64
+	}{
+		{"full settle", "0a.8", 18000, 25000, sql.NullInt64{Int64: 7000, Valid: true}, sql.NullInt64{Int64: 0, Valid: true}},
+		{"0a.8 lift 3 s into settling", "0a.8", 18000, 23000, sql.NullInt64{Int64: 5000, Valid: true}, sql.NullInt64{Int64: 1, Valid: true}},
+		{"0a.7 lift (stop_ms overwritten)", "0a.7", 25900, 25900, sql.NullInt64{Int64: 0, Valid: true}, sql.NullInt64{Int64: 1, Valid: true}},
+		{"forced stop, full settle", "0a.8", 60000, 65000, sql.NullInt64{Int64: 5000, Valid: true}, sql.NullInt64{Int64: 0, Valid: true}},
+		{"forced stop, lifted", "0a.8", 60000, 61500, sql.NullInt64{Int64: 1500, Valid: true}, sql.NullInt64{Int64: 1, Valid: true}},
+		{"0a.5 full settle", "0a.5", 18000, 25100, sql.NullInt64{Int64: 7100, Valid: true}, sql.NullInt64{Int64: 0, Valid: true}},
+		{"0a.4: no fixed stop window", "0a.4", 18000, 23000, sql.NullInt64{Int64: 5000, Valid: true}, sql.NullInt64{}},
+		{"no detector version", nil, 18000, 23000, sql.NullInt64{Int64: 5000, Valid: true}, sql.NullInt64{}},
+		{"sub-5 g abort, stop_ms 0", "0a.8", 0, 9000, sql.NullInt64{Int64: 9000, Valid: true}, sql.NullInt64{}},
+		{"no samples", "0a.8", 18000, -1, sql.NullInt64{}, sql.NullInt64{}},
+	} {
+		r, err := st.db.Exec(`INSERT INTO shot (started_at, stop_ms, detector_version, created_at)
+			VALUES ('2026-11-23T08:00:00Z', ?, ?, '2026-11-23T08:00:00Z')`, c.stopMs, c.detector)
+		if err != nil {
+			t.Fatal(err)
+		}
+		id, _ := r.LastInsertId()
+		if c.lastMs >= 0 {
+			for _, tms := range []int{0, c.lastMs / 2, c.lastMs} {
+				if _, err := st.db.Exec(`INSERT OR IGNORE INTO shot_sample (shot_id, t_ms, weight_mg) VALUES (?,?,0)`,
+					id, tms); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		var tail, lifted sql.NullInt64
+		if err := st.db.QueryRow(`SELECT settle_tail_ms, ended_by_lift FROM v_shot_end WHERE shot_id = ?`, id).
+			Scan(&tail, &lifted); err != nil {
+			t.Fatal(err)
+		}
+		if tail != c.wantTail || lifted != c.want {
+			t.Errorf("%s: tail %v, ended_by_lift %v; want %v, %v", c.name, tail, lifted, c.wantTail, c.want)
+		}
+	}
+}

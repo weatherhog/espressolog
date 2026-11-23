@@ -183,6 +183,8 @@ void ShotDetector::enterSettling(uint32_t t, int32_t w_at_stop, uint32_t stop_t,
   res.yield_at_stop_mg = w_at_stop;
   res.truncated = truncated;
   settle_until = t + SETTLE_MS;
+  // A forced stop can land mid-dip; the settling lift hold starts afresh.
+  lift_since = 0;
 }
 
 // Mean flow over the stable window: 5 g out .. 80 % of final, which skips
@@ -290,18 +292,29 @@ bool ShotDetector::finalizeLifted() {
   return true;
 }
 
-// The cup was lifted WHILE SETTLING (0a.8): the stop was already recognised
-// by enterSettling() -- backdated on the flat path, the forced stop at 60 s
-// on the truncated one -- so keep it, and its yield_at_stop. The lift only
-// ends settling early: the yield is the peak (frozen if something landed,
-// 0a.7), and settle_offset is the drips seen before the lift, a lower bound
-// on the full settle. Up to 0a.7 this went through finalizeLifted(), which
-// overwrote stop_ms with the last sample before the lift -- up to
-// STOP_WINDOW_MS + SETTLE_MS late (shot 212, 2026-11-23: 30.5 s stored for a
-// stop at ~25.3 s) -- and zeroed settle_offset.
+// The cup was lifted WHILE SETTLING (0a.8): the drop held LIFT_HOLD_MS, as
+// during the pour, and buf is trimmed to the samples before it. The stop was
+// already recognised by enterSettling() -- backdated on the flat path, the
+// forced stop at 60 s on the truncated one -- so keep it, and its
+// yield_at_stop. The lift only ends settling early: the yield is the peak
+// (frozen if something landed, 0a.7), and settle_offset is the drips the
+// peak followed before the lift. That is NOT a lower bound on a full settle:
+// the peak follows every reading under DRIP_STEP_MG above it, so upward
+// jitter (+-0.1 g) and the first sub-0.5 g of a grip ratchet it up, where
+// finishShot() reads the last weight -- a lift's offset can read a few
+// tenths high, and it covers only the time settled before the lift. After a
+// forced stop (truncated) the pour may still be running and every reading
+// joins the peak, objects included, so there is no settle to measure:
+// settle_offset stays 0 and final - at_stop does not hold on that path.
+// Nothing in the record flags a lift; the samples identify it exactly
+// (server/migrations/016_settle_end.sql). Up to 0a.7 this went through
+// finalizeLifted() on the first dropped sample, with no hold, and overwrote
+// stop_ms with the last sample before the lift -- up to STOP_WINDOW_MS +
+// SETTLE_MS late (shot 212, 2026-11-23: 30.5 s stored for a stop at
+// ~25.3 s) -- and zeroed settle_offset.
 bool ShotDetector::finishLiftedSettling() {
   res.yield_final_mg = running_max;
-  res.settle_offset_mg = res.yield_final_mg - res.yield_at_stop_mg;
+  res.settle_offset_mg = res.truncated ? 0 : res.yield_final_mg - res.yield_at_stop_mg;
   res.fault = false;
   res.valid = running_max >= REJECT_MIN_MG;
   res.sample_count = buf_count;
@@ -513,9 +526,30 @@ bool ShotDetector::feed(uint32_t t, int32_t w, uint32_t inlet_pulses_total) {
         if (!disturbing && rel > running_max && rel - running_max < DRIP_STEP_MG)
           running_max = rel;
       }
-      // The pour already ended (stop confirmed). If the cup is lifted during
-      // settling, finish now at the peak, keeping the stop (0a.8).
-      if (running_max - rel > LIFT_DROP_MG) return finishLiftedSettling();
+      // The pour already ended (stop confirmed). A drop well below the peak
+      // that holds LIFT_HOLD_MS is the cup being taken: finish at the peak,
+      // keeping the stop (0a.8). A shorter dip -- a bump, the single 0 g
+      // sample a cup-scale reconnect injects -- is not a lift, and settling
+      // never ends on a dropped reading: it waits for the weight to come
+      // back (then finishShot() reads it) or for the hold. Up to 0a.7 the
+      // first dropped sample ended the shot.
+      if (running_max - rel > LIFT_DROP_MG) {
+        if (lift_since == 0) {
+          lift_since = t;
+          // This sample is not appended yet -- unless it shares the previous
+          // slot's millisecond, when appendSample() will merge it into that
+          // slot, which must then go too.
+          lift_buf = buf_count;
+          if (buf_count > 0 && buf[buf_count - 1].t_ms == (uint16_t)(t - t0)) lift_buf--;
+        }
+        if (t - lift_since >= LIFT_HOLD_MS) {
+          buf_count = lift_buf;            // trim the dip off the record
+          return finishLiftedSettling();
+        }
+        appendSample(t, rel);
+        break;
+      }
+      lift_since = 0;
       appendSample(t, rel);
       if (landed_now) {
         // The placement scan stops before the sample where it landed. Taken

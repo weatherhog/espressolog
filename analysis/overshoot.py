@@ -37,8 +37,16 @@ TWO EXCLUSIONS, both earned rather than assumed
   top of it -- net effect shot 37, since 25/26 are already excluded -- so
   this query returns 45 and 45 - 7 = 38.) Their settle_offset_g is 0 by
   construction, not by measurement, and pooling them drags the mean down
-  while telling you nothing. Detected here by requiring a >=4 s tail rather
-  than by trusting the field.
+  while telling you nothing. Detected here by the curve's tail rather than
+  by trusting the field: a settle that ran its course ends at least
+  STOP_WINDOW_MS + SETTLE_MS (7 s) after stop_ms, SETTLE_MS (5 s) after a
+  forced stop at 60 s -- the test migration 016's v_shot_end applies. (Until
+  2026-11-23 a flat ">= 4 s"; on 0a.6 that separates the same shots, since
+  a lift there ends the curve AT stop_ms. From detector 0a.8 a lift while
+  settling keeps stop_ms and stores a real-looking settle_offset_g, with a
+  tail of 2-7 s, so only the exact test keeps it out -- and that is what
+  must hold before this script admits 0a.8. v_shot_end has the one case it
+  misses.)
 
   Shot 37. A -3.10 g step followed by +2.00 g within 180 ms at t=19.4 s --
   liquid cannot do that, something knocked the cup -- then a steady ~1 g/s
@@ -50,7 +58,15 @@ import statistics as st
 
 DB = "espressolog.db"
 WINDOWS_MS = [500, 1000, 2000, 3000, 5000]
-MIN_TAIL_MS = 4000        # below this the settle window was never recorded
+STOP_WINDOW_MS, SETTLE_MS, MAX_SHOT_MS = 2000, 5000, 60000   # firmware/src/detector.h
+
+
+def settled_full_window(stop_ms, last_t_ms):
+    """False when the curve ends before the settle window could have closed:
+    the cup was lifted. Same test as migration 016 (v_shot_end)."""
+    need = SETTLE_MS if stop_ms >= MAX_SHOT_MS else STOP_WINDOW_MS + SETTLE_MS
+    return last_t_ms - stop_ms >= need
+
 DISTURBED = [37]          # knocked cup, see docstring
 SPLIT_SHOT = [25, 26]     # one pull the detector split in two
 
@@ -90,7 +106,7 @@ def main():
         s = curve(conn, shot_id)
         if not s:
             continue
-        if s[-1][0] - stop_ms < MIN_TAIL_MS:
+        if not settled_full_window(stop_ms, s[-1][0]):
             lifted += 1                       # lift-terminated: no settle to measure
             continue
         base = weight_at(s, stop_ms)

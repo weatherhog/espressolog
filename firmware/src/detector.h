@@ -77,16 +77,32 @@ struct ShotResult {
   //     that confirmed it: detector.cpp passes the ring entry at
   //     t − STOP_WINDOW_MS into enterSettling(), "the plateau began at
   //     t_then; that's the stop".
+  // fact:stop-ms-backdating backdated STOP_WINDOW_MS
   //   truncated (MAX_SHOT_MS) — the confirming sample itself, NOT backdated.
   //   finalizeLifted() (a lift DURING THE POUR) — the last retained sample.
   //     Not backdated.
   //   finishLiftedSettling() (a lift WHILE SETTLING, from 0a.8) — whatever
   //     enterSettling() stored, from the flat or the truncated path, KEPT;
-  //     yield_at_stop_mg too. The lift only ends settling early.
-  // fact:stop-ms-backdating backdated STOP_WINDOW_MS
+  //     yield_at_stop_mg too. The lift only ends settling early, after the
+  //     same LIFT_HOLD_MS hold as during the pour. settle_offset_mg is the
+  //     drips before the lift (0 after a forced stop) -- detector.cpp says
+  //     why it is not a lower bound on a full settle.
   //
-  // UP TO 0a.7 -- the rest of this comment, which still describes every
-  // stored record from those versions: finalizeLifted() HAD TWO CALL SITES AND THEY ARE NOT ALIKE. From POURING
+  // NOTHING IN THIS STRUCT FLAGS A LIFT, ON ANY VERSION, AND THE RECORD'S OWN
+  // SAMPLES DO: a settle that ran its course appends a sample at or after
+  // the confirming sample + SETTLE_MS, so its last sample sits at least
+  // STOP_WINDOW_MS + SETTLE_MS (7 s) after stop_ms -- SETTLE_MS (5 s) after
+  // a forced stop, whose stop_ms is >= MAX_SHOT_MS -- and every lift, on
+  // either path and every version from 0a.5, ends sooner. Migration 016
+  // (v_shot_end) applies exactly that test. A lift during the pour ends
+  // the curve at stop_ms (tail 0).
+  //
+  // STILL TRUE ON 0a.8: a lift during the pour goes through finalizeLifted()
+  // as before (stop_ms = last kept sample, yield_at_stop = the peak), and
+  // the sub-5 g flat abort (below) assigns none of these fields.
+  //
+  // UP TO 0a.7 ONLY -- the next two paragraphs, which describe every stored
+  // record from those versions: finalizeLifted() HAD TWO CALL SITES AND THEY ARE NOT ALIKE. From POURING
   // (feed()'s POURING case) the drop must persist LIFT_HOLD_MS and the
   // descending transition is trimmed off buf first. From SETTLING it
   // fires on the FIRST sample below running_max − LIFT_DROP_MG, with no hold
@@ -105,11 +121,16 @@ struct ShotResult {
   // clears res.truncated, so a shot force-stopped at MAX_SHOT_MS and then
   // lifted during settling carries truncated = 1 with lift-derived stop_ms
   // and yield_at_stop_mg. Branching on truncated alone picks the wrong
-  // derivation for both fields.
+  // derivation for both fields. (From 0a.8 that shot keeps the forced
+  // stop's values.)
   //
-  // The lift path is not rare and nothing in this struct flags it:
-  // valid/fault/truncated all read as a normal stop, settle_offset_mg == 0 is
-  // the nearest tell and a flat stop can hit 0 by coincidence.
+  // END OF THE UP-TO-0a.7 PART. From here on, every version again.
+  //
+  // The lift path is not rare and no field flags it: valid/fault/truncated
+  // all read as a normal stop. Up to 0a.7 settle_offset_mg == 0 was the
+  // nearest field tell (a flat stop can hit 0 by coincidence); from 0a.8 a
+  // lift while settling carries a real-looking offset. Use the tail test
+  // above.
   // analysis/overshoot.py records SEVEN lift-terminated shots, found by
   // requiring a >= 4 s tail rather than trusting the field. THAT SEVEN HAS
   // NO ARCHIVE-WIDE DENOMINATOR. Its filter admits only excluded = 0,
@@ -152,9 +173,11 @@ struct ShotResult {
   // The yield stop_ms is paired with, so settle_offset_mg = final − at_stop
   // holds on every path that ASSIGNS these fields — which is every path but
   // the sub-5 g abort above, where all three stay 0 while yield_final_mg is
-  // running_max. It is the weight AT stop_ms only on the flat-stop and
-  // truncated paths; finalizeLifted() stores running_max, which may be an
-  // earlier sample than the one stop_ms names.
+  // running_max, and (from 0a.8) a lift while settling after a forced stop,
+  // where settle_offset_mg is 0 because nothing settled. It is the weight AT
+  // stop_ms only on the flat-stop and truncated paths, which a 0a.8 lift
+  // while settling keeps; finalizeLifted() stores running_max, which may be
+  // an earlier sample than the one stop_ms names.
   int32_t  yield_at_stop_mg;
   int32_t  yield_final_mg;
   int32_t  settle_offset_mg;   // final − at_stop. THE PHASE-1 CALIBRATION.
@@ -347,8 +370,8 @@ private:
   void beginPour(uint32_t crossing_t);
   void enterSettling(uint32_t t, int32_t w_at_stop, uint32_t stop_t, bool truncated);
   bool finishShot();
-  bool finalizeLifted();
-  bool finishLiftedSettling();   // 0a.8: a lift while settling keeps the stop   // cup removed → finalize at the peak weight
+  bool finalizeLifted();         // a lift DURING THE POUR: finalize at the peak, stop_ms = last kept sample
+  bool finishLiftedSettling();   // 0a.8: a lift WHILE SETTLING keeps the recognised stop
   // 0a.7: did this sample jump onto the scale (ShotResult::disturbed)?
   bool jumpsOntoScale(uint32_t t, int32_t w, int32_t prev_w, int32_t rel) const;
   bool risesLikeAPlacement() const;

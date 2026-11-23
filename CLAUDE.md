@@ -801,7 +801,7 @@ server/            Go
                    ambient = room temp/humidity from Home Assistant
                    record = on-flash wire format (v1-v6 decode)
                    web    = embed.FS for the built PWA
-  migrations/0*.sql         15 migrations; 001_init.sql is the base
+  migrations/0*.sql         16 migrations; 001_init.sql is the base
 web/               Vite + React PWA
   src/ · prototype/
 analysis/          Jupyter notebooks, reads the SQLite file
@@ -1521,11 +1521,28 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
 
   **FROM DETECTOR 0a.8 (firmware 0.16.0, 2026-11-23) A LIFT WHILE SETTLING
   KEEPS THE STOP** (row 4): it only ends settling early, `yield_final_g` is
-  the peak and `settle_offset_g` the drips seen before the lift — a lower
-  bound on the full settle, no longer 0. Found on shot 212: stored 30.5 s
-  for a stop at ~25.3 s (replayed through 0a.8: 25.0 s). **Everything below
-  in this entry is about records from 0a.7 and earlier**, which are stored
-  as they were — and that is most of the archive.
+  the peak and `settle_offset_g` the drips the peak followed before the
+  lift — no longer 0, but **not a lower bound on a full settle**: the peak
+  follows any reading under 0.5 g above it, so jitter and the start of a
+  grip can read a few tenths high, and it covers only the time settled. After a
+  forced stop it is 0 (nothing settled; `final − at_stop` does not hold
+  there). Like the pour, settling now takes a lift only after a drop held
+  `LIFT_HOLD_MS` (2 s), so one dropped sample — a bump, a reconnect's 0 g —
+  no longer ends it. Found on shot 212: stored 30.5 s
+  for a stop at ~25.3 s (replayed through 0a.8: 25.0 s).
+
+  **NO FIELD FLAGS A LIFT, ON ANY VERSION — `v_shot_end` (migration 016)
+  DERIVES IT** from the samples: a settle that ran its course ends ≥ 7 s
+  after `stop_ms` (≥ 5 s after a forced stop, `stop_ms` ≥ 60000), a lift
+  sooner. One miss on 0a.8, bounded by a sample gap at the backdated stop;
+  the migration states it. Use it rather than `settle_offset_g = 0`, which
+  a 0a.8 lift no longer reads.
+
+  **The next two paragraphs are about records from 0a.7 and earlier**,
+  which are stored as they were — most of the archive. What follows them
+  (the denominators, shot 37, the sub-5 g abort, which still assigns none
+  of these fields) holds on 0a.8 too, and so does row 3: a lift during the
+  pour is unchanged.
 
   **UP TO 0a.7 THE ROWS ARE NOT MUTUALLY EXCLUSIVE.** `finalizeLifted()` never clears
   `res.truncated`, so a shot force-stopped at 60 s and *then* lifted during
@@ -1543,10 +1560,11 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   (Off the `truncated` entry there is no backdating to undo, so that one
   really is bounded by `SETTLE_MS`.) It also zeroes `settle_offset_g`.
   `valid`/`fault`/`truncated` read exactly as a normal stop;
-  `settle_offset_g = 0` is the nearest tell
+  `settle_offset_g = 0` is the nearest field tell
   and a flat stop can hit 0 by coincidence. **`analysis/overshoot.py`
-  records seven lift-terminated shots**, found by requiring a ≥ 4 s tail
-  rather than trusting the field.
+  records seven lift-terminated shots**, found by the curve's tail rather
+  than the field (≥ 4 s until 2026-11-23; now `v_shot_end`'s test, which
+  separates the same 0a.6 shots and is what keeps a 0a.8 lift out).
 
   **THAT SEVEN HAS NO ARCHIVE-WIDE DENOMINATOR, AND THIS FILE GAVE IT ONE
   UNTIL 2026-10-27.** It read *"seven of the first 46 logged shots"* and
@@ -1747,8 +1765,11 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   table above, row 4). **0a.7 is its own stratum unless a script says otherwise**:
   `analysis/overshoot.py` and the 0f notebook filter on
   `detector_version = '0a.6'`; `analysis/session_warmup.py` pools 0a.6 and
-  0a.7 from 2026-11-22, and 0a.8 from 2026-11-23 (only `stop_ms` and
-  `settle_offset_g` of lifted shots differ, neither of which it reads), and leaves disturbed shots out — not because the
+  0a.7 from 2026-11-22, and 0a.8 from 2026-11-23 for mean flow — but
+  **not for shot time**: `total_s` is `stop_ms / 1000`, which 0a.8 stores
+  up to ~7 s earlier on a lift while settling, so it pairs `total_s` only
+  within sessions on one side of 0a.8 and tabulates it for 0a.6/0a.7
+  only — and leaves disturbed shots out — not because the
   two compute mean flow identically (a grip kept out of an unflagged
   lift-terminated yield moves it), but because the result does not move
   either way; its docstring has the check. **Deploy the server before flashing 0.14.0**: the format

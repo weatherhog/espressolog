@@ -1528,15 +1528,22 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   forced stop it is 0 (nothing settled; `final − at_stop` does not hold
   there). Like the pour, settling now takes a lift only after a drop held
   `LIFT_HOLD_MS` (2 s), so one dropped sample — a bump, a reconnect's 0 g —
-  no longer ends it. Found on shot 212: stored 30.5 s
+  no longer ends it; and because a hold needs time, **`loop()` calls
+  `ShotDetector::tick()`**, which finishes settling on the clock when the
+  yield scale goes quiet (a pending lift past its hold, or 1 s of silence
+  past the settle window) — without it a scale switched off with the cup
+  held the shot open and blocked every spool write. The forced stop at
+  60 s waits while a drop is pending, so a lift across it is an ordinary
+  pour lift rather than a stop taken mid-dip. Found on shot 212: stored 30.5 s
   for a stop at ~25.3 s (replayed through 0a.8: 25.0 s).
 
   **NO FIELD FLAGS A LIFT, ON ANY VERSION — `v_shot_end` (migration 016)
   DERIVES IT** from the samples: a settle that ran its course ends ≥ 7 s
-  after `stop_ms` (≥ 5 s after a forced stop, `stop_ms` ≥ 60000), a lift
-  sooner. One miss on 0a.8, bounded by a sample gap at the backdated stop;
-  the migration states it. Use it rather than `settle_offset_g = 0`, which
-  a 0a.8 lift no longer reads.
+  after `stop_ms` (≥ 5 s after a forced stop, `stop_ms` ≥ 60000), capped
+  below the `t_ms` ceiling of 65535, and a lift sooner. It judges only
+  detectors 0a.5–0a.8 (anything else is NULL) and reads a 0a.8 settle the
+  quiet-scale tick cut short as 1; the migration lists its misses. Use it
+  rather than `settle_offset_g = 0`, which a 0a.8 lift no longer reads.
 
   **The next two paragraphs are about records from 0a.7 and earlier**,
   which are stored as they were — most of the archive. What follows them
@@ -1765,7 +1772,9 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   table above, row 4). **0a.7 is its own stratum unless a script says otherwise**:
   `analysis/overshoot.py` and the 0f notebook filter on
   `detector_version = '0a.6'`; `analysis/session_warmup.py` pools 0a.6 and
-  0a.7 from 2026-11-22, and 0a.8 from 2026-11-23 for mean flow — but
+  0a.7 from 2026-11-22, and 0a.8 from 2026-11-23 for mean flow (the same
+  except after a dip that recovered while settling, where 0a.8 reads the
+  last weight and 0a.7 the peak — rare, re-check as 0a.8 shots accumulate) — but
   **not for shot time**: `total_s` is `stop_ms / 1000`, which 0a.8 stores
   up to ~7 s earlier on a lift while settling, so it pairs `total_s` only
   within sessions on one side of 0a.8 and tabulates it for 0a.6/0a.7

@@ -17,22 +17,39 @@
 -- 0a.7, at stop_ms itself (tail 0); while settling from 0a.8, before the
 -- settle window closes.
 --
--- ONE KNOWN MISS, 0a.8 only: the flat stop is backdated to the newest ring
--- sample at or before confirm - 2 s, so after a sample gap it sits further
--- back, and a lift in the last (that much) of the settle window passes as a
--- full settle. Bounded by the gap; there is no field to do better with.
+-- THE CEILING. t_ms is a uint16 and appendSample() drops samples past
+-- 65535, so a settle running past it (a forced stop that a sample gap
+-- pushed beyond 60 s, or a flat stop confirmed late) stores a short tail
+-- however it ended. The threshold is therefore capped at 64535 - stop_ms:
+-- a curve reaching the last second before the ceiling counts as settled.
+--
+-- KNOWN MISSES:
+--  - 0a.8: the flat stop is backdated to the newest ring sample at or
+--    before confirm - 2 s, so after a sample gap it sits further back, and
+--    a lift in the last (that much) of the settle window passes as a full
+--    settle. Bounded by the gap.
+--  - at the ceiling: a lift in the last second before t_ms = 65535 passes
+--    as a full settle.
+--  - 0a.8 firmware finishes settling on the clock when the yield scale
+--    goes quiet (ShotDetector::tick()); such a curve ends early and reads
+--    1 here. That is what the column means -- the settle was cut short --
+--    but the cause can be the scale rather than a lift.
+-- There is no field to do better with.
 --
 --   settle_tail_ms  last stored sample's t_ms - stop_ms
 --   ended_by_lift   1: the curve ends before the settle window could have
 --                      closed -- a lift, during the pour or while settling
+--                      (or, from 0a.8, a scale that went quiet: above)
 --                   0: settled its full window
 --                   NULL: cannot say -- no samples, stop_ms 0 (the sub-5 g
---                      flat abort assigns none), or a detector before 0a.5,
---                      whose stop rule had no fixed STOP_WINDOW_MS
+--                      flat abort assigns none), or a detector this view
+--                      does not name
 --
--- Valid while STOP_WINDOW_MS = 2000, SETTLE_MS = 5000 and MAX_SHOT_MS =
--- 60000 (firmware/src/detector.h; unchanged from 0a.5 through 0a.8). A
--- detector that changes one must change this view.
+-- Named, not excluded: 0a.5 to 0a.8, with or without a suffix ('0a.8-rc').
+-- Their STOP_WINDOW_MS = 2000, SETTLE_MS = 5000 and MAX_SHOT_MS = 60000
+-- (firmware/src/detector.h); 0a.4 and older had no fixed stop window. Any
+-- other version -- a later detector, '', 'dev' -- reads NULL until a
+-- migration that has checked its constants adds it here.
 CREATE VIEW v_shot_end AS
 SELECT
   s.id                       AS shot_id,
@@ -40,9 +57,11 @@ SELECT
   CASE
     WHEN e.last_t_ms IS NULL OR s.stop_ms IS NULL OR s.stop_ms = 0 THEN NULL
     WHEN s.detector_version IS NULL
-      OR s.detector_version IN ('0a.1', '0a.2', '0a.3', '0a.4') THEN NULL
-    WHEN s.stop_ms >= 60000 THEN e.last_t_ms - s.stop_ms < 5000
-    ELSE e.last_t_ms - s.stop_ms < 7000
+      OR NOT (s.detector_version GLOB '0a.[5-8]'
+              OR s.detector_version GLOB '0a.[5-8][^0-9]*') THEN NULL
+    ELSE e.last_t_ms - s.stop_ms <
+         MIN(CASE WHEN s.stop_ms >= 60000 THEN 5000 ELSE 7000 END,
+             64535 - s.stop_ms)
   END                        AS ended_by_lift
 FROM shot s
 LEFT JOIN (SELECT shot_id, MAX(t_ms) AS last_t_ms

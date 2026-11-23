@@ -89,13 +89,16 @@ struct ShotResult {
   //     why it is not a lower bound on a full settle.
   //
   // NOTHING IN THIS STRUCT FLAGS A LIFT, ON ANY VERSION, AND THE RECORD'S OWN
-  // SAMPLES DO: a settle that ran its course appends a sample at or after
+  // SAMPLES (nearly) DO: a settle that ran its course appends a sample at or after
   // the confirming sample + SETTLE_MS, so its last sample sits at least
   // STOP_WINDOW_MS + SETTLE_MS (7 s) after stop_ms -- SETTLE_MS (5 s) after
   // a forced stop, whose stop_ms is >= MAX_SHOT_MS -- and every lift, on
   // either path and every version from 0a.5, ends sooner. Migration 016
-  // (v_shot_end) applies exactly that test. A lift during the pour ends
-  // the curve at stop_ms (tail 0).
+  // (v_shot_end) applies that test, capped below the t_ms = 65535 ceiling
+  // (later samples are dropped), and lists the cases it misses. A lift
+  // during the pour ends the curve at stop_ms (tail 0). From 0a.8 a
+  // settle that tick() ended because the scale went quiet also ends early
+  // and reads as cut short -- which it was.
   //
   // STILL TRUE ON 0a.8: a lift during the pour goes through finalizeLifted()
   // as before (stop_ms = last kept sample, yield_at_stop = the peak), and
@@ -131,8 +134,9 @@ struct ShotResult {
   // nearest field tell (a flat stop can hit 0 by coincidence); from 0a.8 a
   // lift while settling carries a real-looking offset. Use the tail test
   // above.
-  // analysis/overshoot.py records SEVEN lift-terminated shots, found by
-  // requiring a >= 4 s tail rather than trusting the field. THAT SEVEN HAS
+  // analysis/overshoot.py records SEVEN lift-terminated shots, found by the
+  // curve's tail rather than the field (">= 4 s" until 2026-11-23, now the
+  // tail test above, which separates the same 0a.6 shots). THAT SEVEN HAS
   // NO ARCHIVE-WIDE DENOMINATOR. Its filter admits only excluded = 0,
   // yield >= 15 g, one bean, one dial, one detector version, and drops ids
   // 25, 26 and 37 (net effect 37; 25/26 are already excluded), leaving 45
@@ -322,6 +326,11 @@ public:
   // untouched; 0 from a board with no flowmeter tap is indistinguishable
   // from a shot during which nothing flowed, and both are honest.
   bool feed(uint32_t t_ms, int32_t weight_mg, uint32_t inlet_pulses_total = 0);
+  // 0a.8: finish SETTLING on time when the samples stop (detector.cpp).
+  // Call with millis() after draining the sample queue; true = a completed
+  // ShotResult, exactly as from feed().
+  bool tick(uint32_t now_ms);
+  static constexpr uint32_t SCALE_QUIET_MS = 1000;
   ShotState state() const { return st; }
   const ShotResult& result() const { return res; }
   int32_t flowNowMgps() const { return flow_now; }

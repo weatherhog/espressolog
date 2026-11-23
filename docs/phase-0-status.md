@@ -2615,8 +2615,10 @@ state; closing it is the deliberate act, with the RC chosen first.
    seven shots with no samples after `stop_ms` at all** — a count over the
    45 rows its filter admits, not a rate over the archive — the cup was lifted and the
    detector finalised at the peak, so their `settle_offset_g = 0` is
-   structural, not measured. `overshoot.py` detects them by requiring a
-   ≥4 s tail rather than trusting the field. Shot 37 is also excluded:
+   structural, not measured. `overshoot.py` detects them by the curve's
+   tail rather than trusting the field — ≥4 s until 2026-11-23, now the
+   test migration 016's `v_shot_end` applies (≥ 7 s after a flat stop,
+   ≥ 5 s after a forced one), which separates the same shots. Shot 37 is also excluded:
    a −3.10 g step then +2.00 g inside 180 ms (something knocked the cup)
    followed by a slow lift the 5 g threshold never caught.
 

@@ -160,9 +160,14 @@ STRATUM = {"bean_name": "Moonwalker", "grind_dial": 7.9, "grind_epoch_id": 1}
 # 2026-11-22 update shows the latter does not move the result yet. Anything
 # older than 0a.6 changed the stop rule and stays out. 0a.8 (2026-11-23) is
 # 0a.7 except while settling: a lift keeps stop_ms and measures
-# settle_offset_g, and only a drop held 2 s is a lift; yield_final_g and
-# mean_flow_gps come out the same, and it sets the disturbed flag exactly as
-# 0a.7 does. BUT total_s IS stop_ms / 1000, so 0a.8 changes it: on 0a.6/0a.7
+# settle_offset_g, only a drop held 2 s is a lift, and a quiet scale ends
+# settling on the clock. It sets the disturbed flag exactly as 0a.7 does.
+# yield_final_g, and with it mean_flow_gps (its 80 % point), come out the
+# same EXCEPT when settling saw a dip that recovered -- a reconnect's 0 g, a
+# bump, a lift and put-back within 2 s: 0a.7 ended the shot there at the
+# peak, 0a.8 settles on and reads the last weight. Rare, and pooled on the
+# assumption that it does not move the result -- re-check as 0a.8 shots
+# accumulate, as for 0a.7. BUT total_s IS stop_ms / 1000, so 0a.8 changes it: on 0a.6/0a.7
 # a shot lifted while settling stores stop_ms up to ~7 s late, on 0a.8 the
 # real stop. Mean flow pools across the change; shot time does not (OLD_STOP).
 DETECTORS = {"0a.6", "0a.7", "0a.8"}
@@ -295,7 +300,9 @@ def line(label, sess):
     print(f"{label}: {n} clean shots, {len(sess)} sessions, {len(flow)} with 2+ | "
           f"later faster in {sum(d > 0 for d in flow)}/{len(flow)}, "
           f"{st.mean(flow):+.3f} g/s, p={sign_flip_p(flow):.4f} | first slower in "
-          f"{sum(d > 0 for d in time)}/{len(time)}, {st.mean(time):+.2f} s")
+          + (f"{sum(d > 0 for d in time)}/{len(time)}, {st.mean(time):+.2f} s" if time
+             # every multi-shot session straddles 0a.8: no like-for-like time
+             else "- (no session on one side of 0a.8)"))
 
 
 def table(sess):

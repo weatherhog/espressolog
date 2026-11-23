@@ -1631,7 +1631,8 @@ func TestSetpointPendingStopsOnlyTheTemperatureCarry(t *testing.T) {
 
 // Migration 016: v_shot_end tells a settle that ran its full window from one
 // a lift ended, from the stored samples alone -- 7 s after a flat stop, 5 s
-// after a forced one (stop_ms >= 60000) -- and says NULL where it cannot.
+// after a forced one (stop_ms >= 60000), capped below the t_ms ceiling --
+// and says NULL where it cannot, including any detector it does not name.
 func TestShotEndView(t *testing.T) {
 	st := openTestStore(t)
 	for _, c := range []struct {
@@ -1652,6 +1653,16 @@ func TestShotEndView(t *testing.T) {
 		{"no detector version", nil, 18000, 23000, sql.NullInt64{Int64: 5000, Valid: true}, sql.NullInt64{}},
 		{"sub-5 g abort, stop_ms 0", "0a.8", 0, 9000, sql.NullInt64{Int64: 9000, Valid: true}, sql.NullInt64{}},
 		{"no samples", "0a.8", 18000, -1, sql.NullInt64{}, sql.NullInt64{}},
+		// Review of 3447d49: a settle past t_ms = 65535 stores a short tail.
+		{"forced stop after a gap, full settle", "0a.8", 60600, 65500, sql.NullInt64{Int64: 4900, Valid: true}, sql.NullInt64{Int64: 0, Valid: true}},
+		{"late flat stop, full settle", "0a.8", 59000, 65500, sql.NullInt64{Int64: 6500, Valid: true}, sql.NullInt64{Int64: 0, Valid: true}},
+		{"forced stop after a gap, lifted", "0a.8", 60600, 63000, sql.NullInt64{Int64: 2400, Valid: true}, sql.NullInt64{Int64: 1, Valid: true}},
+		// Named versions only: anything else cannot be judged.
+		{"0a.8-rc", "0a.8-rc", 18000, 23000, sql.NullInt64{Int64: 5000, Valid: true}, sql.NullInt64{Int64: 1, Valid: true}},
+		{"empty version", "", 18000, 23000, sql.NullInt64{Int64: 5000, Valid: true}, sql.NullInt64{}},
+		{"dev build", "dev", 18000, 23000, sql.NullInt64{Int64: 5000, Valid: true}, sql.NullInt64{}},
+		{"a later detector", "0a.9", 18000, 23000, sql.NullInt64{Int64: 5000, Valid: true}, sql.NullInt64{}},
+		{"0a.50 is not 0a.5", "0a.50", 18000, 23000, sql.NullInt64{Int64: 5000, Valid: true}, sql.NullInt64{}},
 	} {
 		r, err := st.db.Exec(`INSERT INTO shot (started_at, stop_ms, detector_version, created_at)
 			VALUES ('2026-11-23T08:00:00Z', ?, ?, '2026-11-23T08:00:00Z')`, c.stopMs, c.detector)

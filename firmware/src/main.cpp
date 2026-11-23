@@ -1540,6 +1540,18 @@ static void queueWeighing(uint8_t role, const WeighingDetector::Event& ev) {
   pending_w[pending_w_n++] = { role, ev };
 }
 
+// A shot the detector finished, from feed() or tick(): spool it and tell
+// the live stream.
+static void shotCompleted() {
+  handleShotComplete(detector.result());
+  char frame[96];
+  snprintf(frame, sizeof(frame),
+           "{\"ev\":\"shot\",\"valid\":%d,\"fault\":%d,\"placement\":%d,\"disturbed\":%d}",
+           detector.result().valid, detector.result().fault, detector.result().placement,
+           detector.result().disturbed);
+  net.sendLive(frame);
+}
+
 void loop() {
   // Before the drain below: every sample is tagged with flow.total(), so the
   // count must be current as of this iteration, not the previous one.
@@ -1582,14 +1594,7 @@ void loop() {
       snprintf(frame, sizeof(frame), "{\"r\":0,\"t\":%lu,\"w\":%ld,\"s\":\"%s\"}",
                (unsigned long)smp.t_ms, (long)smp.weight_mg, stateName(detector.state()));
       net.sendLive(frame);
-      if (complete) {
-        handleShotComplete(detector.result());
-        snprintf(frame, sizeof(frame),
-                 "{\"ev\":\"shot\",\"valid\":%d,\"fault\":%d,\"placement\":%d,\"disturbed\":%d}",
-                 detector.result().valid, detector.result().fault, detector.result().placement,
-                 detector.result().disturbed);
-        net.sendLive(frame);
-      }
+      if (complete) shotCompleted();
       shot_active = detector.state() == ShotState::POURING
                  || detector.state() == ShotState::SETTLING;
     } else {
@@ -1606,6 +1611,15 @@ void loop() {
     if (weighing[smp.role].feed(smp.t_ms, smp.weight_mg, shot_active)) {
       queueWeighing(smp.role, weighing[smp.role].event());
     }
+  }
+  // Detector 0a.8: settling ends on time when the yield scale goes quiet --
+  // a pending lift once its hold has passed, or the settle window once the
+  // scale has sent nothing for SCALE_QUIET_MS. Without this a scale switched
+  // off with the cup left the shot open and every spool write blocked.
+  // After the drain, so every sample stamped before now has been fed.
+  if (detector.tick(millis())) {
+    Serial.println("# shot finished on time: the yield scale went quiet");
+    shotCompleted();
   }
 
   // POLL THE MACHINE BEFORE DECIDING WHETHER IT IS QUIET. These sat BELOW the

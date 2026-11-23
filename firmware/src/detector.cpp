@@ -183,8 +183,34 @@ void ShotDetector::enterSettling(uint32_t t, int32_t w_at_stop, uint32_t stop_t,
   res.yield_at_stop_mg = w_at_stop;
   res.truncated = truncated;
   settle_until = t + SETTLE_MS;
-  // A forced stop can land mid-dip; the settling lift hold starts afresh.
+  // Both callers enter with no drop pending: the flat stop is in the
+  // not-dropped branch, and the forced stop waits for the hold to resolve.
   lift_since = 0;
+}
+
+// Called from loop() with millis() after the sample drain (0a.8). Settling
+// otherwise ends only on a sample, so a scale that goes quiet -- switched
+// off with the cup, or a BLE drop -- left the shot open, and main blocks
+// spool writes while it is (invariant 6, review 2026-11-23). Here:
+//  - a pending lift whose hold has elapsed by the clock is a lift, as if
+//    one more dropped sample had arrived;
+//  - SCALE_QUIET_MS without a sample past the end of settling finishes the
+//    shot on the last weight. The curve then ends before the settle window
+//    closed, so v_shot_end reads it as cut short ("ended_by_lift" means
+//    exactly that), which a scale switched off mid-settle is.
+// Only SETTLING: a scale lost mid-pour still leaves the pour open.
+bool ShotDetector::tick(uint32_t now) {
+  if (st != ShotState::SETTLING) return false;
+  if (lift_since != 0) {
+    if (now - lift_since >= LIFT_HOLD_MS) {
+      buf_count = lift_buf;
+      return finishLiftedSettling();
+    }
+    return false;
+  }
+  if ((int32_t)(now - settle_until) >= 0 && now - last_t >= SCALE_QUIET_MS)
+    return finishShot();
+  return false;
 }
 
 // Mean flow over the stable window: 5 g out .. 80 % of final, which skips
@@ -486,8 +512,13 @@ bool ShotDetector::feed(uint32_t t, int32_t w, uint32_t inlet_pulses_total) {
           }
         }
       }
-      if (st == ShotState::POURING && t - t0 >= MAX_SHOT_MS) {
-        // Not an espresso anymore; stop before uint16 t_ms can wrap.
+      if (st == ShotState::POURING && t - t0 >= MAX_SHOT_MS && lift_since == 0) {
+        // Not an espresso anymore; stop before uint16 t_ms can wrap. NOT
+        // while a drop is pending (0a.8, review 2026-11-23): the forced
+        // stop would take its weight mid-dip (a stored yield_at_stop of
+        // -180 g) and leave the dip in the curve. The hold resolves within
+        // LIFT_HOLD_MS -- a lift finalizes as one, a bump lets the forced
+        // stop through on the next sample -- well before t_ms can wrap.
         enterSettling(t, rel, t, true);
       }
       break;

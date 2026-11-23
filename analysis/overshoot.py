@@ -65,6 +65,7 @@ def settled_full_window(stop_ms, last_t_ms):
     """False when the curve ends before the settle window could have closed:
     the cup was lifted. Same test as migration 016 (v_shot_end)."""
     need = SETTLE_MS if stop_ms >= MAX_SHOT_MS else STOP_WINDOW_MS + SETTLE_MS
+    need = min(need, 64535 - stop_ms)   # t_ms tops out at 65535
     return last_t_ms - stop_ms >= need
 
 DISTURBED = [37]          # knocked cup, see docstring

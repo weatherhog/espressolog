@@ -200,10 +200,16 @@ void ShotDetector::enterSettling(uint32_t t, int32_t w_at_stop, uint32_t stop_t,
 //    (a reconnect's injected 0 g, then the real reading 2 s later): wait.
 //  - SETTLING past the settle window: finish on the last weight.
 //  - POURING, once MAX_SHOT_MS + SETTLE_MS has passed since t0 -- when the
-//    detector would have force-stopped and settled by now, so the pump is
-//    not plausibly still running and a reconnect mid-pour cannot split one
-//    shot in two: finish at the peak, stop_ms = the last kept sample, as a
-//    lift during the pour does (finalizeLifted(); under 5 g a reject).
+//    detector would have force-stopped and settled by now, so a reconnect
+//    mid-pour cannot split one shot in two: finish at the peak, stop_ms =
+//    the last kept sample, as a lift during the pour does, and mark it a
+//    FAULT, not a shot. The scale was lost mid-pour, so the yield is only
+//    what it saw before the gap -- a valid record would carry a short yield
+//    and a wrong mean flow into every analysis (review 2026-11-23). It is
+//    still spooled (invariant 6) and the server excludes it at ingest.
+//    fault was otherwise unused from 0a.4, when a lift stopped faulting.
+//    main calls tick() only while the brew guard says the pump is idle
+//    (invariant 2): a lever-B draw can outrun 65 s.
 // Each of these ends the curve before a settle window could close, so
 // v_shot_end reads the shot as cut short ("ended_by_lift" means exactly
 // that) -- which it was, by the scale rather than a hand.
@@ -213,7 +219,10 @@ bool ShotDetector::tick(uint32_t now) {
   if (st == ShotState::POURING) {
     if ((int32_t)(now - t0) < (int32_t)(MAX_SHOT_MS + SETTLE_MS)) return false;
     if (lift_since != 0) buf_count = lift_buf;   // trim a pending dip
-    return finalizeLifted();
+    finalizeLifted();
+    res.fault = true;    // yield scale lost mid-pour: kept, never a shot
+    res.valid = false;
+    return true;
   }
   if (lift_since != 0) {
     if ((int32_t)(now - lift_since) < (int32_t)LIFT_HOLD_MS) return false;

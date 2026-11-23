@@ -167,7 +167,10 @@ STRATUM = {"bean_name": "Moonwalker", "grind_dial": 7.9, "grind_epoch_id": 1}
 # weight: settling saw a dip that recovered (a reconnect's 0 g, a bump, a
 # lift and put-back within 2 s -- 0a.7 ended the shot at the dip, 0a.8
 # settles on), or the scale went quiet while settling (0a.7 ended at the
-# reconnect's 0 g, 0a.8's tick() finishes on the last weight). Rare, and pooled on the
+# reconnect's 0 g, 0a.8's tick() finishes on the last weight). And a pour
+# whose scale was lost is a fault on 0a.8 (excluded), where 0a.7 held it
+# open and stored a shot once the scale returned -- or lost it if it never
+# did. excluded = 0 drops it on 0a.8 only. Rare, and pooled on the
 # assumption that it does not move the result -- re-check as 0a.8 shots
 # accumulate, as for 0a.7. BUT total_s IS stop_ms / 1000, so 0a.8 changes it: on 0a.6/0a.7
 # a shot lifted while settling stores stop_ms up to ~7 s late, on 0a.8 the

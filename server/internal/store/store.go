@@ -681,6 +681,8 @@ const (
 // re-deriving it. First match wins, so a faulted placement is a fault.
 func excludeReasonAtIngest(h *record.Header) string {
 	switch {
+	case h.ScaleLost():
+		return reasonScaleLost
 	case h.Fault():
 		return reasonFault
 	case h.Reject():
@@ -695,7 +697,11 @@ func excludeReasonAtIngest(h *record.Header) string {
 // matches stored rows against them, so CHANGING ONE STRANDS EVERY ROW
 // ALREADY STORED WITH THE OLD TEXT — add a migration if one ever changes.
 const (
-	reasonFault     = "fault: cup removed mid-pour"
+	reasonFault = "fault: cup removed mid-pour"
+	// Detector 0a.8: the yield scale went quiet mid-pour and the shot was
+	// spooled 65 s on at the peak it saw -- the yield and mean flow are only
+	// what came before the gap.
+	reasonScaleLost = "fault: yield scale lost mid-pour"
 	reasonReject    = "reject: under 5 g"
 	reasonPlacement = "cup placement: the detector judged it a cup set down, not a pour"
 )
@@ -744,10 +750,10 @@ func attributeWeighingToLaterShot(tx *sql.Tx, weighingID int64, grams float64, o
 	err := tx.QueryRow(`
 		SELECT id FROM shot
 		WHERE dose_ground_g IS NULL
-		  AND NOT (excluded = 1 AND COALESCE(exclude_reason, '') IN (?, ?, ?))
+		  AND NOT (excluded = 1 AND COALESCE(exclude_reason, '') IN (?, ?, ?, ?))
 		  AND started_at >= ? AND started_at < ?
 		ORDER BY started_at ASC LIMIT 1`,
-		reasonFault, reasonReject, reasonPlacement, observed, horizon).Scan(&shotID)
+		reasonFault, reasonReject, reasonPlacement, reasonScaleLost, observed, horizon).Scan(&shotID)
 	if err == sql.ErrNoRows {
 		return nil
 	}

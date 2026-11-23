@@ -1688,3 +1688,38 @@ func TestShotEndView(t *testing.T) {
 		}
 	}
 }
+
+// Detector 0a.8 spools a pour whose yield scale went quiet as a FAULT; it is
+// excluded with its own reason, while an older detector's FAULT (a cup
+// removed mid-pour) keeps the old one. Both stay excluded, like any fault.
+func TestIngestScaleLost(t *testing.T) {
+	st := openTestStore(t)
+	for i, c := range []struct {
+		detector string
+		want     string
+	}{
+		{"0a.8", reasonScaleLost},
+		{"0a.8-rc", reasonScaleLost},
+		{"0a.4", reasonFault},
+		{"dev", reasonFault},
+	} {
+		raw, rec := pumpRecordWith(t, uint32(400+i), record.Pump2Cup, 8200, func(h *record.Header) {
+			h.DetectorVersion = [8]byte{}
+			copy(h.DetectorVersion[:], c.detector)
+			h.Flags |= record.FlagFault
+		}, nil)
+		res, err := st.Ingest("aa:bb:cc:dd:ee:04", rec, raw, time.Now())
+		if err != nil {
+			t.Fatalf("%s: %v", c.detector, err)
+		}
+		var excluded int
+		var reason sql.NullString
+		if err := st.db.QueryRow(`SELECT excluded, exclude_reason FROM shot WHERE id = ?`, res.ShotID).
+			Scan(&excluded, &reason); err != nil {
+			t.Fatal(err)
+		}
+		if excluded != 1 || reason.String != c.want {
+			t.Errorf("%s: excluded %d, reason %q; want 1, %q", c.detector, excluded, reason.String, c.want)
+		}
+	}
+}

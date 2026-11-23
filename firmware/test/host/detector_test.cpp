@@ -1034,7 +1034,8 @@ int main() {
   {
     // Review of 7d257d0 (pre-existing): the battery dies mid-pour. tick()
     // waits until the shot would have force-stopped and settled (65 s), so
-    // a reconnect mid-pour cannot split a shot, then records it cut short.
+    // a reconnect mid-pour cannot split a shot, then spools it as a FAULT
+    // (review of fc5f05b): its yield is only what the scale saw.
     ShotDetector d;
     uint32_t tt = 15000000;
     for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
@@ -1048,9 +1049,9 @@ int main() {
     for (int k = 0; k < 10 && !done; k++, now += 100) done = d.tick(now);
     assert(done && d.state() == ShotState::IDLE);
     const ShotResult& rr = d.result();
-    printf("scale died mid-pour: valid=%d stop_ms=%u final=%d n=%u\n",
-           rr.valid, rr.stop_ms, rr.yield_final_mg, rr.sample_count);
-    assert(rr.valid && rr.yield_final_mg > 35000);
+    printf("scale died mid-pour: valid=%d fault=%d stop_ms=%u final=%d n=%u\n",
+           rr.valid, rr.fault, rr.stop_ms, rr.yield_final_mg, rr.sample_count);
+    assert(!rr.valid && rr.fault && rr.yield_final_mg > 35000);
     assert(rr.samples[rr.sample_count - 1].t_ms == rr.stop_ms);   // tail 0: cut short
     printf("a scale lost mid-pour cannot hold the shot open OK\n");
   }

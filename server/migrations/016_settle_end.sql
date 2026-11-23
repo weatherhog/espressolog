@@ -34,7 +34,8 @@
 --    65900: tail 3800 against a cap of 3935) -- reads as a lift.
 --  - 0a.8 firmware ends a shot on the clock when the yield scale goes
 --    quiet for 3 s (ShotDetector::tick()): while settling, or in a pour
---    65 s on. Such a curve ends early and reads 1 here. That is what the
+--    65 s on (spooled as a fault, excluded at ingest). Such a curve ends
+--    early and reads 1 here. That is what the
 --    column means -- the settle was cut short -- but the cause can be the
 --    scale rather than a lift.
 -- There is no field to do better with.

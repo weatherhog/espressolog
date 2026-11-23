@@ -1612,18 +1612,6 @@ void loop() {
       queueWeighing(smp.role, weighing[smp.role].event());
     }
   }
-  // Detector 0a.8: a shot ends on time when the yield scale goes quiet for
-  // SCALE_QUIET_MS (3 s) -- settling, or a pour 65 s on (detector.cpp,
-  // tick()). Without this a scale switched off with the cup, or one whose
-  // battery died mid-pour, left the shot open and every spool write
-  // blocked. After the drain, so nothing queued before this point is
-  // missed; a sample the BLE task stamps between the drain and millis() is
-  // fed next pass, and 3 s of silence cannot hinge on it.
-  if (detector.tick(millis())) {
-    Serial.println("# shot finished on time: the yield scale went quiet");
-    shotCompleted();
-  }
-
   // POLL THE MACHINE BEFORE DECIDING WHETHER IT IS QUIET. These sat BELOW the
   // decision until 2026-10-12, so `quiet` was computed from the PREVIOUS
   // iteration's display reading — and with a ~41 ms frame period that leaves
@@ -1637,6 +1625,25 @@ void loop() {
   pollDisplay();
   machineContextPoll();
   liveDisplay(millis());
+
+  // Detector 0a.8: a shot ends on time when the yield scale goes quiet for
+  // SCALE_QUIET_MS (3 s) -- settling, or a pour 65 s on, which is spooled
+  // as a fault (detector.cpp, tick()). Without this a scale switched off
+  // with the cup, or one whose battery died mid-pour, left the shot open
+  // and every spool write blocked. ONLY WHILE THE PUMP IS IDLE (invariant
+  // 2): completion writes flash at once, and a lever-B draw latches for
+  // minutes; tick() changes nothing until it completes, so not calling it
+  // just defers the finish. Below the machine polls so machineBusy() is
+  // fresh, and after the drain, so nothing queued before the drain is
+  // missed; a sample stamped after it is fed next pass, and 3 s of silence
+  // cannot hinge on it. (The forced stop at 60 s finishes inside feed()
+  // and is NOT deferred -- an older gap, open.)
+  if (detector.state() != ShotState::IDLE && detector.state() != ShotState::ARMED
+      && !machineBusy() && detector.tick(millis())) {
+    Serial.printf("# shot finished on time: the yield scale went quiet%s\n",
+                  detector.result().fault ? " mid-pour -- spooled as a fault" : "");
+    shotCompleted();
+  }
 
   ShotState st = detector.state();
   // INVARIANT 2: never write flash or block on the network during a shot.

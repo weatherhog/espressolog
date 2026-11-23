@@ -8,10 +8,16 @@
 static void print(const ShotResult& r);
 
 // The board also calls tick() from loop() (0a.8): a shot ends on time when
-// the scale goes quiet. What tick() stores does not depend on WHEN it fires,
-// only on the samples before it, so ticking just before each sample -- and
-// once, far on, after the last -- reproduces every record the board would
-// have written, provided the board stayed up.
+// the yield scale goes quiet. What tick() stores does not depend on WHEN it
+// fires, only on the samples before it, so ticking just before each sample
+// -- and once, far on, after the last -- reproduces the quiet-scale endings
+// the capture SHOWS. Not every one the board made: the board defers tick()
+// while the brew guard says the pump runs (no machine state here), a
+// loop() stall that overflows the 64-entry sample queue loses samples the
+// capture never had either, and a sample stamped before a tick but drained
+// after it is fed one pass late. A capture of the samples is not a capture
+// of the board's clock. Only yield-scale lines count: main.cpp also prints
+// the dose scale as "t,w,DOSE", which is not this detector's input.
 int main() {
   ShotDetector det;
   char line[128];
@@ -21,6 +27,7 @@ int main() {
     unsigned long t;
     long w;
     if (sscanf(line, "%lu,%ld", &t, &w) != 2) continue;
+    if (strstr(line, ",DOSE")) continue;           // the dose scale
     if (any && det.tick((uint32_t)t - 1)) print(det.result());
     if (det.feed((uint32_t)t, (int32_t)w)) print(det.result());
     last = (uint32_t)t;

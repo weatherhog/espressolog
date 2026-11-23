@@ -1,4 +1,5 @@
 #pragma once
+#include "detector.h"   // SCALE_QUIET_MS, checked against STALE_MS
 #include <Arduino.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
@@ -70,6 +71,11 @@ private:
   enum ConnectResult : uint8_t { CONNECT_IDLE = 0, CONNECT_PENDING, CONNECT_OK, CONNECT_FAIL };
 
   static constexpr uint32_t STALE_MS      = 3000;
+  // The shot detector ends a shot when the yield scale is quiet this long
+  // (ShotDetector::tick()); a shorter limit than the link's own give-up time
+  // ends normal shots on routine BLE gaps (review 2026-11-23).
+  static_assert(STALE_MS == ShotDetector::SCALE_QUIET_MS,
+                "ShotDetector::SCALE_QUIET_MS must equal ScaleManager::STALE_MS");
   static constexpr uint32_t BACKOFF_MIN_MS = 1000;
   static constexpr uint32_t BACKOFF_MAX_MS = 30000;
   static constexpr uint32_t FLAP_BACKOFF_MAX_MS = 4000;

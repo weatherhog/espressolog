@@ -1534,10 +1534,17 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   routine BLE gap never counts): a pending lift past its hold, a settle
   past its window, or a pour 65 s on — when the shot would have
   force-stopped and settled by now, so a reconnect mid-pour cannot split
-  it — finished at the peak like a pour lift. Without it a scale switched
+  it — finished at the peak and **spooled as a FAULT**, which the server
+  excludes as `'fault: yield scale lost mid-pour'`: its yield is only what
+  the scale saw before the gap. Without it a scale switched
   off with the cup, or one whose battery died mid-pour, held the shot open
-  and blocked every spool write (invariant 6). `replay` ticks too, so it
-  still reproduces what the board stores. The forced stop at
+  and blocked every spool write (invariant 6). **`loop()` calls it only
+  while `machineBusy()` says the pump is idle** (invariant 2: a lever-B
+  draw outruns 65 s); the forced stop at 60 s finishes inside `feed()` and
+  is not deferred — an older gap, still open. `replay` ticks too and skips
+  the dose scale's lines, so it reproduces the quiet-scale endings a
+  capture shows — not one the board made on its own clock (a deferred
+  tick, a stalled `loop()`). The forced stop at
   60 s waits while a drop is pending, so a lift across it is an ordinary
   pour lift rather than a stop taken mid-dip. Found on shot 212: stored 30.5 s
   for a stop at ~25.3 s (replayed through 0a.8: 25.0 s).
@@ -1546,8 +1553,8 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   DERIVES IT** from the samples: a settle that ran its course ends ≥ 7 s
   after `stop_ms` (≥ 5 s after a forced stop, `stop_ms` ≥ 60000), capped
   below the `t_ms` ceiling of 65535, and a lift sooner. It judges only
-  detectors 0a.5–0a.8 (anything else is NULL) and reads a 0a.8 settle the
-  quiet-scale tick cut short as 1; the migration lists its misses. Use it
+  detectors 0a.5–0a.8 (anything else is NULL) and reads a 0a.8 settle or
+  pour the quiet-scale tick cut short as 1; the migration lists its misses. Use it
   rather than `settle_offset_g = 0`, which a 0a.8 lift no longer reads.
 
   **The next two paragraphs are about records from 0a.7 and earlier**,
@@ -1717,7 +1724,10 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   ingest. Added after shot 180 (2026-11-15): a cup put back on an un-tared
   scale landed slowly enough, 3–4 g per sample, to pass the per-sample
   step guard into POURING.
-- **fault** — weight drops > 5 g mid-pour (cup removed)
+- **fault** — up to 0a.3, weight drops > 5 g mid-pour (cup removed); from
+  0a.4 a lift ends the shot instead and nothing set it. **From 0a.8 it
+  means the yield scale went quiet mid-pour** (`tick()`, 65 s on): spooled
+  at the peak, excluded at ingest as `'fault: yield scale lost mid-pour'`
 - **disturbed** (detector **0a.7**, firmware 0.14.0) — something set on
   the scale once the shot has 5 g. **What it does depends on when:**
   - **while settling after a confirmed stop** (2 s flat, so the true weight
@@ -1780,7 +1790,8 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   0a.7 from 2026-11-22, and 0a.8 from 2026-11-23 for mean flow (the same
   except after a dip that recovered while settling, or a scale gone quiet
   while settling, where 0a.8 reads the last weight and 0a.7 the peak —
-  rare, re-check as 0a.8 shots accumulate) — but
+  rare, re-check as 0a.8 shots accumulate; a pour whose scale was lost is
+  a fault on 0a.8 and excluded, where 0a.7 stored a shot) — but
   **not for shot time**: `total_s` is `stop_ms / 1000`, which 0a.8 stores
   up to ~7 s earlier on a lift while settling, so it pairs `total_s` only
   within sessions on one side of 0a.8 and tabulates it for 0a.6/0a.7

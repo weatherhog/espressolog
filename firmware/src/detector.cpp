@@ -201,15 +201,23 @@ void ShotDetector::enterSettling(uint32_t t, int32_t w_at_stop, uint32_t stop_t,
 //  - SETTLING past the settle window: finish on the last weight.
 //  - POURING, once MAX_SHOT_MS + SETTLE_MS has passed since t0 -- when the
 //    detector would have force-stopped and settled by now, so a reconnect
-//    mid-pour cannot split one shot in two: finish at the peak, stop_ms =
-//    the last kept sample, as a lift during the pour does, and mark it a
-//    FAULT, not a shot. The scale was lost mid-pour, so the yield is only
-//    what it saw before the gap -- a valid record would carry a short yield
-//    and a wrong mean flow into every analysis (review 2026-11-23). It is
-//    still spooled (invariant 6) and the server excludes it at ingest.
-//    fault was otherwise unused from 0a.4, when a lift stopped faulting.
-//    main calls tick() only while the brew guard says the pump is idle
-//    (invariant 2): a lever-B draw can outrun 65 s.
+//    mid-pour cannot split one shot in two. What the scale saw last decides
+//    (reviews 2026-11-23):
+//      a drop pending -> the cup was lifted and the scale went with it: a
+//        pour lift (finalizeLifted(), the dip trimmed), valid as any;
+//      under 5 g -> a reject, as any sub-5 g record;
+//      flat (within STOP_DELTA_MG) over the last QUIET_FLAT_MS -> the pour
+//        had ended and the 2 s stop never got to confirm: a flat stop
+//        backdated QUIET_FLAT_MS (1 s, not 2), finished on the last weight;
+//      otherwise -> the scale was lost while the weight was still rising:
+//        a FAULT, not a shot. Its yield is only what the scale saw before
+//        the gap, and a valid record would carry that short yield and a
+//        wrong mean flow into every analysis. Still spooled (invariant 6);
+//        the server excludes it, but it keeps its dose -- the coffee was
+//        used. fault was otherwise unused from 0a.4.
+// tick() is never gated: it decides at once, and main defers only the
+// spool write while the pump runs (invariant 2). Gating tick() kept the
+// shot open, so a flush or the next shot fed into it (review of c85dcf8).
 // Each of these ends the curve before a settle window could close, so
 // v_shot_end reads the shot as cut short ("ended_by_lift" means exactly
 // that) -- which it was, by the scale rather than a hand.
@@ -218,7 +226,19 @@ bool ShotDetector::tick(uint32_t now) {
   if ((int32_t)(now - last_t) < (int32_t)SCALE_QUIET_MS) return false;
   if (st == ShotState::POURING) {
     if ((int32_t)(now - t0) < (int32_t)(MAX_SHOT_MS + SETTLE_MS)) return false;
-    if (lift_since != 0) buf_count = lift_buf;   // trim a pending dip
+    if (lift_since != 0) {                         // lifted, then lost
+      buf_count = lift_buf;
+      return finalizeLifted();
+    }
+    if (running_max < REJECT_MIN_MG) return finalizeLifted();   // a reject
+    uint32_t t_then; int32_t w_then;
+    if (ringAt(last_t - QUIET_FLAT_MS, t_then, w_then) && last_t - t_then >= QUIET_FLAT_MS) {
+      int32_t delta = last_w - w_then;
+      if (delta < STOP_DELTA_MG && delta > -STOP_DELTA_MG) {
+        enterSettling(last_t, w_then - baseline, t_then, false);
+        return finishShot();                       // the pour had ended
+      }
+    }
     finalizeLifted();
     res.fault = true;    // yield scale lost mid-pour: kept, never a shot
     res.valid = false;

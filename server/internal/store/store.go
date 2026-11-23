@@ -144,8 +144,11 @@ func (s *Store) Ingest(deviceID string, r *record.Record, raw []byte, receivedAt
 		// too: almost every one is a knock or a drip, not a shot that choked
 		// (a second review, the same day, reversed a draft that let them keep
 		// it). The late-weighing path skips the same records by their stored
-		// ingest reason (attributeWeighingToLaterShot).
-		if err == nil && !excluded {
+		// ingest reason (attributeWeighingToLaterShot). EXCEPT a pour whose
+		// yield scale was lost (detector 0a.8): excluded because its yield is
+		// short, but a real shot that used the coffee, like a shot the user
+		// excluded -- so it takes its dose (review 2026-11-23).
+		if err == nil && (!excluded || r.Header.ScaleLost()) {
 			err = attributeDoseToShot(tx, res.ShotID, startedAt)
 		}
 	case record.TypeWeighing:
@@ -700,7 +703,7 @@ const (
 	reasonFault = "fault: cup removed mid-pour"
 	// Detector 0a.8: the yield scale went quiet mid-pour and the shot was
 	// spooled 65 s on at the peak it saw -- the yield and mean flow are only
-	// what came before the gap.
+	// what came before the gap. Excluded, but it keeps its dose (Ingest).
 	reasonScaleLost = "fault: yield scale lost mid-pour"
 	reasonReject    = "reject: under 5 g"
 	reasonPlacement = "cup placement: the detector judged it a cup set down, not a pour"
@@ -750,10 +753,10 @@ func attributeWeighingToLaterShot(tx *sql.Tx, weighingID int64, grams float64, o
 	err := tx.QueryRow(`
 		SELECT id FROM shot
 		WHERE dose_ground_g IS NULL
-		  AND NOT (excluded = 1 AND COALESCE(exclude_reason, '') IN (?, ?, ?, ?))
+		  AND NOT (excluded = 1 AND COALESCE(exclude_reason, '') IN (?, ?, ?))
 		  AND started_at >= ? AND started_at < ?
 		ORDER BY started_at ASC LIMIT 1`,
-		reasonFault, reasonReject, reasonPlacement, reasonScaleLost, observed, horizon).Scan(&shotID)
+		reasonFault, reasonReject, reasonPlacement, observed, horizon).Scan(&shotID)
 	if err == sql.ErrNoRows {
 		return nil
 	}

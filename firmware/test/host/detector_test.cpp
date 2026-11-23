@@ -1055,6 +1055,48 @@ int main() {
     assert(rr.samples[rr.sample_count - 1].t_ms == rr.stop_ms);   // tail 0: cut short
     printf("a scale lost mid-pour cannot hold the shot open OK\n");
   }
+  {
+    // Review of c85dcf8: what the scale saw last decides a quiet pour.
+    // kind 0: lifted (a drop pending), then lost -> a valid pour lift
+    // kind 1: flat 1.5 s, stop not yet confirmed, then lost -> a valid flat stop
+    // kind 2: under 5 g, then lost -> a reject, not a fault
+    struct Q { const char* name; int kind; };
+    for (const Q& q : {Q{"lifted then lost", 0}, Q{"flat 1.5 s then lost", 1}, Q{"under 5 g then lost", 2}}) {
+      ShotDetector d;
+      uint32_t tt = 16000000;
+      for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+      int n = q.kind == 2 ? 200 : 195;
+      for (int i = 0; i < n; i++, tt += 100) {
+        double s = i / 10.0, w;
+        if (q.kind == 0) w = s < 18.0 ? 2.0 * s : -180.0;         // lifted at 18 s, lost at 19.5 s
+        else if (q.kind == 1) w = s < 18.0 ? 2.0 * s : 36.0;      // flat from 18 s, lost at 19.5 s
+        else w = s < 1.5 ? 0.5 * s : 0.75 + 0.15 * (s - 1.5);   // a slow 0.15 g/s creep under 5 g
+        d.feed(tt, (int32_t)llround(w * 1000.0));
+      }
+      assert(d.state() == ShotState::POURING);
+      uint32_t t0 = d.result().started_at_ms;
+      uint32_t now = tt;
+      bool done = false;
+      for (int k = 0; k < 1000 && !done; k++, now += 100) done = d.tick(now);
+      assert(done && (int32_t)(now - t0) >= (int32_t)(ShotDetector::MAX_SHOT_MS + ShotDetector::SETTLE_MS));
+      const ShotResult& rr = d.result();
+      uint32_t last = rr.samples[rr.sample_count - 1].t_ms;
+      printf("quiet pour, %s: valid=%d fault=%d stop_ms=%u final=%d last=%u\n",
+             q.name, rr.valid, rr.fault, rr.stop_ms, rr.yield_final_mg, last);
+      assert(!rr.fault);
+      if (q.kind == 0) {
+        assert(rr.valid && rr.yield_final_mg > 35000 && last == rr.stop_ms);
+        assert(rr.samples[rr.sample_count - 1].weight_mg > 30000);   // the dip trimmed
+      } else if (q.kind == 1) {
+        assert(rr.valid && rr.yield_final_mg == 36000);
+        assert(last - rr.stop_ms >= ShotDetector::QUIET_FLAT_MS && last - rr.stop_ms < 1200);
+        assert(rr.settle_offset_mg == rr.yield_final_mg - rr.yield_at_stop_mg);
+      } else {
+        assert(!rr.valid);
+      }
+    }
+    printf("a quiet pour is a lift, a stop or a reject when the scale says so OK\n");
+  }
 
   printf("all scenarios passed\n");
   return 0;

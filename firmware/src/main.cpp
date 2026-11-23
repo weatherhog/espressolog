@@ -824,30 +824,84 @@ static void printShotSummary(const ShotResult& r) {
                 r.sample_count);
 }
 
+// A FINISHED SHOT IS HELD, NOT WRITTEN, UNTIL THE MACHINE IS QUIET (0a.8,
+// review 2026-11-23). Every completion -- the end of settling, a lift, the
+// forced stop at 60 s, a quiet scale -- used to write LittleFS at once, and
+// a flush started inside the 5 s settle window, or a lever-B draw running
+// past a forced stop, then got a flash write with the pump on (invariant 2).
+// The detector moves on at once (a held shot never blocks the next one); the
+// record is copied out -- samples into PSRAM, since the detector's buffer is
+// the next shot's -- with the machine context and tap state as they stood
+// at completion, and written once `quiet` holds, or after HOLD_MAX_MS
+// whatever the guard says, so a guard stuck busy can never hold it for ever
+// (invariant 6 outranks invariant 2). A second completion while one is held
+// writes the held one first. Lost if the board loses power while holding
+// -- the same exposure the shot had while it was still open.
+static constexpr uint32_t HOLD_MAX_MS = 5UL * 60 * 1000;
+static sample_t*  held_samples = nullptr;   // MAX_SAMPLES, PSRAM (setup())
+static bool       held = false;
+static uint32_t   held_at = 0;
+static ShotResult held_r;
+static MachineContext held_mc;
+static bool       held_flow_tap = false;
+static String     held_mac;
+
+static void writeShotRecord(const ShotResult& r, const MachineContext& mc,
+                            bool flow_tap, const String& mac) {
+  if (!spool_ok) {
+    Serial.println("# spool unavailable — record NOT persisted");
+    return;
+  }
+  String path = spool.writeShot(r, mac, mc, flow_tap);
+  if (path.length()) Serial.printf("# spooled %s%s\n", path.c_str(), r.valid ? "" : " (reject)");
+}
+
+static void writeHeldShot(const char* why) {
+  if (!held) return;
+  Serial.printf("# writing the held shot (%s, held %lu ms)\n", why,
+                (unsigned long)(millis() - held_at));
+  writeShotRecord(held_r, held_mc, held_flow_tap, held_mac);
+  held = false;
+}
+
 static void handleShotComplete(const ShotResult& r) {
   printShotSummary(r);
   // Everything the detector finishes is spooled — including rejects (<5 g),
   // flagged so the server excludes them. A missed second shot on 2026-09-04
   // was undiagnosable because a possible reject left no trace; a few bytes
   // of flash per false trigger buys that visibility.
-  if (!spool_ok) {
-    Serial.println("# spool unavailable — record NOT persisted");
+  //
+  // Pour start already picked the press; this only fills it in if the
+  // press was confirmed after the POURING transition. Done now, not at the
+  // write: the next pour resets the context.
+  machine_ctx.resolvePumpIfUnknown(r.started_at_ms);
+  if (flow_tap_shot && !machine_ctx.prePulsesCaptured())
+    machine_ctx.capturePrePulses(pulse_log, r.started_at_ms);
+  if (machine_ctx.context().setpoint_dc != INT16_MIN)
+    Serial.printf("# setpoint %d C (last dialled on the display)\n",
+                  machine_ctx.context().setpoint_dc / 10);
+  else if (machine_ctx.context().setpoint_pending)
+    Serial.println("# setpoint edit not confirmed before this pour — recorded as unknown; no brew temperature carried onto or across this shot");
+  else
+    Serial.println("# setpoint not known (no confirmed edit seen, or the display was not decoding) — the server may carry an earlier one");
+
+  if (held) writeHeldShot("a second shot completed");
+  if (!held_samples) {
+    // No PSRAM buffer: nowhere to keep the samples, so write now as before.
+    writeShotRecord(r, machine_ctx.context(), flow_tap_shot, scales.slotMac(ScaleRole::YIELD));
   } else {
-    // Pour start already picked the press; this only fills it in if the
-    // press was confirmed after the POURING transition.
-    machine_ctx.resolvePumpIfUnknown(r.started_at_ms);
-    if (flow_tap_shot && !machine_ctx.prePulsesCaptured())
-      machine_ctx.capturePrePulses(pulse_log, r.started_at_ms);
-    String path = spool.writeShot(r, scales.slotMac(ScaleRole::YIELD),
-                                  machine_ctx.context(), flow_tap_shot);
-    if (path.length()) Serial.printf("# spooled %s%s\n", path.c_str(), r.valid ? "" : " (reject)");
-    if (machine_ctx.context().setpoint_dc != INT16_MIN)
-      Serial.printf("# setpoint %d C (last dialled on the display)\n",
-                    machine_ctx.context().setpoint_dc / 10);
-    else if (machine_ctx.context().setpoint_pending)
-      Serial.println("# setpoint edit not confirmed before this pour — recorded as unknown; no brew temperature carried onto or across this shot");
-    else
-      Serial.println("# setpoint not known (no confirmed edit seen, or the display was not decoding) — the server may carry an earlier one");
+    uint16_t n = r.sample_count <= ShotDetector::MAX_SAMPLES ? r.sample_count
+                                                            : (uint16_t)ShotDetector::MAX_SAMPLES;
+    memcpy(held_samples, r.samples, (size_t)n * sizeof(sample_t));
+    held_r = r;
+    held_r.samples = held_samples;
+    held_r.sample_count = n;
+    held_mc = machine_ctx.context();
+    held_flow_tap = flow_tap_shot;
+    held_mac = scales.slotMac(ScaleRole::YIELD);
+    held_at = millis();
+    held = true;
+    Serial.println("# shot held until the machine is quiet");
   }
   Serial.println("# ---- end shot ----");
 }
@@ -1394,6 +1448,7 @@ static void handleCommand(String line, Stream& out) {
       out.printf("# %s saved to NVS — 'reboot' to apply\n", nvs_key);
     }
   } else if (cmd == "reboot") {
+    writeHeldShot("reboot");
     out.println("# rebooting");
     out.flush();
     ESP.restart();
@@ -1446,6 +1501,12 @@ void setup() {
   // it and the frames from +4.1 s would be dropped until loop() starts.
   for (uint32_t t0 = millis(); millis() - t0 < 2000; delay(5)) pollDisplay();
   Serial.printf("# espressolog %s (detector %s)\n", FIRMWARE_VERSION, DETECTOR_VERSION);
+
+  // The held-shot buffer (handleShotComplete()). PSRAM, which this workload
+  // otherwise leaves unused; without it a finished shot is written at once.
+  held_samples = (sample_t*)ps_malloc(ShotDetector::MAX_SAMPLES * sizeof(sample_t));
+  if (!held_samples)
+    Serial.println("# no PSRAM for the held-shot buffer -- shots are written as they finish, pump or not");
 
   // 4th arg: our partition is labeled "littlefs", not the wrapper's default "spiffs"
   //
@@ -1627,19 +1688,16 @@ void loop() {
   liveDisplay(millis());
 
   // Detector 0a.8: a shot ends on time when the yield scale goes quiet for
-  // SCALE_QUIET_MS (3 s) -- settling, or a pour 65 s on, which is spooled
-  // as a fault (detector.cpp, tick()). Without this a scale switched off
-  // with the cup, or one whose battery died mid-pour, left the shot open
-  // and every spool write blocked. ONLY WHILE THE PUMP IS IDLE (invariant
-  // 2): completion writes flash at once, and a lever-B draw latches for
-  // minutes; tick() changes nothing until it completes, so not calling it
-  // just defers the finish. Below the machine polls so machineBusy() is
-  // fresh, and after the drain, so nothing queued before the drain is
-  // missed; a sample stamped after it is fed next pass, and 3 s of silence
-  // cannot hinge on it. (The forced stop at 60 s finishes inside feed()
-  // and is NOT deferred -- an older gap, open.)
-  if (detector.state() != ShotState::IDLE && detector.state() != ShotState::ARMED
-      && !machineBusy() && detector.tick(millis())) {
+  // SCALE_QUIET_MS (3 s) -- settling, or a pour 65 s on (detector.cpp,
+  // tick()). Without this a scale switched off with the cup, or one whose
+  // battery died mid-pour, left the shot open and every spool write
+  // blocked. NOT gated on the machine: the shot closes at once, so a flush
+  // or the next shot cannot feed into it, and the spool write is what
+  // waits (handleShotComplete(), invariant 2) -- gating tick() itself was
+  // tried and kept the shot open (review of c85dcf8). After the drain, so
+  // nothing queued before it is missed; a sample stamped after it is fed
+  // next pass, and 3 s of silence cannot hinge on it.
+  if (detector.tick(millis())) {
     Serial.printf("# shot finished on time: the yield scale went quiet%s\n",
                   detector.result().fault ? " mid-pour -- spooled as a fault" : "");
     shotCompleted();
@@ -1693,6 +1751,11 @@ void loop() {
   // hidden: with no machine signal there is nothing to distinguish them with.
   // It does mean the invariant-2 fix is conditional on a tap being live.
   bool quiet = (st == ShotState::IDLE || st == ShotState::ARMED) && !machineBusy();
+
+  // A held shot goes to flash first, once quiet -- or after HOLD_MAX_MS
+  // regardless (see handleShotComplete()).
+  if (held && (quiet || millis() - held_at >= HOLD_MAX_MS))
+    writeHeldShot(quiet ? "machine quiet" : "held too long, writing regardless");
 
   if (quiet && spool_ok) {
     while (pending_w_n > 0) {

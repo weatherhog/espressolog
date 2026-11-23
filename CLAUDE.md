@@ -714,8 +714,11 @@ three.
   silently (RTC_SW_SYS_RST before any output) on arduino-espressif32 2.0.17.
   Bisected empirically 2026-08-27; only the first 8 MB is usable by firmware.
 
-PSRAM is unused by this workload. It's present because that's the cheap
-commodity module, not because we need it.
+PSRAM is used for one thing: the 20 KB held-shot buffer (from 0.16.0,
+`handleShotComplete()`), so a finished shot can wait for a quiet machine
+while the detector's own buffer takes the next one. Without PSRAM a shot is
+written as it finishes. It's present because that's the cheap commodity
+module, not because we need it.
 
 ---
 
@@ -1534,17 +1537,27 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   routine BLE gap never counts): a pending lift past its hold, a settle
   past its window, or a pour 65 s on — when the shot would have
   force-stopped and settled by now, so a reconnect mid-pour cannot split
-  it — finished at the peak and **spooled as a FAULT**, which the server
-  excludes as `'fault: yield scale lost mid-pour'`: its yield is only what
-  the scale saw before the gap. Without it a scale switched
+  it. A quiet pour is decided by what the scale saw last: a drop pending
+  is a pour lift, under 5 g a reject, flat over the last
+  `QUIET_FLAT_MS` (1 s) a flat stop **backdated 1 s, not 2** (the 2 s
+  stop never got to confirm), and only a weight still rising is **spooled
+  as a FAULT**, which the server excludes as `'fault: yield scale lost
+  mid-pour'` — its yield is only what the scale saw before the gap — but
+  which keeps its dose. Without it a scale switched
   off with the cup, or one whose battery died mid-pour, held the shot open
-  and blocked every spool write (invariant 6). **`loop()` calls it only
-  while `machineBusy()` says the pump is idle** (invariant 2: a lever-B
-  draw outruns 65 s); the forced stop at 60 s finishes inside `feed()` and
-  is not deferred — an older gap, still open. `replay` ticks too and skips
+  and blocked every spool write (invariant 6). `tick()` is never gated.
+  **What waits is the spool write: every finished shot — any path, the
+  forced stop included — is HELD** (samples copied to PSRAM, the machine
+  context as it stood) and written once the machine is quiet, i.e. the
+  same `IDLE`/`ARMED` + `!machineBusy()` test that gates weighings, or
+  after 5 min regardless, so a stuck guard cannot keep it for ever
+  (`handleShotComplete()`, invariant 2). Until 0.16.0 a flush started in
+  the 5 s settle window got a flash write mid-pump. A held shot is lost if
+  the board loses power before it is written; `reboot` writes it first.
+  `replay` ticks too and skips
   the dose scale's lines, so it reproduces the quiet-scale endings a
-  capture shows — not one the board made on its own clock (a deferred
-  tick, a stalled `loop()`). The forced stop at
+  capture shows — not one the board made on its own clock (a stalled
+  `loop()` overflowing the sample queue). The forced stop at
   60 s waits while a drop is pending, so a lift across it is an ordinary
   pour lift rather than a stop taken mid-dip. Found on shot 212: stored 30.5 s
   for a stop at ~25.3 s (replayed through 0a.8: 25.0 s).
@@ -1726,8 +1739,10 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   step guard into POURING.
 - **fault** — up to 0a.3, weight drops > 5 g mid-pour (cup removed); from
   0a.4 a lift ends the shot instead and nothing set it. **From 0a.8 it
-  means the yield scale went quiet mid-pour** (`tick()`, 65 s on): spooled
-  at the peak, excluded at ingest as `'fault: yield scale lost mid-pour'`
+  means the yield scale went quiet mid-pour while the weight was still
+  rising** (`tick()`, 65 s on): spooled at the peak, excluded at ingest as
+  `'fault: yield scale lost mid-pour'`, and — unlike every other ingest
+  exclusion — it keeps its dose: the coffee was used
 - **disturbed** (detector **0a.7**, firmware 0.14.0) — something set on
   the scale once the shot has 5 g. **What it does depends on when:**
   - **while settling after a confirmed stop** (2 s flat, so the true weight

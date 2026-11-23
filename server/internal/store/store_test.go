@@ -1723,3 +1723,44 @@ func TestIngestScaleLost(t *testing.T) {
 		}
 	}
 }
+
+// A pour whose yield scale was lost (detector 0a.8 FAULT) is excluded, but
+// it used the coffee: it takes its dose, whichever arrives first -- unlike a
+// legacy fault, a reject or a placement (TestExcludedRecordsTakeNoDose).
+func TestScaleLostShotKeepsDose(t *testing.T) {
+	dev := "aa:bb:cc:dd:ee:05"
+	base := time.Now().Add(-time.Hour).Truncate(time.Second)
+	for _, order := range []string{"weighing first", "weighing last"} {
+		st := openTestStore(t)
+		w := weighingRecord(1, 18000, base.Add(-time.Minute))
+		raw, rec := pumpRecordWith(t, 300, record.Pump2Cup, 8200, func(h *record.Header) {
+			h.StartedAtUnixMs = uint64(base.UnixMilli())
+			h.DetectorVersion = [8]byte{}
+			copy(h.DetectorVersion[:], "0a.8")
+			h.Flags |= record.FlagFault
+		}, nil)
+		if order == "weighing first" {
+			if _, err := st.Ingest(dev, w, []byte{2}, base); err != nil {
+				t.Fatal(err)
+			}
+		}
+		res, err := st.Ingest(dev, rec, raw, base)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if order == "weighing last" {
+			if _, err := st.Ingest(dev, w, []byte{2}, base); err != nil {
+				t.Fatal(err)
+			}
+		}
+		var g sql.NullFloat64
+		var excl int
+		if err := st.db.QueryRow(`SELECT dose_ground_g, excluded FROM shot WHERE id = ?`, res.ShotID).
+			Scan(&g, &excl); err != nil {
+			t.Fatal(err)
+		}
+		if excl != 1 || !g.Valid || g.Float64 != 18.0 {
+			t.Errorf("%s: excluded=%d dose=%v, want excluded with dose 18", order, excl, g)
+		}
+	}
+}

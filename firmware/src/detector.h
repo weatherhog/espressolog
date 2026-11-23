@@ -65,8 +65,9 @@ struct ShotResult {
   // creeps on slower than a pour, or in steps of 5 g or less, is not seen,
   // and one landing more than 20 g above its earlier peak within 1 s is
   // still a placement and excluded as one -- as it is after a forced stop,
-  // where the placement scan is not cut. The lift paths are unchanged --
-  // a lift during SETTLING still overwrites stop_ms as described below.
+  // where the placement scan is not cut. The lift paths were unchanged in
+  // 0a.7 -- a lift during SETTLING still overwrote stop_ms; 0a.8 fixed that
+  // (stop_ms, below).
   bool     disturbed;
   uint32_t started_at_ms;  // millis() of t=0 (backdated to the flow crossing)
   // Where the detector judged the pour to have ended. HOW that is derived
@@ -77,10 +78,15 @@ struct ShotResult {
   //     t − STOP_WINDOW_MS into enterSettling(), "the plateau began at
   //     t_then; that's the stop".
   //   truncated (MAX_SHOT_MS) — the confirming sample itself, NOT backdated.
-  //   finalizeLifted() — the last retained sample. Not backdated.
+  //   finalizeLifted() (a lift DURING THE POUR) — the last retained sample.
+  //     Not backdated.
+  //   finishLiftedSettling() (a lift WHILE SETTLING, from 0a.8) — whatever
+  //     enterSettling() stored, from the flat or the truncated path, KEPT;
+  //     yield_at_stop_mg too. The lift only ends settling early.
   // fact:stop-ms-backdating backdated STOP_WINDOW_MS
   //
-  // finalizeLifted() HAS TWO CALL SITES AND THEY ARE NOT ALIKE. From POURING
+  // UP TO 0a.7 -- the rest of this comment, which still describes every
+  // stored record from those versions: finalizeLifted() HAD TWO CALL SITES AND THEY ARE NOT ALIKE. From POURING
   // (feed()'s POURING case) the drop must persist LIFT_HOLD_MS and the
   // descending transition is trimmed off buf first. From SETTLING it
   // fires on the FIRST sample below running_max − LIFT_DROP_MG, with no hold
@@ -341,7 +347,8 @@ private:
   void beginPour(uint32_t crossing_t);
   void enterSettling(uint32_t t, int32_t w_at_stop, uint32_t stop_t, bool truncated);
   bool finishShot();
-  bool finalizeLifted();   // cup removed → finalize at the peak weight
+  bool finalizeLifted();
+  bool finishLiftedSettling();   // 0a.8: a lift while settling keeps the stop   // cup removed → finalize at the peak weight
   // 0a.7: did this sample jump onto the scale (ShotResult::disturbed)?
   bool jumpsOntoScale(uint32_t t, int32_t w, int32_t prev_w, int32_t rel) const;
   bool risesLikeAPlacement() const;

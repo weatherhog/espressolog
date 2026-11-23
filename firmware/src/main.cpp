@@ -19,8 +19,8 @@
 #include <esp_timer.h>
 #include <driver/gpio.h>
 
-const char* FIRMWARE_VERSION = "0.15.1";
-const char* DETECTOR_VERSION = "0a.7";
+const char* FIRMWARE_VERSION = "0.16.0";
+const char* DETECTOR_VERSION = "0a.8";
 
 static ScaleManager scales;
 static ShotDetector detector;

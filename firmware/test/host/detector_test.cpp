@@ -501,8 +501,8 @@ int main() {
   {
     // Shot 205 (2026-11-21): stopped at ~28.5 s on ~37.4 g, then +7.8 g and
     // +3.2 g at 33.9 s while settling, then lifted. 0a.6 recorded 49.41 g.
-    // The lift during settling still overwrites stop_ms (a lift path,
-    // unchanged in 0a.7); only the yield is protected.
+    // 0a.8: the lift during settling keeps the recognised stop (~28.5 s);
+    // up to 0a.7 it overwrote stop_ms with the last sample before the lift.
     ShotResult rr = replayThenLift(SHOT_205, sizeof SHOT_205 / sizeof SHOT_205[0]);
     printf("shot 205 replay: valid=%d disturbed=%d stop_ms=%u at_stop=%d final=%d settle=%d\n",
            rr.valid, rr.disturbed, rr.stop_ms, rr.yield_at_stop_mg, rr.yield_final_mg,
@@ -510,7 +510,9 @@ int main() {
     assert(rr.valid && rr.disturbed && !rr.placement);
     // The flat weight before the grip was 37.81 g.
     assert(rr.yield_final_mg >= 37700 && rr.yield_final_mg <= 37950);
-    assert(rr.yield_at_stop_mg == rr.yield_final_mg && rr.settle_offset_mg == 0);
+    assert(rr.stop_ms > 26000 && rr.stop_ms < 30000);
+    assert(rr.settle_offset_mg == rr.yield_final_mg - rr.yield_at_stop_mg);
+    assert(rr.settle_offset_mg >= 0 && rr.settle_offset_mg <= 600);
     printf("a jump during settling is not the yield OK\n");
   }
   {
@@ -561,6 +563,8 @@ int main() {
            rr.disturbed, rr.stop_ms, rr.yield_final_mg, rr.settle_offset_mg);
     assert(rr.valid && !rr.disturbed);
     assert(rr.yield_final_mg > 35500 && rr.yield_final_mg < 36500);
+    // 0a.8: the plateau began at 18 s; the lift at 23 s does not move it.
+    assert(rr.stop_ms >= 17500 && rr.stop_ms <= 18300);
     (void)start;
     printf("a clean lift after the stop is not disturbed OK\n");
   }

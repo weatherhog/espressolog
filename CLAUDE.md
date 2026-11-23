@@ -1513,17 +1513,27 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   |---|---|---|
   | flat stop — the normal one | backdated `STOP_WINDOW_MS` | the weight at that instant |
   | `truncated = 1` (`MAX_SHOT_MS`, 60 s) | the confirming sample, **not** backdated | that same instant |
-  | **cup lifted** (`finalizeLifted`) | the last retained sample | `running_max`, which may be earlier |
+  | **cup lifted during the pour** (`finalizeLifted`) | the last retained sample | `running_max`, which may be earlier |
+  | **cup lifted while settling**, from 0a.8 (`finishLiftedSettling`) | row 1's or row 2's, kept | row 1's or row 2's, kept |
 
   <!-- fact:stop-ms-backdating backdated STOP_WINDOW_MS -->
-  <!-- fact:stop-ms-row-mapping | flat stop — the normal one | backdated `STOP_WINDOW_MS` | the weight at that instant |;;| `truncated = 1` (`MAX_SHOT_MS`, 60 s) | the confirming sample, **not** backdated | that same instant |;;| **cup lifted** (`finalizeLifted`) | the last retained sample | `running_max`, which may be earlier | -->
+  <!-- fact:stop-ms-row-mapping | flat stop — the normal one | backdated `STOP_WINDOW_MS` | the weight at that instant |;;| `truncated = 1` (`MAX_SHOT_MS`, 60 s) | the confirming sample, **not** backdated | that same instant |;;| **cup lifted during the pour** (`finalizeLifted`) | the last retained sample | `running_max`, which may be earlier |;;| **cup lifted while settling**, from 0a.8 (`finishLiftedSettling`) | row 1's or row 2's, kept | row 1's or row 2's, kept | -->
 
-  **THE ROWS ARE NOT MUTUALLY EXCLUSIVE.** `finalizeLifted()` never clears
+  **FROM DETECTOR 0a.8 (firmware 0.16.0, 2026-11-23) A LIFT WHILE SETTLING
+  KEEPS THE STOP** (row 4): it only ends settling early, `yield_final_g` is
+  the peak and `settle_offset_g` the drips seen before the lift — a lower
+  bound on the full settle, no longer 0. Found on shot 212: stored 30.5 s
+  for a stop at ~25.3 s (replayed through 0a.8: 25.0 s). **Everything below
+  in this entry is about records from 0a.7 and earlier**, which are stored
+  as they were — and that is most of the archive.
+
+  **UP TO 0a.7 THE ROWS ARE NOT MUTUALLY EXCLUSIVE.** `finalizeLifted()` never clears
   `res.truncated`, so a shot force-stopped at 60 s and *then* lifted during
   settling reads `truncated = 1` with lift-derived values. **A query that
-  branches on `truncated` alone picks row 2 and gets row 3.**
+  branches on `truncated` alone picks row 2 and gets row 3.** (From 0a.8
+  that shot takes row 4 and keeps row 2's values.)
 
-  **THE LIFT PATH IS NOT AN EDGE CASE AND NOTHING FLAGS IT.** A lift during
+  **UP TO 0a.7 THE LIFT PATH IS NOT AN EDGE CASE AND NOTHING FLAGS IT.** A lift during
   SETTLING — stop the shot, pick the cup up — *overwrites* the backdated
   `stop_ms` that `enterSettling()` had already stored correctly. That check
   runs before the settle window expires, so the lift lands as late as the
@@ -1732,12 +1742,13 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   (flow × sample interval: one 240 ms BLE gap at 2.5 g/s is enough, and
   the SHOT_205 curve has gaps like that every second or two) and freezes
   it low, flagged — main took the last weight. **During the pour,** an object that creeps on or lands in steps of
-  5 g or less is not seen; and **the lift paths are unchanged** —
-  a lift during settling still overwrites `stop_ms` as the table above
-  says. **0a.7 is its own stratum unless a script says otherwise**:
+  5 g or less is not seen; and in 0a.7 **the lift paths are unchanged** —
+  a lift during settling still overwrites `stop_ms`, which 0a.8 fixed (the
+  table above, row 4). **0a.7 is its own stratum unless a script says otherwise**:
   `analysis/overshoot.py` and the 0f notebook filter on
   `detector_version = '0a.6'`; `analysis/session_warmup.py` pools 0a.6 and
-  0a.7 from 2026-11-22 and leaves disturbed shots out — not because the
+  0a.7 from 2026-11-22, and 0a.8 from 2026-11-23 (only `stop_ms` and
+  `settle_offset_g` of lifted shots differ, neither of which it reads), and leaves disturbed shots out — not because the
   two compute mean flow identically (a grip kept out of an unflagged
   lift-terminated yield moves it), but because the result does not move
   either way; its docstring has the check. **Deploy the server before flashing 0.14.0**: the format

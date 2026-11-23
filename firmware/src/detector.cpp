@@ -269,16 +269,39 @@ bool ShotDetector::risesLikeAPlacement() const {
   return false;
 }
 
-// The cup was lifted (sustained drop below the peak). Lifting after a pour
-// is normal — not a fault — so this finalizes a real shot at the peak
-// weight. Only a lift with almost nothing in the cup (an aborted/channelled
-// pour) is a reject. buf_count is expected to be trimmed to the pre-lift
+// The cup was lifted DURING THE POUR (sustained drop below the peak).
+// Lifting after a pour is normal — not a fault — so this finalizes a real
+// shot at the peak weight. Only a lift with almost nothing in the cup (an
+// aborted/channelled pour) is a reject. A lift WHILE SETTLING is
+// finishLiftedSettling() (0a.8). buf_count is expected to be trimmed to the pre-lift
 // samples by the caller.
 bool ShotDetector::finalizeLifted() {
   res.yield_final_mg = running_max;
   res.yield_at_stop_mg = running_max;
   res.settle_offset_mg = 0;   // no settle measured — cup left early
   res.stop_ms = buf_count > 0 ? buf[buf_count - 1].t_ms : 0;
+  res.fault = false;
+  res.valid = running_max >= REJECT_MIN_MG;
+  res.sample_count = buf_count;
+  res.samples = buf;
+  res.placement = risesLikeAPlacement();
+  computeFlowWindow();
+  resetToIdle();
+  return true;
+}
+
+// The cup was lifted WHILE SETTLING (0a.8): the stop was already recognised
+// by enterSettling() -- backdated on the flat path, the forced stop at 60 s
+// on the truncated one -- so keep it, and its yield_at_stop. The lift only
+// ends settling early: the yield is the peak (frozen if something landed,
+// 0a.7), and settle_offset is the drips seen before the lift, a lower bound
+// on the full settle. Up to 0a.7 this went through finalizeLifted(), which
+// overwrote stop_ms with the last sample before the lift -- up to
+// STOP_WINDOW_MS + SETTLE_MS late (shot 212, 2026-11-23: 30.5 s stored for a
+// stop at ~25.3 s) -- and zeroed settle_offset.
+bool ShotDetector::finishLiftedSettling() {
+  res.yield_final_mg = running_max;
+  res.settle_offset_mg = res.yield_final_mg - res.yield_at_stop_mg;
   res.fault = false;
   res.valid = running_max >= REJECT_MIN_MG;
   res.sample_count = buf_count;
@@ -491,8 +514,8 @@ bool ShotDetector::feed(uint32_t t, int32_t w, uint32_t inlet_pulses_total) {
           running_max = rel;
       }
       // The pour already ended (stop confirmed). If the cup is lifted during
-      // settling, just finalize now at the peak — no need to wait it out.
-      if (running_max - rel > LIFT_DROP_MG) return finalizeLifted();
+      // settling, finish now at the peak, keeping the stop (0a.8).
+      if (running_max - rel > LIFT_DROP_MG) return finishLiftedSettling();
       appendSample(t, rel);
       if (landed_now) {
         // The placement scan stops before the sample where it landed. Taken

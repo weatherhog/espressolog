@@ -158,8 +158,11 @@ STRATUM = {"bean_name": "Moonwalker", "grind_dial": 7.9, "grind_epoch_id": 1}
 # flag, so it filters nothing on 0a.6 rows), and on an unflagged
 # lift-terminated shot whose grip 0a.7 keeps out of the yield. The docstring's
 # 2026-11-22 update shows the latter does not move the result yet. Anything
-# older than 0a.6 changed the stop rule and stays out.
-DETECTORS = {"0a.6", "0a.7"}
+# older than 0a.6 changed the stop rule and stays out. 0a.8 (2026-11-23) is
+# 0a.7 except that a lift while settling keeps stop_ms and measures
+# settle_offset_g; yield_final_g and mean_flow_gps come out the same, and it
+# sets the disturbed flag exactly as 0a.7 does.
+DETECTORS = {"0a.6", "0a.7", "0a.8"}
 MIN_YIELD_G = 15
 
 FIELDS = ["id", "started_at", "excluded", "bean_name", "grind_dial",

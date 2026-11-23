@@ -29,11 +29,14 @@
 --    a lift in the last (that much) of the settle window passes as a full
 --    settle. Bounded by the gap.
 --  - at the ceiling: a lift in the last second before t_ms = 65535 passes
---    as a full settle.
---  - 0a.8 firmware finishes settling on the clock when the yield scale
---    goes quiet (ShotDetector::tick()); such a curve ends early and reads
---    1 here. That is what the column means -- the settle was cut short --
---    but the cause can be the scale rather than a lift.
+--    as a full settle; and a full settle whose samples stopped short of
+--    the cap -- a sample gap across it (stop_ms 60600, a gap from 64400 to
+--    65900: tail 3800 against a cap of 3935) -- reads as a lift.
+--  - 0a.8 firmware ends a shot on the clock when the yield scale goes
+--    quiet for 3 s (ShotDetector::tick()): while settling, or in a pour
+--    65 s on. Such a curve ends early and reads 1 here. That is what the
+--    column means -- the settle was cut short -- but the cause can be the
+--    scale rather than a lift.
 -- There is no field to do better with.
 --
 --   settle_tail_ms  last stored sample's t_ms - stop_ms

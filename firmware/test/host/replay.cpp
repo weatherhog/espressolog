@@ -5,24 +5,38 @@
 #include <cstdlib>
 #include <cstring>
 
+static void print(const ShotResult& r);
+
+// The board also calls tick() from loop() (0a.8): a shot ends on time when
+// the scale goes quiet. What tick() stores does not depend on WHEN it fires,
+// only on the samples before it, so ticking just before each sample -- and
+// once, far on, after the last -- reproduces every record the board would
+// have written, provided the board stayed up.
 int main() {
   ShotDetector det;
   char line[128];
+  uint32_t last = 0;
+  bool any = false;
   while (fgets(line, sizeof(line), stdin)) {
     unsigned long t;
     long w;
     if (sscanf(line, "%lu,%ld", &t, &w) != 2) continue;
-    if (det.feed((uint32_t)t, (int32_t)w)) {
-      const ShotResult& r = det.result();
-      printf("RECORD valid=%d fault=%d trunc=%d placement=%d disturbed=%d t0=%u stop_ms=%u at_stop=%d final=%d settle=%d peak=%d mean=%d win0=%u win1=%u n=%u\n",
-             r.valid, r.fault, r.truncated, r.placement, r.disturbed, r.started_at_ms, r.stop_ms,
-             r.yield_at_stop_mg, r.yield_final_mg, r.settle_offset_mg,
-             r.peak_flow_mgps, r.mean_flow_mgps,
-             r.flow_win_start_ms, r.flow_win_end_ms, r.sample_count);
-      for (uint16_t i = 0; i < r.sample_count; i++)
-        printf("S %u,%d\n", r.samples[i].t_ms, r.samples[i].weight_mg);
-      printf("END\n");
-    }
+    if (any && det.tick((uint32_t)t - 1)) print(det.result());
+    if (det.feed((uint32_t)t, (int32_t)w)) print(det.result());
+    last = (uint32_t)t;
+    any = true;
   }
+  if (any && det.tick(last + 3600000u)) print(det.result());
   return 0;
+}
+
+static void print(const ShotResult& r) {
+  printf("RECORD valid=%d fault=%d trunc=%d placement=%d disturbed=%d t0=%u stop_ms=%u at_stop=%d final=%d settle=%d peak=%d mean=%d win0=%u win1=%u n=%u\n",
+         r.valid, r.fault, r.truncated, r.placement, r.disturbed, r.started_at_ms, r.stop_ms,
+         r.yield_at_stop_mg, r.yield_final_mg, r.settle_offset_mg,
+         r.peak_flow_mgps, r.mean_flow_mgps,
+         r.flow_win_start_ms, r.flow_win_end_ms, r.sample_count);
+  for (uint16_t i = 0; i < r.sample_count; i++)
+    printf("S %u,%d\n", r.samples[i].t_ms, r.samples[i].weight_mg);
+  printf("END\n");
 }

@@ -1529,10 +1529,15 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   there). Like the pour, settling now takes a lift only after a drop held
   `LIFT_HOLD_MS` (2 s), so one dropped sample — a bump, a reconnect's 0 g —
   no longer ends it; and because a hold needs time, **`loop()` calls
-  `ShotDetector::tick()`**, which finishes settling on the clock when the
-  yield scale goes quiet (a pending lift past its hold, or 1 s of silence
-  past the settle window) — without it a scale switched off with the cup
-  held the shot open and blocked every spool write. The forced stop at
+  `ShotDetector::tick()`**, which ends a shot on the clock once the yield
+  scale has been quiet for 3 s (the scale manager's own `STALE_MS`, so a
+  routine BLE gap never counts): a pending lift past its hold, a settle
+  past its window, or a pour 65 s on — when the shot would have
+  force-stopped and settled by now, so a reconnect mid-pour cannot split
+  it — finished at the peak like a pour lift. Without it a scale switched
+  off with the cup, or one whose battery died mid-pour, held the shot open
+  and blocked every spool write (invariant 6). `replay` ticks too, so it
+  still reproduces what the board stores. The forced stop at
   60 s waits while a drop is pending, so a lift across it is an ordinary
   pour lift rather than a stop taken mid-dip. Found on shot 212: stored 30.5 s
   for a stop at ~25.3 s (replayed through 0a.8: 25.0 s).
@@ -1773,8 +1778,9 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   `analysis/overshoot.py` and the 0f notebook filter on
   `detector_version = '0a.6'`; `analysis/session_warmup.py` pools 0a.6 and
   0a.7 from 2026-11-22, and 0a.8 from 2026-11-23 for mean flow (the same
-  except after a dip that recovered while settling, where 0a.8 reads the
-  last weight and 0a.7 the peak — rare, re-check as 0a.8 shots accumulate) — but
+  except after a dip that recovered while settling, or a scale gone quiet
+  while settling, where 0a.8 reads the last weight and 0a.7 the peak —
+  rare, re-check as 0a.8 shots accumulate) — but
   **not for shot time**: `total_s` is `stop_ms / 1000`, which 0a.8 stores
   up to ~7 s earlier on a lift while settling, so it pairs `total_s` only
   within sessions on one side of 0a.8 and tabulates it for 0a.6/0a.7

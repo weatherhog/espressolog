@@ -983,6 +983,77 @@ int main() {
     }
     printf("a quiet scale cannot hold a shot open OK\n");
   }
+  {
+    // Review of 7d257d0: with a 1 s quiet limit, an ordinary BLE gap across
+    // the end of settling ended a normal shot early. The limit is the scale
+    // manager's 3 s now; a 2.5 s gap is ridden out and the settle completes.
+    ShotDetector d;
+    uint32_t tt = 13000000;
+    for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+    bool fin = false;
+    uint32_t start = tt;
+    while (!fin && tt < start + 40000) {
+      double s = (tt - start) / 1000.0;
+      fin = d.feed(tt, (int32_t)llround((s < 18.0 ? 2.0 * s : 36.0) * 1000.0));
+      if (fin) break;
+      uint32_t next = tt + ((s > 24.4 && s < 24.6) ? 2500 : 100);   // a gap across settle_until
+      for (uint32_t now = tt + 50; now < next; now += 50) assert(!d.tick(now));
+      tt = next;
+    }
+    assert(fin);
+    const ShotResult& rr = d.result();
+    uint32_t tail = rr.samples[rr.sample_count - 1].t_ms - rr.stop_ms;
+    printf("2.5 s BLE gap at the end of settling: tail=%u\n", tail);
+    assert(tail >= needMs(rr.stop_ms));
+    printf("a BLE gap at the end of settling is not a quiet scale OK\n");
+  }
+  {
+    // Review of 7d257d0: a reconnect's injected 0 g, then the real reading
+    // 2.1 s later. The hold has passed by the clock, but the scale was not
+    // quiet for long: tick() waits, and the reading that comes back is a dip.
+    ShotDetector d;
+    uint32_t tt = 14000000;
+    for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+    bool fin = false;
+    for (int i = 0; i < 215; i++, tt += 100)
+      fin = d.feed(tt, (int32_t)llround((i < 180 ? 2.0 * i / 10.0 : 36.0) * 1000.0));
+    assert(!fin && d.state() == ShotState::SETTLING);
+    d.feed(tt, 0);                                    // the injected 0 g
+    for (uint32_t now = tt; now <= tt + 2100; now += 50) assert(!d.tick(now));
+    tt += 2100;
+    fin = d.feed(tt, 36100);                          // back
+    for (int i = 0; i < 100 && !fin; i++) { tt += 100; fin = d.feed(tt, 36100); }
+    assert(fin);
+    const ShotResult& rr = d.result();
+    uint32_t tail = rr.samples[rr.sample_count - 1].t_ms - rr.stop_ms;
+    printf("reconnect 0 g then 2.1 s: final=%d tail=%u\n", rr.yield_final_mg, tail);
+    assert(rr.valid && rr.yield_final_mg == 36100);
+    assert(tail >= needMs(rr.stop_ms));
+    printf("a reconnect is not a lift by the clock OK\n");
+  }
+  {
+    // Review of 7d257d0 (pre-existing): the battery dies mid-pour. tick()
+    // waits until the shot would have force-stopped and settled (65 s), so
+    // a reconnect mid-pour cannot split a shot, then records it cut short.
+    ShotDetector d;
+    uint32_t tt = 15000000;
+    for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+    for (int i = 0; i < 250; i++, tt += 100) d.feed(tt, (int32_t)llround(1.5 * i / 10.0 * 1000.0));
+    assert(d.state() == ShotState::POURING);
+    uint32_t t0 = d.result().started_at_ms;
+    uint32_t now = tt;
+    for (; (int32_t)(now - t0) < (int32_t)(ShotDetector::MAX_SHOT_MS + ShotDetector::SETTLE_MS); now += 100)
+      assert(!d.tick(now));
+    bool done = false;
+    for (int k = 0; k < 10 && !done; k++, now += 100) done = d.tick(now);
+    assert(done && d.state() == ShotState::IDLE);
+    const ShotResult& rr = d.result();
+    printf("scale died mid-pour: valid=%d stop_ms=%u final=%d n=%u\n",
+           rr.valid, rr.stop_ms, rr.yield_final_mg, rr.sample_count);
+    assert(rr.valid && rr.yield_final_mg > 35000);
+    assert(rr.samples[rr.sample_count - 1].t_ms == rr.stop_ms);   // tail 0: cut short
+    printf("a scale lost mid-pour cannot hold the shot open OK\n");
+  }
 
   printf("all scenarios passed\n");
   return 0;

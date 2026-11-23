@@ -97,8 +97,8 @@ struct ShotResult {
   // (v_shot_end) applies that test, capped below the t_ms = 65535 ceiling
   // (later samples are dropped), and lists the cases it misses. A lift
   // during the pour ends the curve at stop_ms (tail 0). From 0a.8 a
-  // settle that tick() ended because the scale went quiet also ends early
-  // and reads as cut short -- which it was.
+  // shot that tick() ended because the scale went quiet (3 s, settling or a
+  // pour 65 s on) also ends early and reads as cut short -- which it was.
   //
   // STILL TRUE ON 0a.8: a lift during the pour goes through finalizeLifted()
   // as before (stop_ms = last kept sample, yield_at_stop = the peak), and
@@ -326,11 +326,15 @@ public:
   // untouched; 0 from a board with no flowmeter tap is indistinguishable
   // from a shot during which nothing flowed, and both are honest.
   bool feed(uint32_t t_ms, int32_t weight_mg, uint32_t inlet_pulses_total = 0);
-  // 0a.8: finish SETTLING on time when the samples stop (detector.cpp).
-  // Call with millis() after draining the sample queue; true = a completed
-  // ShotResult, exactly as from feed().
+  // 0a.8: finish a shot on time when the yield scale goes quiet
+  // (detector.cpp). Call with millis() after draining the sample queue;
+  // true = a completed ShotResult, exactly as from feed().
   bool tick(uint32_t now_ms);
-  static constexpr uint32_t SCALE_QUIET_MS = 1000;
+  // = ScaleManager::STALE_MS: the silence after which the scale manager
+  // itself gives the link up. Was 1000 for one commit; a routine 1 s BLE
+  // gap at the end of settling then ended a normal shot early (review
+  // 2026-11-23).
+  static constexpr uint32_t SCALE_QUIET_MS = 3000;
   ShotState state() const { return st; }
   const ShotResult& result() const { return res; }
   int32_t flowNowMgps() const { return flow_now; }

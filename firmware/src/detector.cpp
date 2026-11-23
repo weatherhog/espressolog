@@ -188,28 +188,39 @@ void ShotDetector::enterSettling(uint32_t t, int32_t w_at_stop, uint32_t stop_t,
   lift_since = 0;
 }
 
-// Called from loop() with millis() after the sample drain (0a.8). Settling
-// otherwise ends only on a sample, so a scale that goes quiet -- switched
-// off with the cup, or a BLE drop -- left the shot open, and main blocks
-// spool writes while it is (invariant 6, review 2026-11-23). Here:
-//  - a pending lift whose hold has elapsed by the clock is a lift, as if
-//    one more dropped sample had arrived;
-//  - SCALE_QUIET_MS without a sample past the end of settling finishes the
-//    shot on the last weight. The curve then ends before the settle window
-//    closed, so v_shot_end reads it as cut short ("ended_by_lift" means
-//    exactly that), which a scale switched off mid-settle is.
-// Only SETTLING: a scale lost mid-pour still leaves the pour open.
+// Called from loop() with millis() after the sample drain (0a.8). The
+// detector otherwise moves only on a sample, so a scale that goes quiet --
+// switched off with the cup, a BLE drop, a dead battery -- left the shot
+// open, and main writes no spool while one is (invariant 6, reviews
+// 2026-11-23). "Quiet" is SCALE_QUIET_MS without a sample: the scale
+// manager's own STALE_MS, so a routine BLE gap (~240 ms) or a gap of a
+// second or two is never taken for one. When it is quiet:
+//  - SETTLING with a lift pending past its hold: a lift, as if one more
+//    dropped sample had arrived. Pending but quiet for less than that
+//    (a reconnect's injected 0 g, then the real reading 2 s later): wait.
+//  - SETTLING past the settle window: finish on the last weight.
+//  - POURING, once MAX_SHOT_MS + SETTLE_MS has passed since t0 -- when the
+//    detector would have force-stopped and settled by now, so the pump is
+//    not plausibly still running and a reconnect mid-pour cannot split one
+//    shot in two: finish at the peak, stop_ms = the last kept sample, as a
+//    lift during the pour does (finalizeLifted(); under 5 g a reject).
+// Each of these ends the curve before a settle window could close, so
+// v_shot_end reads the shot as cut short ("ended_by_lift" means exactly
+// that) -- which it was, by the scale rather than a hand.
 bool ShotDetector::tick(uint32_t now) {
-  if (st != ShotState::SETTLING) return false;
-  if (lift_since != 0) {
-    if (now - lift_since >= LIFT_HOLD_MS) {
-      buf_count = lift_buf;
-      return finishLiftedSettling();
-    }
-    return false;
+  if (st != ShotState::SETTLING && st != ShotState::POURING) return false;
+  if ((int32_t)(now - last_t) < (int32_t)SCALE_QUIET_MS) return false;
+  if (st == ShotState::POURING) {
+    if ((int32_t)(now - t0) < (int32_t)(MAX_SHOT_MS + SETTLE_MS)) return false;
+    if (lift_since != 0) buf_count = lift_buf;   // trim a pending dip
+    return finalizeLifted();
   }
-  if ((int32_t)(now - settle_until) >= 0 && now - last_t >= SCALE_QUIET_MS)
-    return finishShot();
+  if (lift_since != 0) {
+    if ((int32_t)(now - lift_since) < (int32_t)LIFT_HOLD_MS) return false;
+    buf_count = lift_buf;
+    return finishLiftedSettling();
+  }
+  if ((int32_t)(now - settle_until) >= 0) return finishShot();
   return false;
 }
 

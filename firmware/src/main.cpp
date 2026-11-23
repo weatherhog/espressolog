@@ -1612,11 +1612,13 @@ void loop() {
       queueWeighing(smp.role, weighing[smp.role].event());
     }
   }
-  // Detector 0a.8: settling ends on time when the yield scale goes quiet --
-  // a pending lift once its hold has passed, or the settle window once the
-  // scale has sent nothing for SCALE_QUIET_MS. Without this a scale switched
-  // off with the cup left the shot open and every spool write blocked.
-  // After the drain, so every sample stamped before now has been fed.
+  // Detector 0a.8: a shot ends on time when the yield scale goes quiet for
+  // SCALE_QUIET_MS (3 s) -- settling, or a pour 65 s on (detector.cpp,
+  // tick()). Without this a scale switched off with the cup, or one whose
+  // battery died mid-pour, left the shot open and every spool write
+  // blocked. After the drain, so nothing queued before this point is
+  // missed; a sample the BLE task stamps between the drain and millis() is
+  // fed next pass, and 3 s of silence cannot hinge on it.
   if (detector.tick(millis())) {
     Serial.println("# shot finished on time: the yield scale went quiet");
     shotCompleted();

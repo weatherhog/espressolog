@@ -163,9 +163,11 @@ STRATUM = {"bean_name": "Moonwalker", "grind_dial": 7.9, "grind_epoch_id": 1}
 # settle_offset_g, only a drop held 2 s is a lift, and a quiet scale ends
 # settling on the clock. It sets the disturbed flag exactly as 0a.7 does.
 # yield_final_g, and with it mean_flow_gps (its 80 % point), come out the
-# same EXCEPT when settling saw a dip that recovered -- a reconnect's 0 g, a
-# bump, a lift and put-back within 2 s: 0a.7 ended the shot there at the
-# peak, 0a.8 settles on and reads the last weight. Rare, and pooled on the
+# same EXCEPT in two cases where 0a.7 stored the peak and 0a.8 the last
+# weight: settling saw a dip that recovered (a reconnect's 0 g, a bump, a
+# lift and put-back within 2 s -- 0a.7 ended the shot at the dip, 0a.8
+# settles on), or the scale went quiet while settling (0a.7 ended at the
+# reconnect's 0 g, 0a.8's tick() finishes on the last weight). Rare, and pooled on the
 # assumption that it does not move the result -- re-check as 0a.8 shots
 # accumulate, as for 0a.7. BUT total_s IS stop_ms / 1000, so 0a.8 changes it: on 0a.6/0a.7
 # a shot lifted while settling stores stop_ms up to ~7 s late, on 0a.8 the

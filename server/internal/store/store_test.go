@@ -1764,3 +1764,57 @@ func TestScaleLostShotKeepsDose(t *testing.T) {
 		}
 	}
 }
+
+// A scale-lost fault that is ALSO a placement (a cup set down slowly on an
+// un-tared scale, then the scale lost) is a placement: excluded as one, and
+// it takes no dose -- the real shot pulled next keeps it (review of 7bfbbc7).
+func TestScaleLostPlacementTakesNoDose(t *testing.T) {
+	dev := "aa:bb:cc:dd:ee:06"
+	base := time.Now().Add(-time.Hour).Truncate(time.Second)
+	for _, order := range []string{"weighing first", "weighing last"} {
+		st := openTestStore(t)
+		w := weighingRecord(1, 18000, base.Add(-time.Minute))
+		xraw, xrec := pumpRecordWith(t, 300, record.Pump2Cup, 8200, func(h *record.Header) {
+			h.StartedAtUnixMs = uint64(base.Add(-30 * time.Second).UnixMilli())
+			h.DetectorVersion = [8]byte{}
+			copy(h.DetectorVersion[:], "0a.8")
+			h.Flags |= record.FlagFault | record.FlagPlacement
+		}, nil)
+		sraw, srec := pumpRecordWith(t, 301, record.Pump2Cup, 8200, func(h *record.Header) {
+			h.StartedAtUnixMs = uint64(base.UnixMilli())
+		}, nil)
+		if order == "weighing first" {
+			if _, err := st.Ingest(dev, w, []byte{2}, base); err != nil {
+				t.Fatal(err)
+			}
+		}
+		xres, err := st.Ingest(dev, xrec, xraw, base)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sres, err := st.Ingest(dev, srec, sraw, base)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if order == "weighing last" {
+			if _, err := st.Ingest(dev, w, []byte{2}, base); err != nil {
+				t.Fatal(err)
+			}
+		}
+		var xg, sg sql.NullFloat64
+		var reason string
+		if err := st.db.QueryRow(`SELECT dose_ground_g, exclude_reason FROM shot WHERE id = ?`, xres.ShotID).
+			Scan(&xg, &reason); err != nil {
+			t.Fatal(err)
+		}
+		if err := st.db.QueryRow(`SELECT dose_ground_g FROM shot WHERE id = ?`, sres.ShotID).Scan(&sg); err != nil {
+			t.Fatal(err)
+		}
+		if reason != reasonPlacement || xg.Valid {
+			t.Errorf("%s: placement+scale-lost reason %q dose %v, want placement and no dose", order, reason, xg)
+		}
+		if !sg.Valid || sg.Float64 != 18.0 {
+			t.Errorf("%s: the real shot's dose = %v, want 18", order, sg)
+		}
+	}
+}

@@ -714,10 +714,10 @@ three.
   silently (RTC_SW_SYS_RST before any output) on arduino-espressif32 2.0.17.
   Bisected empirically 2026-08-27; only the first 8 MB is usable by firmware.
 
-PSRAM is used for one thing: the 20 KB held-shot buffer (from 0.16.0,
-`handleShotComplete()`), so a finished shot can wait for a quiet machine
-while the detector's own buffer takes the next one. Without PSRAM a shot is
-written as it finishes. It's present because that's the cheap commodity
+PSRAM is used for one thing: two 20 KB held-shot buffers (from 0.16.0,
+`handleShotComplete()`), so a shot finishing while the pump runs can wait
+for a quiet machine while the detector's own buffer takes the next one.
+Without PSRAM a shot is written as it finishes. It's present because that's the cheap commodity
 module, not because we need it.
 
 ---
@@ -1537,8 +1537,8 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   routine BLE gap never counts): a pending lift past its hold, a settle
   past its window, or a pour 65 s on — when the shot would have
   force-stopped and settled by now, so a reconnect mid-pour cannot split
-  it. A quiet pour is decided by what the scale saw last: a drop pending
-  is a pour lift, under 5 g a reject, flat over the last
+  it. A quiet pour is decided by what the scale saw before it went quiet:
+  under 5 g a reject, flat over the last
   `QUIET_FLAT_MS` (1 s) a flat stop **backdated 1 s, not 2** (the 2 s
   stop never got to confirm), and only a weight still rising is **spooled
   as a FAULT**, which the server excludes as `'fault: yield scale lost
@@ -1546,14 +1546,22 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   which keeps its dose. Without it a scale switched
   off with the cup, or one whose battery died mid-pour, held the shot open
   and blocked every spool write (invariant 6). `tick()` is never gated.
-  **What waits is the spool write: every finished shot — any path, the
-  forced stop included — is HELD** (samples copied to PSRAM, the machine
-  context as it stood) and written once the machine is quiet, i.e. the
-  same `IDLE`/`ARMED` + `!machineBusy()` test that gates weighings, or
-  after 5 min regardless, so a stuck guard cannot keep it for ever
-  (`handleShotComplete()`, invariant 2). Until 0.16.0 a flush started in
-  the 5 s settle window got a flash write mid-pump. A held shot is lost if
-  the board loses power before it is written; `reboot` writes it first.
+  **What waits is the spool write, and only while the machine is busy:**
+  a finished shot — any path, the forced stop included — is written at once
+  if the machine is quiet (the `IDLE`/`ARMED` + `!machineBusy()` test that
+  gates weighings), as before; otherwise it is HELD in one of two PSRAM
+  slots (samples and machine context as they stood) and written at the
+  first quiet moment, oldest first. Past 5 min a held shot is written
+  regardless — but only between shots, never into a pour — so a stuck
+  guard cannot keep it for ever; with both slots full the oldest goes at
+  once (`handleShotComplete()`, invariant 2). Until 0.16.0 a flush started
+  in the 5 s settle window got a flash write mid-pump. A held shot is lost
+  if the board loses power before it is written; `reboot` writes them
+  first. Holding every shot was tried for one commit and put shots 0.15.1
+  had on flash in RAM. A quiet pour's short pending drop — a bump, a
+  reconnect's 0 g — is trimmed, never taken for a lift (`feed()` takes any
+  drop that lasts 2 s); its flat test is half the stop band (0.15 g over
+  1 s, the stop rule's rate).
   `replay` ticks too and skips
   the dose scale's lines, so it reproduces the quiet-scale endings a
   capture shows — not one the board made on its own clock (a stalled
@@ -1732,7 +1740,8 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   (a scale reconnect) nothing is judged, because the rise across the gap is
   unknown; a placement there goes unflagged. **No record excluded at ingest
   — placement, reject or fault — takes a dose** (`store.go`); a knock must
-  not take the real shot's.
+  not take the real shot's. The one exception is 0a.8's scale-lost fault
+  (the `fault` bullet below), and not when it is also a placement.
   Kept, flagged (`SPOOL_FLAG_PLACEMENT`, firmware 0.11.1) and excluded at
   ingest. Added after shot 180 (2026-11-15): a cup put back on an un-tared
   scale landed slowly enough, 3–4 g per sample, to pass the per-sample

@@ -148,7 +148,7 @@ func (s *Store) Ingest(deviceID string, r *record.Record, raw []byte, receivedAt
 		// yield scale was lost (detector 0a.8): excluded because its yield is
 		// short, but a real shot that used the coffee, like a shot the user
 		// excluded -- so it takes its dose (review 2026-11-23).
-		if err == nil && (!excluded || r.Header.ScaleLost()) {
+		if err == nil && (!excluded || (r.Header.ScaleLost() && !r.Header.Placement())) {
 			err = attributeDoseToShot(tx, res.ShotID, startedAt)
 		}
 	case record.TypeWeighing:
@@ -683,15 +683,18 @@ const (
 // the arrival path's dose attribution reads that report rather than
 // re-deriving it. First match wins, so a faulted placement is a fault.
 func excludeReasonAtIngest(h *record.Header) string {
+	// Placement first: a cup set down is never a shot, so a scale-lost fault
+	// that is also a placement is stored as the placement -- and the
+	// late-weighing path then skips it like one (review of 7bfbbc7).
 	switch {
+	case h.Placement():
+		return reasonPlacement
 	case h.ScaleLost():
 		return reasonScaleLost
 	case h.Fault():
 		return reasonFault
 	case h.Reject():
 		return reasonReject
-	case h.Placement():
-		return reasonPlacement
 	}
 	return ""
 }

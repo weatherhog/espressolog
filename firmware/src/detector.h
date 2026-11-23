@@ -18,7 +18,7 @@ enum class ShotState : uint8_t { IDLE, ARMED, POURING, SETTLING };
 // caller (spool/upload layer) — this struct is measurement only.
 struct ShotResult {
   bool     valid;          // false: rejected (<5 g) or faulted
-  bool     fault;          // cup removed mid-pour
+  bool     fault;          // 0a.8: the yield scale went quiet mid-pour (tick()); up to 0a.3: cup removed mid-pour
   bool     truncated;      // hit the uint16 t_ms ceiling, stop was forced
   // The curve rose more than PLACEMENT_RISE_MG ABOVE ITS EARLIER PEAK
   // within PLACEMENT_RISE_MS somewhere (risesLikeAPlacement() in

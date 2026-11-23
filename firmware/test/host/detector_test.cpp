@@ -1098,8 +1098,11 @@ int main() {
         assert(!rr.fault && !rr.valid);
       } else {
         assert(rr.fault && !rr.valid);
-        assert(last == rr.stop_ms);                       // ends at the last kept sample
         if (q.kind <= 1) assert(rr.yield_final_mg == 36000);   // the peak the scale saw
+        // The short pending drop is trimmed: no sample of the -180 g lift
+        // (kind 0) or of the reconnect's 0 g (kind 3) is left in the curve.
+        for (uint16_t k = 0; k < rr.sample_count; k++)
+          if (rr.samples[k].t_ms > 5000) assert(rr.samples[k].weight_mg > 1000);
       }
     }
     printf("a quiet pour is a reject or a scale-lost fault, never a guess OK\n");

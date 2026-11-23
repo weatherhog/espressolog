@@ -1539,7 +1539,8 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   force-stopped and settled by now, so a reconnect mid-pour cannot split
   it. A quiet pour under 5 g is a reject; **any other quiet pour is
   spooled as a FAULT**, which the server excludes as `'fault: yield scale
-  lost mid-pour'` but which keeps its dose — un-exclude a good one by hand.
+  lost mid-pour'` but which keeps its dose — un-exclude a good one by hand
+  (the serial log and the PWA say so when one happens).
   **It is not classified further, on purpose**: the second before the
   scale vanished cannot tell jitter, drips, a lift and a reconnect's 0 g
   apart, and the rules tried (a pending drop as a lift, a flat tail as a
@@ -1554,15 +1555,17 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   is quiet** (the `IDLE`/`ARMED` + `!machineBusy()` test that gates
   weighings), else at the first quiet pass, oldest first. Deciding at
   completion read the previous pass's switches, since completions happen in
-  the sample drain before the polls. Past 5 min a held shot is written
-  regardless — but only with the detector IDLE (ARMED with a busy guard is
-  a running pump) — so a stuck guard cannot keep it for ever; with both
+  the sample drain before the polls. Past 5 min with the detector IDLE, or
+  30 min with it ARMED (ARMED with a busy guard may be a running pump, but
+  a cup left on the scale keeps it ARMED most of the day), a held shot is
+  written regardless, so a stuck guard cannot keep it for ever; with both
   slots full the oldest goes at once. A slot is freed only when its write
-  succeeded, and none is tried while the spool is unavailable
+  succeeded; a failed one is retried every 30 s and logged once
   (`handleShotComplete()`, invariants 2 and 6). Until 0.16.0 a flush
   started in the 5 s settle window got a flash write mid-pump. A held shot
   is lost if the board loses power before it is written; `reboot` writes
-  them first.
+  them first and refuses while any is still held (`reboot force` loses
+  them).
   `replay` ticks too and skips
   the dose scale's lines, so it reproduces the quiet-scale endings a
   capture shows — not one the board made on its own clock (a stalled

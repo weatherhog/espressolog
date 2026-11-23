@@ -679,9 +679,11 @@ const (
 )
 
 // excludeReasonAtIngest is the one place a record's ingest-time exclusion
-// is decided ("" = not excluded). insertShot stores it and reports it, and
-// the arrival path's dose attribution reads that report rather than
-// re-deriving it. First match wins, so a faulted placement is a placement
+// is decided ("" = not excluded). insertShot stores it and reports whether
+// it excluded; Ingest calls this again for the one reason that still takes
+// a dose (reasonScaleLost) -- the same answer, since the function is pure
+// and insertShot applies no override of its own (keep it that way, or pass
+// the reason out). First match wins, so a faulted placement is a placement
 // (a placement ranked after the faults until 2026-11-23, when the only
 // fault it could meet was the legacy one and both were dose-less).
 func excludeReasonAtIngest(h *record.Header) string {

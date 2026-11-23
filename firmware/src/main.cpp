@@ -842,13 +842,19 @@ static void printShotSummary(const ShotResult& r) {
 // they stood at completion. HOLD_SLOTS of them, so a second shot finishing
 // while the pump still runs is held too. Escape hatches, all choosing
 // invariant 6 over invariant 2: past HOLD_MAX_MS a held shot is written
-// whatever the guard says -- but only with the detector IDLE (ARMED with
-// the guard busy is a running pump: pre-infusion or a flush), so a guard
-// stuck busy cannot keep it for ever; with every slot full the oldest is
-// written at once. A slot is freed only when its write succeeded, and none
-// is attempted while the spool is unavailable. A held shot is lost if the
-// board loses power before it is written; `reboot` writes them first.
-static constexpr uint32_t HOLD_MAX_MS = 5UL * 60 * 1000;
+// whatever the guard says with the detector IDLE, and past
+// HOLD_MAX_ARMED_MS with it ARMED too -- ARMED with a busy guard may be a
+// running pump (pre-infusion, a flush), but a cup left on the scale keeps
+// the detector ARMED most of the day, so IDLE alone let a guard stuck busy
+// hold a shot until the power went (review of 5652cd2); no pump run lasts
+// 30 min. With every slot full the oldest is written at once. A slot is
+// freed only when its write succeeded; a failed one is retried every
+// HOLD_RETRY_MS, logged once, not every loop() pass. A held shot is lost if
+// the board loses power before it is written; `reboot` writes them first
+// and refuses while any is still held, unless forced.
+static constexpr uint32_t HOLD_MAX_MS       = 5UL * 60 * 1000;
+static constexpr uint32_t HOLD_MAX_ARMED_MS = 30UL * 60 * 1000;
+static constexpr uint32_t HOLD_RETRY_MS     = 30UL * 1000;
 static constexpr int HOLD_SLOTS = 2;
 struct HeldShot {
   sample_t*      samples = nullptr;   // MAX_SAMPLES, PSRAM (setup())
@@ -858,6 +864,8 @@ struct HeldShot {
   MachineContext mc;
   bool           flow_tap = false;
   String         mac;
+  uint32_t       retry_at = 0;        // after a failed write: not before this
+  bool           failing = false;     // a write failed; logged once
 };
 static HeldShot held_shots[HOLD_SLOTS];
 
@@ -878,13 +886,27 @@ static bool writeShotRecord(const ShotResult& r, const MachineContext& mc,
 }
 
 // Frees the slot only on success: a failed write keeps the shot in RAM.
-static bool writeHeld(HeldShot& h, const char* why) {
+// Frees the slot only on success. After a failure the slot is not tried
+// again for HOLD_RETRY_MS (force: try now, e.g. `reboot`).
+static bool writeHeld(HeldShot& h, const char* why, bool force = false) {
   if (!h.used) return true;
-  if (!spool_ok) return false;
-  Serial.printf("# writing a held shot (%s, held %lu ms)\n", why,
-                (unsigned long)(millis() - h.at));
-  if (!writeShotRecord(h.r, h.mc, h.flow_tap, h.mac)) return false;
+  uint32_t now = millis();
+  if (h.failing && !force && (int32_t)(now - h.retry_at) < 0) return false;
+  if (!h.failing)
+    Serial.printf("# writing a held shot (%s, held %lu ms)\n", why,
+                  (unsigned long)(now - h.at));
+  if (!spool_ok || !writeShotRecord(h.r, h.mc, h.flow_tap, h.mac)) {
+    if (!h.failing)
+      Serial.printf("# held shot NOT written (%s) -- kept in RAM, retrying every %lu s\n",
+                    spool_ok ? "spool write failed" : "spool unavailable",
+                    (unsigned long)(HOLD_RETRY_MS / 1000));
+    h.failing = true;
+    h.retry_at = now + HOLD_RETRY_MS;
+    return false;
+  }
+  if (h.failing) Serial.println("# held shot written after earlier failures");
   h.used = false;
+  h.failing = false;
   return true;
 }
 
@@ -896,18 +918,24 @@ static HeldShot* oldestHeld() {
   return o;
 }
 
-static void writeAllHeld(const char* why) {
+// Returns how many are still held (a failure stops it: order is kept).
+static int writeAllHeld(const char* why) {
   while (HeldShot* h = oldestHeld())
-    if (!writeHeld(*h, why)) break;    // spool down: they stay held
+    if (!writeHeld(*h, why, true)) break;
+  int n = 0;
+  for (HeldShot& h : held_shots) if (h.used) n++;
+  return n;
 }
 
 // From loop(), after the machine polls, once `quiet` is known.
 static void serviceHeldShots(bool quiet) {
-  bool idle = detector.state() == ShotState::IDLE;
+  ShotState st = detector.state();
   while (HeldShot* h = oldestHeld()) {
+    uint32_t age = millis() - h->at;
     bool ok;
     if (quiet) ok = writeHeld(*h, "machine quiet");
-    else if (idle && millis() - h->at >= HOLD_MAX_MS)
+    else if ((st == ShotState::IDLE && age >= HOLD_MAX_MS)
+             || (st == ShotState::ARMED && age >= HOLD_MAX_ARMED_MS))
       ok = writeHeld(*h, "held too long, writing regardless");
     else break;
     if (!ok) break;
@@ -945,7 +973,7 @@ static void handleShotComplete(const ShotResult& r) {
   for (HeldShot& h : held_shots) if (!h.used) { slot = &h; break; }
   if (!slot) {                        // every slot full: the oldest goes now
     HeldShot* o = oldestHeld();
-    if (writeHeld(*o, "every hold slot full")) {
+    if (writeHeld(*o, "every hold slot full", true)) {
       slot = o;
     } else {
       // The spool is down and RAM is full: this shot cannot be kept either.
@@ -964,6 +992,8 @@ static void handleShotComplete(const ShotResult& r) {
   slot->flow_tap = flow_tap_shot;
   slot->mac = scales.slotMac(ScaleRole::YIELD);
   slot->at = millis();
+  slot->failing = false;
+  slot->retry_at = 0;
   slot->used = true;
   Serial.println("# shot held -- written once the machine is quiet (this pass, if it is)");
   Serial.println("# ---- end shot ----");
@@ -1297,7 +1327,7 @@ static void handleCommand(String line, Stream& out) {
   String arg = sp < 0 ? "" : line.substring(sp + 1);
 
   if (cmd == "help" || cmd == "h") {
-    out.println("# status|s  tare|t  raw|r  verbose|v  display [on|off]  flow [on|off|filter <us>]  switches [on|off]  pins  selftest [n] [hz]  drive [status|gate|fire|direct]  ls  dump <file>  rm <file>  format  fake  net  scales  assign <yield|dose> <mac|last>  set <ssid|pass|endpoint> <val>  reboot");
+    out.println("# status|s  tare|t  raw|r  verbose|v  display [on|off]  flow [on|off|filter <us>]  switches [on|off]  pins  selftest [n] [hz]  drive [status|gate|fire|direct]  ls  dump <file>  rm <file>  format  fake  net  scales  assign <yield|dose> <mac|last>  set <ssid|pass|endpoint> <val>  reboot [force]");
   } else if (cmd == "status" || cmd == "s") {
     out.printf("# yield: state=%d mac=%s | dose: state=%d mac=%s\n",
                (int)scales.slotState(ScaleRole::YIELD), scales.slotMac(ScaleRole::YIELD).c_str(),
@@ -1511,7 +1541,12 @@ static void handleCommand(String line, Stream& out) {
       out.printf("# %s saved to NVS — 'reboot' to apply\n", nvs_key);
     }
   } else if (cmd == "reboot") {
-    writeAllHeld("reboot");
+    int still = writeAllHeld("reboot");
+    if (still > 0 && arg != "force") {
+      out.printf("# %d shot(s) held in RAM could not be written -- a reboot loses them."
+                 " Fix the spool, or 'reboot force' to lose them.\n", still);
+      return;
+    }
     out.println("# rebooting");
     out.flush();
     ESP.restart();
@@ -1768,7 +1803,9 @@ void loop() {
   // next pass, and 3 s of silence cannot hinge on it.
   if (detector.tick(millis())) {
     Serial.printf("# shot finished on time: the yield scale went quiet%s\n",
-                  detector.result().fault ? " mid-pour -- recorded as a fault" : "");
+                  detector.result().fault
+                    ? " mid-pour -- recorded as a fault, excluded on the server; un-exclude it if the shot was good"
+                    : "");
     shotCompleted();
   }
 
@@ -1821,8 +1858,8 @@ void loop() {
   // It does mean the invariant-2 fix is conditional on a tap being live.
   bool quiet = (st == ShotState::IDLE || st == ShotState::ARMED) && !machineBusy();
 
-  // Held shots go to flash first, once quiet -- or past HOLD_MAX_MS,
-  // between shots, regardless (see handleShotComplete()).
+  // Held shots go to flash first, once quiet -- or, past HOLD_MAX_MS idle
+  // (HOLD_MAX_ARMED_MS armed), regardless (see handleShotComplete()).
   serviceHeldShots(quiet);
 
   if (quiet && spool_ok) {

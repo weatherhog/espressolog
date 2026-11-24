@@ -336,7 +336,10 @@ board quietly:
 Then run DRC and export with `kicad-cli`. The current board: **DRC 0 errors,
 0 unconnected** (8 silk warnings). The `fab/` folder holds the Gerber + drill zip (for
 JLCPCB/PCBWay: 2 layers, 1.6 mm FR-4, 100 × 100 mm), the BOM and
-`espressolog-board-1to1-print.pdf`.
+`espressolog-board-1to1-print.pdf` (black and white: pads with their holes,
+the part outlines and labels, the board edge; no tracks or pour. Made with
+`kicad-cli pcb export pdf --layers F.Mask,F.Silkscreen,Edge.Cuts
+--mode-single --black-and-white`).
 
 **The machine nets are hand-laid, not autorouted** (`MACHINE_TRACKS` in
 `gen_pcb.py`, since the 2026-11-24 layout review). That covers every

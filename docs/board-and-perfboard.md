@@ -113,7 +113,7 @@ use nothing else"; see the retraction below.
 | 1 | **3V3** | | **GND** |
 | 2 | 3V3 | | GPIO43 / TX |
 | 3 | RST | | GPIO44 / RX |
-| **4** | **GPIO4** — `ESD4` clock | | **GPIO1** — `Q` readback |
+| **4** | **GPIO4** — `ESD4` clock | | **GPIO1** — J3 NTC, ADC1 (PROPOSED, PCB) *(`Q` readback until 2026-11-24)* |
 | **5** | **GPIO5** — `ESD1` data | | **GPIO2** — `Q` readback |
 | **6** | **GPIO6** — flow `#` | | **GPIO42** — trigger, 1Cup photoMOS 1 |
 | **7** | **GPIO7** — 1Cup | | **GPIO41** — trigger, 1Cup photoMOS 2 |
@@ -126,7 +126,7 @@ use nothing else"; see the retraction below.
 | 14 | GPIO46 † | | GPIO0 † |
 | 15 | **GPIO9** — gate `Q` readback, proposed | | GPIO45 † |
 | 16 | **GPIO10** — gate trigger, proposed | | **GPIO48 — onboard RGB LED** ◆ |
-| 17 | GPIO11 | | **GPIO47** — `Q` readback, 2Cup photoMOS 1 |
+| 17 | **GPIO11** — `Q` readback, 1Cup photoMOS 1 (PCB, 2026-11-24) | | **GPIO47** — `Q` readback, 2Cup photoMOS 1 |
 | 18 | GPIO12 | | **GPIO21** — `Q` readback, 2Cup photoMOS 2 |
 | 19 | GPIO13 | | GPIO20 † |
 | 20 | GPIO14 | | GPIO19 † |
@@ -836,7 +836,7 @@ Pinout per `docs/phase-0-plan.md`: 1 1A̅ · 2 1B · 3 1R̅ · 4 1Q̄ · 5 2Q ·
 | Timing, drive | per channel: **330 K** from pin 15 (or 7) to 3V3, **1 µF** between pins 14 and 15 (or 6 and 7) — soldered, never socketed |
 | Timing, gate | **470 K / 1 µF** on U3 pins 14/15 |
 | `Q` → cells | U1 pin 13 → F′16 (cell r 12) · U1 pin 5 → F′21 (r 17) · U2 pin 13 → F′26 (r 22) · U2 pin 5 → F′31 (r 27) |
-| `Q` readbacks, 1 K each | U1 pin 13 → GPIO1 K12 · U1 pin 5 → GPIO2 K13 · U2 pin 13 → GPIO47 K25 · U2 pin 5 → GPIO21 K26 · U3 pin 13 → GPIO9 A23 (wire under the devkit) |
+| `Q` readbacks, 1 K each | U1 pin 13 → GPIO1 K12 (**GPIO11 on the PCB**, 2026-11-24) · U1 pin 5 → GPIO2 K13 · U2 pin 13 → GPIO47 K25 · U2 pin 5 → GPIO21 K26 · U3 pin 13 → GPIO9 A23 (wire under the devkit) |
 | Decoupling | 100 nF from each pin 16 to GND, at the chip |
 | Not connected | every pin 4 and 12 (`Q̄`) |
 | Jumper (b) | **C′34** (LED rail) – **C′35** (3V3 bus); open until the bench test |

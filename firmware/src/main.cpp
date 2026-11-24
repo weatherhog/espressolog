@@ -884,7 +884,8 @@ static void spoolFakeShot(Stream& out) {
 // Channel n's trigger fires U1/U2 and its Q comes back through 1 K.
 struct DriveChan { const char* name; uint8_t trig; uint8_t q; };
 static constexpr DriveChan DRIVE_CH[4] = {
-  { "1Cup photoMOS 1", 42, 1  },    // U1 ch1: pin 1 A̅, pin 13 Q
+  { "1Cup photoMOS 1", 42, 11 },    // U1 ch1: pin 1 A̅, pin 13 Q. GPIO1 until the
+                                     // PCB (2026-11-24): GPIO1 is ADC1, now the J3 NTC
   { "1Cup photoMOS 2", 41, 2  },    // U1 ch2: pin 9 A̅, pin 5 Q
   { "2Cup photoMOS 1", 40, 47 },    // U2 ch1
   { "2Cup photoMOS 2", 39, 21 },    // U2 ch2

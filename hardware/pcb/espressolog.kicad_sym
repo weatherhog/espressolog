@@ -145,9 +145,9 @@
 (property "Datasheet" "" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
 (symbol "XH_J4_0_1" (rectangle (start -2.54 1.27) (end 7.62 -6.35) (stroke (width 0.254) (type default)) (fill (type background))))
 (symbol "XH_J4_1_1"
-(pin passive line (at -5.08 0 0) (length 2.54) (name "+ (PROVISIONAL)" (effects (font (size 1.27 1.27)))) (number "1" (effects (font (size 1.27 1.27)))))
-(pin passive line (at -5.08 -2.54 0) (length 2.54) (name "T" (effects (font (size 1.27 1.27)))) (number "2" (effects (font (size 1.27 1.27)))))
-(pin passive line (at -5.08 -5.08 0) (length 2.54) (name "# (PROVISIONAL)" (effects (font (size 1.27 1.27)))) (number "3" (effects (font (size 1.27 1.27)))))
+(pin passive line (at -5.08 0 0) (length 2.54) (name "outer 1" (effects (font (size 1.27 1.27)))) (number "1" (effects (font (size 1.27 1.27)))))
+(pin passive line (at -5.08 -2.54 0) (length 2.54) (name "+ (middle)" (effects (font (size 1.27 1.27)))) (number "2" (effects (font (size 1.27 1.27)))))
+(pin passive line (at -5.08 -5.08 0) (length 2.54) (name "outer 3" (effects (font (size 1.27 1.27)))) (number "3" (effects (font (size 1.27 1.27)))))
 ))
 (symbol "XH_J3" (pin_names (offset 0.508)) (exclude_from_sim no) (in_bom yes) (on_board yes)
 (property "Reference" "J" (at 0 2.54 0) (effects (font (size 1.27 1.27))))

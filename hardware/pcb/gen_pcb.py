@@ -67,7 +67,11 @@ for inn, out, x1 in [("J5", "J25", 18.5), ("J4", "J24", 31.5),
 # left, rows staggered so no two raw pads are neighbours
 at("R2", 16.0, 23.5, 180)          # ESD4: raw 16,23.5   -> sense 5.84
 at("R1", 13.5, 26.7, 180)          # ESD1: raw 13.5,26.7 -> sense 3.34
-at("R3", 26.5, 29.9, 180)          # FLOW: raw 26.5,29.9 -> sense 16.34
+# FLOW: raw pad under whichever outer J4 pin is # (S.J4_FLOW_PIN)
+if S.J4_FLOW_PIN == "3":
+    at("R3", 26.5, 29.9, 180)      # raw 26.5,29.9 -> sense 16.34
+else:
+    at("R3", 31.5, 25.5, 180)      # raw 31.5,25.5 -> sense 21.34
 # --- sense shunts and candidate caps, flat, under the devkit
 for i, ref in enumerate(["R8", "R9", "R10", "R11", "R12", "R13", "R14",
                          "R15", "R16"]):
@@ -195,7 +199,7 @@ def place_upright(f, x, y1, d):
 
 # -------------------------------------------------- fixed machine tracks
 # Each entry: (net, layer, [points]). A point is (x, y) or ("ref", "pad").
-F_, B_ = "F", "B"
+F_, B_, V_ = "F", "B", "via"
 def MACHINE_TRACKS():
     # the T-pieces: IN pin k -> OUT pin k, straight down, for every line --
     # GND too (J5 VSS, J4 T), so the machine's own ground current takes the
@@ -209,16 +213,19 @@ def MACHINE_TRACKS():
         # reference and the only ground the J2 taps have. Both tie to the
         # devkit's GND at J12 pin 1, clear of the raw fans; the pour is kept
         # off the pass-through block, so these are tracks.
-        ("GND", F_, [("J24", "2"), (29.0, 24.0), (31.4, 26.4), ("J12", "1")]),
-        ("GND", B_, [("J25", "4"), (9.0, 20.9), (9.0, 33.6), (29.8, 33.6),
-                     ("J12", "1")]),
+        ("GND", F_, ([("J24", "1"), ("J12", "1")] if S.J4_T_PIN == "1" else
+                     [("J24", "3"), (26.5, 28.5), (29.9, 31.9), ("J12", "1")])),
+        # J5 VSS: B.Cu down the left and across at y 30 to a via on the T
+        # anchor's diagonal (a B.Cu run on to J12 walled off the shunts)
+        ("GND", B_, [("J25", "4"), (9.0, 20.9), (9.0, 30.0), (28.0, 30.0)]),
+        ("GND", V_, [(28.0, 30.0)]),
         # pos 1: J2 IN pin 1 -> (a1) pin 1 -> (a2) pin 1, along the top
         ("POS1_5V", F_, [("J2", "1"), (82.5, 11.0), (84.5, 9.0), ("JP1", "1"),
                          ("JP2", "1")]),
         # fans from the OUT pins straight down to the raw pads of the taps
         ("ESD4_RAW", F_, [("J25", "2"), ("R2", "1")]),
         ("ESD1_RAW", F_, [("J25", "3"), ("R1", "1")]),
-        ("FLOW_RAW", F_, [("J24", "3"), ("R3", "1")]),
+        ("FLOW_RAW", F_, [("J24", S.J4_FLOW_PIN), ("R3", "1")]),
         ("NTC_P1_RAW", F_, [("J23", "1"), ("R60", "1")]),
         ("NTC_P2_RAW", F_, [("J23", "2"), (41.5, 21.0), (40.5, 22.0),
                             ("R61", "1")]),
@@ -252,6 +259,16 @@ def lay_machine_tracks(board, padxy, nets):
     has had items removed hands back untyped SWIG footprints."""
     for net, layer, pts in MACHINE_TRACKS():
         xy = [padxy(p[0], p[1]) if isinstance(p[0], str) else p for p in pts]
+        if layer == V_:
+            for x, y in xy:
+                v = pcbnew.PCB_VIA(board)
+                v.SetPosition(mm(x, y))
+                v.SetWidth(pcbnew.FromMM(0.9))
+                v.SetDrill(pcbnew.FromMM(0.45))
+                v.SetNet(nets[net])
+                v.SetLocked(True)
+                board.Add(v)
+            continue
         for (x1, y1), (x2, y2) in zip(xy, xy[1:]):
             t = pcbnew.PCB_TRACK(board)
             t.SetStart(mm(x1, y1))

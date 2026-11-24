@@ -2701,14 +2701,25 @@ state; closing it is the deliberate act, with the RC chosen first.
 
    | Marking | Role | On the 2S T-piece lead | Measured |
    |---|---|---|---|
-   | `T` (middle) | **ground** | yellow | continuity beep to J5 pin 1 `VSS`; **no resistance value recorded** |
+   | `T` | **ground** | yellow | continuity beep to J5 pin 1 `VSS`; **no resistance value recorded** |
    | `+` | **+5 V supply** | green | 5.0 V, steady through a flush |
    | `#` | **signal** | black | 0.3 V parked, **2.5 V averaged during flow** |
 
+   **`T` IS NOT THE MIDDLE CONDUCTOR — `+` IS (2026-11-24).** The `T` row
+   read "`T` (middle)" until then, and the paragraph below called `T` "the
+   middle conductor". Lucas, on the J4 T-piece's machine-side plug:
+   *"Middle wire is green. Yellow and black are on the outside"* — green is
+   `+`, by the colours in this table. The working perfboard agrees by
+   function: yellow lands on the ground bus, black on the `#` tap, and flow
+   counts have been live since 2026-11-13. The PCB's first T-piece commit
+   (`ee2795e`) took "middle" at its word and tied the machine's `+` to our
+   GND; it was caught before anything was ordered. Which outer side `T` is
+   on is recorded in `hardware/pcb/gen_schematic.py` (`J4_T_PIN`).
+
    **Normative home for the conductor map is CLAUDE.md**, which carries the
    same three rows beside the J4 conditioning. This copy is the **bench
-   record** and keeps what CLAUDE.md does not: that `T` is the middle
-   conductor, which symbols were guessed right, and the confidence-label
+   record** and keeps what CLAUDE.md does not: which symbols were guessed
+   right, and the confidence-label
    lesson below. The three roles and the three colours are tagged on both
    sides, so `tools/check-facts.py` fails if they ever diverge — which is
    the one divergence here that could put a probe on the wrong wire.

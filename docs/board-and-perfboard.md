@@ -579,6 +579,20 @@ plugs back on its own headers.** The pin map, the pre-power metering (a row
 per cable, same-direction vs reverse) and the layout are in
 `hardware/pcb/README.md`; everything below is the perfboard.
 
+**Plug orientation, read off the machine-side plugs, 2026-11-24 (Lucas).**
+Each was seen from its wire end with the latches up. The latch faces up on
+a side-entry XH header (also confirmed), so left and right mirror against
+a board seen from above with the opening away:
+- **J4: green `+` in the MIDDLE**, yellow `T` on his right, black `#` on his
+  left. On the PCB that is pad 1 `#`, pad 2 `+`, pad 3 `T`.
+  `docs/phase-0-status.md`'s "`T` (middle)" was wrong, and the first PCB
+  T-piece commit tied `+` to ground because of it.
+- **J5: the unbranched conductor (`Disp-P4`) on his left**, so pad 1. With
+  the positional order, that gives pad 2 `ESD4`, pad 3 `ESD1`, pad 4
+  `VSS`.
+- **J2: the +5 V common on his left**, so pad 1. Steam, 2Cup, 1Cup and
+  Water follow on pads 2–5.
+
 **Harness headers, top edge, side-entry XH, plugs entering from the top:**
 
 | Header | Pins | Notes |

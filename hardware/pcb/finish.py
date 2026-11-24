@@ -7,6 +7,9 @@ Repeatable: it starts from route.py's copy in build/, before any of this.
 """
 import os
 import pcbnew
+import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import gen_schematic as S          # noqa: E402  (J4_T_PIN)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PCB = os.path.join(HERE, "espressolog-board.kicad_pcb")
@@ -148,7 +151,8 @@ text("USB end    ESP32 devkit    ANTENNA end", 2.0, 58.5, angle=90)
 # through), so these name both. Not collision-checked against each other:
 # the 2.5 mm pitch leaves them closer than the label margin.
 PIN_NAMES = [(18.5, "P4"), (16.0, "CK"), (13.5, "DA"), (11.0, "0V"),
-             (31.5, "+"), (29.0, "T"), (26.5, "#"),
+             (29.0, "+"), (31.5, "T" if S.J4_T_PIN == "1" else "#"),
+             (26.5, "#" if S.J4_T_PIN == "1" else "T"),
              (44.0, "1"), (41.5, "2"),
              (82.5, "+5"), (80.0, "ST"), (77.5, "2C"), (75.0, "1C"),
              (72.5, "W")]

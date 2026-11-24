@@ -93,7 +93,7 @@ SYMBOLS = {s[0]: s for s in [
     conn("DevKit_SignalColumn", 22, DEVKIT_A),
     conn("DevKit_OppositeColumn", 22, DEVKIT_K),
     conn("XH_J5", 4, ["Disp-P4", "ESD4", "ESD1", "VSS"]),
-    conn("XH_J4", 3, ["+ (PROVISIONAL)", "T", "# (PROVISIONAL)"]),
+    conn("XH_J4", 3, ["outer 1", "+ (middle)", "outer 3"]),
     conn("XH_J3", 2, ["NTC P1", "NTC P2"]),
     conn("XH_J2", 5, ["pos1 +5V", "Steam", "2Cup", "1Cup", "Water"]),
     ("MCP6002", "U", (-5.08, 5.08, 5.08, -5.08),
@@ -131,17 +131,34 @@ def C(ref, value, a, b, fp, dnp=False):
 # Pin k is the JST pin number (pad 1 = the RIGHT pin, opening at the edge):
 #   J5  1 Disp-P4 (the machine's square pad) · 2 ESD4 · 3 ESD1 · 4 VSS
 #       -- docs/machine-display-bus.md: VSS is the spoked-pad end
-#   J4  1 + · 2 T · 3 #   -- T is the MIDDLE conductor (measured);
-#       WHICH OUTER PIN IS + AND WHICH IS # IS PROVISIONAL, not recorded.
-#       Read it off the machine's J4 before ordering: swapping them puts the
-#       100 K / 220 K tap on the sensor rail.
+#   J4  2 = + (the MIDDLE conductor, GREEN: Lucas, 2026-11-24, on the
+#       T-piece's machine-side plug; docs/phase-0-status.md's "T (middle)"
+#       was wrong, and ee2795e tied + to our GND because of it).
+#       T (yellow) and # (black) are the outer pins; WHICH SIDE is J4_T_PIN
+#       below, and it is unset until read off the plug.
 #   J3  1 NTC P1 · 2 NTC P2   -- roles unmeasured; the tap is DNP
 #   J2  1 pos 1 · 2 Steam · 3 2Cup · 4 1Cup · 5 Water   -- positional
 # J4 + and J5 Disp-P4 cross the board as isolated pass-throughs: nothing else
 # connects to them, ever (the J4 + rule in CLAUDE.md).
+# Which outer J4 pin is T (yellow): "1" (board-right) or "3" (board-left),
+# seen from above with the top edge away. UNSET until read off the plug: the
+# board must not be generated from a guess, because T is tied to our GND.
+# 2026-11-24, Lucas, looking at the WIRE-ENTRY end of the T-piece's
+# machine-side plug, latches up: green middle, yellow on his RIGHT, black on
+# his LEFT. Seen from above the board (opening away) that is yellow LEFT ->
+# pad 3 = T, pad 1 = #. Rests on the plug's latch facing up (away from the
+# PCB) on a side-entry header -- CONFIRMED by Lucas, 2026-11-24: "yes the
+# latches are on top". J5 (Disp-P4 on the board-right = pad 1) and J2 (+5 V
+# common on the board-right = pad 1) were read off their plugs the same day
+# and match the map above.
+J4_T_PIN = os.environ.get("J4_T_PIN") or "3"
+if J4_T_PIN not in ("1", "3"):
+    raise SystemExit("J4_T_PIN is not set: which outer J4 pin is T (yellow)? "
+                     "Read it off the plug, then set it in gen_schematic.py")
+J4_FLOW_PIN = "3" if J4_T_PIN == "1" else "1"
 PIN = {
     "J5": {"1": "DISP_P4_RAW", "2": "ESD4_RAW", "3": "ESD1_RAW", "4": "GND"},
-    "J4": {"1": "FLOW_PLUS_RAW", "2": "GND", "3": "FLOW_RAW"},
+    "J4": {J4_T_PIN: "GND", "2": "FLOW_PLUS_RAW", J4_FLOW_PIN: "FLOW_RAW"},
     "J3": {"1": "NTC_P1_RAW", "2": "NTC_P2_RAW"},
     "J2": {"1": "POS1_5V", "2": "STEAM_RAW", "3": "2CUP_RAW",
            "4": "1CUP_RAW", "5": "WATER_RAW"},
@@ -402,7 +419,7 @@ NOTES = [
     "U3 (PROPOSED gate) and R36 (its readback) go in or come out TOGETHER. Phase 0: socket fitted, chip and R36 out.",
     "T-pieces on the board: IN (side-entry, original harness) -> OUT (vertical, cable to the machine), pin k to pin k for every line.",
     "J4 '+' and J5 Disp-P4 are isolated pass-throughs: nothing else connects to them. J2 carries no ground. Nothing on devkit 5Vin.",
-    "J4 pin 1 = '+' and pin 3 = '#' is PROVISIONAL: read it off the machine's J4 before ordering. J3 tap: all DNP until J3 is measured.",
+    "J4: '+' is the MIDDLE pin (isolated pass-through); T and # are the outer pins, side set by J4_T_PIN. J3 tap: all DNP until J3 is measured.",
 ]
 
 def write():

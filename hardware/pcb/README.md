@@ -48,10 +48,10 @@ top edge names each column, which is the same pin on IN and OUT):
 
 | Conn | Pin 1 | Pin 2 | Pin 3 | Pin 4 | Pin 5 | Source |
 |---|---|---|---|---|---|---|
-| J5 / J25 | `Disp-P4` (P4) | `ESD4` clock (CK) | `ESD1` data (DA) | `VSS` (0V) | | `docs/machine-display-bus.md`: `VSS` is the spoked-pad end; the square pad is `Disp-P4` |
-| J4 / J24 | **`+` PROVISIONAL** | `T` ground | **`#` PROVISIONAL** | | | `T` is the middle conductor (measured). **Which outer pin is `+` is not recorded** |
+| J5 / J25 | `Disp-P4` (P4) | `ESD4` clock (CK) | `ESD1` data (DA) | `VSS` (0V) | | pad 1 read off the plug (2026-11-24); the rest positional, `docs/machine-display-bus.md` |
+| J4 / J24 | `#` | **`+`** (middle, green) | `T` | | | read off the machine-side plug, Lucas, 2026-11-24 (`J4_T_PIN = "3"` in `gen_schematic.py`) |
 | J3 / J23 | NTC P1 | NTC P2 | | | | roles unmeasured; the tap is DNP |
-| J2 / J22 | pos 1 +5 V | Steam | 2Cup | 1Cup | Water | positional (`CLAUDE.md`, J2 table) |
+| J2 / J22 | pos 1 +5 V | Steam | 2Cup | 1Cup | Water | pad 1 read off the plug (2026-11-24); the rest positional (`CLAUDE.md`, J2 table) |
 
 - **J4 `+` and J5 `Disp-P4` cross the board as isolated pass-through traces.**
   They have no pad but their own header pins, no test point, no via, no pour
@@ -84,15 +84,22 @@ photoMOS 1) is on **GPIO11** (signal column position 17), and **GPIO1**
 
 ## Not settled. Check before ordering
 
-- **J4 pin order: read it off the machine first.** Which outer pin of J4 is
-  `+` and which is `#` is not recorded anywhere in this repo. The board
-  assumes pin 1 = `+` and pin 3 = `#`. If it's the other way round, the
-  100 K / 220 K tap lands on the sensor rail, which breaks the J4 `+` rule.
-  Look at the machine's J4: the `+` / `#` / `T` marks and the square pad.
-  Then fix `PIN["J4"]` in `gen_schematic.py` and the silk in `finish.py`.
-- **J5 orientation.** This rests on the square pad being `Disp-P4`
-  (`docs/machine-display-bus.md`) and on JST pin 1 being the square pad. The
-  pre-power check below confirms it, but only once the board exists.
+- **J4: `+` is the MIDDLE pin; which outer pin is `T` is `J4_T_PIN`.** The
+  first T-piece commit (`ee2795e`) took `docs/phase-0-status.md`'s "`T`
+  (middle)" at its word and tied the machine's `+` to our GND. That doc was
+  wrong, and Lucas read the plug. `T` is tied to our GND, so its side came
+  from the plug, not a guess. If it ever has to change, it is one setting:
+  R3 and the `T` ground anchor move with it.
+- **Plug orientation: CONFIRMED 2026-11-24 for J4, J5 and J2.** Lucas read
+  each machine-side plug from its wire end with the latches up (the latch
+  faces up on a side-entry header, also confirmed), which mirrors left and
+  right against the board frame:
+  - J4: `+` (green) in the middle, `#` (black) on pad 1, `T` (yellow) on
+    pad 3;
+  - J5: `Disp-P4` on pad 1;
+  - J2: the +5 V common on pad 1.
+
+  The pre-power check below still confirms all three on the built board.
 - **Capacitor lead pitch, not measured.** The footprints assume 5.0 mm for the
   1 µF MKT and the 100 nF / 470 pF / 10 nF discs. Measure the parts you have.
 - **BC547 footprint:** `TO-92_Inline_Wide`, with legs 2.54 mm apart like the
@@ -123,14 +130,15 @@ Board unpowered, devkit out, every jumper open, DNP parts unfitted.
    ground on `+` or `#`.
 2. **Board pass-through.** IN pin k reads ~0 Ω to OUT pin k, and open to
    every other pin of both headers. This catches a solder bridge.
-3. **The isolated lines.** J24 pin 1 (`+`) and J25 pin 1 (`Disp-P4`) read
-   open to every other pin, to TP1 (GND) and to TP2 (3V3). J23 pins 1 and 2
-   read open to everything.
-4. **Ground.** J25 pin 4 and J24 pin 2 read ~0 Ω to TP1. No J2 pin reads ~0
-   to TP1.
+3. **The isolated lines.** J24 pin 2 (`+`, the middle one) and J25 pin 1
+   (`Disp-P4`) read open to every other pin, to TP1 (GND) and to TP2 (3V3).
+   J23 pins 1 and 2 read open to everything.
+4. **Ground.** J25 pin 4 and the J24 `T` pin read ~0 Ω to TP1, and **J24
+   pin 2 does NOT** (that reading is the `ee2795e` short). No J2 pin reads
+   ~0 to TP1.
 5. **Taps by value**, header pin to devkit socket position:
    - 8.2 kΩ: J25 pin 3 → A5 and J25 pin 2 → A4;
-   - 100 kΩ: J24 pin 3 → A6;
+   - 100 kΩ: the J24 `#` pin → A6;
    - 150 kΩ: J22 pins 5, 4, 3, 2 → A10, A7, A8, A9 (the 100 K and 150 K bags
      look alike).
    - Then the shunts, socket position to TP1: A4 and A5 16.4 kΩ, A6–A10
@@ -138,8 +146,8 @@ Board unpowered, devkit out, every jumper open, DNP parts unfitted.
 6. **At the machine**, machine off and unplugged from the mains, OUT cables
    to the machine board, harness plugs NOT on the IN headers:
    - TP1 reads ~0 Ω to J5's spoked pad (`VSS`) and to J4's `T`;
-   - J24 pin 1 reads ~0 Ω to the machine's J4 `+` and open to TP1;
-   - J24 pin 3 reads ~0 Ω to `#`;
+   - J24 pin 2 reads ~0 Ω to the machine's J4 `+` and open to TP1;
+   - the J24 `#` pin reads ~0 Ω to `#`;
    - J25 pin 1 reads ~0 Ω to J5's square pad (`Disp-P4`).
 
    This confirms the J5 orientation and the J4 pin order on the real
@@ -226,7 +234,7 @@ them are inside one part, or a part's own fan:
 
 | Pair | Gap | Why |
 |---|---|---|
-| neighbouring pins of an XH header (incl. J5 `ESD1`–`VSS`, J4 `+`/`#`–`T`) | 0.80 mm | the 2.5 mm XH pitch: the machine's own connectors |
+| neighbouring pins of an XH header (incl. J5 `ESD1`–`VSS`, J4 `T`/`#`–`+`) | 0.80 mm | the 2.5 mm XH pitch: the machine's own connectors |
 | pos 1 – A1_LEG / A2_LEG | 0.84 mm | the (a1)/(a2) jumper pins |
 | each AQY's two outputs, and the MID/return pad beside it | 0.94 mm | across ONE photoMOS of a chain: the second one still holds |
 | tracks leaving a header or jumper pin, beside its next pin | 1.45–1.49 mm | pass-throughs and fans |
@@ -242,14 +250,13 @@ What the measurement found outside those:
 
 ## Before ordering
 
-1. **Read the machine's J4 pin order** (above) and fix `PIN["J4"]` if needed.
-2. **A layout review in a fresh context**, against the machine-zone rules in
+1. **A layout review in a fresh context**, against the machine-zone rules in
    `docs/board-and-perfboard.md` and this file.
-3. **Print `fab/espressolog-board-1to1-print.pdf` at 100 %** (check that
+2. **Print `fab/espressolog-board-1to1-print.pdf` at 100 %** (check that
    the 100 mm outline measures 100 mm). Then press in the real parts:
    - the devkit (25.4 mm between columns);
    - a side-entry and a vertical XH header of each size, with the original
      harness plugs;
    - a BC547, an AQY212EH, a DIL08PZ and a DIL16 socket;
    - the 1 µF MKT and the 100 nF discs.
-4. Upload `fab/espressolog-board-gerbers.zip`.
+3. Upload `fab/espressolog-board-gerbers.zip`.

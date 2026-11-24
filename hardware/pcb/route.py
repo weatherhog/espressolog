@@ -37,9 +37,9 @@ UNROUTED_NETS = set()             # nets dropped from the DSN, if any
 ROUTE_KEEPOUT = "route.py: our tracks out of the header block"
 # OFF: with the J5/J4 block closed, 3V3 from J11 pin 1 had only a ~1.6 mm
 # corridor and Freerouting stopped completing the board (tried 2026-11-24).
-# The 2 mm netclass rule still applies there; on the current routing no
-# track of ours runs between the J5/J4 IN and OUT pins (check it with the
-# review's gap script after any re-route).
+# The 2 mm netclass rule still applies there. Some routings run a +3V3 track
+# on B.Cu between the J5 IN and OUT pins (2.03 mm at b3d9441's successor);
+# check with the review's gap script after any re-route.
 ROUTE_KEEPOUT_ON = False
 
 

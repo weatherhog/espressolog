@@ -29,15 +29,25 @@ Each machine connector has two headers on the top edge:
 - **IN** (J5, J4, J3, J2): side-entry, opening at the edge. The machine's
   **original harness plug** mates here.
 - **OUT** (J25, J24, J23, J22): vertical, right behind its IN. A
-  **same-direction** ready-made XH cable runs from here to the machine
-  board's own header.
+  ready-made XH cable runs from here to the machine board's own header.
+  **It must map pin 1 to pin 1.** Don't buy by the direction word: in
+  同向 / 反向 ("same" / "reverse") listings, the pin-1-to-pin-1 cable is
+  probably the one whose latches face OPPOSITE sides when laid flat. Two
+  identical plugs on an uncrossed cable, both latches up, are mirrored
+  (final review S1). Metering step 1 below decides, whatever the listing
+  says.
 
 **IN pin k is joined to OUT pin k by one straight track, for every line.** A
 plug mates any XH header of its size the same way, so the machine sees its
-own harness, conductor for conductor. The taps branch off the OUT pins. The
-four connectors have different pin counts (2, 3, 4, 5), so no plug fits
-another connector's header, and IN and OUT of one connector are electrically
-interchangeable.
+own harness, conductor for conductor. The taps branch off the OUT pins. IN
+and OUT of one connector are electrically interchangeable.
+
+**A plug in the WRONG connector's header is not ruled out (unverified).**
+The four have different pin counts (2, 3, 4, 5), but XH plugs are not
+width-keyed against a larger housing, so a smaller plug may seat offset in a
+bigger header. Example: the J4 flowmeter plug in J2 IN at pins 1–3 puts the
+flowmeter's `+` on pos 1 and its `T` on raw 2Cup, which is a held press. Try
+each plug in each wrong header at the 1:1 print step (below).
 
 **Operating consequence: the machine's switches, display, flowmeter and NTC
 all run through this board. Without it, the machine runs only with the
@@ -123,11 +133,21 @@ photoMOS 1) is on **GPIO11** (signal column position 17), and **GPIO1**
 
 Board unpowered, devkit out, every jumper open, DNP parts unfitted.
 
-1. **Each OUT cable on its own.** Lay it flat with both latches up and don't
-   turn either end over. Cavity N must read ~0 Ω to cavity N at the other end
-   and open to every other cavity. **A reversed cable fails this, and must
-   not be used**: on J5 it puts our ground on `Disp-P4`, on J4 it puts our
-   ground on `+` or `#`.
+1. **Each OUT cable, on this board.** Plug its two ends into that
+   connector's own IN and OUT headers (no harness, no machine).
+   - **Correct cable:** pin 1 ↔ pin 1. Each line only loops back to itself,
+     so no two different pins are joined.
+   - **Mirrored cable:** pin k ↔ pin n+1−k, so pin 1 is shorted to pin n.
+
+   No cavity numbering is needed. Meter on the IN header:
+   - J5: pin 1 – pin 4 must read open (mirrored: `Disp-P4` on GND), and
+     pin 2 – pin 3 must read ~49 kΩ (mirrored: ~0);
+   - J4: pin 1 – pin 3 must read ~320 kΩ (mirrored: `#` on GND, the `E01`
+     class);
+   - J3: pin 1 – pin 2 must read open;
+   - J2: pin 1 – pin 5 must read open, and pin 2 – pin 4 ~740 kΩ.
+
+   **Any ~0 Ω reading means a mirrored cable, which must not be used.**
 2. **Board pass-through.** IN pin k reads ~0 Ω to OUT pin k, and open to
    every other pin of both headers. This catches a solder bridge.
 3. **The isolated lines.** J24 pin 2 (`+`, the middle one) and J25 pin 1
@@ -148,10 +168,11 @@ Board unpowered, devkit out, every jumper open, DNP parts unfitted.
    - TP1 reads ~0 Ω to J5's spoked pad (`VSS`) and to J4's `T`;
    - J24 pin 2 reads ~0 Ω to the machine's J4 `+` and open to TP1;
    - the J24 `#` pin reads ~0 Ω to `#`;
-   - J25 pin 1 reads ~0 Ω to J5's square pad (`Disp-P4`).
+   - J25 pin 1 reads ~0 Ω to J5's square pad (`Disp-P4`);
+   - J22 pin 1 reads ~0 Ω to the machine's J2 common, the pin in every
+     lever's continuity pair.
 
-   This confirms the J5 orientation and the J4 pin order on the real
-   machine.
+   This confirms the J5, J4 and J2 orientation on the real machine.
 7. Only then do the harness plugs go on the IN headers.
 
 ## Building the board
@@ -199,24 +220,32 @@ short with (a2) fitted got around both series photoMOS. The layout now:
   NTC), pos 1 and the drive chains. The exceptions:
   - a track leaving an XH header or jumper pin may pass that part's other
     pins at 1.2 mm (the machine's own pitch);
-  - the ground pass-through may pass its connector's machine pins at 1.2 mm;
+  - the ground pass-through may pass its connector's machine pins at 1.2 mm
+    (J4/J24 and J5/J25 only, the headers that have one);
   - pads of one connector, jumper or AQY may sit at their own pitch;
-  - pads with no net (the empty half of each DIP-8) need 0.6 mm.
+  - pads with no net (the empty half of each DIP-8) need 0.6 mm. This
+    excludes the devkit sockets, whose unconnected pins are live.
+- **The 1Cup and 2Cup chains keep 2.5 mm apart** (`1CUP_RAW`/`MID_1CUP`/
+  `A1_LEG` against `2CUP_RAW`/`MID_2CUP`/`A2_LEG`). The exemptions are the
+  J2/J22 pins and the tracks touching the "J2 fan zone" rule area (finish.py,
+  y < 23.2): the first mm leaving the 2.5 mm header pitch. This is what would
+  catch a repeat of the first review's finding 2.
 - **KiCad 10 accepts only some condition syntax.** `A.NetClass == '…'` matches
   nothing, so use `hasNetclass()`. `Parent.Reference` doesn't exist, so use
   `memberOfFootprint()`. One condition KiCad can't parse disables the whole
   file and DRC falls back to the netclasses, which is how these rules were
   inert in the first draft. After editing the file, check that a DRC report
   names the custom rules.
-- Netclasses: signals 0.3 mm. `Power` (+3V3, LED_RAIL) and `Ground` 0.5 mm.
-  `Machine` 0.4 mm.
-- Freerouting narrows a few signal tracks to ~0.18 mm between pins, so the
-  board minimum is 0.15 mm (JLCPCB makes 0.127).
+- Netclass track widths: signals 0.3 mm, `Power` (+3V3, LED_RAIL) and
+  `Ground` 0.5 mm, `Machine` 0.4 mm (its clearance is the 2 mm above).
+- Freerouting narrows a few signal tracks to 0.23 mm between pins (the board
+  minimum is set at 0.15 mm; JLCPCB makes 0.127).
 - **No ground pour** in:
   - the machine corner (J2, its 150 K, pos 1, (a1)/(a2), the returns);
   - the photoMOS output column and its lanes;
-  - the J5/J4/J3 pass-through block;
-  - under the antenna.
+  - the J5/J4/J3 pass-through block, down to the J3 tap's raw pads;
+  - under the antenna;
+  - within 2 mm of the devkit's 5Vin (J11 pins 20–22).
 
   GND is routed, and poured on both layers everywhere else.
 - **Silk:** all of it is ≥ 1.0 mm high with a 0.15 mm stroke (JLCPCB's
@@ -225,9 +254,15 @@ short with (a2) fitted got around both series photoMOS. The layout now:
   - `a1` / `a2` `OPEN in Phase 0`, `(b) OPEN until bench`;
   - `J3: PID sensor, tap DNP until measured`;
   - `SELFTEST: never fit`, `U3 + R36 OUT while gate PROPOSED`;
-  - the devkit outline, plus `USB end … ANTENNA end`.
+  - the devkit outline, plus `USB end … ANTENNA end`;
+  - socket positions 1/5/10/15/20 on J11 and J12, and `5V` at J11 pin 21;
+  - `fit ONE` between R61 and R60;
+  - `GND` / `3V3` on the test loops, `<=470p` by C1/C2, `AQY` at each DIP-8's
+    pin-1 end.
 
-  JP1's and R60's references only fit on the fab layer.
+  JP1's reference is on the fab layer only (the `a1` label names it). R60 and
+  R27 are labelled by hand. C15's and C20's references sit inside their own
+  outlines, which leaves 4 silk warnings in DRC.
 
 **Every machine-copper gap under 2 mm**, measured on the routed board. All of
 them are inside one part, or a part's own fan:
@@ -242,11 +277,53 @@ them are inside one part, or a part's own fan:
 
 What the measurement found outside those:
 - **Nothing crosses chains.** No 2Cup copper is within 2.5 mm of the 1Cup
-  chain, or the reverse, apart from the J2 header.
+  chain, or the reverse, apart from the J2 header and its fan zone. This is
+  DRC-enforced (above).
 - **No machine net comes within 2 mm of our copper** (GND, +3V3, LED_RAIL,
   an LED pad, a tap node), apart from the connectors' own ground pins.
 - **No pour comes within 2 mm of a machine net.**
-- **The returns run 2.6 mm apart on B.Cu** where they turn toward J2.
+- **The returns run 2.6 mm or more apart on B.Cu** where they turn toward J2.
+- **One +3V3 track runs on B.Cu between the J5 IN and OUT pins**, 2.03 mm
+  from the bus pads. It's inside the rule and masked. Keeping the router out
+  of that block made it stop completing the board (`route.py`,
+  `ROUTE_KEEPOUT_ON`); hand-laying a 3V3 trunk would allow it.
+
+**Bridge-prone bare pad pairs to inspect under the loupe** (besides the
+'221 sockets and BC547 legs in `docs/board-and-perfboard.md`):
+- **R60.1 – R61.1** (`NTC_P1_RAW` – `NTC_P2_RAW`, bare while DNP, 1.9 mm).
+  A bridge shorts the PID's NTC, so it reads hot and the heater goes off.
+  That is the fail-safe direction.
+- **R7.1 (`STEAM_RAW`) – R40.2 (`LED_A1`), 2.32 mm.** With (b) fitted, a
+  bridge puts 3V3 through 330 Ω on the Steam line, which is a phantom steam
+  press and bypasses the (a) jumpers. That is the first review's blocker-1
+  class, so inspect it.
+- **C16.1 / C17.1 (+3V3) – U1.9 / U2.9 (`A̅`, 1.8 mm).** A bridge holds `A̅`
+  at its idle level. Safe.
+- **R20.1 / R22.1 (trigger) – R33.2 / R35.2 (readback), 1.9 mm.** A bridge
+  joins a trigger to the other channel's Q through 1 K. Benign.
+
+R36–R25 (gate readback – `ARM`) and JP4–R26 (selftest – GND) are now
+≥ 2.8 mm.
+
+## For the 1:1 print and bring-up (not Gerber changes)
+
+From the final review:
+- **Wrong-header plugs (S5):** try every harness plug and OUT cable in every
+  wrong header. If any seats, mark each IN/OUT pair as a block on the silk
+  ("DISP", "FLOW", "NTC", "LEVERS") and/or widen the gaps between IN headers.
+- **Plug clearance:** mate a plug on each OUT header with its IN header
+  fitted (~1.2 mm between bodies), and check adjacent OUT plugs (~2 mm).
+- **The `2CUP_RAW` lane runs 1.2 mm from the right edge:** keep conductive
+  standoffs and box walls off that edge.
+- **Antenna:** the J5 `VSS` ground anchor and R1 sit under the module end, ~10
+  mm below it. If it matters, move them.
+- **Mounting holes against the box standoffs:** unchecked.
+- **Not in the BOM** (it lists only the schematic parts): DIL16 sockets ×3,
+  DIL08 sockets ×4, jumper shunts ×3, the four OUT cables, the devkit and its
+  1×22 female headers ×2.
+- **Firmware:** this board reads the 1Cup photoMOS 1 `Q` on GPIO11. Flash
+  the branch firmware (`30beb28`) before any `drive` bench run; firmware from
+  `main` reads it on GPIO1, which here is the floating NTC_ADC net.
 
 ## Before ordering
 

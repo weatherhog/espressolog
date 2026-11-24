@@ -78,15 +78,19 @@ for i, ref in enumerate(["R8", "R9", "R10", "R11", "R12", "R13", "R14",
     at(ref, 13.0, 35.0 + i * 3.5)
 for i, ref in enumerate(["C1", "C2", "C3"]):
     at(ref, 14.0, 66.5 + i * 3.5)
-at("JP4", 36.5, 91.0)              # selftest: beside the USB end, not in line
+at("JP4", 36.5, 92.0)              # selftest: beside the USB end; 2.8 mm from R26 GND
 
 # --- MACHINE CORNER. J2's 150 K lie flat, raw pad (pad 1) on the right
 # under its OUT pin, rows staggered down and to the right so no two raw pads
 # are neighbours; each return comes in from the right at its own row.
 # 2Cup's row is ABOVE 1Cup's: the 2Cup return comes from the outer lane
 # (x 98.6), so it has to turn in above the top of the 1Cup lane (x 94.4)
-J2R = {"R4": (72.5, 23.4), "R6": (77.5, 26.6), "R5": (75.0, 29.8),
-       "R7": (80.0, 33.0)}                          # W, 2C, 1C, S
+J2R = {"R4": (72.5, 23.4), "R6": (77.5, 26.6), "R5": (75.0, 30.0),
+       "R7": (80.0, 33.2)}                          # W, 2C, 1C, S
+# (R5 raw 2.6 mm from R6 raw: the 1Cup/2Cup 2.5 mm rule in the .kicad_dru.
+# R7.1 (Steam raw) is 2.32 mm from R40.2 (an LED anode): inside the 2 mm
+# rule, on the loupe list. Moving R7 back to 33.0 made Freerouting leave 16
+# connections open, 2026-11-24.)
 for ref, (x, y) in J2R.items():
     at(ref, x, y, 180)
 at("JP1", 88.0, 9.0)               # (a1): pin 1 = pos 1, pin 2 = 1Cup leg
@@ -149,7 +153,7 @@ upright("R26", LEFT_X, G_Y + 7.0, "down")  # gate enable pull-down
 at("C14", CAP_R_X, G_Y, 270)
 upright("R31", COL1_X, G_Y + 2.54, "up")   # 3V3 on top
 upright("R25", COL1_X, G_Y + 9.0, "down")  # ARM pull-down, away from 3V3
-upright("R36", COL2_X, G_Y + 6.0, "down")  # gate readback (DNP)
+upright("R36", COL2_X + 1.0, G_Y + 6.0, "down")  # gate readback (DNP), 2.9 mm from ARM
 
 # --- jumper (b) and the bench test loops, bottom right
 at("JP3", 88.0, 88.0)
@@ -230,8 +234,12 @@ def MACHINE_TRACKS():
         ("NTC_P2_RAW", F_, [("J23", "2"), (41.5, 21.0), (40.5, 22.0),
                             ("R61", "1")]),
         ("WATER_RAW", F_, [("J22", "5"), ("R4", "1")]),
-        ("1CUP_RAW", F_, [("J22", "4"), ("R5", "1")]),
-        ("2CUP_RAW", F_, [("J22", "3"), ("R6", "1")]),
+        # 1Cup jogs left past R4 (Water) so it keeps 2.5 mm from R6's 2Cup
+        # pad (final review N1); the part inside the J2 fan zone (y < 23.2)
+        # is at the header's own pitch
+        ("1CUP_RAW", F_, [("J22", "4"), (75.0, 23.2), (73.95, 24.9),
+                          (73.95, 28.8), ("R5", "1")]),
+        ("2CUP_RAW", F_, [("J22", "3"), (77.5, 23.2), ("R6", "1")]),
         ("STEAM_RAW", F_, [("J22", "2"), ("R7", "1")]),
         # drive legs behind the open jumpers, on the output side
         ("A1_LEG", F_, [("JP1", "2"), (88.0, 13.0), (88.5, 13.5), (88.5, 34.4),
@@ -245,8 +253,10 @@ def MACHINE_TRACKS():
                           (OUT_X + 2.28, CELL_Y[4] - 2.28), ("U7", "8")]),
         # the raw returns, B.Cu, outside the stack, each in its own lane and
         # in at its own row (crossing the A legs and fans on the other layer)
+        # in 0.5 mm below R5's row, so it keeps 2.5 mm from R6's 2Cup pad
         ("1CUP_RAW", B_, [("U5", "7"), (94.4, CELL_Y[2] + 2.54),
-                          (94.4, J2R["R5"][1]), ("R5", "1")]),
+                          (94.4, J2R["R5"][1] + 0.5),
+                          (J2R["R5"][0] + 0.5, J2R["R5"][1] + 0.5), ("R5", "1")]),
         ("2CUP_RAW", B_, [("U7", "7"), (98.6, CELL_Y[4] + 2.54),
                           (98.6, J2R["R6"][1]), ("R6", "1")]),
     ]

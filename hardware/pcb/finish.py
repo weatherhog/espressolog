@@ -42,12 +42,23 @@ MACHINE_AREA = [(66, 0), (W, 0), (W, 86), (87.5, 86), (87.5, 35.5),
                 (66, 35.5)]
 # The J5/J4/J3 pass-throughs (IN and OUT headers): J4 + and J5 Disp-P4 run
 # here, and nothing of ours may pour up to them.
-HEADER_AREA = [(7.5, 0.5), (48.0, 0.5), (48.0, 22.0), (7.5, 22.0)]
+# (to y 26: the J3 tap's raw pads R60.1/R61.1 at y 23.4 sit inside it)
+HEADER_AREA = [(7.5, 0.5), (48.0, 0.5), (48.0, 26.0), (7.5, 26.0)]
+# Devkit 5Vin (J11.21) sits beside its GND (J11.22): keep the pour >= 2 mm
+# from J11.20-22 (CLAUDE.md "5Vin ... Leave the gap"; final review S3).
+FIVEV_AREA = [(3.0, 77.3), (9.0, 77.3), (9.0, 88.3), (3.0, 88.3)]
 # Under the ESP32 module's antenna (the devkit's module end, at the top).
 ANTENNA_AREA = [(4.5, 24.5), (33.0, 24.5), (33.0, 34.5), (4.5, 34.5)]
 for name, pts in [("machine corner: no pour", MACHINE_AREA),
                   ("pass-through headers: no pour", HEADER_AREA),
-                  ("antenna: no pour", ANTENNA_AREA)]:
+                  ("antenna: no pour", ANTENNA_AREA),
+                  ("devkit 5Vin: no pour", FIVEV_AREA),
+                  # named for espressolog-board.kicad_dru: the first mm of
+                  # track leaving J2/J22's 2.5 mm pitch, exempt from the
+                  # 1Cup/2Cup 2.5 mm rule (it is in the machine corner, so
+                  # no pour here either)
+                  ("J2 fan zone", [(66.0, 14.0), (84.0, 14.0), (84.0, 23.2),
+                                   (66.0, 23.2)])]:
     k = pcbnew.ZONE(board)
     k.SetIsRuleArea(True)
     k.SetZoneName(name)
@@ -64,8 +75,8 @@ for name, pts in [("machine corner: no pour", MACHINE_AREA),
     board.Add(k)
 
 # ------------------------------------------------------------- GND pours
-# GND is not routed (route.py leaves it out): both pours carry it, joined
-# through the THT GND pads.
+# GND is routed (route.py), and both pours carry it too, joined through the
+# THT GND pads.
 gnd = board.FindNet("GND")
 for layer, name in [(pcbnew.B_Cu, "GND pour B"), (pcbnew.F_Cu, "GND pour F")]:
     z = pcbnew.ZONE(board)
@@ -141,10 +152,30 @@ text("J3: PID sensor,", 59.0, 2.0)
 text("tap DNP until measured", 59.0, 3.5)
 text("(b) OPEN until bench", 77.0, 93.0)
 text("SELFTEST: never fit", 26.0, 93.0)
-text("U3 + R36 OUT while gate PROPOSED", 25.5, 97.9)
-text("espressolog v2 2026-11", 80.0, 97.9)
+text("U3 + R36 OUT while gate PROPOSED", 57.0, 97.9)
+text("espressolog v2", 85.0, 97.9)
 # rotated 90 it reads bottom to top: USB end at the bottom, antenna at pin 1
 text("USB end    ESP32 devkit    ANTENNA end", 2.0, 58.5, angle=90)
+
+# J3 tap: the build rule on the board itself (final review S4); doubles as
+# R61's and R60's reference, left and right of it
+text("fit ONE", 42.25, 25.75)
+text("R60", 51.6, 23.4)                 # R60's own reference has no room
+text("R27", 61.6, 26.7)                 # placed by hand: the placer lost it
+# devkit socket positions (the metering names A4..A10), and 5Vin
+for k in (1, 5, 10, 15, 20):
+    y = 32.0 + (k - 1) * 2.54
+    text(str(k), 8.6, y)
+    text(str(k), 28.9, y)
+text("5V", 8.9, 82.8)
+# test loops: what they are
+text("GND", 60.0, 95.6)
+text("3V3", 66.0, 95.6)
+# C1/C2 sit on the display bus: never 10 nF there (CLAUDE.md, 0e)
+text("<=470p", 24.0, 68.25)
+# the AQY212EH goes at the pin-1 end of each uncut DIP-8
+for y in (37.0, 50.0, 63.0, 76.0):
+    text("AQY", 87.3, y + 1.27, 0.0 + 1.0)
 
 # Pin names at the top edge, in front of each IN header. The OUT header
 # right behind it carries the same pin in the same column (straight

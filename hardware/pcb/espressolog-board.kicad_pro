@@ -293,7 +293,26 @@
       },
       {
         "bus_width": 12,
-        "clearance": 0.6,
+        "clearance": 0.25,
+        "diff_pair_gap": 0.25,
+        "diff_pair_via_gap": 0.25,
+        "diff_pair_width": 0.2,
+        "line_style": 0,
+        "microvia_diameter": 0.3,
+        "microvia_drill": 0.1,
+        "name": "Ground",
+        "pcb_color": "rgba(0, 0, 0, 0.000)",
+        "priority": 2,
+        "schematic_color": "rgba(0, 0, 0, 0.000)",
+        "track_width": 0.5,
+        "tuning_profile": "",
+        "via_diameter": 0.9,
+        "via_drill": 0.45,
+        "wire_width": 6
+      },
+      {
+        "bus_width": 12,
+        "clearance": 2.0,
         "diff_pair_gap": 0.25,
         "diff_pair_via_gap": 0.25,
         "diff_pair_width": 0.2,
@@ -342,10 +361,6 @@
       },
       {
         "netclass": "Power",
-        "pattern": "GND"
-      },
-      {
-        "netclass": "Power",
         "pattern": "LED_RAIL"
       },
       {
@@ -363,6 +378,10 @@
       {
         "netclass": "Machine",
         "pattern": "*_RAW"
+      },
+      {
+        "netclass": "Ground",
+        "pattern": "GND"
       }
     ]
   },

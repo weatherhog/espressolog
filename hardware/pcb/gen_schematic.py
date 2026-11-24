@@ -26,6 +26,10 @@ FP_R = "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"
 # drive-side resistors (R20 and up) stand upright, as on the perfboard; the
 # sense ones lie flat, because the shunts sit under the devkit (10 mm clearance)
 FP_R_UP = "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P2.54mm_Vertical"
+# J2's four 150 K stand in a row of columns in the machine corner: 7.62 mm
+# pitch keeps each raw pad well clear of the resistor's own sense pad
+FP_R_J2 = "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal"
+FP_TP = "TestPoint:TestPoint_Loop_D2.50mm_Drill1.0mm"
 # PITCH NOT MEASURED: the bought MKT 1 uF and the X7R 100 nF / NP0 470 pF.
 FP_C_FILM = "Capacitor_THT:C_Rect_L7.2mm_W5.5mm_P5.00mm_FKS2_FKP2_MKS2_MKP2"
 FP_C_DISC = "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm"
@@ -87,6 +91,7 @@ SYMBOLS = {s[0]: s for s in [
     conn("XH_J4", 3, ["T", "empty", "#"]),
     conn("XH_J2", 5, ["pos1 +5V", "Steam", "2Cup", "1Cup", "Water"]),
     conn("Jumper2", 2, ["1", "2"]),
+    ("TestPoint", "TP", (-1.27, 1.27, 1.27, -1.27), [("1", "~", 0, -3.81, 90)]),
 ]}
 
 # -------------------------------------------------------------------- parts
@@ -96,7 +101,8 @@ def part(ref, sym, value, fp, pins, dnp=False):
     P.append((ref, sym, value, fp, pins, dnp))
 
 def R(ref, value, a, b, dnp=False):
-    fp = FP_R_UP if int(ref[1:]) >= 20 else FP_R
+    n = int(ref[1:])
+    fp = FP_R_UP if n >= 20 else FP_R_J2 if 4 <= n <= 7 else FP_R
     part(ref, "R", value, fp, {"1": a, "2": b}, dnp)
 
 def C(ref, value, a, b, fp, dnp=False):
@@ -217,6 +223,10 @@ part("JP2", "Jumper2", "(a2) 2Cup drive leg - OPEN in Phase 0", FP_HDR2,
 part("JP3", "Jumper2", "(b) LED supply - OPEN until bench test", FP_HDR2,
      {"1": "+3V3", "2": "LED_RAIL"})
 
+# --- bench test loops, for the analyser and scope ground and supply
+part("TP1", "TestPoint", "GND loop", FP_TP, {"1": "GND"})
+part("TP2", "TestPoint", "3V3 loop", FP_TP, {"1": "+3V3"})
+
 # ------------------------------------------------------------------ writer
 _NS = uuid.UUID("5d2f1b9e-6c1a-4f0e-9a51-e5b0c0ffee01")
 _n = [0]
@@ -328,6 +338,7 @@ def layout():
         pos[f"R{43 + n}"] = (360 * g, y)
         pos[f"R{47 + n}"] = (375 * g, y)
     row(["JP1", "JP2", "JP3"], 270 * g, 230 * g, 70 * g)
+    row(["TP1", "TP2"], 80 * g, 250 * g, 14 * g)
     return pos
 
 NOTES = [

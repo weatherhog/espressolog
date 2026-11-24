@@ -30,10 +30,13 @@ def polygon(zone, pts):
 
 
 # ------------------------------------------------------------ keep-outs
-# No copper POUR in the machine corner (J2, its 150 K, pos 1, (a1)/(a2)) or
-# down the photoMOS output column: those nets stay as tracks only, so the
-# machine-voltage area reads as its own zone and no ground sits beside it.
-MACHINE_AREA = [(60, 0), (W, 0), (W, 82), (89, 82), (89, 31), (60, 31)]
+# No copper POUR in the machine corner (J2, its 150 K, pos 1, (a1)/(a2), the
+# returns' channels) or down the photoMOS output column and its lanes: those
+# nets stay as tracks only, so the machine-voltage area reads as its own zone.
+# Elsewhere the netclass (2 mm, espressolog-board.kicad_dru) keeps the pour
+# away from the J4/J5 raw lines.
+MACHINE_AREA = [(60, 0), (W, 0), (W, 86), (87.5, 86), (87.5, 34.5),
+                (60, 34.5)]
 # Under the ESP32 module's antenna (the devkit's module end, at the top).
 ANTENNA_AREA = [(4.5, 16.5), (33.0, 16.5), (33.0, 26.5), (4.5, 26.5)]
 for name, pts in [("machine corner: no pour", MACHINE_AREA),
@@ -53,19 +56,23 @@ for name, pts in [("machine corner: no pour", MACHINE_AREA),
     polygon(k, pts)
     board.Add(k)
 
-# ------------------------------------------------------------- GND pour
+# ------------------------------------------------------------- GND pours
+# GND is not routed (route.py leaves it out): both pours carry it, joined
+# through the THT GND pads.
 gnd = board.FindNet("GND")
-z = pcbnew.ZONE(board)
-z.SetLayer(pcbnew.B_Cu)
-z.SetNet(gnd)
-z.SetZoneName("GND pour")
-z.SetLocalClearance(F(0.4))
-z.SetMinThickness(F(0.3))
-z.SetPadConnection(pcbnew.ZONE_CONNECTION_THERMAL)
-z.SetThermalReliefGap(F(0.5))
-z.SetThermalReliefSpokeWidth(F(0.5))
-polygon(z, [(0.5, 0.5), (W - 0.5, 0.5), (W - 0.5, H - 0.5), (0.5, H - 0.5)])
-board.Add(z)
+for layer, name in [(pcbnew.B_Cu, "GND pour B"), (pcbnew.F_Cu, "GND pour F")]:
+    z = pcbnew.ZONE(board)
+    z.SetLayer(layer)
+    z.SetNet(gnd)
+    z.SetZoneName(name)
+    z.SetLocalClearance(F(0.4))
+    z.SetMinThickness(F(0.3))
+    z.SetPadConnection(pcbnew.ZONE_CONNECTION_THERMAL)
+    z.SetThermalReliefGap(F(0.5))
+    z.SetThermalReliefSpokeWidth(F(0.5))
+    z.SetIslandRemovalMode(pcbnew.ISLAND_REMOVAL_MODE_ALWAYS)
+    polygon(z, [(0.5, 0.5), (W - 0.5, 0.5), (W - 0.5, H - 0.5), (0.5, H - 0.5)])
+    board.Add(z)
 
 # ------------------------------------------------------------ obstacles
 def inflate(bb, mm):
@@ -119,7 +126,7 @@ text("J5 display", 13.0, 1.8, 0.8)
 text("J4 flow", 28.5, 1.8, 0.8)
 text("J2 switches", 73.0, 1.8, 0.8)
 text("(b) OPEN until bench", 79.0, 93.0, 0.8)
-text("SELFTEST: never fit", 25.5, 89.3, 0.8)
+text("SELFTEST: never fit", 27.5, 94.6, 0.8)
 text("U3 + R36 OUT while gate PROPOSED", 34.0, 99.0 - 0.9, 0.8)
 text("espressolog sense+drive v1 2026-11", 75.0, 98.2, 0.8)
 text("devkit: module/antenna end", 19.0, 15.6, 0.8, layer=pcbnew.Dwgs_User)

@@ -1,0 +1,40 @@
+(version 1)
+
+# KiCad 10: `A.NetClass == 'Machine'` matches nothing (every rule here was
+# inert until that was found on 2026-11-24); hasNetclass() is the form
+# that works.
+
+# Machine nets (netclass Machine: pos 1, every raw line, the drive chains)
+# keep 2 mm from everything of ours. Layout review 2026-11-24: on the
+# perfboard the rule was "which copper a machine net may run beside", and a
+# PCB short is a bridge between exposed copper, so distance is the lever.
+
+(rule "machine nets among themselves"
+  (condition "A.hasNetclass('Machine') && B.hasNetclass('Machine')")
+  (constraint clearance (min 1.0mm)))
+
+(rule "machine nets to everything else"
+  (condition "A.hasNetclass('Machine') && !B.hasNetclass('Machine')")
+  (constraint clearance (min 2.0mm)))
+
+# A connector's or jumper's own pin pitch is not a layout choice: J2/J4/J5
+# are 2.5 mm XH, JP1/JP2 2.54 mm headers, so a machine track leaving one pin
+# passes its neighbour at ~1.45 mm. The doc accepts this as a property of
+# the connector. Only the machine net's OWN fan track gets this: anything
+# else near a connector pin still needs the 2 mm above.
+(rule "machine fan track beside its connector's other pins"
+  (condition "A.Type == 'Track' && A.hasNetclass('Machine') && B.Type == 'Pad' && (B.memberOfFootprint('J2') || B.memberOfFootprint('J4') || B.memberOfFootprint('J5') || B.memberOfFootprint('JP1') || B.memberOfFootprint('JP2'))")
+  (constraint clearance (min 1.2mm)))
+
+# Pads of one part: a connector's or jumper's own pins, an AQY's two outputs.
+# (KiCad 10 has no `Parent.Reference`; a condition it cannot parse disables
+# the whole file, so the parts are listed.)
+(rule "pads of the same part"
+  (condition "A.Type == 'Pad' && B.Type == 'Pad' && ((A.memberOfFootprint('J2') && B.memberOfFootprint('J2')) || (A.memberOfFootprint('J4') && B.memberOfFootprint('J4')) || (A.memberOfFootprint('J5') && B.memberOfFootprint('J5')) || (A.memberOfFootprint('JP1') && B.memberOfFootprint('JP1')) || (A.memberOfFootprint('JP2') && B.memberOfFootprint('JP2')) || (A.memberOfFootprint('U4') && B.memberOfFootprint('U4')) || (A.memberOfFootprint('U5') && B.memberOfFootprint('U5')) || (A.memberOfFootprint('U6') && B.memberOfFootprint('U6')) || (A.memberOfFootprint('U7') && B.memberOfFootprint('U7')))")
+  (constraint clearance (min 0.2mm)))
+
+# Pads with no net (the empty half of each uncut DIP-8, empty XH cavities)
+# carry nothing: a machine track may pass them at the ordinary clearance.
+(rule "machine nets beside pads with no net"
+  (condition "A.hasNetclass('Machine') && B.Type == 'Pad' && B.NetName == ''")
+  (constraint clearance (min 0.6mm)))

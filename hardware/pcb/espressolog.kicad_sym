@@ -172,4 +172,13 @@
 (pin passive line (at -5.08 0 0) (length 2.54) (name "1" (effects (font (size 1.27 1.27)))) (number "1" (effects (font (size 1.27 1.27)))))
 (pin passive line (at -5.08 -2.54 0) (length 2.54) (name "2" (effects (font (size 1.27 1.27)))) (number "2" (effects (font (size 1.27 1.27)))))
 ))
+(symbol "TestPoint" (pin_names (offset 0.508)) (exclude_from_sim no) (in_bom yes) (on_board yes)
+(property "Reference" "TP" (at 0 2.54 0) (effects (font (size 1.27 1.27))))
+(property "Value" "TestPoint" (at 0 -2.54 0) (effects (font (size 1.27 1.27))))
+(property "Footprint" "" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
+(property "Datasheet" "" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))
+(symbol "TestPoint_0_1" (rectangle (start -1.27 1.27) (end 1.27 -1.27) (stroke (width 0.254) (type default)) (fill (type background))))
+(symbol "TestPoint_1_1"
+(pin passive line (at 0 -3.81 90) (length 2.54) (name "~" (effects (font (size 1.27 1.27)))) (number "1" (effects (font (size 1.27 1.27)))))
+))
 )

@@ -67,35 +67,76 @@ Python (`KPY=/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/
 
 ```bash
 python3 gen_schematic.py --check   # schematic, ERC, netlist round-trip
-$KPY gen_pcb.py                    # placement (no routing), courtyard check
-$KPY route.py                      # Freerouting, headless (Java 21+, jar in ~/.local/share/freerouting)
-$KPY finish.py                     # GND pour, keep-outs, labels, refs
+$KPY gen_pcb.py                    # placement + the machine nets as locked tracks
+$KPY route.py                      # Freerouting the rest, headless (Java 21+, jar in ~/.local/share/freerouting)
+$KPY finish.py                     # GND pours (both layers), keep-outs, labels, refs
 ```
+
+`route.py` can be re-run on a routed board. It strips everything except the
+locked machine tracks in a separate process, then routes.
 
 Then run DRC and export with `kicad-cli`. The current board: **DRC 0 violations,
 0 unconnected**. The `fab/` folder holds the Gerber + drill zip (for
 JLCPCB/PCBWay: 2 layers, 1.6 mm FR-4, 100 × 100 mm), the BOM and
 `espressolog-board-1to1-print.pdf`.
 
-**Rules on the board:**
-- Netclasses: signals 0.3 mm. `Power` (+3V3, GND, LED_RAIL) 0.5 mm.
-  `Machine` (pos 1, every raw line, the drive chains) 0.4 mm with **0.6 mm
-  clearance**.
+**The machine nets are hand-laid, not autorouted** (`MACHINE_TRACKS` in
+`gen_pcb.py`, since the 2026-11-24 layout review). Freerouting treated the
+old netclass as "keep 0.6 mm away" and nothing more. It ran the raw 1Cup/2Cup
+returns past LED anode pads, so one short plus (b) fitted was a held press
+that no (a) jumper blocks. It also ran the (a2) feed past U5's raw-1Cup pin
+and along raw 2Cup, so one short with (a2) fitted got around both series
+photoMOS. The layout now:
+- **Everything machine-side stays on the output side of the photoMOS.**
+  - Pos 1 runs along the top edge.
+  - A1_LEG (F.Cu) drops in a lane at x 88.5, above the stack.
+  - A2_LEG (F.Cu) runs in the outer lane at x 97.5.
+  - The MID links jog round the empty socket pads.
+  - The returns run on B.Cu: 1Cup in lane x 94.4, 2Cup in lane x 98.6. Each
+    climbs its own channel between the J2 resistor columns (R4–R7 stand as
+    columns, 6.5 mm apart).
+- **The returns cross the A legs only on the opposite layer.**
+
+**Rules on the board** (`espressolog-board.kicad_dru` with the netclasses):
+- **`Machine` nets keep 2 mm from everything of ours** and 1 mm from each
+  other. The exceptions:
+  - a fan track leaving a J2/J4/J5/JP1/JP2 pin may pass that part's other
+    pins at 1.2 mm;
+  - pads of one connector, jumper or AQY may sit at their own pitch;
+  - pads with no net (the empty half of each DIP-8) need 0.6 mm.
+- **KiCad 10 accepts only some condition syntax.** `A.NetClass == '…'` matches
+  nothing, so use `hasNetclass()`. `Parent.Reference` doesn't exist, so use
+  `memberOfFootprint()`. One condition KiCad can't parse disables the whole
+  file and DRC falls back to the netclasses, which is how these rules were
+  inert in the first draft. After editing the file, check that a DRC report
+  names the custom rules.
+- Netclasses: signals 0.3 mm. `Power` (+3V3, LED_RAIL) and `Ground` 0.5 mm.
+  `Machine` 0.4 mm.
 - Freerouting narrows a few signal tracks to ~0.18 mm between pins, so the
   board minimum is 0.15 mm (JLCPCB makes 0.127).
-- **No ground pour in the machine corner** (J2, its 150 K, pos 1, (a1)/(a2))
-  **or down the photoMOS output column**, and none under the antenna.
+- **No ground pour in the machine corner** (J2, its 150 K, pos 1,
+  (a1)/(a2), the returns' channels) **or down the photoMOS output column and
+  its lanes**, and none under the antenna. GND is routed and also poured on
+  both layers.
 - Labels on the silkscreen: `a1` / `a2` `OPEN in Phase 0`, `(b) OPEN until
   bench`, `SELFTEST: never fit`, `U3 + R36 OUT while gate PROPOSED`.
 
-**Closest gaps between machine-net copper**, measured on the routed board:
+**Every machine-copper gap under 2 mm**, measured on the routed board. All of
+them are inside one part, or a part's own fan:
 
 | Pair | Gap | Why |
 |---|---|---|
-| pos 1 – Steam, 1Cup raw – 2Cup raw | 0.79, 0.69 mm | adjacent J2 pins, 2.5 mm pitch — the machine's own connector |
+| neighbouring J2 / J5 / J4 pins (incl. J5 `ESD1`–`VSS`) | 0.80 mm | the 2.5 mm XH pitch: the machine's own connectors |
 | pos 1 – A1_LEG / A2_LEG | 0.84 mm | the (a1)/(a2) jumper pins |
-| **A2_LEG – MID_1CUP** | **0.61 mm** | the (a2) feed runs down past the 1Cup chain to U6. A bridge there would only make the 1Cup line depend on U5 alone, and only once (a2) is fitted. Worth a re-route if the review asks for it |
-| pos 1 – GND | 23 mm | no ground near pos 1 |
+| each AQY's two outputs, and the MID/return pad beside it | 0.94 mm | across ONE photoMOS of a chain: the second one still holds |
+| fan tracks beside their connector's next pin | 1.45–1.49 mm | J2/J5/JP fans leaving a pin |
+| MID / leg tracks beside the next pad of the same chain | 1.54 mm | within one photoMOS, as above |
+
+Nothing crosses chains: no 2Cup copper is within 2.5 mm of the 1Cup chain
+or the reverse, apart from the J2 header pins. No machine net is within 2 mm
+of GND, +3V3, LED_RAIL or an LED pad, apart from J5's own `ESD1`–`VSS` pins.
+The two returns run 2.6 mm apart on B.Cu for ~15 mm where they turn toward
+J2.
 
 ## Before ordering
 

@@ -275,7 +275,7 @@ export default function Pull({ shots, beans, activeBeanId, onIngested }) {
         <Panel style={{ padding: 16 }}>
           <Eyebrow>Target</Eyebrow>
           <div style={{ display: "grid", gridTemplateColumns: "auto 1fr auto 1fr", gap: 8, alignItems: "center", marginTop: 10 }}>
-            {[["y0", "yield"], ["y1", "to"], ["t0", "time"], ["t1", "to"]].map(([key, label]) => (
+            {[["y0", "yield"], ["y1", "to"], ["t0", "pour"], ["t1", "to"]].map(([key, label]) => (
               <div key={key} style={{ display: "contents" }}>
                 <span style={{ fontFamily: MONO, fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: T.inkSoft }}>{label}</span>
                 <input type="number" step={key.startsWith("y") ? 0.5 : 1} value={targets[key]}
@@ -289,7 +289,7 @@ export default function Pull({ shots, beans, activeBeanId, onIngested }) {
             ))}
           </div>
           <div style={{ marginTop: 6, fontFamily: MONO, fontSize: 9.5, color: T.inkSoft, letterSpacing: "0.06em" }}>
-            G × SECONDS — the box the trace should exit through
+            G × SECONDS FROM FIRST DRIP — the box the trace should exit through
           </div>
         </Panel>
 

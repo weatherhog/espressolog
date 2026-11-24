@@ -9,6 +9,19 @@ export function Eyebrow({ children, style }) {
   );
 }
 
+// The headline shot time is the machine's own: pump on to pump off, the
+// number on the display and the one recipes mean by "25-30 s" (counted from
+// pump start, pre-infusion included). total_s is the scale's time, first
+// drip to a flat weight, ~10 s shorter with pre-infusion. Shots without a
+// display reading fall back to the press-to-stop span, then to the scale's
+// time, and the label says which, so the three are never shown as one.
+export function shotTime(shot) {
+  if (shot.machine_timer_s != null) return { s: shot.machine_timer_s, label: "Time" };
+  if (shot.pump_to_stop_s != null) return { s: shot.pump_to_stop_s, label: "Press→stop" };
+  if (shot.total_s != null) return { s: shot.total_s, label: "Pour" };
+  return { s: null, label: "Time" };
+}
+
 export function Readout({ value, unit, label, color = T.ink, size = 34 }) {
   return (
     <div>

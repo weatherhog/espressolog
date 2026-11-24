@@ -36,9 +36,13 @@
 --    quiet for 3 s (ShotDetector::tick()): while settling, or in a pour
 --    65 s on (then a reject under 5 g, else a scale-lost fault excluded
 --    at ingest). Such a curve ends
---    early and reads 1 here. That is what the
---    column means -- the settle was cut short -- but the cause can be the
---    scale rather than a lift.
+--    early and reads 1 here, and it can do so when the settle was NOT cut
+--    short: a settle window that closed on the clock while the scale was
+--    silent -- shot 214 (2026-11-24): cup lifted, Bookoo switched off,
+--    samples end 4.8 s after the stop, the window closed at ~7 s with the
+--    peak as the yield. So 1 means the samples stop early; the cause can
+--    be a lift, a quiet scale, or both, and the stored yield may still be
+--    a full settle's.
 -- There is no field to do better with.
 --
 --   settle_tail_ms  last stored sample's t_ms - stop_ms

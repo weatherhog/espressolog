@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { T, MONO, SANS } from "./tokens.js";
-import { Eyebrow, Readout, Panel, Chip, Stepper } from "./components.jsx";
+import { Eyebrow, Readout, Panel, Chip, Stepper, shotTime } from "./components.jsx";
 import { patchShot, postTasting } from "./api.js";
 
 // The capture screen: everything pre-filled, nothing required. Machine
@@ -201,14 +201,20 @@ export default function Capture({ shots, beans, justSaved, onSaved }) {
     <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
       <Panel style={{ padding: 24, flex: "1 1 380px", minWidth: 0 }}>
         <Eyebrow>Measured — shot #{pending.id} · {new Date(pending.started_at).toLocaleString()}</Eyebrow>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, margin: "16px 0 32px" }}>
-          <Readout value={pending.total_s?.toFixed(1) ?? "—"} unit="s" label="Time" size={30} />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, margin: "16px 0 12px" }}>
+          <Readout value={shotTime(pending).s?.toFixed(1) ?? "—"} unit="s" label={shotTime(pending).label} size={30} />
           <Readout value={pending.yield_final_g?.toFixed(1) ?? "—"} unit="g" label="Yield" size={30} />
           <Readout
             value={pending.settle_offset_g != null
               ? (pending.settle_offset_g >= 0 ? `+${pending.settle_offset_g.toFixed(1)}` : pending.settle_offset_g.toFixed(1))
               : "—"}
             unit="g" label="Settled" size={30} color={T.flow} />
+        </div>
+        {/* The two halves of the machine's time: how long the puck took to
+            drip (pre-infusion and saturation), then the pour the scale saw. */}
+        <div style={{ fontFamily: MONO, fontSize: 12, color: T.inkSoft, marginBottom: 32 }}>
+          first drip {pending.first_drip_ms != null ? `${(pending.first_drip_ms / 1000).toFixed(1)} s` : "—"}
+          {" · "}pour {pending.total_s != null ? `${pending.total_s.toFixed(1)} s` : "—"}
         </div>
 
         <Eyebrow>Confirm</Eyebrow>

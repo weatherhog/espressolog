@@ -39,6 +39,11 @@ FP_TO92 = "Package_TO_SOT_THT:TO-92_Inline_Wide"  # 2.54 mm legs; pad 1 = C (BC5
 FP_SOCK22 = "Connector_PinSocket_2.54mm:PinSocket_1x22_P2.54mm_Vertical"
 FP_HDR2 = "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"
 FP_XH = "Connector_JST:JST_XH_S{n}B-XH-A_1x0{n}_P2.50mm_Horizontal"
+# OUT headers: vertical (top-entry), right behind each side-entry IN header
+FP_XH_V = "Connector_JST:JST_XH_B{n}B-XH-A_1x0{n}_P2.50mm_Vertical"
+# the J3 NTC tap's 10 M: P5.08 so its raw pad keeps 2 mm from its own tap pad
+FP_R_TAP = "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P5.08mm_Vertical"
+FP_DIP8_IC = "Package_DIP:DIP-8_W7.62mm"
 
 # ------------------------------------------------------------------- symbols
 # Every pin is passive: ERC then checks only that nothing is left dangling.
@@ -87,9 +92,15 @@ SYMBOLS = {s[0]: s for s in [
     two_pin("R", "R"), two_pin("C", "C"), hc221(), AQY, BC547,
     conn("DevKit_SignalColumn", 22, DEVKIT_A),
     conn("DevKit_OppositeColumn", 22, DEVKIT_K),
-    conn("XH_J5", 4, ["empty", "ESD4", "ESD1", "VSS"]),
-    conn("XH_J4", 3, ["T", "empty", "#"]),
+    conn("XH_J5", 4, ["Disp-P4", "ESD4", "ESD1", "VSS"]),
+    conn("XH_J4", 3, ["+ (PROVISIONAL)", "T", "# (PROVISIONAL)"]),
+    conn("XH_J3", 2, ["NTC P1", "NTC P2"]),
     conn("XH_J2", 5, ["pos1 +5V", "Steam", "2Cup", "1Cup", "Water"]),
+    ("MCP6002", "U", (-5.08, 5.08, 5.08, -5.08),
+     [("1", "OUTA", -7.62, 3.81, 0), ("2", "-INA", -7.62, 1.27, 0),
+      ("3", "+INA", -7.62, -1.27, 0), ("4", "VSS", -7.62, -3.81, 0),
+      ("8", "VDD", 7.62, 3.81, 180), ("7", "OUTB", 7.62, 1.27, 180),
+      ("6", "-INB", 7.62, -1.27, 180), ("5", "+INB", 7.62, -3.81, 180)]),
     conn("Jumper2", 2, ["1", "2"]),
     ("TestPoint", "TP", (-1.27, 1.27, 1.27, -1.27), [("1", "~", 0, -3.81, 90)]),
 ]}
@@ -102,32 +113,54 @@ def part(ref, sym, value, fp, pins, dnp=False):
 
 def R(ref, value, a, b, dnp=False):
     n = int(ref[1:])
-    fp = FP_R_UP if n >= 20 else FP_R_J2 if 4 <= n <= 7 else FP_R
+    fp = (FP_R_TAP if n in (60, 61) else FP_R_UP if n >= 20
+          else FP_R_J2 if 4 <= n <= 7 else FP_R)
     part(ref, "R", value, fp, {"1": a, "2": b}, dnp)
 
 def C(ref, value, a, b, fp, dnp=False):
     part(ref, "C", value, fp, {"1": a, "2": b}, dnp)
 
-# --- harness headers. Pad 1 is the RIGHT-hand pin with the opening facing the
-# top edge (the footprint opens toward +y, so it is placed rotated 180 deg).
-# Nets are assigned so the hole order left-to-right matches the perfboard's,
-# and the existing branch plugs mate unchanged:
-#   J5  B3 VSS · C3 ESD1 · D3 ESD4 · E3 empty   -> pads 4 3 2 1
-#   J4  I3 #   · J3 empty · K3 T                -> pads 3 2 1
-#   J2  E' Water · F' 1Cup · G' 2Cup · H' Steam · I' pos1 -> pads 5 4 3 2 1
-part("J5", "XH_J5", "J5 display branch (Disp-P4 NOT branched)",
-     FP_XH.format(n=4), {"1": None, "2": "ESD4_RAW", "3": "ESD1_RAW", "4": "GND"})
-part("J4", "XH_J4", "J4 flow branch (+ NEVER enters the board)",
-     FP_XH.format(n=3), {"1": "GND", "2": None, "3": "FLOW_RAW"})
-part("J2", "XH_J2", "J2 switch branch (NO ground on J2)",
-     FP_XH.format(n=5), {"1": "POS1_5V", "2": "STEAM_RAW", "3": "2CUP_RAW",
-                         "4": "1CUP_RAW", "5": "WATER_RAW"})
+# --- harness headers: the T-pieces live on the board (decided 2026-11-24).
+# Each machine connector gets an IN header (side-entry, top edge) that the
+# ORIGINAL harness plug mates, and an OUT header (vertical, right behind it)
+# with a ready-made XH cable to the machine board. IN pin k -> OUT pin k,
+# straight through, for EVERY line; the taps branch off the pass-through.
+# A plug mates a header the same way whatever its style, so with a
+# same-direction cable the machine sees exactly its own harness.
+#
+# Pin k is the JST pin number (pad 1 = the RIGHT pin, opening at the edge):
+#   J5  1 Disp-P4 (the machine's square pad) · 2 ESD4 · 3 ESD1 · 4 VSS
+#       -- docs/machine-display-bus.md: VSS is the spoked-pad end
+#   J4  1 + · 2 T · 3 #   -- T is the MIDDLE conductor (measured);
+#       WHICH OUTER PIN IS + AND WHICH IS # IS PROVISIONAL, not recorded.
+#       Read it off the machine's J4 before ordering: swapping them puts the
+#       100 K / 220 K tap on the sensor rail.
+#   J3  1 NTC P1 · 2 NTC P2   -- roles unmeasured; the tap is DNP
+#   J2  1 pos 1 · 2 Steam · 3 2Cup · 4 1Cup · 5 Water   -- positional
+# J4 + and J5 Disp-P4 cross the board as isolated pass-throughs: nothing else
+# connects to them, ever (the J4 + rule in CLAUDE.md).
+PIN = {
+    "J5": {"1": "DISP_P4_RAW", "2": "ESD4_RAW", "3": "ESD1_RAW", "4": "GND"},
+    "J4": {"1": "FLOW_PLUS_RAW", "2": "GND", "3": "FLOW_RAW"},
+    "J3": {"1": "NTC_P1_RAW", "2": "NTC_P2_RAW"},
+    "J2": {"1": "POS1_5V", "2": "STEAM_RAW", "3": "2CUP_RAW",
+           "4": "1CUP_RAW", "5": "WATER_RAW"},
+}
+OUT_REF = {"J5": "J25", "J4": "J24", "J3": "J23", "J2": "J22"}
+for ref, sym, n, what in [("J5", "XH_J5", 4, "J5 display"),
+                          ("J4", "XH_J4", 3, "J4 flow"),
+                          ("J3", "XH_J3", 2, "J3 NTC (the PID's sensor)"),
+                          ("J2", "XH_J2", 5, "J2 switches (no ground)")]:
+    part(ref, sym, f"{what} IN - original harness plug",
+         FP_XH.format(n=n), PIN[ref])
+    part(OUT_REF[ref], sym, f"{what} OUT - cable to the machine board",
+         FP_XH_V.format(n=n), PIN[ref])
 
 # --- devkit, two 1x22 female headers 10 pitches (25.4 mm) apart
 A = {1: "+3V3", 2: "+3V3", 4: "ESD4", 5: "ESD1", 6: "FLOW", 7: "1CUP",
      8: "2CUP", 9: "STEAM", 10: "WATER", 12: "SELFTEST_IO8", 15: "RB_GATE",
-     16: "GATE_TRIG"}   # 21 = 5Vin: nothing; 22 = GND left unused, no joint beside 5Vin
-K = {1: "GND", 4: "RB_1CUP_1", 5: "RB_1CUP_2", 6: "TRIG_1CUP_1",
+     16: "GATE_TRIG", 17: "RB_1CUP_1"}   # 21 = 5Vin: nothing; 22 = GND left unused, no joint beside 5Vin
+K = {1: "GND", 4: "NTC_ADC", 5: "RB_1CUP_2", 6: "TRIG_1CUP_1",
      7: "TRIG_1CUP_2", 8: "TRIG_2CUP_1", 9: "TRIG_2CUP_2", 10: "GATE_EN",
      17: "RB_2CUP_1", 18: "RB_2CUP_2", 21: "GND", 22: "GND"}
 part("J11", "DevKit_SignalColumn", "ESP32-S3-DevKitC-1 signal column (A)",
@@ -225,6 +258,22 @@ part("JP3", "Jumper2", "(b) LED supply - OPEN until bench test", FP_HDR2,
 
 # --- bench test loops, for the analyser and scope ground and supply
 part("TP1", "TestPoint", "GND loop", FP_TP, {"1": "GND"})
+
+# --- J3 NTC tap. ALL DNP until J3 is measured and the tap has its own design
+# pass: the machine's PID regulates on this NTC, so any load shifts the brew
+# temperature, and a fault that reads cold keeps the heater on. Fit ONE 10 M,
+# on the line measured to be the divider node (both fitted put 20 M across
+# the NTC). MCP6002 (CMOS, ~1 pA bias) as a unity follower; RC into GPIO1.
+R("R60", "10M - DNP, fit ONE", "NTC_P1_RAW", "NTC_TAP", dnp=True)
+R("R61", "10M - DNP, fit ONE", "NTC_P2_RAW", "NTC_TAP", dnp=True)
+R("R62", "shunt - DNP, only if 5 V referenced", "NTC_TAP", "GND", dnp=True)
+C("C20", "10n - DNP", "NTC_TAP", "GND", FP_C_DISC, dnp=True)
+part("U8", "MCP6002", "MCP6002 - DNP", FP_DIP8_IC,
+     {"1": "NTC_OUT", "2": "NTC_OUT", "3": "NTC_TAP", "4": "GND",
+      "5": "GND", "6": "U8_B_OUT", "7": "U8_B_OUT", "8": "+3V3"}, dnp=True)
+R("R63", "1k - DNP", "NTC_OUT", "NTC_ADC", dnp=True)
+C("C21", "100n - DNP", "NTC_ADC", "GND", FP_C_DISC, dnp=True)
+C("C22", "100n - DNP", "+3V3", "GND", FP_C_DISC, dnp=True)
 part("TP2", "TestPoint", "3V3 loop", FP_TP, {"1": "+3V3"})
 
 # ------------------------------------------------------------------ writer
@@ -317,6 +366,11 @@ def layout():
     # connectors and devkit, left
     pos["J5"] = (30 * g, 30 * g); pos["J4"] = (30 * g, 45 * g)
     pos["J2"] = (30 * g, 60 * g)
+    pos["J25"] = (55 * g, 30 * g); pos["J24"] = (55 * g, 45 * g)
+    pos["J22"] = (55 * g, 60 * g)
+    pos["J3"] = (30 * g, 250 * g); pos["J23"] = (55 * g, 250 * g)
+    row(["R60", "R61", "R62", "C20", "R63", "C21", "C22"], 80 * g, 300 * g, 14 * g)
+    pos["U8"] = (200 * g, 300 * g)
     pos["J11"] = (30 * g, 90 * g); pos["J12"] = (30 * g, 160 * g)
     # sense resistors, two rows
     row(["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9"], 80 * g, 40 * g, 14 * g)
@@ -346,8 +400,9 @@ NOTES = [
     "Label-based: connectivity is the labels. Normative: docs/board-and-perfboard.md (Sense-side / Drive-side layout).",
     "Invariant 1: JP1 (a1), JP2 (a2) in series with the photoMOS outputs and JP3 (b) LED supply stay OPEN in Phase 0.",
     "U3 (PROPOSED gate) and R36 (its readback) go in or come out TOGETHER. Phase 0: socket fitted, chip and R36 out.",
-    "J2 carries no ground. J4 '+' never enters the board. J5 Disp-P4 is not branched. Nothing on devkit 5Vin.",
-    "Harness header pads: pad 1 is the RIGHT pin with the opening at the top edge - hole order matches the perfboard.",
+    "T-pieces on the board: IN (side-entry, original harness) -> OUT (vertical, cable to the machine), pin k to pin k for every line.",
+    "J4 '+' and J5 Disp-P4 are isolated pass-throughs: nothing else connects to them. J2 carries no ground. Nothing on devkit 5Vin.",
+    "J4 pin 1 = '+' and pin 3 = '#' is PROVISIONAL: read it off the machine's J4 before ordering. J3 tap: all DNP until J3 is measured.",
 ]
 
 def write():

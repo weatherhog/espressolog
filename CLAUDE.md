@@ -1030,8 +1030,12 @@ the document, not the document.
   **Chosen 2026-11-03: long side along the 35-hole axis, 66.0 mm.** The
   sense side is drawn hole by hole in `docs/board-and-perfboard.md`,
   "Sense-side layout": shunts under the devkit (10 mm clearance, measured),
-  harness headers on the top edge, and **J4's `+` never enters the box** —
-  the T-piece's branch carries `T` and `#` only. *(58.4 mm was stated as the
+  harness headers on the top edge, and on the perfboard **J4's `+` never
+  enters the box** — the T-piece's branch carries `T` and `#` only. **On the
+  PCB (decided 2026-11-24, the T-pieces move onto the board) `+` crosses
+  the board as an isolated pass-through trace: no pad, test point, via stub
+  or pour near it, 2 mm from everything, and still read-only — nothing
+  connects to it** (`hardware/pcb/README.md`). *(58.4 mm was stated as the
   maximum until 2026-11-03; it was only ever one orientation.)* *(Until 2026-11-03 this read "NOT RECEIVED … PHOTO-COUNTED
   2026-10-29: 35 × 37 = 1295".)* `docs/board-and-perfboard.md` carries the derivation, the 7 × 9
   it supersedes and why, and the pitch-count correction — all moved out of

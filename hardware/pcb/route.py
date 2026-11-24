@@ -30,10 +30,28 @@ UNROUTED_NETS = set()             # nets dropped from the DSN, if any
 
 
 def relay_machine(board, pads):
+    """Remove the fixed copper and lay it again from gen_pcb.py: every track
+    of a machine net, and the GND pass-throughs (matched by their exact
+    segments, since the router's own GND tracks stay)."""
+    def key(x1, y1, x2, y2):
+        a, b = (round(x1, 2), round(y1, 2)), (round(x2, 2), round(y2, 2))
+        return (min(a, b), max(a, b))
+    fixed_gnd = set()
+    for net, layer, pts in G.MACHINE_TRACKS():
+        if net in G.MACHINE_NETS:
+            continue
+        xy = [pads[p] if isinstance(p[0], str) else p for p in pts]
+        for (x1, y1), (x2, y2) in zip(xy, xy[1:]):
+            fixed_gnd.add(key(x1, y1, x2, y2))
     for t in list(board.GetTracks()):
-        if t.GetNetname() in G.MACHINE_NETS:
+        n = t.GetNetname()
+        s, e = t.GetStart(), t.GetEnd()
+        seg = key(pcbnew.ToMM(s.x) - G.OX, pcbnew.ToMM(s.y) - G.OY,
+                  pcbnew.ToMM(e.x) - G.OX, pcbnew.ToMM(e.y) - G.OY)
+        if n in G.MACHINE_NETS or (t.Type() == pcbnew.PCB_TRACE_T and seg in fixed_gnd):
             board.Remove(t)
-    nets = {n: board.FindNet(n) for n in G.MACHINE_NETS}
+    names = {net for net, _l, _p in G.MACHINE_TRACKS()}
+    nets = {n: board.FindNet(n) for n in names}
     G.lay_machine_tracks(board, lambda r, n: pads[(r, n)], nets)
 
 

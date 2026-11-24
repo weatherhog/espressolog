@@ -19,11 +19,16 @@ broke two of those, each a single-short path around the open (a) jumpers.
 So every machine net below is a fixed, locked track; route.py routes only the
 rest, and keeps it 2 mm away (netclass `Machine`).
 
+The T-pieces are on the board (2026-11-24): each machine connector has an
+IN header (side-entry, top edge, the original harness plug) and an OUT header
+(vertical, right behind it, cable to the machine board), joined pin k to pin
+k by a straight track. The taps hang off the OUT pins.
+
 Machine-corner topology (all lanes on the OUTPUT side of the photoMOS):
-  F.Cu  pos 1 (top), the J2/J4/J5 fans to their series resistors, A1_LEG,
-        A2_LEG (outer lane x 97.5), the two MID links on the output column
+  F.Cu  pass-throughs, pos 1 (top), the fans to the series resistors,
+        A1_LEG (lane x 88.5), A2_LEG (outer lane x 97.5), the two MID links
   B.Cu  the raw returns: 1CUP_RAW in lane x 94.4, 2CUP_RAW in lane x 98.6,
-        each up its own channel between the J2 resistor columns
+        each in at its own resistor row from the right
 """
 import os, sys
 import pcbnew
@@ -44,35 +49,44 @@ def at(ref, x, y, rot=0):
     POS[ref] = (x, y, rot)
 
 # --- devkit: A column (signal) and K column, 25.4 mm apart, pin 1 at the top
-at("J11", 6.0, 24.0)
-at("J12", 31.4, 24.0)
+# (8 mm lower than the first layout, to make room for the OUT headers)
+DEV_Y1 = 32.0
+at("J11", 6.0, DEV_Y1)
+at("J12", 31.4, DEV_Y1)
 
-# --- harness headers on the top edge, opening at the edge (rotated 180)
-at("J5", 18.5, 12.0, 180)          # pads 18.5 (1, empty) .. 11 (4, VSS)
-at("J4", 31.5, 12.0, 180)          # pads 31.5 (1, T) .. 26.5 (3, #)
-at("J2", 78.0, 12.0, 180)          # pads 78 (1, pos 1) .. 68 (5, Water)
+# --- harness headers: IN side-entry on the top edge (opening at the edge,
+# rotated 180, pad 1 on the right); OUT vertical right behind it, pad k
+# directly behind IN pad k, so each pass-through is one short straight track.
+IN_Y, OUT_Y = 12.0, 18.9
+for inn, out, x1 in [("J5", "J25", 18.5), ("J4", "J24", 31.5),
+                     ("J3", "J23", 44.0), ("J2", "J22", 82.5)]:
+    at(inn, x1, IN_Y, 180)
+    at(out, x1, OUT_Y, 180)
 
-# --- sense series legs: raw pad (pad 1) on the right, under its header pin,
-# and no two raw pads neighbours
-at("R2", 17.5, 17.0, 180)          # ESD4: raw 17.5,17  -> sense 7.34,17
-at("R1", 13.5, 20.5, 180)          # ESD1: raw 13.5,20.5 -> sense 3.34,20.5
-at("R3", 26.5, 23.0, 180)          # FLOW: raw 26.5,23  -> sense 16.34,23
+# --- sense series legs: raw pad (pad 1) under its OUT pin, sense end to the
+# left, rows staggered so no two raw pads are neighbours
+at("R2", 16.0, 23.5, 180)          # ESD4: raw 16,23.5   -> sense 5.84
+at("R1", 13.5, 26.7, 180)          # ESD1: raw 13.5,26.7 -> sense 3.34
+at("R3", 26.5, 29.9, 180)          # FLOW: raw 26.5,29.9 -> sense 16.34
 # --- sense shunts and candidate caps, flat, under the devkit
 for i, ref in enumerate(["R8", "R9", "R10", "R11", "R12", "R13", "R14",
                          "R15", "R16"]):
-    at(ref, 13.0, 27.0 + i * 3.5)
+    at(ref, 13.0, 35.0 + i * 3.5)
 for i, ref in enumerate(["C1", "C2", "C3"]):
-    at(ref, 14.0, 58.5 + i * 3.5)
-at("JP4", 27.5, 89.0)              # selftest: beside the USB end, not in line
+    at(ref, 14.0, 66.5 + i * 3.5)
+at("JP4", 36.5, 91.0)              # selftest: beside the USB end, not in line
 
-# --- MACHINE CORNER. J2's 150 K stand as columns, raw pad (pad 1) at the top,
-# 6.5 mm apart so each return climbs its own channel between two columns.
-J2R_Y = 18.5
-J2R_X = {"R4": 63.5, "R5": 69.5, "R6": 76.0, "R7": 82.5}   # W, 1C, 2C, S
-for ref, x in J2R_X.items():
-    at(ref, x, J2R_Y, 90)                     # checked below: pad 2 is BELOW
-at("JP1", 85.0, 8.0)               # (a1): pin 1 = pos 1, pin 2 = 1Cup leg
-at("JP2", 90.0, 8.0)               # (a2)
+# --- MACHINE CORNER. J2's 150 K lie flat, raw pad (pad 1) on the right
+# under its OUT pin, rows staggered down and to the right so no two raw pads
+# are neighbours; each return comes in from the right at its own row.
+# 2Cup's row is ABOVE 1Cup's: the 2Cup return comes from the outer lane
+# (x 98.6), so it has to turn in above the top of the 1Cup lane (x 94.4)
+J2R = {"R4": (72.5, 23.4), "R6": (77.5, 26.6), "R5": (75.0, 29.8),
+       "R7": (80.0, 33.0)}                          # W, 2C, 1C, S
+for ref, (x, y) in J2R.items():
+    at(ref, x, y, 180)
+at("JP1", 88.0, 9.0)               # (a1): pin 1 = pos 1, pin 2 = 1Cup leg
+at("JP2", 92.5, 9.0)               # (a2), clear of the H2 screw head
 
 # --- photoMOS stack, pad 1 (LED anode) facing left, outputs on the right
 PM_X = 83.5
@@ -109,7 +123,18 @@ for u, c in {"U1": dict(y=28.0, pullA1="R20", pullA2="R21", rc1="R27",
     upright(c["rc2"], COL1_X, y0 + 6.0, "down")      # RC2 on top, 3V3 below
     upright(c["pullA2"], COL1_X, y0 + 15.5, "down")  # pin 9 pull-up
     upright(c["rb1"], COL2_X, y0 + 4.54, "up")       # readback on top, Q below
-at("C15", 44.5, 24.0)                      # U1 decoupling, above pin 16
+at("C15", 54.5, 24.5)                      # U1 decoupling, by pin 16
+# --- J3 NTC tap, all DNP. The two 10 M stand upright with their raw pad
+# under the OUT pins and their tap pad pointing AWAY from each other; the tap
+# node is routed below them, 2 mm clear (netclass Machine).
+upright("R60", 44.0, 23.4, "right")        # P1 raw -> tap at 49.08
+upright("R61", 40.5, 23.4, "left")         # P2 raw -> tap at 35.42
+upright("R62", 52.0, 6.0, "down")          # tap -> GND shunt, scaling only
+upright("C20", 49.5, 17.0, "up")           # 10 n, tap -> GND at the op-amp
+at("U8", 54.0, 12.5)                       # MCP6002: pin 3 = +INA at 54,17.58
+upright("R63", 57.0, 8.5, "up")            # 1 K out -> NTC_ADC
+upright("C21", 60.0, 6.0, "right")         # 100 n on NTC_ADC
+upright("C22", 64.3, 12.5, "down")         # 100 n VDD decoupling, by pin 8
 at("C16", 49.5, 49.0, 180)                 # 3V3 pad by U1 pin 9 (pulled up
 at("C17", 49.5, 74.0, 180)                 # anyway), GND pad away from it
 # U3, the PROPOSED gate
@@ -132,7 +157,8 @@ HOLES = [(3.5, 3.5), (96.5, 3.5), (3.5, 96.5), (96.5, 96.5)]
 # Nets that carry machine voltage or sit on a machine line: netclass Machine.
 MACHINE_NETS = {"POS1_5V", "A1_LEG", "A2_LEG", "MID_1CUP", "MID_2CUP",
                 "1CUP_RAW", "2CUP_RAW", "STEAM_RAW", "WATER_RAW",
-                "ESD1_RAW", "ESD4_RAW", "FLOW_RAW"}
+                "ESD1_RAW", "ESD4_RAW", "FLOW_RAW", "FLOW_PLUS_RAW",
+                "DISP_P4_RAW", "NTC_P1_RAW", "NTC_P2_RAW"}
 
 
 def mm(x, y):
@@ -153,12 +179,16 @@ def pad_xy(f, num):
 
 
 def place_upright(f, x, y1, d):
-    """Pad 1 at (x, y1); pad 2 directly above ("up") or below ("down")."""
+    """Pad 1 at (x, y1); pad 2 above, below, left or right of it."""
     for rot in (0, 90, 180, 270):
         f.SetOrientationDegrees(rot)
         f.SetPosition(mm(x, y1))
         px, py = pad_xy(f, "2")
-        if abs(px - x) < 0.01 and ((py < y1) if d == "up" else (py > y1)):
+        ok = {"up": abs(px - x) < 0.01 and py < y1,
+              "down": abs(px - x) < 0.01 and py > y1,
+              "left": abs(py - y1) < 0.01 and px < x,
+              "right": abs(py - y1) < 0.01 and px > x}[d]
+        if ok:
             return
     raise SystemExit(f"cannot orient {f.GetReference()} {d}")
 
@@ -167,35 +197,51 @@ def place_upright(f, x, y1, d):
 # Each entry: (net, layer, [points]). A point is (x, y) or ("ref", "pad").
 F_, B_ = "F", "B"
 def MACHINE_TRACKS():
-    return [
-        # pos 1: J2 pin 1 -> (a1) pin 1 -> (a2) pin 1, along the top
-        ("POS1_5V", F_, [("J2", "1"), (78.0, 10.0), (80.0, 8.0), ("JP1", "1"),
+    # the T-pieces: IN pin k -> OUT pin k, straight down, for every line --
+    # GND too (J5 VSS, J4 T), so the machine's own ground current takes the
+    # short way and not our pour
+    passthrough = []
+    for inn, out in S.OUT_REF.items():
+        for k, net in S.PIN[inn].items():
+            passthrough.append((net, F_, [(inn, k), (out, k)]))
+    return passthrough + [
+        # GROUND ANCHORS: the machine's ground (J4 T, J5 VSS) is our dividers'
+        # reference and the only ground the J2 taps have. Both tie to the
+        # devkit's GND at J12 pin 1, clear of the raw fans; the pour is kept
+        # off the pass-through block, so these are tracks.
+        ("GND", F_, [("J24", "2"), (29.0, 24.0), (31.4, 26.4), ("J12", "1")]),
+        ("GND", B_, [("J25", "4"), (9.0, 20.9), (9.0, 33.6), (29.8, 33.6),
+                     ("J12", "1")]),
+        # pos 1: J2 IN pin 1 -> (a1) pin 1 -> (a2) pin 1, along the top
+        ("POS1_5V", F_, [("J2", "1"), (82.5, 11.0), (84.5, 9.0), ("JP1", "1"),
                          ("JP2", "1")]),
-        # J2 fans to the raw pads of their 150 K
-        ("WATER_RAW", F_, [("J2", "5"), (68.0, 13.5), (63.5, 18.0), ("R4", "1")]),
-        ("1CUP_RAW", F_, [("J2", "4"), (70.5, 15.0), (69.5, 16.0), ("R5", "1")]),
-        ("2CUP_RAW", F_, [("J2", "3"), (73.0, 15.0), (76.0, 18.0), ("R6", "1")]),
-        # Steam drops 2 mm before turning, so it clears pos 1's pin by 2 mm
-        ("STEAM_RAW", F_, [("J2", "2"), (75.5, 14.0), (80.0, 18.5), ("R7", "1")]),
-        # J5 / J4 fans to their series legs
-        ("ESD4_RAW", F_, [("J5", "2"), (16.0, 14.5), (17.5, 16.0), ("R2", "1")]),
-        ("ESD1_RAW", F_, [("J5", "3"), ("R1", "1")]),
-        ("FLOW_RAW", F_, [("J4", "3"), ("R3", "1")]),
+        # fans from the OUT pins straight down to the raw pads of the taps
+        ("ESD4_RAW", F_, [("J25", "2"), ("R2", "1")]),
+        ("ESD1_RAW", F_, [("J25", "3"), ("R1", "1")]),
+        ("FLOW_RAW", F_, [("J24", "3"), ("R3", "1")]),
+        ("NTC_P1_RAW", F_, [("J23", "1"), ("R60", "1")]),
+        ("NTC_P2_RAW", F_, [("J23", "2"), (41.5, 21.0), (40.5, 22.0),
+                            ("R61", "1")]),
+        ("WATER_RAW", F_, [("J22", "5"), ("R4", "1")]),
+        ("1CUP_RAW", F_, [("J22", "4"), ("R5", "1")]),
+        ("2CUP_RAW", F_, [("J22", "3"), ("R6", "1")]),
+        ("STEAM_RAW", F_, [("J22", "2"), ("R7", "1")]),
         # drive legs behind the open jumpers, on the output side
-        ("A1_LEG", F_, [("JP1", "2"), (85.0, 13.0), (88.5, 16.5), (88.5, 34.4),
+        ("A1_LEG", F_, [("JP1", "2"), (88.0, 13.0), (88.5, 13.5), (88.5, 34.4),
                         ("U4", "8")]),
-        ("A2_LEG", F_, [("JP2", "2"), (92.0, 12.54), (97.5, 12.54),
+        ("A2_LEG", F_, [("JP2", "2"), (94.46, 13.5), (97.5, 13.5),
                         (97.5, CELL_Y[3]), ("U6", "8")]),
         # the MID links jog right round the empty socket pads 5/6 between them
         ("MID_1CUP", F_, [("U4", "7"), (OUT_X + 2.28, CELL_Y[1] + 4.82),
                           (OUT_X + 2.28, CELL_Y[2] - 2.28), ("U5", "8")]),
         ("MID_2CUP", F_, [("U6", "7"), (OUT_X + 2.28, CELL_Y[3] + 4.82),
                           (OUT_X + 2.28, CELL_Y[4] - 2.28), ("U7", "8")]),
-        # the raw returns, B.Cu, outside the stack, each up its own channel
-        ("1CUP_RAW", B_, [("U5", "7"), (94.4, CELL_Y[2] + 2.54), (94.4, 32.5),
-                          (72.75, 32.5), (72.75, J2R_Y), ("R5", "1")]),
-        ("2CUP_RAW", B_, [("U7", "7"), (98.6, CELL_Y[4] + 2.54), (98.6, 29.5),
-                          (79.25, 29.5), (79.25, J2R_Y), ("R6", "1")]),
+        # the raw returns, B.Cu, outside the stack, each in its own lane and
+        # in at its own row (crossing the A legs and fans on the other layer)
+        ("1CUP_RAW", B_, [("U5", "7"), (94.4, CELL_Y[2] + 2.54),
+                          (94.4, J2R["R5"][1]), ("R5", "1")]),
+        ("2CUP_RAW", B_, [("U7", "7"), (98.6, CELL_Y[4] + 2.54),
+                          (98.6, J2R["R6"][1]), ("R6", "1")]),
     ]
 
 MACHINE_WIDTH = 0.4
@@ -249,13 +295,6 @@ def build():
             net = pins.get(pad.GetNumber())
             if net:
                 pad.SetNet(nets[net])
-
-    # the J2 resistors: pad 2 (sense) must be BELOW pad 1 (raw)
-    for ref, x in J2R_X.items():
-        (x1, y1), (x2, y2) = pad_xy(fps[ref], "1"), pad_xy(fps[ref], "2")
-        if not (abs(x2 - x1) < 0.01 and y2 > y1):
-            fps[ref].SetOrientationDegrees(270)
-            fps[ref].SetPosition(mm(x, J2R_Y))
 
     for i, (x, y) in enumerate(HOLES, start=1):
         h = load("MountingHole:MountingHole_3.2mm_M3")

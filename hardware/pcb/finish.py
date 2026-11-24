@@ -35,11 +35,15 @@ def polygon(zone, pts):
 # nets stay as tracks only, so the machine-voltage area reads as its own zone.
 # Elsewhere the netclass (2 mm, espressolog-board.kicad_dru) keeps the pour
 # away from the J4/J5 raw lines.
-MACHINE_AREA = [(60, 0), (W, 0), (W, 86), (87.5, 86), (87.5, 34.5),
-                (60, 34.5)]
+MACHINE_AREA = [(66, 0), (W, 0), (W, 86), (87.5, 86), (87.5, 35.5),
+                (66, 35.5)]
+# The J5/J4/J3 pass-throughs (IN and OUT headers): J4 + and J5 Disp-P4 run
+# here, and nothing of ours may pour up to them.
+HEADER_AREA = [(7.5, 0.5), (48.0, 0.5), (48.0, 22.0), (7.5, 22.0)]
 # Under the ESP32 module's antenna (the devkit's module end, at the top).
-ANTENNA_AREA = [(4.5, 16.5), (33.0, 16.5), (33.0, 26.5), (4.5, 26.5)]
+ANTENNA_AREA = [(4.5, 24.5), (33.0, 24.5), (33.0, 34.5), (4.5, 34.5)]
 for name, pts in [("machine corner: no pour", MACHINE_AREA),
+                  ("pass-through headers: no pour", HEADER_AREA),
                   ("antenna: no pour", ANTENNA_AREA)]:
     k = pcbnew.ZONE(board)
     k.SetIsRuleArea(True)
@@ -93,11 +97,17 @@ for fp in board.GetFootprints():
 edge = pcbnew.BOX2I(P(0.8, 0.8), pcbnew.VECTOR2I(F(W - 1.6), F(H - 1.6)))
 
 
-def free(bb, ignore=()):
+def free(bb, ignore=(), why=False):
     """True if bb is on the board and clear of every obstacle except those
     in ignore (a reference may sit inside its own part's outline)."""
-    return edge.Contains(bb) and not any(
-        bb.Intersects(o) for i, o in enumerate(obstacles) if i not in ignore)
+    hits = [o for i, o in enumerate(obstacles) if i not in ignore and bb.Intersects(o)]
+    if why:
+        for o in hits:
+            c = o.GetCenter()
+            print(f"   hits obstacle at ({pcbnew.ToMM(c.x) - OX:.1f}, {pcbnew.ToMM(c.y) - OY:.1f})")
+        if not edge.Contains(bb):
+            print("   outside the board margin")
+    return edge.Contains(bb) and not hits
 
 
 def text(s, x, y, size=1.0, angle=0, layer=pcbnew.F_SilkS):
@@ -113,35 +123,60 @@ def text(s, x, y, size=1.0, angle=0, layer=pcbnew.F_SilkS):
     if layer == pcbnew.F_SilkS:
         if not free(bb):
             print(f"LABEL COLLIDES: {s!r} at ({x}, {y})")
+            free(bb, why=True)
         obstacles.append(inflate(bb, 0.2))
     return t
 
 
 # ------------------------------------------------------------- labels
-text("a1", 85.0, 5.0)
-text("a2", 90.0, 5.0)
-text("OPEN in Phase 0", 87.5, 13.6, 0.8)
-text("MACHINE", 60.0, 2.6, 1.0)
-text("J5 display", 13.0, 1.8, 0.8)
-text("J4 flow", 28.5, 1.8, 0.8)
-text("J2 switches", 73.0, 1.8, 0.8)
-text("(b) OPEN until bench", 79.0, 93.0, 0.8)
-text("SELFTEST: never fit", 27.5, 94.6, 0.8)
-text("U3 + R36 OUT while gate PROPOSED", 34.0, 99.0 - 0.9, 0.8)
-text("espressolog sense+drive v1 2026-11", 75.0, 98.2, 0.8)
-text("devkit: module/antenna end", 19.0, 15.6, 0.8, layer=pcbnew.Dwgs_User)
+# Silk is >= 1.0 mm high with a 0.15 mm stroke (JLCPCB's minimum).
+text("a1", 88.0, 6.0)
+text("a2", 92.5, 6.0)
+text("OPEN in", 90.3, 15.6)
+text("Phase 0", 90.3, 17.1)
+text("J3: PID sensor,", 59.0, 2.0)
+text("tap DNP until measured", 59.0, 3.5)
+text("(b) OPEN until bench", 77.0, 93.0)
+text("SELFTEST: never fit", 26.0, 93.0)
+text("U3 + R36 OUT while gate PROPOSED", 25.5, 97.9)
+text("espressolog v2 2026-11", 80.0, 97.9)
+# rotated 90 it reads bottom to top: USB end at the bottom, antenna at pin 1
+text("USB end    ESP32 devkit    ANTENNA end", 2.0, 58.5, angle=90)
 
-# devkit outline on the drawings layer: where it sits over the sense shunts
-dev = pcbnew.PCB_SHAPE(board)
-dev.SetShape(pcbnew.SHAPE_T_RECT)
-dev.SetLayer(pcbnew.Dwgs_User)
-dev.SetStart(P(4.7, 19.0))
-dev.SetEnd(P(32.7, 82.5))
-dev.SetWidth(F(0.15))
-board.Add(dev)
+# Pin names at the top edge, in front of each IN header. The OUT header
+# right behind it carries the same pin in the same column (straight
+# through), so these name both. Not collision-checked against each other:
+# the 2.5 mm pitch leaves them closer than the label margin.
+PIN_NAMES = [(18.5, "P4"), (16.0, "CK"), (13.5, "DA"), (11.0, "0V"),
+             (31.5, "+"), (29.0, "T"), (26.5, "#"),
+             (44.0, "1"), (41.5, "2"),
+             (82.5, "+5"), (80.0, "ST"), (77.5, "2C"), (75.0, "1C"),
+             (72.5, "W")]
+for x, name in PIN_NAMES:
+    t = pcbnew.PCB_TEXT(board)
+    t.SetText(name)
+    t.SetLayer(pcbnew.F_SilkS)
+    t.SetTextSize(pcbnew.VECTOR2I(F(1.0), F(1.0)))
+    t.SetTextThickness(F(0.15))
+    t.SetPosition(P(x, 1.55))
+    board.Add(t)
+    obstacles.append(inflate(t.GetBoundingBox(), 0.1))
+
+# devkit outline on the SILKSCREEN (review finding 8): which way round the
+# devkit goes, and that the sense shunts sit under it
+# (three sides: the module end at y 27 would run over the sense legs' pads)
+for (x1, y1), (x2, y2) in [((4.0, 28.0), (4.0, 90.5)), ((4.0, 90.5), (33.4, 90.5)),
+                           ((33.4, 90.5), (33.4, 28.0))]:
+    dev = pcbnew.PCB_SHAPE(board)
+    dev.SetShape(pcbnew.SHAPE_T_SEGMENT)
+    dev.SetLayer(pcbnew.F_SilkS)
+    dev.SetStart(P(x1, y1))
+    dev.SetEnd(P(x2, y2))
+    dev.SetWidth(F(0.15))
+    board.Add(dev)
 
 # ---------------------------------------------- reference designators
-SIZE = 0.8
+SIZE = 1.0
 moved, fab = 0, []
 for fp in sorted(board.GetFootprints(), key=lambda f: f.GetReference()):
     ref = fp.Reference()
@@ -149,7 +184,7 @@ for fp in sorted(board.GetFootprints(), key=lambda f: f.GetReference()):
         ref.SetVisible(False)
         continue
     ref.SetTextSize(pcbnew.VECTOR2I(F(SIZE), F(SIZE)))
-    ref.SetTextThickness(F(0.12))
+    ref.SetTextThickness(F(0.15))
     ref.SetLayer(pcbnew.F_SilkS)
     bb = fp.GetBoundingBox(False)
     cx, cy = bb.GetCenter().x, bb.GetCenter().y

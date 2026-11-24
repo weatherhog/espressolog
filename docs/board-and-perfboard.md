@@ -565,6 +565,20 @@ A14 GPIO6 (flow `#`), A15 GPIO7 (1Cup), A16 GPIO15 (2Cup), A17 GPIO16
 (Steam), A18 GPIO17 (Water); GPIO8 is A20. **A29 is 5Vin — nothing is
 connected at or beside it.**
 
+**THE PCB DOES THIS DIFFERENTLY — decided 2026-11-24.** The T-pieces move
+onto the board: each machine connector gets an IN header (side-entry, top
+edge) that the original harness plug mates, and an OUT header (vertical,
+right behind it) with a ready-made XH cable to the machine board, joined pin
+k to pin k for every line. **J4 `+` and J5 `Disp-P4` then cross the board as
+isolated pass-through traces: no pad, test point, via stub or pour near
+them, 2 mm from everything, and still read-only — nothing connects to
+them.** The J3 NTC becomes a fourth pass-through, its tap footprints-only.
+**Operating consequence: the machine's switches, display, flowmeter and NTC
+all run through the PCB. Without it the machine runs only with the original
+plugs back on its own headers.** The pin map, the pre-power metering (a row
+per cable, same-direction vs reverse) and the layout are in
+`hardware/pcb/README.md`; everything below is the perfboard.
+
 **Harness headers, top edge, side-entry XH, plugs entering from the top:**
 
 | Header | Pins | Notes |
@@ -606,6 +620,8 @@ board's own, so with the machine disconnected the only path is through
 the sensor's electronics, which may read finite or OL. Then meter
 from each conductor at the T-piece's crimped plug that mates the machine header (the soldered header end reads the same) to the board hole
 this layout names:
+
+*(Perfboard only. The PCB's metering table is in `hardware/pcb/README.md`.)*
 
 | Conductor | Board hole | Expect |
 |---|---|---|

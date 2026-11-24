@@ -23,6 +23,9 @@ KICAD_CLI = os.environ.get(
 
 # ---------------------------------------------------------------- footprints
 FP_R = "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"
+# drive-side resistors (R20 and up) stand upright, as on the perfboard; the
+# sense ones lie flat, because the shunts sit under the devkit (10 mm clearance)
+FP_R_UP = "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P2.54mm_Vertical"
 # PITCH NOT MEASURED: the bought MKT 1 uF and the X7R 100 nF / NP0 470 pF.
 FP_C_FILM = "Capacitor_THT:C_Rect_L7.2mm_W5.5mm_P5.00mm_FKS2_FKP2_MKS2_MKP2"
 FP_C_DISC = "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm"
@@ -93,7 +96,8 @@ def part(ref, sym, value, fp, pins, dnp=False):
     P.append((ref, sym, value, fp, pins, dnp))
 
 def R(ref, value, a, b, dnp=False):
-    part(ref, "R", value, FP_R, {"1": a, "2": b}, dnp)
+    fp = FP_R_UP if int(ref[1:]) >= 20 else FP_R
+    part(ref, "R", value, fp, {"1": a, "2": b}, dnp)
 
 def C(ref, value, a, b, fp, dnp=False):
     part(ref, "C", value, fp, {"1": a, "2": b}, dnp)

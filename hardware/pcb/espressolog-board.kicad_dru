@@ -6,6 +6,9 @@
 # memberOfFootprint(). A condition KiCad cannot parse disables the WHOLE
 # file and DRC silently falls back to the netclasses: after editing this,
 # check that a DRC report names these rules.
+# Net names are written '*NAME': == wildcard-matches, so the rules survive a
+# GUI "Update PCB from Schematic", which renames every net to /NAME
+# (fix-pass check NIT 9).
 
 # Machine nets (netclass Machine: pos 1, every raw line incl. the J3 NTC,
 # J4 + and J5 Disp-P4 pass-throughs, the drive chains) keep 2 mm from
@@ -36,7 +39,7 @@
 # a GND track anywhere else near a machine pin still needs 2 mm (final
 # review S2a: this used to cover J2/J22/JP1/JP2 too).
 (rule "ground pass-through beside its connector's machine pins"
-  (condition "A.Type == 'Pad' && A.hasNetclass('Machine') && B.Type == 'Track' && B.NetName == 'GND' && B.Locked && (A.memberOfFootprint('J4') || A.memberOfFootprint('J5') || A.memberOfFootprint('J24') || A.memberOfFootprint('J25'))")
+  (condition "A.Type == 'Pad' && A.hasNetclass('Machine') && B.Type == 'Track' && B.NetName == '*GND' && B.Locked && (A.memberOfFootprint('J4') || A.memberOfFootprint('J5') || A.memberOfFootprint('J24') || A.memberOfFootprint('J25'))")
   (constraint clearance (min 1.2mm)))
 
 # Pads of one part: a connector's or jumper's own pins, an AQY's outputs.
@@ -60,12 +63,27 @@
 # and items touching the "J2 fan zone" rule area (finish.py) -- the first
 # few mm of track leaving the 2.5 mm-pitch header, which cannot be wider.
 (rule "1Cup and 2Cup chains apart"
-  (condition "(((A.NetName == '2CUP_RAW' || A.NetName == 'MID_2CUP' || A.NetName == 'A2_LEG') && (B.NetName == '1CUP_RAW' || B.NetName == 'MID_1CUP' || B.NetName == 'A1_LEG')) || ((A.NetName == '1CUP_RAW' || A.NetName == 'MID_1CUP' || A.NetName == 'A1_LEG') && (B.NetName == '2CUP_RAW' || B.NetName == 'MID_2CUP' || B.NetName == 'A2_LEG'))) && !A.memberOfFootprint('J2') && !A.memberOfFootprint('J22') && !B.memberOfFootprint('J2') && !B.memberOfFootprint('J22') && !A.intersectsArea('J2 fan zone') && !B.intersectsArea('J2 fan zone')")
+  (condition "(((A.NetName == '*2CUP_RAW' || A.NetName == '*MID_2CUP' || A.NetName == '*A2_LEG') && (B.NetName == '*1CUP_RAW' || B.NetName == '*MID_1CUP' || B.NetName == '*A1_LEG')) || ((A.NetName == '*1CUP_RAW' || A.NetName == '*MID_1CUP' || A.NetName == '*A1_LEG') && (B.NetName == '*2CUP_RAW' || B.NetName == '*MID_2CUP' || B.NetName == '*A2_LEG'))) && !A.memberOfFootprint('J2') && !A.memberOfFootprint('J22') && !B.memberOfFootprint('J2') && !B.memberOfFootprint('J22') && !A.intersectsArea('J2 fan zone') && !B.intersectsArea('J2 fan zone')")
   (constraint clearance (min 2.5mm)))
 
 # A leg beside its OWN return is the both-photoMOS bypass; pos 1 beside a
 # lever line gets round the jumper as well. Track to track: the pads are
 # header and jumper pins (pre-order review S4e).
 (rule "a leg beside its own return, or pos 1 beside a lever line"
-  (condition "((A.NetName == 'A1_LEG' && B.NetName == '1CUP_RAW') || (A.NetName == 'A2_LEG' && B.NetName == '2CUP_RAW') || (A.NetName == 'POS1_5V' && (B.NetName == '1CUP_RAW' || B.NetName == '2CUP_RAW' || B.NetName == 'MID_1CUP' || B.NetName == 'MID_2CUP' || B.NetName == 'WATER_RAW'))) && A.Type == 'Track' && B.Type == 'Track'")
+  (condition "((A.NetName == '*A1_LEG' && B.NetName == '*1CUP_RAW') || (A.NetName == '*A2_LEG' && B.NetName == '*2CUP_RAW') || (A.NetName == '*POS1_5V' && (B.NetName == '*1CUP_RAW' || B.NetName == '*2CUP_RAW' || B.NetName == '*MID_1CUP' || B.NetName == '*MID_2CUP' || B.NetName == '*WATER_RAW'))) && A.Type == 'Track' && B.Type == 'Track'")
   (constraint clearance (min 2.5mm)))
+
+
+# Pos 1 beside Steam: J2 pin 1-2, boiler to 165 C, no jumper in the path.
+# Its own rule at 2.0, not in the 2.5 rule above: the J2/J22 pass-throughs
+# themselves sit 2.10 apart (fix-pass check SHOULD 3).
+(rule "pos 1 beside Steam"
+  (condition "A.NetName == '*POS1_5V' && B.NetName == '*STEAM_RAW' && A.Type == 'Track' && B.Type == 'Track'")
+  (constraint clearance (min 2.0mm)))
+
+# The mounting holes are NPTH: no copper, so no clearance rule above sees
+# them, only hole_clearance. A screw head or metal standoff must not reach a
+# machine net (fix-pass check SHOULD 2). 3.0 mm from the hole EDGE.
+(rule "machine nets clear of the mounting holes"
+  (condition "A.hasNetclass('Machine') && B.memberOfFootprint('H*')")
+  (constraint hole_clearance (min 3.0mm)))

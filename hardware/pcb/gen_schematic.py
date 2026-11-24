@@ -41,7 +41,7 @@ FP_HDR2 = "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"
 FP_XH = "Connector_JST:JST_XH_S{n}B-XH-A_1x0{n}_P2.50mm_Horizontal"
 # OUT headers: vertical (top-entry), right behind each side-entry IN header
 FP_XH_V = "Connector_JST:JST_XH_B{n}B-XH-A_1x0{n}_P2.50mm_Vertical"
-# the J3 NTC tap's 10 M: P5.08 so its raw pad keeps 2 mm from its own tap pad
+# the J3 NTC tap's raw-side 4.7 M: P5.08 so its raw pad keeps 2 mm from its own far pad
 FP_R_TAP = "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P5.08mm_Vertical"
 FP_DIP8_IC = "Package_DIP:DIP-8_W7.62mm"
 
@@ -136,7 +136,8 @@ def C(ref, value, a, b, fp, dnp=False):
 #       was wrong, and ee2795e tied + to our GND because of it).
 #       T (yellow) and # (black) are the outer pins: # on pad 1, T on pad 3
 #       (J4_T_PIN below).
-#   J3  1 NTC P1 · 2 NTC P2   -- roles unmeasured; the tap is DNP
+#   J3  1 NTC P1 · 2 NTC P2   -- 109 k between them (2026-11-24); which is
+#       the divider node is unmeasured; the tap is DNP
 #   J2  1 pos 1 · 2 Steam · 3 2Cup · 4 1Cup · 5 Water   -- positional
 # J4 + and J5 Disp-P4 cross the board as isolated pass-throughs: nothing else
 # connects to them, ever (the J4 + rule in CLAUDE.md).
@@ -279,17 +280,30 @@ part("TP1", "TestPoint", "GND loop", FP_TP, {"1": "GND"})
 
 # --- J3 NTC tap. ALL DNP until J3 is measured and the tap has its own design
 # pass: the machine's PID regulates on this NTC, so any load shifts the brew
-# temperature, and a fault that reads cold keeps the heater on. Fit ONE 10 M,
-# on the line measured to be the divider node (both fitted put 20 M across
-# the NTC). MCP6002 (CMOS, ~1 pA bias) as a unity follower; RC into GPIO1.
-R("R60", "10M - DNP, fit ONE", "NTC_P1_RAW", "NTC_TAP", dnp=True)
-R("R61", "10M - DNP, fit ONE", "NTC_P2_RAW", "NTC_TAP", dnp=True)
+# temperature, and a fault that reads cold keeps the heater on.
+# Measured 2026-11-24 (operator): J3 is a 2-pin XH, the sensor reads 109 k
+# between its two wires at room temperature, so a 100 k NTC. Which pin is the
+# divider node, and its voltage, are NOT measured yet.
+# Two 4.7 M in series, so no single bridged or failed part leaves less than
+# 4.7 M on the NTC line: fit ONE of R60/R61 (the pin measured to be the
+# divider node; both fitted put 9.4 M across the NTC), plus R64.
+# MCP6002 (CMOS, ~1 pA bias): half A is a unity follower. Half B follows A
+# through the Rf/Rg footprints -- a wire link in R66 and R67 left out makes
+# it a second follower (the parked default); R66/R67 fitted give gain
+# 1 + R66/R67 for a node that sits low when hot. Fit ONE output resistor:
+# R63 (straight) or R68 (after the gain stage). RC into GPIO1 (ADC1).
+R("R60", "4.7M - DNP, fit ONE", "NTC_P1_RAW", "NTC_MID", dnp=True)
+R("R61", "4.7M - DNP, fit ONE", "NTC_P2_RAW", "NTC_MID", dnp=True)
+R("R64", "4.7M - DNP", "NTC_MID", "NTC_TAP", dnp=True)
 R("R62", "shunt - DNP, only if 5 V referenced", "NTC_TAP", "GND", dnp=True)
 C("C20", "10n - DNP", "NTC_TAP", "GND", FP_C_DISC, dnp=True)
 part("U8", "MCP6002", "MCP6002 - DNP", FP_DIP8_IC,
      {"1": "NTC_OUT", "2": "NTC_OUT", "3": "NTC_TAP", "4": "GND",
-      "5": "GND", "6": "U8_B_OUT", "7": "U8_B_OUT", "8": "+3V3"}, dnp=True)
-R("R63", "1k - DNP", "NTC_OUT", "NTC_ADC", dnp=True)
+      "5": "NTC_OUT", "6": "NTC_FB", "7": "NTC_GOUT", "8": "+3V3"}, dnp=True)
+R("R63", "1k - DNP, fit ONE of R63/R68", "NTC_OUT", "NTC_ADC", dnp=True)
+R("R66", "Rf - DNP: wire link = unity", "NTC_GOUT", "NTC_FB", dnp=True)
+R("R67", "Rg - DNP, gain only", "NTC_FB", "GND", dnp=True)
+R("R68", "1k - DNP, fit ONE of R63/R68", "NTC_GOUT", "NTC_ADC", dnp=True)
 C("C21", "100n - DNP", "NTC_ADC", "GND", FP_C_DISC, dnp=True)
 C("C22", "100n - DNP", "+3V3", "GND", FP_C_DISC, dnp=True)
 part("TP2", "TestPoint", "3V3 loop", FP_TP, {"1": "+3V3"})
@@ -387,8 +401,10 @@ def layout():
     pos["J25"] = (55 * g, 30 * g); pos["J24"] = (55 * g, 45 * g)
     pos["J22"] = (55 * g, 60 * g)
     pos["J3"] = (30 * g, 250 * g); pos["J23"] = (55 * g, 250 * g)
-    row(["R60", "R61", "R62", "C20", "R63", "C21", "C22"], 80 * g, 300 * g, 14 * g)
-    pos["U8"] = (200 * g, 300 * g)
+    row(["R60", "R61", "R64", "R62", "C20", "R63", "C21", "C22"],
+        80 * g, 300 * g, 14 * g)
+    pos["U8"] = (215 * g, 300 * g)
+    row(["R66", "R67", "R68"], 80 * g, 330 * g, 14 * g)
     pos["J11"] = (30 * g, 90 * g); pos["J12"] = (30 * g, 160 * g)
     # sense resistors, two rows
     row(["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9"], 80 * g, 40 * g, 14 * g)
@@ -470,7 +486,10 @@ def check():
     erc = os.path.join(out, "erc.rpt")
     subprocess.run([KICAD_CLI, "sch", "erc", "--severity-all", "-o", erc, sch],
                    check=False, capture_output=True)
-    print(open(erc).read().strip().splitlines()[-1] if os.path.exists(erc) else "no ERC report")
+    m = re.search(r"ERC messages: (\d+)\s+Errors (\d+)\s+Warnings (\d+)",
+                  open(erc).read() if os.path.exists(erc) else "")
+    print(f"ERC: {m.group(2)} errors, {m.group(3)} warnings" if m else "no ERC report")
+    erc_ok = bool(m) and m.group(2) == "0"
     net = os.path.join(out, f"{PROJECT}.net")
     subprocess.run([KICAD_CLI, "sch", "export", "netlist", "-o", net, sch],
                    check=True, capture_output=True)
@@ -492,7 +511,7 @@ def check():
         bad += 1
         print(f"EXTRA net {n}: {sorted(got[n])}")
     print(f"netlist round-trip: {len(want)} nets intended, {bad} problems")
-    return bad == 0
+    return bad == 0 and erc_ok
 
 if __name__ == "__main__":
     write()

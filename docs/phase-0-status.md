@@ -2628,7 +2628,7 @@ state; closing it is the deliberate act, with the RC chosen first.
    | J5 | — | 4 | GND, `ESD1`, `ESD4`, `Disp-P4` — **JST XH, `XHP-4`** (verified) |
    | J2 | `BOTONE` | 5 | **positional: 1 = +5 V common · 2 = Steam · 3 = 2Cup · 4 = 1Cup · 5 = Water** — `XHP-5`. *(Read "+5 V, Steam, 1Cup, 2Cup, Water" until 2026-10-29 — the non-positional order CLAUDE.md's J2 table warns swaps the shot with the clean cycle if read as positions, on the one row a builder reads with the plug in hand.)* |
    | J4 | — | 3 | flowmeter — `XHP-3`. **Measured 2026-10-04: ground (`T`), +5 V (`+`), ONE signal (`#`)** — not two nets. |
-   | J3 | — | 2 | NTC thermistor |
+   | J3 | — | 2 | NTC thermistor — **2-pin JST XH, and the sensor reads 109 kΩ between its two wires** (operator, 2026-11-24, plug off the machine board; presumably at room temperature, which was not recorded). That fits a 100 kΩ NTC. Which pin is the divider node, the pull-up and the node voltage are unmeasured (`hardware/pcb/README.md`, "The J3 NTC tap"). |
    | J1 | — | 9 | **mains and loads — never touch** |
 5. **0d — flowmeter — FIRST ATTEMPT FAILED, 2026-10-03.** Recorded because
    it is the **only time Phase 0 has violated hard invariant 1**, and the

@@ -9,7 +9,8 @@ import os
 import pcbnew
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import gen_schematic as S          # noqa: E402  (J4_T_PIN)
+import gen_schematic as S          # noqa: E402  (the netlist)
+import gen_pcb as G                # noqa: E402  (the hand-laid copper)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PCB = os.path.join(HERE, "espressolog-board.kicad_pcb")
@@ -22,7 +23,11 @@ def P(x, y):
 
 
 # Start from route.py's copy: no zones, no labels, so this is repeatable.
-board = pcbnew.LoadBoard(os.path.join(HERE, "build", "routed.kicad_pcb"))
+ROUTED = os.path.join(HERE, "build", "routed.kicad_pcb")
+if not os.path.exists(ROUTED):
+    sys.exit("no build/routed.kicad_pcb: route.py did not finish (it removes "
+             "a stale one at its start). Run route.py again.")
+board = pcbnew.LoadBoard(ROUTED)
 
 
 def polygon(zone, pts):
@@ -158,8 +163,8 @@ text("a1", 88.0, 6.0)
 text("a2", 92.5, 6.0)
 text("OPEN in", 90.3, 15.6)
 text("Phase 0", 90.3, 17.1)
-text("J3: PID sensor,", 59.0, 2.0)
-text("tap DNP until measured", 59.0, 3.5)
+text("J3 = PID sensor", 60.0, 1.8)
+text("tap: all DNP", 60.0, 3.2)
 text("(b) OPEN until bench", 77.0, 93.0)
 text("SELFTEST: never fit", 26.0, 93.0)
 text("U3 + R36 OUT while gate PROPOSED", 57.0, 97.9)
@@ -167,17 +172,25 @@ text("espressolog v2", 85.0, 97.9)
 # rotated 90 it reads bottom to top: USB end at the bottom, antenna at pin 1
 text("USB end    ESP32 devkit    ANTENNA end", 2.0, 58.5, angle=90)
 
-# Each IN/OUT pair named on the board, on the LEFT of the pair and spanning
-# both headers: a smaller XH plug may seat offset in a larger header, and no
-# metering catches a plug moved afterwards (pre-order review S10).
+# Each IN/OUT pair named on the board, on the LEFT of the pair, once beside
+# the IN header and once beside the OUT header: a smaller XH plug may seat
+# offset in a larger header, and no metering catches a plug moved afterwards
+# (pre-order review S10; fix-pass check NIT 11).
 for name, x in [("DISPLAY", 7.2), ("FLOW", 22.75), ("NTC", 37.7),
                 ("LEVERS", 68.7)]:
     text(name, x, 11.8, 1.2, angle=90)
+    text(name, x, 19.2, 1.0, angle=90)
 
 # J3 tap: the build rule on the board itself (final review S4); doubles as
 # R61's and R60's reference, left and right of it
 text("fit ONE", 42.25, 25.75)
-text("R60", 51.6, 23.4)                 # R60's own reference has no room
+text("R60", 51.8, 23.9)                 # R60's own reference has no room
+# the other tap parts the placer found no room for
+text("R64", 51.7, 21.95)
+text("R68", 49.0, 4.6)
+text("R63", 55.0, 7.2, angle=90)
+text("R66", 66.7, 13.9, angle=90)
+text("R67", 66.7, 19.2, angle=90)
 text("R27", 61.6, 26.7)                 # placed by hand: the placer lost it
 # devkit socket positions (the metering names A4..A10), and 5Vin
 for k in (1, 5, 10, 15, 20):
@@ -263,17 +276,125 @@ for fp in sorted(board.GetFootprints(), key=lambda f: f.GetReference()):
         ref.SetPosition(bb.GetCenter())
         fab.append(fp.GetReference())
 
-# The confirmed J4 pinout, checked on the board itself (pre-order review S9):
-# T (pad 3) on GND, # (pad 1) on its tap, + (pad 2) on two pads and nothing else.
+# ---------------------------------------------------------------- checks
+# Not `assert`: python -O strips those. Any failure stops before the save.
+def check(ok, msg):
+    if not ok:
+        sys.exit("finish.py CHECK FAILED: " + msg)
+
 _pads = {(f.GetReference(), p.GetNumber()): p.GetNetname()
          for f in board.GetFootprints() for p in f.Pads()}
+# 1. The board is the netlist: every pad of every part on the net
+#    gen_schematic.py gives it, so a stale routed board cannot be finished
+#    (fix-pass check, SHOULD 5).
+_want = {(ref, num): (net or "") for ref, _s, _v, _fp, pins, _d in S.P
+         for num, net in pins.items()}
+_bad = sorted(k for k in _want if _pads.get(k, "?").lstrip("/") != _want[k])
+check(not _bad, f"pad nets differ from gen_schematic.py: {_bad[:8]}")
+# 2. The confirmed pinouts, on the board itself (pre-order review S9): J4
+#    T (pad 3) on GND, # (pad 1) on its tap, + (pad 2) isolated; J5 pad 4
+#    VSS, pad 1 Disp-P4 isolated; J2 pad 1 the +5 V common.
 for _j in ("J4", "J24"):
-    assert _pads[(_j, "3")] == "GND" and _pads[(_j, "1")] == "FLOW_RAW" \
-        and _pads[(_j, "2")] == "FLOW_PLUS_RAW", f"{_j}: wrong pinout"
+    check((_pads[(_j, "1")], _pads[(_j, "2")], _pads[(_j, "3")])
+          == ("FLOW_RAW", "FLOW_PLUS_RAW", "GND"), f"{_j}: wrong pinout")
+for _j in ("J5", "J25"):
+    check((_pads[(_j, "1")], _pads[(_j, "2")], _pads[(_j, "3")],
+           _pads[(_j, "4")]) == ("DISP_P4_RAW", "ESD4_RAW", "ESD1_RAW", "GND"),
+          f"{_j}: wrong pinout")
+for _j in ("J2", "J22"):
+    check([_pads[(_j, str(k))] for k in range(1, 6)]
+          == ["POS1_5V", "STEAM_RAW", "2CUP_RAW", "1CUP_RAW", "WATER_RAW"],
+          f"{_j}: wrong pinout")
 for _net in ("FLOW_PLUS_RAW", "DISP_P4_RAW"):
-    assert sum(1 for v in _pads.values() if v == _net) == 2, _net
-    assert sum(1 for t in board.GetTracks() if t.GetNetname() == _net) == 1, _net
+    check(sum(1 for v in _pads.values() if v == _net) == 2, _net + ": pads")
+    check(sum(1 for t in board.GetTracks() if t.GetNetname() == _net) == 1,
+          _net + ": more than its one pass-through track")
+# 3. The hand-laid copper is exactly gen_pcb.py's: every segment and via on
+#    the board and locked, and no other track on a machine net.
+_xy = {(f.GetReference(), p.GetNumber()): G.pad_xy(f, p.GetNumber())
+       for f in board.GetFootprints() for p in f.Pads()}
+def _key(net, lay, a, b):
+    a, b = (round(a[0], 2), round(a[1], 2)), (round(b[0], 2), round(b[1], 2))
+    return (net, lay, min(a, b), max(a, b))
+_laid, _vias = set(), set()
+for _net, _lay, _pts in G.MACHINE_TRACKS():
+    _p = [_xy[q] if isinstance(q[0], str) else q for q in _pts]
+    if _lay == G.V_:
+        _vias |= {(_net, round(x, 2), round(y, 2)) for x, y in _p}
+        continue
+    _laid |= {_key(_net, _lay, a, b) for a, b in zip(_p, _p[1:])}
+_on, _onv = set(), set()
+for _t in board.GetTracks():
+    _s, _e = _t.GetStart(), _t.GetEnd()
+    _a = (pcbnew.ToMM(_s.x) - OX, pcbnew.ToMM(_s.y) - OY)
+    _b = (pcbnew.ToMM(_e.x) - OX, pcbnew.ToMM(_e.y) - OY)
+    _n = _t.GetNetname().lstrip("/")
+    if _t.Type() == pcbnew.PCB_VIA_T:
+        if _t.IsLocked():
+            _onv.add((_n, round(_a[0], 2), round(_a[1], 2)))
+        check(_n not in G.MACHINE_NETS, f"a via on machine net {_n}")
+        continue
+    _k = _key(_n, "F" if _t.GetLayer() == pcbnew.F_Cu else "B", _a, _b)
+    if _t.IsLocked():
+        _on.add(_k)
+    check(_n not in G.MACHINE_NETS or (_t.IsLocked() and _k in _laid),
+          f"a track on machine net {_n} that gen_pcb.py did not lay: {_k}")
+check(_laid <= _on, f"hand-laid segments missing or unlocked: {sorted(_laid - _on)[:6]}")
+check(_on <= _laid, f"locked segments gen_pcb.py does not lay: {sorted(_on - _laid)[:6]}")
+check(_vias == _onv, f"locked vias differ: {sorted(_vias ^ _onv)}")
+# 3b. Nothing of ours crosses a machine track on the OTHER layer (no DRC
+#     rule sees opposite layers; route.py keeps the router out, this proves
+#     it). The hand-laid ground anchors count as ours.
+def _crosses(a, b):
+    def o(p, q, r):
+        return (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
+    return (o(a[0], a[1], b[0]) * o(a[0], a[1], b[1]) < 0
+            and o(b[0], b[1], a[0]) * o(b[0], b[1], a[1]) < 0)
+_segs = []
+for _t in board.GetTracks():
+    if _t.Type() == pcbnew.PCB_VIA_T:
+        continue
+    _s, _e = _t.GetStart(), _t.GetEnd()
+    _segs.append((_t.GetNetname().lstrip("/"), _t.GetLayer(),
+                  ((pcbnew.ToMM(_s.x) - OX, pcbnew.ToMM(_s.y) - OY),
+                   (pcbnew.ToMM(_e.x) - OX, pcbnew.ToMM(_e.y) - OY)),
+                  pcbnew.ToMM(_t.GetWidth())))
+def _pt(p, a, b):
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    L = dx * dx + dy * dy
+    t = 0.0 if L == 0 else max(0.0, min(1.0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L))
+    return ((p[0] - a[0] - t * dx) ** 2 + (p[1] - a[1] - t * dy) ** 2) ** 0.5
+def _dist(a, b):
+    if _crosses(a, b):
+        return 0.0
+    return min(_pt(a[0], *b), _pt(a[1], *b), _pt(b[0], *a), _pt(b[1], *a))
+# projected edge-to-edge gap through the board: collinear, parallel and
+# T-junction runs count, not only proper crossings
+_under = sorted({(m[0], o[0], round(o[2][0][0], 1), round(o[2][0][1], 1))
+                 for m in _segs if m[0] in G.MACHINE_NETS
+                 for o in _segs if o[0] not in G.MACHINE_NETS
+                 and o[1] != m[1]
+                 and _dist(m[2], o[2]) - m[3] / 2 - o[3] / 2 < 1.0})
+check(not _under, "our copper under, or within 1 mm through the board of, a "
+      f"machine track (machine net, ours, start of our segment): {_under[:8]}")
+
+# The routed board must be the placement gen_pcb.py last wrote (route.py
+# saves the same placement to PCB): a stale build/routed.kicad_pcb after a
+# gen_pcb.py edit would otherwise be finished over the new placement.
+if os.path.exists(PCB):
+    _now = {f.GetReference(): (f.GetPosition().x, f.GetPosition().y,
+                               round(f.GetOrientationDegrees(), 1))
+            for f in pcbnew.LoadBoard(PCB).GetFootprints()}
+    _rt = {f.GetReference(): (f.GetPosition().x, f.GetPosition().y,
+                              round(f.GetOrientationDegrees(), 1))
+           for f in board.GetFootprints()}
+    _moved = sorted(r for r in set(_now) | set(_rt) if _now.get(r) != _rt.get(r))
+    check(not _moved, f"build/routed.kicad_pcb is not the placement in {os.path.basename(PCB)}: {_moved[:8]}. Run route.py.")
 
 pcbnew.ZONE_FILLER(board).Fill(board.Zones())
+# 4. Nothing left open (route.py exits 0 with connections unrouted).
+board.BuildConnectivity()
+_open = board.GetConnectivity().GetUnconnectedCount(False)
+check(_open == 0, f"{_open} open connection(s): run `route.py --keep` again")
 board.Save(PCB)
 print(f"refs placed on silk: {moved}; fab only (no room): {', '.join(fab) or 'none'}")

@@ -26,8 +26,8 @@ k by a straight track. The taps hang off the OUT pins.
 
 Machine-corner topology (all lanes on the OUTPUT side of the photoMOS):
   F.Cu  pass-throughs, pos 1 (top), the fans to the series resistors,
-        A1_LEG (lane x 88.5), A2_LEG (outer lane x 97.5), the two MID links
-  B.Cu  the raw returns: 1CUP_RAW in lane x 94.4, 2CUP_RAW in lane x 98.6,
+        A1_LEG (lane x 88.5), A2_LEG (lane x 96.4), the two MID links
+  B.Cu  the raw returns: 1CUP_RAW in lane x 94.7, 2CUP_RAW in lane x 98.6,
         each in at its own resistor row from the right
 """
 import os, sys
@@ -67,11 +67,8 @@ for inn, out, x1 in [("J5", "J25", 18.5), ("J4", "J24", 31.5),
 # left, rows staggered so no two raw pads are neighbours
 at("R2", 16.0, 23.5, 180)          # ESD4: raw 16,23.5   -> sense 5.84
 at("R1", 13.5, 26.7, 180)          # ESD1: raw 13.5,26.7 -> sense 3.34
-# FLOW: raw pad under whichever outer J4 pin is # (S.J4_FLOW_PIN)
-if S.J4_FLOW_PIN == "3":
-    at("R3", 26.5, 29.9, 180)      # raw 26.5,29.9 -> sense 16.34
-else:
-    at("R3", 31.5, 25.5, 180)      # raw 31.5,25.5 -> sense 21.34
+# FLOW: raw pad under J4 pin 1, which is # (S.J4_FLOW_PIN, asserted in finish.py)
+at("R3", 31.5, 25.5, 180)          # raw 31.5,25.5 -> sense 21.34
 # --- sense shunts and candidate caps, flat, under the devkit
 for i, ref in enumerate(["R8", "R9", "R10", "R11", "R12", "R13", "R14",
                          "R15", "R16"]):
@@ -132,17 +129,21 @@ for u, c in {"U1": dict(y=28.0, pullA1="R20", pullA2="R22", rc1="R27",
     upright(c["pullA2"], COL1_X, y0 + 15.5, "down")  # pin 9 pull-up
     upright(c["rb1"], COL2_X, y0 + 4.54, "up")       # readback on top, Q below
 at("C15", 54.5, 24.5)                      # U1 decoupling, by pin 16
-# --- J3 NTC tap, all DNP. The two 10 M stand upright with their raw pad
-# under the OUT pins and their tap pad pointing AWAY from each other; the tap
-# node is routed below them, 2 mm clear (netclass Machine).
-upright("R60", 44.0, 23.4, "right")        # P1 raw -> tap at 49.08
-upright("R61", 40.5, 23.4, "left")         # P2 raw -> tap at 35.42
+# --- J3 NTC tap, all DNP. The two raw-side 4.7 M stand upright with their
+# raw pad under the OUT pins and their far pad (NTC_MID) pointing AWAY from
+# each other; everything from NTC_MID on is behind 4.7 M and is ours.
+upright("R60", 44.0, 23.4, "right")        # P1 raw -> mid at 49.08
+upright("R61", 40.5, 23.4, "left")         # P2 raw -> mid at 35.42
+upright("R64", 48.9, 20.0, "right")        # mid -> tap at 51.44,20.0
 upright("R62", 52.0, 6.0, "down")          # tap -> GND shunt, scaling only
 upright("C20", 49.5, 17.0, "up")           # 10 n, tap -> GND at the op-amp
 at("U8", 54.0, 12.5)                       # MCP6002: pin 3 = +INA at 54,17.58
-upright("R63", 57.0, 8.5, "up")            # 1 K out -> NTC_ADC
+upright("R63", 57.0, 8.5, "up")            # 1 K, follower out -> NTC_ADC
+upright("R68", 48.6, 2.6, "right")         # 1 K, gain out -> NTC_ADC at 51.14
 upright("C21", 60.0, 6.0, "right")         # 100 n on NTC_ADC
-upright("C22", 64.3, 12.5, "down")         # 100 n VDD decoupling, by pin 8
+upright("C22", 60.0, 9.3, "right")         # 100 n VDD decoupling, above pin 8
+upright("R66", 64.5, 12.6, "down")         # Rf: OUTB (pin 7) -> -INB at 15.14
+upright("R67", 64.5, 17.9, "down")         # Rg: -INB -> GND at 20.44
 at("C16", 49.5, 49.0, 180)                 # 3V3 pad by U1 pin 9 (pulled up
 at("C17", 49.5, 74.0, 180)                 # anyway), GND pad away from it
 # U3, the PROPOSED gate
@@ -217,8 +218,8 @@ def MACHINE_TRACKS():
         # reference and the only ground the J2 taps have. Both tie to the
         # devkit's GND at J12 pin 1, clear of the raw fans; the pour is kept
         # off the pass-through block, so these are tracks.
-        ("GND", F_, ([("J24", "1"), ("J12", "1")] if S.J4_T_PIN == "1" else
-                     [("J24", "3"), (26.5, 28.5), (29.9, 31.9), ("J12", "1")])),
+        ("GND", F_, [("J24", S.J4_T_PIN), (26.5, 28.5), (29.9, 31.9),
+                     ("J12", "1")]),
         # J5 VSS: B.Cu down the left and across at y 30 to a via on the T
         # anchor's diagonal (a B.Cu run on to J12 walled off the shunts)
         ("GND", B_, [("J25", "4"), (9.0, 20.9), (9.0, 30.0), (28.0, 30.0)]),
@@ -391,6 +392,10 @@ def overlaps(board):
 
 
 if __name__ == "__main__":
+    # a new placement makes any routed copy stale: finish.py must not find it
+    _stale = os.path.join(HERE, "build", "routed.kicad_pcb")
+    if os.path.exists(_stale):
+        os.remove(_stale)
     out = build()
     board = pcbnew.LoadBoard(out)       # reload so courtyards are built
     hits, outside = overlaps(board)

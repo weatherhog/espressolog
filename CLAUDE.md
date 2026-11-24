@@ -914,8 +914,9 @@ arm-window gate, PROPOSED — footprint reserved** (ten bought). The
 pins rest on one layout fact: **positions 4–10 of the OPPOSITE header column
 are `GPIO1, 2, 42, 41, 40, 39, 38` — all free and none strapping when the
 drive side was decided, directly across from the seven sense taps.** 38–42
-are now drive and 1–2 the first two `Q` readbacks *("all free" until
-2026-10-30)*. Sense on one side of the devkit, drive on
+are now drive, 2 a `Q` readback and 1 the (proposed) J3 NTC input
+*("all free" until 2026-10-30; 1–2 the first two `Q` readbacks until the
+PCB, 2026-11-24)*. Sense on one side of the devkit, drive on
 the other — which separates logic nets from sense nets and **says nothing
 about where pos 1 runs** *(a draft called it "the segregation the pos-1 rule
 asks for"; that rule is about the +5 V conductor, which never reaches a

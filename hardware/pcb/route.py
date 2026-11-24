@@ -35,32 +35,39 @@ UNROUTED_NETS = set()             # nets dropped from the DSN, if any
 # Both are done before any Remove() in their process (SWIG wrappers go
 # untyped after one).
 ROUTE_KEEPOUT = "route.py: our tracks out of the header block"
-# OFF: with the J5/J4 block closed, 3V3 from J11 pin 1 had only a ~1.6 mm
-# corridor and Freerouting stopped completing the board (tried 2026-11-24).
-# The 2 mm netclass rule still applies there. Some routings run a +3V3 track
-# on B.Cu between the J5 IN and OUT pins (2.03 mm at b3d9441's successor);
-# check with the review's gap script after any re-route.
-ROUTE_KEEPOUT_ON = False
+# ON since the +3V3 trunk is hand-laid (gen_pcb.py, OUR_FIXED_TRACKS): with
+# the router feeding 3V3 itself, closing this block stopped it completing
+# the board.
+ROUTE_KEEPOUT_ON = True
 
 
 def add_route_keepout(board):
-    k = pcbnew.ZONE(board)
-    k.SetIsRuleArea(True)
-    k.SetZoneName(ROUTE_KEEPOUT)
-    k.SetDoNotAllowTracks(True)
-    k.SetDoNotAllowVias(True)
-    k.SetDoNotAllowZoneFills(True)
-    k.SetDoNotAllowPads(False)
-    k.SetDoNotAllowFootprints(False)
-    ls = pcbnew.LSET()
-    ls.AddLayer(pcbnew.F_Cu)
-    ls.AddLayer(pcbnew.B_Cu)
-    k.SetLayerSet(ls)
-    o = k.Outline()
-    o.NewOutline()
-    for x, y in [(7.5, 0.5), (36.0, 0.5), (36.0, 21.8), (7.5, 21.8)]:
-        o.Append(pcbnew.FromMM(G.OX + x), pcbnew.FromMM(G.OY + y))
-    board.Add(k)
+    """The header block, plus a 1 mm frame along every board edge: with the
+    drive-side clearance the router took a readback along the bottom edge at
+    0.37 mm (2026-11-24). The hand-laid 2Cup lane at x 98.6 is inside it."""
+    areas = [[(7.5, 0.5), (36.0, 0.5), (36.0, 21.8), (7.5, 21.8)],
+             [(0, 0), (100, 0), (100, 1.0), (0, 1.0)],
+             [(0, 99.0), (100, 99.0), (100, 100), (0, 100)],
+             [(0, 0), (1.0, 0), (1.0, 100), (0, 100)],
+             [(99.2, 0), (100, 0), (100, 100), (99.2, 100)]]
+    for n, pts in enumerate(areas):
+        k = pcbnew.ZONE(board)
+        k.SetIsRuleArea(True)
+        k.SetZoneName(f"{ROUTE_KEEPOUT} {n}")
+        k.SetDoNotAllowTracks(True)
+        k.SetDoNotAllowVias(True)
+        k.SetDoNotAllowZoneFills(True)
+        k.SetDoNotAllowPads(False)
+        k.SetDoNotAllowFootprints(False)
+        ls = pcbnew.LSET()
+        ls.AddLayer(pcbnew.F_Cu)
+        ls.AddLayer(pcbnew.B_Cu)
+        k.SetLayerSet(ls)
+        o = k.Outline()
+        o.NewOutline()
+        for x, y in pts:
+            o.Append(pcbnew.FromMM(G.OX + x), pcbnew.FromMM(G.OY + y))
+        board.Add(k)
 
 
 def relay_machine(board, pads):
@@ -99,12 +106,21 @@ def relay_only():
     """In a fresh process: KiCad's SWIG wrappers come back untyped after a
     Specctra import, so the re-lay runs separately."""
     board = pcbnew.LoadBoard(PCB)
-    for z in list(board.Zones()):       # route.py's own keep-out, see above
-        if z.GetZoneName() == ROUTE_KEEPOUT:
-            board.Remove(z)
+    # everything is read before the first Remove(): the wrappers come back
+    # untyped after it
     pads = {(f.GetReference(), p.GetNumber()): G.pad_xy(f, p.GetNumber())
             for f in board.GetFootprints() for p in f.Pads()}
     relay_machine(board, pads)          # exactly gen_pcb.py's machine copper
+    board.Save(PCB)
+
+
+def unkeep_only():
+    """In its own process (one LoadBoard, zones read before any Remove):
+    take route.py's keep-outs off again, then write finish.py's input."""
+    board = pcbnew.LoadBoard(PCB)
+    for z in [z for z in list(board.Zones())
+              if z.GetZoneName().startswith(ROUTE_KEEPOUT)]:
+        board.Remove(z)
     board.Save(PCB)
     routed = os.path.join(BUILD, "routed.kicad_pcb")
     board.Save(routed)                  # finish.py starts from this copy
@@ -112,6 +128,10 @@ def relay_only():
         shutil.copy(PCB.replace(".kicad_pcb", ext), routed.replace(".kicad_pcb", ext))
     print("routed ->", os.path.basename(PCB))
 
+
+if "--unkeep" in sys.argv:
+    unkeep_only()
+    sys.exit(0)
 
 if "--relay" in sys.argv:
     relay_only()
@@ -126,14 +146,16 @@ if "--strip" in sys.argv:
     old_zones = list(board.Zones())    # finish.py's pours and keep-outs,
     if ROUTE_KEEPOUT_ON:               # taken before anything changes
         add_route_keepout(board)
-    for t in list(board.GetTracks()):  # keep only the fixed machine tracks
-        if not t.IsLocked():
-            board.Remove(t)
+    if "--keep" not in sys.argv:       # --keep: a second pass that only
+        for t in list(board.GetTracks()):  # completes what the first left open
+            if not t.IsLocked():       # keep only the fixed (locked) tracks
+                board.Remove(t)
     for z in old_zones:
         board.Remove(z)
     board.Save(UNROUTED)
     sys.exit(0)
-if subprocess.run([sys.executable, __file__, "--strip"]).returncode:
+if subprocess.run([sys.executable, __file__, "--strip"]
+                  + (["--keep"] if "--keep" in sys.argv else [])).returncode:
     sys.exit("strip failed")
 board = pcbnew.LoadBoard(UNROUTED)
 FPS = {(f.GetReference(), p.GetNumber()): G.pad_xy(f, p.GetNumber())
@@ -162,4 +184,11 @@ if not os.path.exists(ses):
 if not pcbnew.ImportSpecctraSES(board, ses):
     sys.exit("SES import failed")
 board.Save(PCB)
-sys.exit(subprocess.run([sys.executable, __file__, "--relay"]).returncode)
+rc = (subprocess.run([sys.executable, __file__, "--relay"]).returncode
+      or subprocess.run([sys.executable, __file__, "--unkeep"]).returncode)
+if rc:
+    # finish.py would otherwise start from a stale build/routed.kicad_pcb
+    if os.path.exists(os.path.join(BUILD, "routed.kicad_pcb")):
+        os.remove(os.path.join(BUILD, "routed.kicad_pcb"))
+    sys.exit("RELAY FAILED: the board is not usable; build/routed.kicad_pcb removed")
+sys.exit(0)

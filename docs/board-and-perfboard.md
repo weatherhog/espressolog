@@ -579,6 +579,13 @@ plugs back on its own headers.** The pin map, the pre-power metering (a row
 per cable, same-direction vs reverse) and the layout are in
 `hardware/pcb/README.md`; everything below is the perfboard.
 
+**The PCB crosses the '221 assignment** (pre-order review, 2026-11-24): U1
+drives photoMOS 1 of each chain (U4, U6) and U2 photoMOS 2 of each (U5, U7),
+where the netlist table below has U1 = 1Cup and U2 = 2Cup. Both photoMOS of
+a chain on one package meant a single package fault, such as an unseated
+ground pin, could close both. GPIOs, net names and firmware are unchanged:
+GPIO41 now lands on U2 pin 1 and GPIO40 on U1 pin 9.
+
 **Plug orientation, read off the machine-side plugs, 2026-11-24 (Lucas).**
 Each was seen from its wire end with the latches up. The latch faces up on
 a side-entry XH header (also confirmed), so left and right mirror against

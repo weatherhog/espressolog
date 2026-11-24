@@ -81,16 +81,14 @@ for i, ref in enumerate(["C1", "C2", "C3"]):
 at("JP4", 36.5, 92.0)              # selftest: beside the USB end; 2.8 mm from R26 GND
 
 # --- MACHINE CORNER. J2's 150 K lie flat, raw pad (pad 1) on the right
-# under its OUT pin, rows staggered down and to the right so no two raw pads
-# are neighbours; each return comes in from the right at its own row.
+# two columns away from the next lever's fan, so that no fan passes another
+# lever's raw pad closer than 2 mm (pre-order review S5): Water's pad sits
+# 3 mm LEFT of its pin, 2Cup's 1.5 mm RIGHT of its pin, and Steam's fan runs
+# down a lane at x 82.6 to stay clear of 2Cup's pad.
 # 2Cup's row is ABOVE 1Cup's: the 2Cup return comes from the outer lane
-# (x 98.6), so it has to turn in above the top of the 1Cup lane (x 94.4)
-J2R = {"R4": (72.5, 23.4), "R6": (77.5, 26.6), "R5": (75.0, 30.0),
-       "R7": (80.0, 33.2)}                          # W, 2C, 1C, S
-# (R5 raw 2.6 mm from R6 raw: the 1Cup/2Cup 2.5 mm rule in the .kicad_dru.
-# R7.1 (Steam raw) is 2.32 mm from R40.2 (an LED anode): inside the 2 mm
-# rule, on the loupe list. Moving R7 back to 33.0 made Freerouting leave 16
-# connections open, 2026-11-24.)
+# (x 98.6), so it has to turn in above the top of the 1Cup lane (x 94.7).
+J2R = {"R4": (69.5, 23.4), "R6": (79.0, 26.6), "R5": (75.0, 30.2),
+       "R7": (80.0, 33.4)}                          # W, 2C, 1C, S
 for ref, (x, y) in J2R.items():
     at(ref, x, y, 180)
 at("JP1", 88.0, 9.0)               # (a1): pin 1 = pos 1, pin 2 = 1Cup leg
@@ -116,10 +114,12 @@ UP = []          # (ref, x, pad1_y, "up"|"down")
 def upright(ref, x, y1, d):
     UP.append((ref, x, y1, d))
 
-for u, c in {"U1": dict(y=28.0, pullA1="R20", pullA2="R21", rc1="R27",
-                        rc2="R28", c1="C10", c2="C11", rb1="R32", rb2="R33"),
-             "U2": dict(y=53.0, pullA1="R22", pullA2="R23", rc1="R29",
-                        rc2="R30", c1="C12", c2="C13", rb1="R34",
+# (crossed assignment: U1 carries 1Cup PM1 on channel 1 and 2Cup PM1 on
+# channel 2, U2 the two PM2s -- gen_schematic.py, drive221)
+for u, c in {"U1": dict(y=28.0, pullA1="R20", pullA2="R22", rc1="R27",
+                        rc2="R28", c1="C10", c2="C11", rb1="R32", rb2="R34"),
+             "U2": dict(y=53.0, pullA1="R21", pullA2="R23", rc1="R29",
+                        rc2="R30", c1="C12", c2="C13", rb1="R33",
                         rb2="R35")}.items():
     y0 = c["y"]
     at(u, CHIP_X, y0)
@@ -233,19 +233,23 @@ def MACHINE_TRACKS():
         ("NTC_P1_RAW", F_, [("J23", "1"), ("R60", "1")]),
         ("NTC_P2_RAW", F_, [("J23", "2"), (41.5, 21.0), (40.5, 22.0),
                             ("R61", "1")]),
-        ("WATER_RAW", F_, [("J22", "5"), ("R4", "1")]),
-        # 1Cup jogs left past R4 (Water) so it keeps 2.5 mm from R6's 2Cup
-        # pad (final review N1); the part inside the J2 fan zone (y < 23.2)
-        # is at the header's own pitch
-        ("1CUP_RAW", F_, [("J22", "4"), (75.0, 23.2), (73.95, 24.9),
-                          (73.95, 28.8), ("R5", "1")]),
-        ("2CUP_RAW", F_, [("J22", "3"), (77.5, 23.2), ("R6", "1")]),
-        ("STEAM_RAW", F_, [("J22", "2"), ("R7", "1")]),
+        # The four lever fans. Inside the "J2 fan zone" (y < 23.0) they sit
+        # at the header's own 2.5 mm pitch; each is cut at the zone edge so
+        # the DRC exemption ends there. Below it every lever is >= 2 mm from
+        # every other lever's copper, and 1Cup >= 2.5 mm from 2Cup.
+        ("WATER_RAW", F_, [("J22", "5"), (72.5, 20.4), ("R4", "1")]),
+        ("1CUP_RAW", F_, [("J22", "4"), (75.0, 23.3), ("R5", "1")]),
+        ("2CUP_RAW", F_, [("J22", "3"), (77.5, 22.0), (79.0, 23.5),
+                          ("R6", "1")]),
+        ("STEAM_RAW", F_, [("J22", "2"), (80.0, 21.0), (82.6, 23.6),
+                           (82.6, 30.8), ("R7", "1")]),
         # drive legs behind the open jumpers, on the output side
         ("A1_LEG", F_, [("JP1", "2"), (88.0, 13.0), (88.5, 13.5), (88.5, 34.4),
                         ("U4", "8")]),
-        ("A2_LEG", F_, [("JP2", "2"), (94.46, 13.5), (97.5, 13.5),
-                        (97.5, CELL_Y[3]), ("U6", "8")]),
+        # x 96.4: 1.8 mm lateral from its own return on the other layer
+        # (x 98.6), 2.6 mm from the MID_1CUP jog (pre-order review S8)
+        ("A2_LEG", F_, [("JP2", "2"), (94.46, 13.5), (96.4, 13.5),
+                        (96.4, CELL_Y[3]), ("U6", "8")]),
         # the MID links jog right round the empty socket pads 5/6 between them
         ("MID_1CUP", F_, [("U4", "7"), (OUT_X + 2.28, CELL_Y[1] + 4.82),
                           (OUT_X + 2.28, CELL_Y[2] - 2.28), ("U5", "8")]),
@@ -253,13 +257,37 @@ def MACHINE_TRACKS():
                           (OUT_X + 2.28, CELL_Y[4] - 2.28), ("U7", "8")]),
         # the raw returns, B.Cu, outside the stack, each in its own lane and
         # in at its own row (crossing the A legs and fans on the other layer)
-        # in 0.5 mm below R5's row, so it keeps 2.5 mm from R6's 2Cup pad
-        ("1CUP_RAW", B_, [("U5", "7"), (94.4, CELL_Y[2] + 2.54),
-                          (94.4, J2R["R5"][1] + 0.5),
-                          (J2R["R5"][0] + 0.5, J2R["R5"][1] + 0.5), ("R5", "1")]),
+        ("1CUP_RAW", B_, [("U5", "7"), (94.7, CELL_Y[2] + 2.54),
+                          (94.7, J2R["R5"][1]), ("R5", "1")]),
         ("2CUP_RAW", B_, [("U7", "7"), (98.6, CELL_Y[4] + 2.54),
                           (98.6, J2R["R6"][1]), ("R6", "1")]),
+    ] + OUR_FIXED_TRACKS()
+
+
+def OUR_FIXED_TRACKS():
+    """Two nets of OURS that the autorouter must not place (pre-order review
+    S6, S7). Laid like the machine nets; route.py re-lays them the same way.
+
+    +3V3 trunk: the board's only 3V3 feed used to run between the J5 IN and
+    OUT rows, under Disp-P4 and the bus. It now leaves J11 under the devkit
+    (B.Cu, y 33.27), rounds the VSS via and J12 pin 1, and ends on R20.2;
+    the router takes 3V3 on from there, and is kept out of the header block.
+
+    LED_RAIL: the router threaded it between TO-92 pads and past JP3.1 (the
+    3V3 side of jumper (b)). It is now a trunk at x 65.25, left of the cells,
+    with one stub per cell 1 mm above the cell's resistor row, and it reaches
+    JP3.2 from below, away from JP3.1."""
+    rail = [("LED_RAIL", B_, [(65.25, CELL_Y[1] - 1.0), (65.25, 81.5),
+                              (75.65, 91.9), (86.64, 91.9), ("JP3", "2")])]
+    for n, y in CELL_Y.items():
+        rail.append(("LED_RAIL", B_, [(65.25, y - 1.0), (75.5, y - 1.0),
+                                      (f"R{39 + n}", "1")]))
+    return rail + [
+        ("+3V3", B_, [("J11", "1"), ("J11", "2"), (7.27, 33.27),
+                      (27.5, 33.27), (29.3, 31.47), (29.3, 30.9),
+                      (29.9, 30.3), (34.2, 30.3), ("R20", "2")]),
     ]
+
 
 MACHINE_WIDTH = 0.4
 

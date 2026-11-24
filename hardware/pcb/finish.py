@@ -47,6 +47,16 @@ HEADER_AREA = [(7.5, 0.5), (48.0, 0.5), (48.0, 26.0), (7.5, 26.0)]
 # Devkit 5Vin (J11.21) sits beside its GND (J11.22): keep the pour >= 2 mm
 # from J11.20-22 (CLAUDE.md "5Vin ... Leave the gap"; final review S3).
 FIVEV_AREA = [(3.0, 77.3), (9.0, 77.3), (9.0, 88.3), (3.0, 88.3)]
+# No pour within 4 mm of a mounting hole: a screw head or metal standoff
+# must not sit on masked ground copper (pre-order review S11). H2 is in the
+# machine corner, which has no pour anyway.
+def _octagon(cx, cy, r):
+    k = r * 0.4142
+    return [(cx - k, cy - r), (cx + k, cy - r), (cx + r, cy - k), (cx + r, cy + k),
+            (cx + k, cy + r), (cx - k, cy + r), (cx - r, cy + k), (cx - r, cy - k)]
+HOLE_AREAS = [(f"mounting hole {n}: no pour", _octagon(x, y, 4.0))
+              for n, (x, y) in [("H1", (3.5, 3.5)), ("H3", (3.5, 96.5)),
+                                ("H4", (96.5, 96.5))]]
 # Under the ESP32 module's antenna (the devkit's module end, at the top).
 ANTENNA_AREA = [(4.5, 24.5), (33.0, 24.5), (33.0, 34.5), (4.5, 34.5)]
 for name, pts in [("machine corner: no pour", MACHINE_AREA),
@@ -57,8 +67,8 @@ for name, pts in [("machine corner: no pour", MACHINE_AREA),
                   # track leaving J2/J22's 2.5 mm pitch, exempt from the
                   # 1Cup/2Cup 2.5 mm rule (it is in the machine corner, so
                   # no pour here either)
-                  ("J2 fan zone", [(66.0, 14.0), (84.0, 14.0), (84.0, 23.2),
-                                   (66.0, 23.2)])]:
+                  ("J2 fan zone", [(66.0, 14.0), (84.0, 14.0), (84.0, 23.0),
+                                   (66.0, 23.0)])] + HOLE_AREAS:
     k = pcbnew.ZONE(board)
     k.SetIsRuleArea(True)
     k.SetZoneName(name)
@@ -157,6 +167,13 @@ text("espressolog v2", 85.0, 97.9)
 # rotated 90 it reads bottom to top: USB end at the bottom, antenna at pin 1
 text("USB end    ESP32 devkit    ANTENNA end", 2.0, 58.5, angle=90)
 
+# Each IN/OUT pair named on the board, on the LEFT of the pair and spanning
+# both headers: a smaller XH plug may seat offset in a larger header, and no
+# metering catches a plug moved afterwards (pre-order review S10).
+for name, x in [("DISPLAY", 7.2), ("FLOW", 22.75), ("NTC", 37.7),
+                ("LEVERS", 68.7)]:
+    text(name, x, 11.8, 1.2, angle=90)
+
 # J3 tap: the build rule on the board itself (final review S4); doubles as
 # R61's and R60's reference, left and right of it
 text("fit ONE", 42.25, 25.75)
@@ -182,8 +199,7 @@ for y in (37.0, 50.0, 63.0, 76.0):
 # through), so these name both. Not collision-checked against each other:
 # the 2.5 mm pitch leaves them closer than the label margin.
 PIN_NAMES = [(18.5, "P4"), (16.0, "CK"), (13.5, "DA"), (11.0, "0V"),
-             (29.0, "+"), (31.5, "T" if S.J4_T_PIN == "1" else "#"),
-             (26.5, "#" if S.J4_T_PIN == "1" else "T"),
+             (29.0, "+"), (31.5, "#"), (26.5, "T"),
              (44.0, "1"), (41.5, "2"),
              (82.5, "+5"), (80.0, "ST"), (77.5, "2C"), (75.0, "1C"),
              (72.5, "W")]
@@ -246,6 +262,17 @@ for fp in sorted(board.GetFootprints(), key=lambda f: f.GetReference()):
         ref.SetLayer(pcbnew.F_Fab)       # no room on silk: fab layer only
         ref.SetPosition(bb.GetCenter())
         fab.append(fp.GetReference())
+
+# The confirmed J4 pinout, checked on the board itself (pre-order review S9):
+# T (pad 3) on GND, # (pad 1) on its tap, + (pad 2) on two pads and nothing else.
+_pads = {(f.GetReference(), p.GetNumber()): p.GetNetname()
+         for f in board.GetFootprints() for p in f.Pads()}
+for _j in ("J4", "J24"):
+    assert _pads[(_j, "3")] == "GND" and _pads[(_j, "1")] == "FLOW_RAW" \
+        and _pads[(_j, "2")] == "FLOW_PLUS_RAW", f"{_j}: wrong pinout"
+for _net in ("FLOW_PLUS_RAW", "DISP_P4_RAW"):
+    assert sum(1 for v in _pads.values() if v == _net) == 2, _net
+    assert sum(1 for t in board.GetTracks() if t.GetNetname() == _net) == 1, _net
 
 pcbnew.ZONE_FILLER(board).Fill(board.Zones())
 board.Save(PCB)

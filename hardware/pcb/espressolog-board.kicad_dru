@@ -30,11 +30,13 @@
 
 # The machine's own ground conductors (J5 VSS, J4 T) pass straight through
 # IN -> OUT between the machine pins beside them, as in the harness.
+# Only the hand-laid (LOCKED) ground tracks, the pass-throughs and anchors,
+# so the router's GND cannot come near `+` or Disp-P4 (pre-order review S4a).
 # Only the headers that HAVE a ground pass-through (J4/J24 T, J5/J25 VSS);
 # a GND track anywhere else near a machine pin still needs 2 mm (final
 # review S2a: this used to cover J2/J22/JP1/JP2 too).
 (rule "ground pass-through beside its connector's machine pins"
-  (condition "A.Type == 'Pad' && A.hasNetclass('Machine') && B.Type == 'Track' && B.NetName == 'GND' && (A.memberOfFootprint('J4') || A.memberOfFootprint('J5') || A.memberOfFootprint('J24') || A.memberOfFootprint('J25'))")
+  (condition "A.Type == 'Pad' && A.hasNetclass('Machine') && B.Type == 'Track' && B.NetName == 'GND' && B.Locked && (A.memberOfFootprint('J4') || A.memberOfFootprint('J5') || A.memberOfFootprint('J24') || A.memberOfFootprint('J25'))")
   (constraint clearance (min 1.2mm)))
 
 # Pads of one part: a connector's or jumper's own pins, an AQY's outputs.
@@ -44,10 +46,12 @@
 
 # Pads with no net (the empty half of each uncut DIP-8) carry nothing: a
 # machine track may pass them at the ordinary clearance.
-# Not the devkit sockets: their unconnected pads are live devkit pins
-# (5Vin, EN, strapping, USB) -- final review S2b.
+# ONLY the photoMOS sockets' empty half (pads 3-6 of U4-U7). Every other
+# pad with no net is live or metal: devkit pins (5Vin, EN, strapping, USB),
+# the '221s' Q-bar outputs (driven high), the mounting holes' screws
+# (final review S2b; pre-order review S4b, c).
 (rule "machine nets beside pads with no net"
-  (condition "A.hasNetclass('Machine') && B.Type == 'Pad' && B.NetName == '' && !B.memberOfFootprint('J11') && !B.memberOfFootprint('J12')")
+  (condition "A.hasNetclass('Machine') && B.Type == 'Pad' && B.NetName == '' && (B.memberOfFootprint('U4') || B.memberOfFootprint('U5') || B.memberOfFootprint('U6') || B.memberOfFootprint('U7'))")
   (constraint clearance (min 0.6mm)))
 
 # The 1Cup and 2Cup chains keep 2.5 mm apart, so a single short cannot join
@@ -57,4 +61,11 @@
 # few mm of track leaving the 2.5 mm-pitch header, which cannot be wider.
 (rule "1Cup and 2Cup chains apart"
   (condition "(((A.NetName == '2CUP_RAW' || A.NetName == 'MID_2CUP' || A.NetName == 'A2_LEG') && (B.NetName == '1CUP_RAW' || B.NetName == 'MID_1CUP' || B.NetName == 'A1_LEG')) || ((A.NetName == '1CUP_RAW' || A.NetName == 'MID_1CUP' || A.NetName == 'A1_LEG') && (B.NetName == '2CUP_RAW' || B.NetName == 'MID_2CUP' || B.NetName == 'A2_LEG'))) && !A.memberOfFootprint('J2') && !A.memberOfFootprint('J22') && !B.memberOfFootprint('J2') && !B.memberOfFootprint('J22') && !A.intersectsArea('J2 fan zone') && !B.intersectsArea('J2 fan zone')")
+  (constraint clearance (min 2.5mm)))
+
+# A leg beside its OWN return is the both-photoMOS bypass; pos 1 beside a
+# lever line gets round the jumper as well. Track to track: the pads are
+# header and jumper pins (pre-order review S4e).
+(rule "a leg beside its own return, or pos 1 beside a lever line"
+  (condition "((A.NetName == 'A1_LEG' && B.NetName == '1CUP_RAW') || (A.NetName == 'A2_LEG' && B.NetName == '2CUP_RAW') || (A.NetName == 'POS1_5V' && (B.NetName == '1CUP_RAW' || B.NetName == '2CUP_RAW' || B.NetName == 'MID_1CUP' || B.NetName == 'MID_2CUP' || B.NetName == 'WATER_RAW'))) && A.Type == 'Track' && B.Type == 'Track'")
   (constraint clearance (min 2.5mm)))

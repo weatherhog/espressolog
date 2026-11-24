@@ -293,6 +293,25 @@
       },
       {
         "bus_width": 12,
+        "clearance": 0.45,
+        "diff_pair_gap": 0.25,
+        "diff_pair_via_gap": 0.25,
+        "diff_pair_width": 0.2,
+        "line_style": 0,
+        "microvia_diameter": 0.3,
+        "microvia_drill": 0.1,
+        "name": "Drive",
+        "pcb_color": "rgba(0, 0, 0, 0.000)",
+        "priority": 3,
+        "schematic_color": "rgba(0, 0, 0, 0.000)",
+        "track_width": 0.3,
+        "tuning_profile": "",
+        "via_diameter": 0.8,
+        "via_drill": 0.4,
+        "wire_width": 6
+      },
+      {
+        "bus_width": 12,
         "clearance": 0.25,
         "diff_pair_gap": 0.25,
         "diff_pair_via_gap": 0.25,
@@ -357,23 +376,19 @@
     "netclass_patterns": [
       {
         "netclass": "Power",
-        "pattern": "+3V3"
-      },
-      {
-        "netclass": "Power",
-        "pattern": "LED_RAIL"
+        "pattern": "*+3V3"
       },
       {
         "netclass": "Machine",
-        "pattern": "POS1_5V"
+        "pattern": "*POS1_5V"
       },
       {
         "netclass": "Machine",
-        "pattern": "A?_LEG"
+        "pattern": "*A?_LEG"
       },
       {
         "netclass": "Machine",
-        "pattern": "MID_*CUP"
+        "pattern": "*MID_*CUP"
       },
       {
         "netclass": "Machine",
@@ -381,7 +396,55 @@
       },
       {
         "netclass": "Ground",
-        "pattern": "GND"
+        "pattern": "*GND"
+      },
+      {
+        "netclass": "Drive",
+        "pattern": "*LED_RAIL"
+      },
+      {
+        "netclass": "Drive",
+        "pattern": "*LED_A?"
+      },
+      {
+        "netclass": "Drive",
+        "pattern": "*LED_K?"
+      },
+      {
+        "netclass": "Drive",
+        "pattern": "*BASE?"
+      },
+      {
+        "netclass": "Drive",
+        "pattern": "*Q_?CUP_?"
+      },
+      {
+        "netclass": "Drive",
+        "pattern": "*ARM"
+      },
+      {
+        "netclass": "Drive",
+        "pattern": "*TRIG_?CUP_?"
+      },
+      {
+        "netclass": "Drive",
+        "pattern": "*U?_RC?"
+      },
+      {
+        "netclass": "Drive",
+        "pattern": "*U?_CX?"
+      },
+      {
+        "netclass": "Drive",
+        "pattern": "*RB_GATE"
+      },
+      {
+        "netclass": "Drive",
+        "pattern": "*GATE_EN"
+      },
+      {
+        "netclass": "Drive",
+        "pattern": "*GATE_TRIG"
       }
     ]
   },

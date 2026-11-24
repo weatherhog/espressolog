@@ -134,28 +134,23 @@ def C(ref, value, a, b, fp, dnp=False):
 #   J4  2 = + (the MIDDLE conductor, GREEN: Lucas, 2026-11-24, on the
 #       T-piece's machine-side plug; docs/phase-0-status.md's "T (middle)"
 #       was wrong, and ee2795e tied + to our GND because of it).
-#       T (yellow) and # (black) are the outer pins; WHICH SIDE is J4_T_PIN
-#       below, and it is unset until read off the plug.
+#       T (yellow) and # (black) are the outer pins: # on pad 1, T on pad 3
+#       (J4_T_PIN below).
 #   J3  1 NTC P1 · 2 NTC P2   -- roles unmeasured; the tap is DNP
 #   J2  1 pos 1 · 2 Steam · 3 2Cup · 4 1Cup · 5 Water   -- positional
 # J4 + and J5 Disp-P4 cross the board as isolated pass-throughs: nothing else
 # connects to them, ever (the J4 + rule in CLAUDE.md).
-# Which outer J4 pin is T (yellow): "1" (board-right) or "3" (board-left),
-# seen from above with the top edge away. UNSET until read off the plug: the
-# board must not be generated from a guess, because T is tied to our GND.
-# 2026-11-24, Lucas, looking at the WIRE-ENTRY end of the T-piece's
+# Which outer J4 pin is T (yellow): pad 3, the board-left one. Read off the
+# plug: 2026-11-24, Lucas, looking at the WIRE-ENTRY end of the T-piece's
 # machine-side plug, latches up: green middle, yellow on his RIGHT, black on
 # his LEFT. Seen from above the board (opening away) that is yellow LEFT ->
-# pad 3 = T, pad 1 = #. Rests on the plug's latch facing up (away from the
-# PCB) on a side-entry header -- CONFIRMED by Lucas, 2026-11-24: "yes the
-# latches are on top". J5 (Disp-P4 on the board-right = pad 1) and J2 (+5 V
-# common on the board-right = pad 1) were read off their plugs the same day
-# and match the map above.
-J4_T_PIN = os.environ.get("J4_T_PIN") or "3"
-if J4_T_PIN not in ("1", "3"):
-    raise SystemExit("J4_T_PIN is not set: which outer J4 pin is T (yellow)? "
-                     "Read it off the plug, then set it in gen_schematic.py")
-J4_FLOW_PIN = "3" if J4_T_PIN == "1" else "1"
+# pad 3 = T, pad 1 = #. The plug's latch faces up on a side-entry header
+# (confirmed the same day). J5 (Disp-P4 on pad 1) and J2 (+5 V common on
+# pad 1) were read off their plugs the same day and match the map above.
+# HARD-CODED, no environment override (pre-order review S9): the other
+# value puts # on our ground, and --check would still pass.
+J4_T_PIN = "3"
+J4_FLOW_PIN = "1"
 PIN = {
     "J5": {"1": "DISP_P4_RAW", "2": "ESD4_RAW", "3": "ESD1_RAW", "4": "GND"},
     "J4": {J4_T_PIN: "GND", "2": "FLOW_PLUS_RAW", J4_FLOW_PIN: "FLOW_RAW"},
@@ -211,15 +206,21 @@ part("JP4", "Jumper2", "selftest GPIO8-GPIO6 - NEVER fitted in service",
      FP_HDR2, {"1": "SELFTEST_IO8", "2": "FLOW"})
 
 # --- drive: the three '221s
-def drive221(ref, line):
+# CROSSED (pre-order review S1, 2026-11-24): each '221 package drives ONE
+# photoMOS of EACH chain -- U1 the two first devices, U2 the two second ones.
+# A package-level fault (an unseated GND pin, latch-up) then closes at most
+# one device per chain, which is what the series pair is for. Net names and
+# GPIOs are unchanged, so DRIVE_CH[] in main.cpp is untouched; only which
+# chip a TRIG / Q net lands on moved (the perfboard doc has U1 = 1Cup).
+def drive221(ref, ch1, ch2):
     part(ref, "74HC221", "CD74HC221E", FP_DIP16, {
-        "1": f"TRIG_{line}_1", "2": "+3V3", "3": "ARM", "4": None,
-        "5": f"Q_{line}_2", "6": f"{ref}_CX2", "7": f"{ref}_RC2", "8": "GND",
-        "9": f"TRIG_{line}_2", "10": "+3V3", "11": "ARM", "12": None,
-        "13": f"Q_{line}_1", "14": f"{ref}_CX1", "15": f"{ref}_RC1",
+        "1": f"TRIG_{ch1}", "2": "+3V3", "3": "ARM", "4": None,
+        "5": f"Q_{ch2}", "6": f"{ref}_CX2", "7": f"{ref}_RC2", "8": "GND",
+        "9": f"TRIG_{ch2}", "10": "+3V3", "11": "ARM", "12": None,
+        "13": f"Q_{ch1}", "14": f"{ref}_CX1", "15": f"{ref}_RC1",
         "16": "+3V3"})
-drive221("U1", "1CUP")
-drive221("U2", "2CUP")
+drive221("U1", "1CUP_1", "2CUP_1")     # photoMOS 1 of each chain (U4, U6)
+drive221("U2", "1CUP_2", "2CUP_2")     # photoMOS 2 of each chain (U5, U7)
 part("U3", "74HC221", "CD74HC221E - PROPOSED gate: socket fitted, chip OUT",
      FP_DIP16, {"1": "GATE_TRIG", "2": "+3V3", "3": "GATE_EN", "4": None,
                 "5": None, "6": None, "7": None, "8": "GND", "9": "GND",
@@ -245,11 +246,11 @@ for ref_r, ref_c, chip, ch, val in [("R27", "C10", "U1", 1, "330k"),
 for ref_c in ["C15", "C16", "C17"]:      # one per '221, at the chip
     C(ref_c, "100n X7R", "+3V3", "GND", FP_C_DISC)
 # Q readbacks - value OPEN, 1k proposed
-R("R32", "1k (OPEN)", "Q_1CUP_1", "RB_1CUP_1")
-R("R33", "1k (OPEN)", "Q_1CUP_2", "RB_1CUP_2")
-R("R34", "1k (OPEN)", "Q_2CUP_1", "RB_2CUP_1")
-R("R35", "1k (OPEN)", "Q_2CUP_2", "RB_2CUP_2")
-R("R36", "1k (OPEN) - fit ONLY with U3", "ARM", "RB_GATE", dnp=True)
+R("R32", "1k (value TBD)", "Q_1CUP_1", "RB_1CUP_1")
+R("R33", "1k (value TBD)", "Q_1CUP_2", "RB_1CUP_2")
+R("R34", "1k (value TBD)", "Q_2CUP_1", "RB_2CUP_1")
+R("R35", "1k (value TBD)", "Q_2CUP_2", "RB_2CUP_2")
+R("R36", "1k (value TBD) - fit ONLY with U3", "ARM", "RB_GATE", dnp=True)
 
 # --- LED-driver cells and photoMOS, n = 1..4
 CELLS = [("Q_1CUP_1", "U4", "A1_LEG", "MID_1CUP"),

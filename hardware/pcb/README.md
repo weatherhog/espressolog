@@ -60,7 +60,50 @@ not committed.
   bodge wire, GPIO38 to the arm net, not a solder jumper. The minimum-gap stage
   on U3's spare channel is not designed, so U3 channel 2 is tied off.
 
-## Next
+## Building the board
 
-Placement → routing (Freerouting) → DRC → Gerbers. Then a 1:1 paper print with
-the real parts pressed into it, before ordering.
+Placement, routing and finishing are scripts too. Each runs with KiCad's
+Python (`KPY=/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3`):
+
+```bash
+python3 gen_schematic.py --check   # schematic, ERC, netlist round-trip
+$KPY gen_pcb.py                    # placement (no routing), courtyard check
+$KPY route.py                      # Freerouting, headless (Java 21+, jar in ~/.local/share/freerouting)
+$KPY finish.py                     # GND pour, keep-outs, labels, refs
+```
+
+Then run DRC and export with `kicad-cli`. The current board: **DRC 0 violations,
+0 unconnected**. The `fab/` folder holds the Gerber + drill zip (for
+JLCPCB/PCBWay: 2 layers, 1.6 mm FR-4, 100 × 100 mm), the BOM and
+`espressolog-board-1to1-print.pdf`.
+
+**Rules on the board:**
+- Netclasses: signals 0.3 mm. `Power` (+3V3, GND, LED_RAIL) 0.5 mm.
+  `Machine` (pos 1, every raw line, the drive chains) 0.4 mm with **0.6 mm
+  clearance**.
+- Freerouting narrows a few signal tracks to ~0.18 mm between pins, so the
+  board minimum is 0.15 mm (JLCPCB makes 0.127).
+- **No ground pour in the machine corner** (J2, its 150 K, pos 1, (a1)/(a2))
+  **or down the photoMOS output column**, and none under the antenna.
+- Labels on the silkscreen: `a1` / `a2` `OPEN in Phase 0`, `(b) OPEN until
+  bench`, `SELFTEST: never fit`, `U3 + R36 OUT while gate PROPOSED`.
+
+**Closest gaps between machine-net copper**, measured on the routed board:
+
+| Pair | Gap | Why |
+|---|---|---|
+| pos 1 – Steam, 1Cup raw – 2Cup raw | 0.79, 0.69 mm | adjacent J2 pins, 2.5 mm pitch — the machine's own connector |
+| pos 1 – A1_LEG / A2_LEG | 0.84 mm | the (a1)/(a2) jumper pins |
+| **A2_LEG – MID_1CUP** | **0.61 mm** | the (a2) feed runs down past the 1Cup chain to U6. A bridge there would only make the 1Cup line depend on U5 alone, and only once (a2) is fitted. Worth a re-route if the review asks for it |
+| pos 1 – GND | 23 mm | no ground near pos 1 |
+
+## Before ordering
+
+1. **A layout review in a fresh context**, against the machine-zone rules in
+   `docs/board-and-perfboard.md`.
+2. **Print `fab/espressolog-board-1to1-print.pdf` at 100 %** (check that
+   the 100 mm outline measures 100 mm). Then press in the real parts: the
+   devkit (25.4 mm between columns), the side-entry XH headers with the
+   **existing branch plugs**, a BC547, an AQY212EH, a DIL08PZ and a DIL16
+   socket, the 1 µF MKT and the 100 nF discs.
+3. Upload `fab/espressolog-board-gerbers.zip`.

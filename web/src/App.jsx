@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { T, MONO, SANS, paperBg, SERIES } from "./tokens.js";
-import { Eyebrow, Readout, Panel, Tag, timeReadout } from "./components.jsx";
+import { Eyebrow, Readout, Panel, Tag } from "./components.jsx";
+import { timeReadout } from "./shotTime.js";
 import { Spark, Overlay } from "./Chart.jsx";
 import { fetchShots, fetchCurve, fetchBeans, deleteShot, health, loadBean } from "./api.js";
 import Capture from "./Capture.jsx";

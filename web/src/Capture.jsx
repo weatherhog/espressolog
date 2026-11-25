@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { T, MONO, SANS } from "./tokens.js";
-import { Eyebrow, Readout, Panel, Chip, Stepper, timeReadout } from "./components.jsx";
+import { Eyebrow, Readout, Panel, Chip, Stepper } from "./components.jsx";
+import { timeReadout } from "./shotTime.js";
 import { patchShot, postTasting } from "./api.js";
 
 // The capture screen: everything pre-filled, nothing required. Machine

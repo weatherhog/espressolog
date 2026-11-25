@@ -148,8 +148,10 @@ machine's display.)
   dates its run's start (frame time minus reading); a frame counts only when
   the one before it gives the same date, a new run must count up before it
   replaces the old one, and `onPourStop()` freezes the value at the shot's
-  stop (CLAUDE.md, display-bus entry). A glitch frame, or the same glitch
-  twice, never counts up, so it can no longer reach the record.
+  stop (`docs/machine-display-bus.md`, "What the firmware stores as the
+  shot timer"). An idle glitch, single or repeated, never counts up, so it
+  can no longer become a run; a misread repeated on two frames of a real
+  run can still move its value by a tenth.
 - **`SETPOINT-TOUCHED` latched during a short steam start/stop**, with no
   button touched. **The decoder explained it**: up to 0.9.8 `display.cpp`
   latched `adjust`/`touched` when two blank FRAMES arrived within

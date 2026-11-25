@@ -638,42 +638,23 @@ the obvious guard and is not built.
 boundaries.
 
 **`machine_timer_dl` IS THIS SHOT'S PUMP RUN OR 0 — FROM FIRMWARE 0.16.1
-(2026-11-25), WITH THE EXCEPTIONS BELOW.** Up to 0.16.0 it could be
-**another run's**: pour start carried whatever the timer last reached, so a
-pour with no timer of its own (a hot-water draw, the display tap off or
-stale) stored the previous brew's or flush's; and it was read at
-completion, after the 5 s settle, so a flush pressed while SETTLING
-replaced it. Now (`machine_context.h`) the tracker follows the run on the
-glass apart from the stored value. **A run is its date, taken while it
-counts up**: every TIMER frame dates the run's start (frame time minus
-reading), and a frame counts only when the frame before it was TIMER and
-gives the same date within 0.3 s, so a misread seconds digit counts for
-nothing; a tenths digit off by one or two passes that, so a rise also needs
-both frames of the pair to show the new value (each value shows on 2–3
-frames). **The display holds the final value ~5 s after pump-off** (the
-2026-10-03 captures: `105` for 5.2 s, `210` for 5.1 s), so a frame showing
-the run's own maximum keeps the run without moving its date. A pair with
-another date is only a candidate until a later frame of that date reads
-higher: then it is a new run (a restart, a flush); a misread that repeats
-never counts up and never becomes one. Pour start carries the run only if
-it counted up within 0.5 s — a pump running now, not a held final value —
-and `onPourStop()` freezes the value at the detector's backdated stop, at
-the SETTLING transition or, for a shot finished straight from POURING, at
-completion: it takes the newest run of the pour that began at or before the
-stop, and only that run may keep counting. **The exception: a flush pressed
-after pump-off but BEFORE that stop** — while the cup still drips and the
-weight is not yet flat — is the latest run at the stop and is stored as the
-shot's, at its full length, which can exceed the shot's own — and, by the
-same 0.5 s rule, a pour with no timer of its own (a hot-water draw)
-confirmed within 0.5 s of another run's last count carries that run
-(replayed on the 2026-10-03 captures; physically unlikely). Also: a pour
-whose timer has stopped counting when POURING is confirmed (first drip +
-~300 ms + BLE and loop latency) reads 0, and eight or more new runs between
-the stop and its freeze push the shot's run out (0).
-**Records from 0.16.0 and earlier keep the old behaviour**, which is why
-the PWA's `shotTime()` (`web/src/components.jsx`) still trusts
-`machine_timer_s` only inside a window around the press-to-stop span — and
-the exception is why that window should stay even for 0.16.1 records.
+(2026-11-25), WITH TWO RARE EXCEPTIONS.** Up to 0.16.0 it could be
+**another run's**: the previous brew's on a hot-water draw or with the
+display tap off, and a flush's when pressed while SETTLING. From 0.16.1
+(`machine_context.h`) a run is identified by its start date and taken only
+while it counts up, pour start carries it only if it counted up within
+0.5 s, and `onPourStop()` freezes it at the shot's stop. **The display holds
+the final value ~5 s after pump-off**, which any timer logic must allow
+for. **Exceptions:** a flush pressed after pump-off but BEFORE the scale's
+stop is stored as the shot's, at its full length, which can exceed the
+shot's own; and a pour with no timer of its own confirmed within 0.5 s of
+another run's last count carries that run (physically unlikely). A misread
+repeated on two frames can move it by a tenth. **Records from 0.16.0 and
+earlier keep the old behaviour**, so the PWA's `shotTime()` window stays —
+for 0.16.1 records too, because of the first exception.
+**`docs/machine-display-bus.md`, "What the firmware stores as the shot
+timer", is normative on the mechanism**, its limits and the capture replays
+that tested it.
 
 **`docs/machine-display-bus.md` is normative on everything else** — the JST
 identification by measurement, the `Disp-P4` bidirectional-handshake

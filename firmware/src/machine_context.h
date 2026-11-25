@@ -201,10 +201,11 @@ public:
     if (r.mode != DisplayBus::Mode::TIMER) {
       have_prev_est = false;
       // Retire a run unseen for RUN_RECENT_US. Idle frames come every ~41 ms,
-      // so this happens long before micros() wraps (~71.6 min) and an old
-      // run's times could look recent again (review of 9734611). With the
-      // bus silent, main.cpp's staleness test keeps onPourStart from
-      // carrying anything.
+      // so while the machine is on this happens long before micros() wraps
+      // (~71.6 min) and an old run's times could look recent again (review
+      // of 9734611). With the machine off the bus is silent and nothing
+      // retires it; carrying it then needs a pour within 0.5 s of a wrap
+      // (docs/machine-display-bus.md, known limits).
       if (have_glass_run && (uint32_t)(r.at_us - run_seen_us) > RUN_RECENT_US)
         have_glass_run = false;
       return;
@@ -226,15 +227,45 @@ public:
     const bool recent = have_glass_run
                      && (uint32_t)(r.at_us - run_seen_us) <= RUN_RECENT_US;
     bool new_run = false;
+    // A RUN CANNOT RISE FASTER THAN TIME PASSES UNSEEN: at most one tick per
+    // 100 ms since this board last saw a frame SHOWING ITS VALUE (run_at_us:
+    // a rise, or a frame equal to it). While frames keep
+    // coming (every ~41 ms) that is one tick, so a misread repeated on two
+    // frames moves the value by a tenth at most -- not a second, which a
+    // held value's walking date could otherwise match (review of 9486c25).
+    // After a blind spot -- a loop() stall or a dropout at pump-off -- the
+    // allowance grows with it, so the final value is still taken.
+    const uint32_t unseen_us = (uint32_t)(r.at_us - run_at_us);
+    const uint32_t allow = recent ? (unseen_us + 99999u) / 100000u : 0;
+    const bool may_rise = recent && sure_dl > run_dl && sure_dl <= (uint32_t)run_dl + allow;
     if (recent && near(est, run_last_est)) {
-      if (sure_dl > run_dl) {                       // counting: the run goes on
+      if (may_rise) {                               // counting: the run goes on
         run_dl = sure_dl;
+        run_at_us = r.at_us;
         run_last_est = est;
         last_rise_us = r.at_us;
         if ((int32_t)(est - run_start_us) < 0) run_start_us = est;
+      } else if (r.timer_dl == run_dl) {
+        run_at_us = r.at_us;                        // still showing its value
       }
     } else if (recent && r.timer_dl == run_dl) {
-      run_seen_us = r.at_us;                        // the final value, held
+      run_seen_us = run_at_us = r.at_us;            // the final value, held
+      return;
+    } else if (may_rise && sure_dl == r.timer_dl) {
+      // THE FINAL VALUE AFTER A BLIND SPOT: the display already holds it
+      // (its date has walked on), higher than the last rise seen. Taken as
+      // the run's value, without refreshing liveness -- the run has stopped
+      // counting (review of 9486c25: a 0.3 s stall at pump-off lost the last
+      // tenths, 103 stored for 105).
+      run_dl = sure_dl;
+      run_seen_us = run_at_us = r.at_us;
+      if (!stopped) {
+        if (n_runs == 0) pushRun();
+        runs[n_runs - 1] = { run_start_us, run_dl };
+        mc.machine_timer_dl = run_dl;
+      } else if (timer_follow) {
+        mc.machine_timer_dl = run_dl;
+      }
       return;
     } else if (have_cand && near(est, cand_last_est)
                && (uint32_t)(r.at_us - cand_seen_us) <= RUN_RECENT_US) {
@@ -243,6 +274,7 @@ public:
       new_run = true;
       have_glass_run = true;
       run_dl = sure_dl;
+      run_at_us = r.at_us;
       run_start_us = (int32_t)(cand_start_us - est) < 0 ? cand_start_us : est;
       run_last_est = est;
       last_rise_us = r.at_us;
@@ -392,7 +424,7 @@ public:
   // draw, which the display does not time; the display tap off or stale)
   // stored the PREVIOUS brew's or flush's timer (review of the PWA's
   // shot-time headline, 2026-11-25). Dropping it costs nothing while the
-  // run goes on: the next confirmed frame restores the running maximum. It
+  // run goes on: its next counted frames put it back in the pour. It
   // costs the value when the timer has stopped counting by the time POURING
   // is confirmed -- first drip + POUR_HOLD_MS (~300 ms) + BLE and loop
   // latency -- i.e. the pump stopped at or just after first drip: then 0,
@@ -622,6 +654,7 @@ private:
   uint32_t run_start_us = 0;        // its earliest date
   uint32_t run_last_est = 0;        // the date of its latest rising frame
   uint32_t run_seen_us = 0;         // its latest counted frame, held ones too
+  uint32_t run_at_us = 0;           // its latest frame showing run_dl (or a rise)
   uint32_t last_rise_us = 0;        // when it last counted up
   bool     have_cand = false;       // a counted pair of another date, not yet rising
   uint16_t cand_dl = 0;

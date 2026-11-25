@@ -30,7 +30,9 @@ built.
 
 ## Preconditions — every one, every time
 
-1. **Off the machine.** J2, J4 and J5 T-pieces unplugged from the board. The
+1. **Off the machine.** J2, J4 and J5 T-pieces unplugged from the board (on
+   the PCB, `hardware/pcb`: the J22, J24 and J25 OUT cables off — the harness
+   plugs alone are not enough, the OUT cables are the machine side). The
    firmware watches J5's clock and data, J4's `#` and the four J2 lines
    for 50 ms and refuses if any reads HIGH, but that is a backstop, not the
    check: it cannot see a harness plugged into a machine that is off, nor
@@ -56,7 +58,9 @@ built.
 
 ## Procedure
 
-**0. Flash and look.** Flash the bench firmware. `drive status` must read:
+**0. Flash and look.** Flash the bench firmware. On the PCB, `drive status`
+must print `Q(GPIO11)` for channel 1 (a build that prints `Q(GPIO1)` has the
+perfboard-era pin map: wrong firmware for that board). `drive status` must read:
 GPIO38 = 0, every `A̅` = 1, every `Q` = 0. Anything else is a wiring fault:
 stop and meter.
 

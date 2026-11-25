@@ -1,0 +1,92 @@
+(version 1)
+
+# KiCad 10: `A.NetClass == 'Machine'` matches nothing (every rule here was
+# inert until that was found on 2026-11-24); hasNetclass() is the form that
+# works. There is no `Parent.Reference` either, so parts are listed with
+# memberOfFootprint(). A condition KiCad cannot parse disables the WHOLE
+# file and DRC silently falls back to the netclasses: after editing this,
+# check that a DRC report names these rules.
+# Net names are written '*NAME': == wildcard-matches, so the rules survive a
+# GUI "Update PCB from Schematic", which renames every net to /NAME
+# (fix-pass check NIT 9).
+
+# Machine nets (netclass Machine: pos 1, every raw line incl. the J3 NTC,
+# J4 + and J5 Disp-P4 pass-throughs, the drive chains) keep 2 mm from
+# everything of ours. Later rules override earlier ones.
+
+(rule "machine nets among themselves"
+  (condition "A.hasNetclass('Machine') && B.hasNetclass('Machine')")
+  (constraint clearance (min 1.0mm)))
+
+(rule "machine nets to everything else"
+  (condition "A.hasNetclass('Machine') && !B.hasNetclass('Machine')")
+  (constraint clearance (min 2.0mm)))
+
+# A connector's or jumper's own pin pitch is not a layout choice: the XH
+# headers (IN J2-J5, OUT J22-J25) are 2.5 mm, JP1/JP2 2.54 mm, so a track
+# leaving one pin passes its neighbour at ~1.45 mm. That is the machine's
+# own connector, as in its harness. MEANT for tracks leaving the connector's
+# own pins, but the condition is wider: ANY machine track gets 1.2 mm to ANY
+# pin of these parts (KiCad has no "same footprint as this track's pad"
+# test). The machine copper is hand-laid and measured; DRC does not hold a
+# foreign machine track to 2 mm here (pre-push review SHOULD 9).
+(rule "machine fan track beside its connector's other pins"
+  (condition "A.Type == 'Track' && A.hasNetclass('Machine') && B.Type == 'Pad' && (B.memberOfFootprint('J2') || B.memberOfFootprint('J3') || B.memberOfFootprint('J4') || B.memberOfFootprint('J5') || B.memberOfFootprint('J22') || B.memberOfFootprint('J23') || B.memberOfFootprint('J24') || B.memberOfFootprint('J25') || B.memberOfFootprint('JP1') || B.memberOfFootprint('JP2'))")
+  (constraint clearance (min 1.2mm)))
+
+# The machine's own ground conductors (J5 VSS, J4 T) pass straight through
+# IN -> OUT between the machine pins beside them, as in the harness.
+# Only the hand-laid (LOCKED) ground tracks, the pass-throughs and anchors,
+# so the router's GND cannot come near `+` or Disp-P4 (pre-order review S4a).
+# Only the headers that HAVE a ground pass-through (J4/J24 T, J5/J25 VSS);
+# a GND track anywhere else near a machine pin still needs 2 mm (final
+# review S2a: this used to cover J2/J22/JP1/JP2 too).
+(rule "ground pass-through beside its connector's machine pins"
+  (condition "A.Type == 'Pad' && A.hasNetclass('Machine') && B.Type == 'Track' && B.NetName == '*GND' && B.Locked && (A.memberOfFootprint('J4') || A.memberOfFootprint('J5') || A.memberOfFootprint('J24') || A.memberOfFootprint('J25'))")
+  (constraint clearance (min 1.2mm)))
+
+# Pads of one part: a connector's or jumper's own pins, an AQY's outputs.
+(rule "pads of the same part"
+  (condition "A.Type == 'Pad' && B.Type == 'Pad' && ((A.memberOfFootprint('J2') && B.memberOfFootprint('J2')) || (A.memberOfFootprint('J3') && B.memberOfFootprint('J3')) || (A.memberOfFootprint('J4') && B.memberOfFootprint('J4')) || (A.memberOfFootprint('J5') && B.memberOfFootprint('J5')) || (A.memberOfFootprint('J22') && B.memberOfFootprint('J22')) || (A.memberOfFootprint('J23') && B.memberOfFootprint('J23')) || (A.memberOfFootprint('J24') && B.memberOfFootprint('J24')) || (A.memberOfFootprint('J25') && B.memberOfFootprint('J25')) || (A.memberOfFootprint('JP1') && B.memberOfFootprint('JP1')) || (A.memberOfFootprint('JP2') && B.memberOfFootprint('JP2')) || (A.memberOfFootprint('U4') && B.memberOfFootprint('U4')) || (A.memberOfFootprint('U5') && B.memberOfFootprint('U5')) || (A.memberOfFootprint('U6') && B.memberOfFootprint('U6')) || (A.memberOfFootprint('U7') && B.memberOfFootprint('U7')))")
+  (constraint clearance (min 0.2mm)))
+
+# Pads with no net (the empty half of each uncut DIP-8) carry nothing: a
+# machine track may pass them at the ordinary clearance.
+# ONLY the photoMOS sockets' empty half (pads 3-6 of U4-U7). Every other
+# pad with no net is live or metal: devkit pins (5Vin, EN, strapping, USB),
+# the '221s' Q-bar outputs (driven high), the mounting holes' screws
+# (final review S2b; pre-order review S4b, c).
+(rule "machine nets beside pads with no net"
+  (condition "A.hasNetclass('Machine') && B.Type == 'Pad' && B.NetName == '' && (B.memberOfFootprint('U4') || B.memberOfFootprint('U5') || B.memberOfFootprint('U6') || B.memberOfFootprint('U7'))")
+  (constraint clearance (min 0.6mm)))
+
+# The 1Cup and 2Cup chains keep 2.5 mm apart, so a single short cannot join
+# the two levers or feed one chain from the other's leg (first review's
+# finding 2; final review S2c). Exempt: the J2/J22 header pins themselves,
+# and items touching the "J2 fan zone" rule area (finish.py) -- the first
+# few mm of track leaving the 2.5 mm-pitch header, which cannot be wider.
+(rule "1Cup and 2Cup chains apart"
+  (condition "(((A.NetName == '*2CUP_RAW' || A.NetName == '*MID_2CUP' || A.NetName == '*A2_LEG') && (B.NetName == '*1CUP_RAW' || B.NetName == '*MID_1CUP' || B.NetName == '*A1_LEG')) || ((A.NetName == '*1CUP_RAW' || A.NetName == '*MID_1CUP' || A.NetName == '*A1_LEG') && (B.NetName == '*2CUP_RAW' || B.NetName == '*MID_2CUP' || B.NetName == '*A2_LEG'))) && !A.memberOfFootprint('J2') && !A.memberOfFootprint('J22') && !B.memberOfFootprint('J2') && !B.memberOfFootprint('J22') && !A.intersectsArea('J2 fan zone') && !B.intersectsArea('J2 fan zone')")
+  (constraint clearance (min 2.5mm)))
+
+# A leg beside its OWN return is the both-photoMOS bypass; pos 1 beside a
+# lever line gets round the jumper as well. Track to track: the pads are
+# header and jumper pins (pre-order review S4e).
+(rule "a leg beside its own return, or pos 1 beside a lever line"
+  (condition "((A.NetName == '*A1_LEG' && B.NetName == '*1CUP_RAW') || (A.NetName == '*A2_LEG' && B.NetName == '*2CUP_RAW') || (A.NetName == '*POS1_5V' && (B.NetName == '*1CUP_RAW' || B.NetName == '*2CUP_RAW' || B.NetName == '*MID_1CUP' || B.NetName == '*MID_2CUP' || B.NetName == '*WATER_RAW'))) && A.Type == 'Track' && B.Type == 'Track'")
+  (constraint clearance (min 2.5mm)))
+
+
+# Pos 1 beside Steam: J2 pin 1-2, boiler to 165 C, no jumper in the path.
+# Its own rule at 2.0, not in the 2.5 rule above: the J2/J22 pass-throughs
+# themselves sit 2.10 apart (fix-pass check SHOULD 3).
+(rule "pos 1 beside Steam"
+  (condition "A.NetName == '*POS1_5V' && B.NetName == '*STEAM_RAW' && A.Type == 'Track' && B.Type == 'Track'")
+  (constraint clearance (min 2.0mm)))
+
+# The mounting holes are NPTH: no copper, so no clearance rule above sees
+# them, only hole_clearance. A screw head or metal standoff must not reach a
+# machine net (fix-pass check SHOULD 2). 3.0 mm from the hole EDGE.
+(rule "machine nets clear of the mounting holes"
+  (condition "A.hasNetclass('Machine') && B.memberOfFootprint('H*')")
+  (constraint hole_clearance (min 3.0mm)))

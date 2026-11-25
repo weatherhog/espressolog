@@ -945,6 +945,68 @@ int main() {
     printf("a shot completed from POURING drops a flush after its stop OK\n");
   }
 
+  {
+    // 23. Review of 7b27abe: one misread HIGH TIMER frame (750 in a 25 s
+    //     run) is ignored, after the stop while the pump runs on and during
+    //     the pour alike.
+    MachineContextTracker k;
+    uint32_t t = 1000000;
+    k.onReading(temp(95, t), false);
+    k.onPourStart(t + 41000);
+    for (uint16_t d = 1; d <= 250; d++) k.onReading(timer(d, t + 100000 + d * 100000), false);
+    k.onPourStop(t + 100000 + 250 * 100000 + 10000, 2000);   // forced stop, pump on
+    k.onReading(timer(750, t + 100000 + 251 * 100000), false);
+    for (uint16_t d = 252; d <= 300; d++) k.onReading(timer(d, t + 100000 + d * 100000), false);
+    assert(k.context().machine_timer_dl == 300);   // not 75.0 s
+    MachineContextTracker m;
+    m.onReading(temp(95, t), false);
+    m.onPourStart(t + 41000);
+    for (uint16_t d = 1; d <= 250; d++)
+      m.onReading(timer(d == 200 ? 750 : d, t + 100000 + d * 100000), false);
+    assert(m.context().machine_timer_dl == 250);
+    printf("a misread high TIMER frame is ignored OK\n");
+  }
+  {
+    // 24. Review of 7b27abe: two flushes between the stop and a late
+    //     onPourStop() (a scale lost mid-pour is completed up to 65 s on):
+    //     the shot goes back to its own run, not the first flush.
+    MachineContextTracker m;
+    uint32_t t = 1000000;
+    m.onReading(temp(95, t), false);
+    m.onPourStart(t + 41000);
+    for (uint16_t d = 1; d <= 280; d++) m.onReading(timer(d, t + 100000 + d * 100000), false);
+    t += 100000 + 280 * 100000;
+    for (int i = 1; i <= 10; i++) m.onReading(temp(95, t + i * 41000), false);
+    const uint32_t stop = t + 10 * 41000;
+    uint32_t u = stop + 200000;
+    for (uint16_t d = 1; d <= 30; d++) m.onReading(timer(d, u + d * 100000), false);
+    u += 30 * 100000;
+    for (int i = 1; i <= 10; i++) m.onReading(temp(95, u + i * 41000), false);
+    u += 10 * 41000;
+    for (uint16_t d = 1; d <= 30; d++) m.onReading(timer(d, u + d * 100000), false);
+    u += 30 * 100000;
+    m.onPourStop(u, (u - stop) / 1000);
+    assert(m.context().machine_timer_dl == 280);   // not a flush's 3.0 s
+    printf("several flushes before a late stop do not replace the shot's run OK\n");
+  }
+  {
+    // 25. Review of 7b27abe: a misread LOW frame splits the run just before
+    //     the stop is confirmed; the run still dates from its real start, so
+    //     it is the run in force at the stop and goes on counting.
+    MachineContextTracker k;
+    uint32_t t = 1000000;
+    k.onReading(temp(95, t), false);
+    k.onPourStart(t + 41000);
+    for (uint16_t d = 1; d <= 250; d++)
+      k.onReading(timer(d == 245 ? 1 : d, t + 100000 + d * 100000), false);
+    const uint32_t stop = t + 100000 + 240 * 100000;
+    const uint32_t now = t + 100000 + 250 * 100000 + 10000;
+    k.onPourStop(now, (now - stop) / 1000);
+    for (uint16_t d = 251; d <= 300; d++) k.onReading(timer(d, t + 100000 + d * 100000), false);
+    assert(k.context().machine_timer_dl == 300);
+    printf("a run split by a misread low frame keeps its start OK\n");
+  }
+
   printf("\nall machine context tests passed\n");
   return 0;
 }

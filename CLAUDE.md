@@ -652,9 +652,13 @@ completion: a restart after the stop is undone, and only the run in force
 at the stop may keep counting, unbroken. **The exception: a flush pressed
 after pump-off but BEFORE that stop** — while the cup still drips and the
 weight is not yet flat — is the latest run at the stop and is stored as
-the shot's. Also: a run that ends within ~1 s before first drip with no
-frame after it reads 0, and a single misread frame or a frame gap while the
-pump outlasts the stop freezes it early (short, still its own run).
+the shot's. Also: a pour whose timer is no longer on the display when
+POURING is confirmed (first drip + ~300 ms + BLE and loop latency) reads 0;
+a misread low frame, or a frame gap over 1 s — a bus dropout or a `loop()`
+stall — while the pump outlasts the stop freezes it early (short, still its
+own run); a reading the timer cannot have reached is ignored as a misread;
+and more than four restarts between the stop and its freeze lose the run
+(0).
 **Records from 0.16.0 and earlier keep the old behaviour**, which is why
 the PWA's `shotTime()` (`web/src/components.jsx`) still trusts
 `machine_timer_s` only inside a window around the press-to-stop span — and

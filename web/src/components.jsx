@@ -19,21 +19,21 @@ export function Eyebrow({ children, style }) {
 // hot-water draw (the display runs no timer then) or with the display tap
 // off; a flush pressed inside the 5 s settle (the timer is copied at
 // completion), which leaves the flush's first seconds; and before 0.9.7 a
-// misread " 95" idle frame, 9.5 s. From 0.16.1 (the timer-own-run fix, on
-// claude/timer-own-run) the firmware stores only a run it saw start, with
-// two exceptions its CLAUDE.md lists: a flush pressed after pump-off but
-// before the scale's stop is stored at full length, which reads ABOVE the
-// press-to-stop span p; and a pour confirmed within 0.5 s of another
-// run's last count carries that run.
+// misread " 95" idle frame, 9.5 s. From 0.16.1 (the timer-own-run fix)
+// the firmware stores only a run it saw start, with two exceptions its
+// CLAUDE.md lists: a flush pressed after pump-off but before the scale's
+// stop is stored at its own full length, which can read above OR below the
+// press-to-stop span p (a 1Cup flush after a 2Cup shot: 10.5 against 32);
+// and a pour confirmed within 0.5 s of another run's last count carries
+// that run.
 //
 // The rule, in order:
 //  - a confirmed hot-water press (pump_line 3), any firmware: rejected --
 //    the display runs no timer for it, so a stored one is another run's;
-//  - 0.16.1+: with a usable p, rejected only when it reads more than 3 s
-//    over p (the late flush); with none, trusted;
-//  - older, with a usable p: a lopsided window -- up to 9 s under p (the
-//    0a.7 lift shift plus drips; shot 212: timer 35.9, p 42.3), at most
-//    3 s over;
+//  - with a usable p, any firmware: a lopsided window -- up to 9 s under
+//    p (the 0a.7 lift shift plus drips; shot 212: timer 35.9, p 42.3), at
+//    most 3 s over -- which also catches 0.16.1's late flush;
+//  - 0.16.1+ with no usable p: trusted;
 //  - older, no usable p: on a v3+ record (pump_line set) with no press
 //    at all (pump_line 0), unchecked -- a missed hot-water press looks the
 //    same and carries the previous brew; otherwise it stands alone if it is
@@ -46,8 +46,10 @@ export function Eyebrow({ children, style }) {
 // press rejected it, "unchecked" (?) when nothing could check it. The
 // cautious choice is visible, and a correct timer rejected because p is
 // wrong (a borrowed press, a lift mid-pour) can still be read off the row.
-// Not caught: a stale timer inside the window, and on records with no
-// switch data a stale timer >= 15 s (the display tap off).
+// Not caught: a stale timer inside the window; on records with no switch
+// data a stale timer >= 15 s (the display tap off); and on 0.16.1 a pour
+// confirmed within 0.5 s of another run's last count, whose carried timer
+// lands inside the window or has no p to check it.
 // Fallbacks say what they are: "Press→stop" (p), then "Pour" (first drip
 // to a flat weight, ~10 s short of the machine on a pre-infused shot).
 const MIN_BREW_S = 15;
@@ -68,12 +70,10 @@ function timerVerdict(shot, p) {
   const m = shot.machine_timer_s;
   if (m == null || !(m > 0)) return null;
   if (shot.pump_line === 3) return "disagreed";
-  if (firmwareAtLeast(shot.firmware_version, [0, 16, 1])) {
-    return p != null && m - p > TIMER_OVER_P_MAX_S ? "disagreed" : "ok";
-  }
   if (p != null) {
     return p - m <= TIMER_UNDER_P_MAX_S && m - p <= TIMER_OVER_P_MAX_S ? "ok" : "disagreed";
   }
+  if (firmwareAtLeast(shot.firmware_version, [0, 16, 1])) return "ok";
   if (shot.pump_line === 0) return "unchecked";
   return m >= MIN_BREW_S && firmwareAtLeast(shot.firmware_version, [0, 9, 7]) ? "ok" : "unchecked";
 }
@@ -101,15 +101,15 @@ export function shotTime(shot) {
     ? shot.pump_to_stop_s : null;
   const v = timerVerdict(shot, p);
   if (v === "ok") return { s: shot.machine_timer_s, label: "Time", timer: null };
-  const timer = v;
+  const timer = v; // null, "disagreed" or "unchecked"
   if (p != null) return { s: p, label: "Press→stop", timer };
   if (shot.total_s > 0) return { s: shot.total_s, label: "Pour", timer };
-  return { s: null, label: "Time", timer: null };
+  return { s: null, label: "Time", timer };
 }
 
 export function Readout({ value, unit, label, color = T.ink, size = 34, mark, note, title }) {
   return (
-    <div title={title}>
+    <div title={title} style={{ minWidth: 0 }}>{/* lets the note ellipsize in a grid cell */}
       <div style={{
         fontFamily: MONO, fontSize: size, lineHeight: 1, color,
         fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em",
@@ -120,7 +120,8 @@ export function Readout({ value, unit, label, color = T.ink, size = 34, mark, no
       </div>
       <Eyebrow style={{ marginTop: 5 }}>{label}</Eyebrow>
       {note && <div style={{
-        fontFamily: MONO, fontSize: 9.5, color: T.alert, marginTop: 2, whiteSpace: "nowrap",
+        fontFamily: MONO, fontSize: 9.5, color: T.alert, marginTop: 2,
+        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%",
       }}>{note}</div>}
     </div>
   );

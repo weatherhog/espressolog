@@ -35,10 +35,13 @@ function loadTargets() {
       if (saved.t0 === 22 && saved.t1 === 32) { delete saved.t0; delete saved.t1; }
       // Writes get their own try: a failed write must not throw away the
       // saved yield band read above (the outer catch returns the defaults).
-      try {
-        localStorage.setItem("pullTargets", JSON.stringify(saved));
-        localStorage.setItem("pullTargetsPourTime", "1");
-      } catch { /* migrates again next load */ }
+      let wrote = false;
+      try { localStorage.setItem("pullTargets", JSON.stringify(saved)); wrote = true; }
+      catch { /* migrates again next load */ }
+      if (wrote) {
+        try { localStorage.setItem("pullTargetsPourTime", "1"); }
+        catch { /* harmless: the next load re-checks a band already cleaned */ }
+      }
     }
     return { ...DEFAULT_TARGETS, ...saved };
   }

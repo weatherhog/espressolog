@@ -9,17 +9,25 @@ export function Eyebrow({ children, style }) {
   );
 }
 
-export function Readout({ value, unit, label, color = T.ink, size = 34 }) {
+export function Readout({ value, unit, label, color = T.ink, size = 34, mark, note, title }) {
   return (
-    <div>
+    <div title={title}>
       <div style={{
         fontFamily: MONO, fontSize: size, lineHeight: 1, color,
         fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em",
       }}>
         {value}
         {unit && <span style={{ fontSize: size * 0.4, color: T.inkSoft, marginLeft: 3 }}>{unit}</span>}
+        {mark && <span style={{ fontSize: size * 0.5, color: T.alert, marginLeft: 2 }}>{mark}</span>}
       </div>
       <Eyebrow style={{ marginTop: 5 }}>{label}</Eyebrow>
+      {note && <div style={{
+        fontFamily: MONO, fontSize: 9.5, color: T.alert, marginTop: 2,
+        // width 0 + minWidth 100%: the note takes the cell's width but never
+        // widens it, so it ellipsizes instead of pushing the grid column.
+        width: 0, minWidth: "100%",
+        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+      }}>{note}</div>}
     </div>
   );
 }

@@ -719,8 +719,11 @@ three.
   silently (RTC_SW_SYS_RST before any output) on arduino-espressif32 2.0.17.
   Bisected empirically 2026-08-27; only the first 8 MB is usable by firmware.
 
-PSRAM is unused by this workload. It's present because that's the cheap
-commodity module, not because we need it.
+PSRAM is used for one thing: two 20 KB held-shot buffers (from 0.16.0,
+`handleShotComplete()`), so a finished shot can wait for a quiet machine
+while the detector's own buffer takes the next one.
+Without PSRAM a shot is written as it finishes. It's present because that's the cheap commodity
+module, not because we need it.
 
 ---
 
@@ -806,7 +809,7 @@ server/            Go
                    ambient = room temp/humidity from Home Assistant
                    record = on-flash wire format (v1-v6 decode)
                    web    = embed.FS for the built PWA
-  migrations/0*.sql         15 migrations; 001_init.sql is the base
+  migrations/0*.sql         16 migrations; 001_init.sql is the base
 web/               Vite + React PWA
   src/ · prototype/
 analysis/          Jupyter notebooks, reads the SQLite file
@@ -1543,17 +1546,88 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   |---|---|---|
   | flat stop — the normal one | backdated `STOP_WINDOW_MS` | the weight at that instant |
   | `truncated = 1` (`MAX_SHOT_MS`, 60 s) | the confirming sample, **not** backdated | that same instant |
-  | **cup lifted** (`finalizeLifted`) | the last retained sample | `running_max`, which may be earlier |
+  | **cup lifted during the pour** (`finalizeLifted`) | the last retained sample | `running_max`, which may be earlier |
+  | **cup lifted while settling**, from 0a.8 (`finishLiftedSettling`) | row 1's or row 2's, kept | row 1's or row 2's, kept |
 
   <!-- fact:stop-ms-backdating backdated STOP_WINDOW_MS -->
-  <!-- fact:stop-ms-row-mapping | flat stop — the normal one | backdated `STOP_WINDOW_MS` | the weight at that instant |;;| `truncated = 1` (`MAX_SHOT_MS`, 60 s) | the confirming sample, **not** backdated | that same instant |;;| **cup lifted** (`finalizeLifted`) | the last retained sample | `running_max`, which may be earlier | -->
+  <!-- fact:stop-ms-row-mapping | flat stop — the normal one | backdated `STOP_WINDOW_MS` | the weight at that instant |;;| `truncated = 1` (`MAX_SHOT_MS`, 60 s) | the confirming sample, **not** backdated | that same instant |;;| **cup lifted during the pour** (`finalizeLifted`) | the last retained sample | `running_max`, which may be earlier |;;| **cup lifted while settling**, from 0a.8 (`finishLiftedSettling`) | row 1's or row 2's, kept | row 1's or row 2's, kept | -->
 
-  **THE ROWS ARE NOT MUTUALLY EXCLUSIVE.** `finalizeLifted()` never clears
+  **FROM DETECTOR 0a.8 (firmware 0.16.0, 2026-11-23) A LIFT WHILE SETTLING
+  KEEPS THE STOP** (row 4): it only ends settling early, `yield_final_g` is
+  the peak and `settle_offset_g` the drips the peak followed before the
+  lift — no longer 0, but **not a lower bound on a full settle**: the peak
+  follows any reading under 0.5 g above it, so jitter and the start of a
+  grip can read a few tenths high, and it covers only the time settled. After a
+  forced stop it is 0 (nothing settled; `final − at_stop` does not hold
+  there). Like the pour, settling now takes a lift only after a drop held
+  `LIFT_HOLD_MS` (2 s), so one dropped sample — a bump, a reconnect's 0 g —
+  no longer ends it; and because a hold needs time, **`loop()` calls
+  `ShotDetector::tick()`**, which ends a shot on the clock once the yield
+  scale has been quiet for 3 s (the scale manager's own `STALE_MS`, so a
+  routine BLE gap never counts): a pending lift past its hold, a settle
+  past its window, or a pour 65 s on — when the shot would have
+  force-stopped and settled by now, so a reconnect mid-pour cannot split
+  it. A quiet pour under 5 g is a reject; **any other quiet pour is
+  spooled as a FAULT**, which the server excludes as `'fault: yield scale
+  lost mid-pour'` but which keeps its dose — un-exclude a good one by hand
+  (the serial log and the PWA say so when one happens).
+  **It is not classified further, on purpose**: the second before the
+  scale vanished cannot tell jitter, drips, a lift and a reconnect's 0 g
+  apart, and the rules tried (a pending drop as a lift, a flat tail as a
+  stop) each misfiled the neighbouring case across four review rounds on
+  2026-11-23. A short pending drop is trimmed off the curve. Without it a scale switched
+  off with the cup, or one whose battery died mid-pour, held the shot open
+  and blocked every spool write (invariant 6). `tick()` is never gated.
+  **What waits is the spool write:** a finished shot — any path, the forced
+  stop included — is copied into one of two PSRAM hold slots (samples and
+  machine context as they stood) and written by `serviceHeldShots()`, which
+  runs after the machine polls: **in the same `loop()` pass if the machine
+  is quiet** (the `IDLE`/`ARMED` + `!machineBusy()` test that gates
+  weighings), else at the first quiet pass, oldest first. Deciding at
+  completion read the previous pass's switches, since completions happen in
+  the sample drain before the polls. Past 5 min with the detector IDLE, or
+  30 min with it ARMED (ARMED with a busy guard may be a running pump, but
+  a cup left on the scale keeps it ARMED most of the day), a held shot is
+  written regardless, so a stuck guard cannot keep it for ever; with both
+  slots full the oldest goes at once. A slot is freed only when its write
+  succeeded; a failed one is retried every 30 s and logged once
+  (`handleShotComplete()`, invariants 2 and 6). Until 0.16.0 a flush
+  started in the 5 s settle window got a flash write mid-pump. A held shot
+  is lost if the board loses power before it is written; `reboot` writes
+  them first and refuses while any is still held (`reboot force` loses
+  them).
+  `replay` ticks too and skips
+  the dose scale's lines, so it reproduces the quiet-scale endings a
+  capture shows — not one the board made on its own clock (a stalled
+  `loop()` overflowing the sample queue). The forced stop at
+  60 s waits while a drop is pending, so a lift across it is an ordinary
+  pour lift rather than a stop taken mid-dip. Found on shot 212: stored 30.5 s
+  for a stop at ~25.3 s (replayed through 0a.8: 25.0 s).
+
+  **NO FIELD FLAGS A LIFT, ON ANY VERSION — `v_shot_end` (migration 016)
+  DERIVES IT** from the samples: a settle that ran its course ends ≥ 7 s
+  after `stop_ms` (≥ 5 s after a forced stop, `stop_ms` ≥ 60000), capped
+  below the `t_ms` ceiling of 65535, and a lift sooner. It judges only
+  detectors 0a.5–0a.8 (anything else is NULL). It reads 1 on an 0a.8
+  curve the quiet-scale tick ended -- a pour 65 s on (a reject or a
+  scale-lost fault), or a settle, including one that then closed on time
+  with a full settle's yield (shot 214) -- except near the `t_ms` ceiling;
+  the migration lists that and its other misses. Use it rather than
+  `settle_offset_g = 0`, which a 0a.8 lift no longer reads.
+
+  **The next two paragraphs are about records from 0a.7 and earlier**,
+  which are stored as they were — most of the archive. What follows them
+  (the denominators, shot 37, the sub-5 g abort, which still assigns none
+  of these fields) holds on 0a.8 too, and so does row 3: a lift during the
+  pour is unchanged.
+
+  **UP TO 0a.7 THE ROWS ARE NOT MUTUALLY EXCLUSIVE.** `finalizeLifted()` never clears
   `res.truncated`, so a shot force-stopped at 60 s and *then* lifted during
   settling reads `truncated = 1` with lift-derived values. **A query that
-  branches on `truncated` alone picks row 2 and gets row 3.**
+  branches on `truncated` alone picks row 2 and gets row 3.** (From 0a.8
+  that shot takes row 4 and keeps row 2's values.)
 
-  **THE LIFT PATH IS NOT AN EDGE CASE AND NOTHING FLAGS IT.** A lift during
+  **UP TO 0a.7 THE LIFT PATH IS NOT AN EDGE CASE AND NOTHING FLAGS IT.** A lift during
   SETTLING — stop the shot, pick the cup up — *overwrites* the backdated
   `stop_ms` that `enterSettling()` had already stored correctly. That check
   runs before the settle window expires, so the lift lands as late as the
@@ -1563,10 +1637,11 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   (Off the `truncated` entry there is no backdating to undo, so that one
   really is bounded by `SETTLE_MS`.) It also zeroes `settle_offset_g`.
   `valid`/`fault`/`truncated` read exactly as a normal stop;
-  `settle_offset_g = 0` is the nearest tell
+  `settle_offset_g = 0` is the nearest field tell
   and a flat stop can hit 0 by coincidence. **`analysis/overshoot.py`
-  records seven lift-terminated shots**, found by requiring a ≥ 4 s tail
-  rather than trusting the field.
+  records seven lift-terminated shots**, found by the curve's tail rather
+  than the field (≥ 4 s until 2026-11-23; now `v_shot_end`'s test, which
+  separates the same 0a.6 shots and is what keeps a 0a.8 lift out).
 
   **THAT SEVEN HAS NO ARCHIVE-WIDE DENOMINATOR, AND THIS FILE GAVE IT ONE
   UNTIL 2026-10-27.** It read *"seven of the first 46 logged shots"* and
@@ -1702,12 +1777,18 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   (a scale reconnect) nothing is judged, because the rise across the gap is
   unknown; a placement there goes unflagged. **No record excluded at ingest
   — placement, reject or fault — takes a dose** (`store.go`); a knock must
-  not take the real shot's.
+  not take the real shot's. The one exception is 0a.8's scale-lost fault
+  (the `fault` bullet below), and not when it is also a placement.
   Kept, flagged (`SPOOL_FLAG_PLACEMENT`, firmware 0.11.1) and excluded at
   ingest. Added after shot 180 (2026-11-15): a cup put back on an un-tared
   scale landed slowly enough, 3–4 g per sample, to pass the per-sample
   step guard into POURING.
-- **fault** — weight drops > 5 g mid-pour (cup removed)
+- **fault** — up to 0a.3, weight drops > 5 g mid-pour (cup removed); from
+  0a.4 a lift ends the shot instead and nothing set it. **From 0a.8 it
+  means the yield scale went quiet mid-pour** (`tick()`, 65 s on, 5 g or
+  more): spooled at the peak, excluded at ingest as
+  `'fault: yield scale lost mid-pour'`, and — unlike every other ingest
+  exclusion — it keeps its dose: the coffee was used
 - **disturbed** (detector **0a.7**, firmware 0.14.0) — something set on
   the scale once the shot has 5 g. **What it does depends on when:**
   - **while settling after a confirmed stop** (2 s flat, so the true weight
@@ -1762,12 +1843,20 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   (flow × sample interval: one 240 ms BLE gap at 2.5 g/s is enough, and
   the SHOT_205 curve has gaps like that every second or two) and freezes
   it low, flagged — main took the last weight. **During the pour,** an object that creeps on or lands in steps of
-  5 g or less is not seen; and **the lift paths are unchanged** —
-  a lift during settling still overwrites `stop_ms` as the table above
-  says. **0a.7 is its own stratum unless a script says otherwise**:
+  5 g or less is not seen; and in 0a.7 **the lift paths are unchanged** —
+  a lift during settling still overwrites `stop_ms`, which 0a.8 fixed (the
+  table above, row 4). **0a.7 is its own stratum unless a script says otherwise**:
   `analysis/overshoot.py` and the 0f notebook filter on
   `detector_version = '0a.6'`; `analysis/session_warmup.py` pools 0a.6 and
-  0a.7 from 2026-11-22 and leaves disturbed shots out — not because the
+  0a.7 from 2026-11-22, and 0a.8 from 2026-11-23 for mean flow (the same
+  except after a dip that recovered while settling, or a scale gone quiet
+  while settling, where 0a.8 reads the last weight and 0a.7 the peak —
+  rare, re-check as 0a.8 shots accumulate; a pour whose scale was lost is
+  a fault on 0a.8 and excluded, where 0a.7 stored a shot) — but
+  **not for shot time**: `total_s` is `stop_ms / 1000`, which 0a.8 stores
+  up to ~7 s earlier on a lift while settling, so it pairs `total_s` only
+  within sessions on one side of 0a.8 and tabulates it for 0a.6/0a.7
+  only — and leaves disturbed shots out — not because the
   two compute mean flow identically (a grip kept out of an unflagged
   lift-terminated yield moves it), but because the result does not move
   either way; its docstring has the check. **Deploy the server before flashing 0.14.0**: the format

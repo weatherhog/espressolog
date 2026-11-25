@@ -158,8 +158,30 @@ STRATUM = {"bean_name": "Moonwalker", "grind_dial": 7.9, "grind_epoch_id": 1}
 # flag, so it filters nothing on 0a.6 rows), and on an unflagged
 # lift-terminated shot whose grip 0a.7 keeps out of the yield. The docstring's
 # 2026-11-22 update shows the latter does not move the result yet. Anything
-# older than 0a.6 changed the stop rule and stays out.
-DETECTORS = {"0a.6", "0a.7"}
+# older than 0a.6 changed the stop rule and stays out. 0a.8 (2026-11-23) is
+# 0a.7 except while settling: a lift keeps stop_ms and measures
+# settle_offset_g, only a drop held 2 s is a lift, and a quiet scale ends
+# settling on the clock. It sets the disturbed flag exactly as 0a.7 does.
+# yield_final_g, and with it mean_flow_gps (its 80 % point), come out the
+# same EXCEPT in two cases where 0a.7 stored the peak and 0a.8 the last
+# weight: settling saw a dip that recovered (a reconnect's 0 g, a bump, a
+# lift and put-back within 2 s -- 0a.7 ended the shot at the dip, 0a.8
+# settles on), or the scale went quiet while settling (0a.7 ended at the
+# reconnect's 0 g, 0a.8's tick() finishes on the last weight). And a pour
+# whose scale was lost is a fault on 0a.8 (excluded unless a human
+# un-excludes it), where 0a.7 held it
+# open and stored a shot once the scale returned -- or lost it if it never
+# did. excluded = 0 drops it on 0a.8 only. Rare, and pooled on the
+# assumption that it does not move the result -- re-check as 0a.8 shots
+# accumulate, as for 0a.7. BUT total_s IS stop_ms / 1000, so 0a.8 changes it: on 0a.6/0a.7
+# a shot lifted while settling stores stop_ms up to ~7 s late, on 0a.8 the
+# real stop. Mean flow pools across the change; shot time does not (OLD_STOP).
+DETECTORS = {"0a.6", "0a.7", "0a.8"}
+# Detectors whose stop_ms a lift while settling overwrote. total_s is paired
+# only within a session whose clean shots are all on one side of 0a.8, and
+# the per-position table reports it for these only -- the archive before
+# 0a.8, where the comparison was made.
+OLD_STOP = {"0a.6", "0a.7"}
 MIN_YIELD_G = 15
 
 FIELDS = ["id", "started_at", "excluded", "bean_name", "grind_dial",
@@ -219,10 +241,17 @@ def sessions(rows, gap_min):
     return out
 
 
+def one_stop_era(s):
+    """All of a session's shots measure stop_ms (total_s) the same way."""
+    return len({r["detector_version"] in OLD_STOP for r in s}) == 1
+
+
 def paired(sess, key, sign=1):
-    """Per multi-shot session: sign * (mean of later shots - first shot)."""
+    """Per multi-shot session: sign * (mean of later shots - first shot).
+    total_s only within a session on one side of 0a.8 (OLD_STOP)."""
     return [sign * (st.mean(r[key] for r in s[1:]) - s[0][key])
-            for s in sess if len(s) >= 2]
+            for s in sess
+            if len(s) >= 2 and (key != "total_s" or one_stop_era(s))]
 
 
 def sign_flip_p(diffs):
@@ -277,7 +306,9 @@ def line(label, sess):
     print(f"{label}: {n} clean shots, {len(sess)} sessions, {len(flow)} with 2+ | "
           f"later faster in {sum(d > 0 for d in flow)}/{len(flow)}, "
           f"{st.mean(flow):+.3f} g/s, p={sign_flip_p(flow):.4f} | first slower in "
-          f"{sum(d > 0 for d in time)}/{len(time)}, {st.mean(time):+.2f} s")
+          + (f"{sum(d > 0 for d in time)}/{len(time)}, {st.mean(time):+.2f} s" if time
+             # every multi-shot session straddles 0a.8: no like-for-like time
+             else "- (no session on one side of 0a.8)"))
 
 
 def table(sess):
@@ -285,14 +316,18 @@ def table(sess):
     for s in sess:
         for i, r in enumerate(s):
             by_pos.setdefault(min(i + 1, 4), []).append(r)
-    print("position   n   mean flow   total_s   dose_ground")
+    print("position   n   mean flow   total_s*  dose_ground")
     for pos in sorted(by_pos):
         rs = by_pos[pos]
         doses = [r["dose_ground_g"] for r in rs if r["dose_ground_g"]]
         dose = f"{st.mean(doses):6.2f} g" if doses else "     -"
+        times = [r["total_s"] for r in rs if r["detector_version"] in OLD_STOP]
+        time = f"{st.mean(times):6.2f} s" if times else "     - "
         print(f"{'4+' if pos == 4 else pos:>8} {len(rs):>3}   "
               f"{st.mean(r['mean_flow_gps'] for r in rs):5.2f} g/s  "
-              f"{st.mean(r['total_s'] for r in rs):6.2f} s  {dose}")
+              f"{time}  {dose}")
+    print(f"* total_s over {sorted(OLD_STOP)} shots only: 0a.8 stores a lifted "
+          "shot's real stop, the older detectors up to ~7 s late")
 
 
 def main():

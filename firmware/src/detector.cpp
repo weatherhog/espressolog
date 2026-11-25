@@ -183,6 +183,61 @@ void ShotDetector::enterSettling(uint32_t t, int32_t w_at_stop, uint32_t stop_t,
   res.yield_at_stop_mg = w_at_stop;
   res.truncated = truncated;
   settle_until = t + SETTLE_MS;
+  // Both callers enter with no drop pending: the flat stop is in the
+  // not-dropped branch, and the forced stop waits for the hold to resolve.
+  lift_since = 0;
+}
+
+// Called from loop() with millis() after the sample drain (0a.8). The
+// detector otherwise moves only on a sample, so a scale that goes quiet --
+// switched off with the cup, a BLE drop, a dead battery -- left the shot
+// open, and main writes no spool while one is (invariant 6, reviews
+// 2026-11-23). "Quiet" is SCALE_QUIET_MS without a sample: the scale
+// manager's own STALE_MS, so a routine BLE gap (~240 ms) or a gap of a
+// second or two is never taken for one. When it is quiet:
+//  - SETTLING with a lift pending past its hold: a lift, as if one more
+//    dropped sample had arrived. Pending but quiet for less than that
+//    (a reconnect's injected 0 g, then the real reading 2 s later): wait.
+//  - SETTLING past the settle window: finish on the last weight.
+//  - POURING, once MAX_SHOT_MS + SETTLE_MS has passed since t0 -- when the
+//    detector would have force-stopped and settled by now, so a reconnect
+//    mid-pour cannot split one shot in two. Under 5 g it is a reject, as
+//    any sub-5 g record. Anything else is a FAULT, "yield scale lost
+//    mid-pour": spooled (invariant 6), excluded at ingest, and it keeps its
+//    dose -- the coffee was used. NOT A GUESS AT WHAT HAPPENED: the last
+//    second or two before the scale vanished cannot tell jitter, drips, a
+//    lift and a reconnect's 0 g apart, and four review rounds of rules that
+//    tried (2026-11-23: a pending drop as a lift, a flat tail as a stop) each
+//    misfiled the case next to the one they fixed. A good shot among these
+//    is un-excluded by hand. A short pending drop is trimmed off the curve
+//    first (feed() takes any drop that lasts LIFT_HOLD_MS, so a pending one
+//    is shorter). fault was otherwise unused from 0a.4.
+// tick() is never gated: it decides at once, and main defers only the
+// spool write while the pump runs (invariant 2). Gating tick() kept the
+// shot open, so a flush or the next shot fed into it (review of c85dcf8).
+// Each of these ends the samples before a settle window could close, so
+// v_shot_end reads ended_by_lift = 1 -- the samples stopped early, by the
+// scale rather than a hand. A settle that runs out on the clock here may
+// still have closed on time with a full settle's yield (shot 214; 016).
+bool ShotDetector::tick(uint32_t now) {
+  if (st != ShotState::SETTLING && st != ShotState::POURING) return false;
+  if ((int32_t)(now - last_t) < (int32_t)SCALE_QUIET_MS) return false;
+  if (st == ShotState::POURING) {
+    if ((int32_t)(now - t0) < (int32_t)(MAX_SHOT_MS + SETTLE_MS)) return false;
+    if (lift_since != 0) buf_count = lift_buf;     // a short drop: trimmed off the curve
+    if (running_max < REJECT_MIN_MG) return finalizeLifted();   // a reject
+    finalizeLifted();
+    res.fault = true;    // yield scale lost mid-pour: kept, never a shot
+    res.valid = false;
+    return true;
+  }
+  if (lift_since != 0) {
+    if ((int32_t)(now - lift_since) < (int32_t)LIFT_HOLD_MS) return false;
+    buf_count = lift_buf;
+    return finishLiftedSettling();
+  }
+  if ((int32_t)(now - settle_until) >= 0) return finishShot();
+  return false;
 }
 
 // Mean flow over the stable window: 5 g out .. 80 % of final, which skips
@@ -269,16 +324,50 @@ bool ShotDetector::risesLikeAPlacement() const {
   return false;
 }
 
-// The cup was lifted (sustained drop below the peak). Lifting after a pour
-// is normal — not a fault — so this finalizes a real shot at the peak
-// weight. Only a lift with almost nothing in the cup (an aborted/channelled
-// pour) is a reject. buf_count is expected to be trimmed to the pre-lift
+// The cup was lifted DURING THE POUR (sustained drop below the peak).
+// Lifting after a pour is normal — not a fault — so this finalizes a real
+// shot at the peak weight. Only a lift with almost nothing in the cup (an
+// aborted/channelled pour) is a reject. A lift WHILE SETTLING is
+// finishLiftedSettling() (0a.8). buf_count is expected to be trimmed to the pre-lift
 // samples by the caller.
 bool ShotDetector::finalizeLifted() {
   res.yield_final_mg = running_max;
   res.yield_at_stop_mg = running_max;
   res.settle_offset_mg = 0;   // no settle measured — cup left early
   res.stop_ms = buf_count > 0 ? buf[buf_count - 1].t_ms : 0;
+  res.fault = false;
+  res.valid = running_max >= REJECT_MIN_MG;
+  res.sample_count = buf_count;
+  res.samples = buf;
+  res.placement = risesLikeAPlacement();
+  computeFlowWindow();
+  resetToIdle();
+  return true;
+}
+
+// The cup was lifted WHILE SETTLING (0a.8): the drop held LIFT_HOLD_MS, as
+// during the pour, and buf is trimmed to the samples before it. The stop was
+// already recognised by enterSettling() -- backdated on the flat path, the
+// forced stop at 60 s on the truncated one -- so keep it, and its
+// yield_at_stop. The lift only ends settling early: the yield is the peak
+// (frozen if something landed, 0a.7), and settle_offset is the drips the
+// peak followed before the lift. That is NOT a lower bound on a full settle:
+// the peak follows every reading under DRIP_STEP_MG above it, so upward
+// jitter (+-0.1 g) and the first sub-0.5 g of a grip ratchet it up, where
+// finishShot() reads the last weight -- a lift's offset can read a few
+// tenths high, and it covers only the time settled before the lift. After a
+// forced stop (truncated) the pour may still be running and every reading
+// joins the peak, objects included, so there is no settle to measure:
+// settle_offset stays 0 and final - at_stop does not hold on that path.
+// Nothing in the record flags a lift; the samples identify it exactly
+// (server/migrations/016_settle_end.sql). Up to 0a.7 this went through
+// finalizeLifted() on the first dropped sample, with no hold, and overwrote
+// stop_ms with the last sample before the lift -- up to STOP_WINDOW_MS +
+// SETTLE_MS late (shot 212, 2026-11-23: 30.5 s stored for a stop at
+// ~25.3 s) -- and zeroed settle_offset.
+bool ShotDetector::finishLiftedSettling() {
+  res.yield_final_mg = running_max;
+  res.settle_offset_mg = res.truncated ? 0 : res.yield_final_mg - res.yield_at_stop_mg;
   res.fault = false;
   res.valid = running_max >= REJECT_MIN_MG;
   res.sample_count = buf_count;
@@ -450,8 +539,13 @@ bool ShotDetector::feed(uint32_t t, int32_t w, uint32_t inlet_pulses_total) {
           }
         }
       }
-      if (st == ShotState::POURING && t - t0 >= MAX_SHOT_MS) {
-        // Not an espresso anymore; stop before uint16 t_ms can wrap.
+      if (st == ShotState::POURING && t - t0 >= MAX_SHOT_MS && lift_since == 0) {
+        // Not an espresso anymore; stop before uint16 t_ms can wrap. NOT
+        // while a drop is pending (0a.8, review 2026-11-23): the forced
+        // stop would take its weight mid-dip (a stored yield_at_stop of
+        // -180 g) and leave the dip in the curve. The hold resolves within
+        // LIFT_HOLD_MS -- a lift finalizes as one, a bump lets the forced
+        // stop through on the next sample -- well before t_ms can wrap.
         enterSettling(t, rel, t, true);
       }
       break;
@@ -490,9 +584,30 @@ bool ShotDetector::feed(uint32_t t, int32_t w, uint32_t inlet_pulses_total) {
         if (!disturbing && rel > running_max && rel - running_max < DRIP_STEP_MG)
           running_max = rel;
       }
-      // The pour already ended (stop confirmed). If the cup is lifted during
-      // settling, just finalize now at the peak — no need to wait it out.
-      if (running_max - rel > LIFT_DROP_MG) return finalizeLifted();
+      // The pour already ended (stop confirmed). A drop well below the peak
+      // that holds LIFT_HOLD_MS is the cup being taken: finish at the peak,
+      // keeping the stop (0a.8). A shorter dip -- a bump, the single 0 g
+      // sample a cup-scale reconnect injects -- is not a lift, and settling
+      // never ends on a dropped reading: it waits for the weight to come
+      // back (then finishShot() reads it) or for the hold. Up to 0a.7 the
+      // first dropped sample ended the shot.
+      if (running_max - rel > LIFT_DROP_MG) {
+        if (lift_since == 0) {
+          lift_since = t;
+          // This sample is not appended yet -- unless it shares the previous
+          // slot's millisecond, when appendSample() will merge it into that
+          // slot, which must then go too.
+          lift_buf = buf_count;
+          if (buf_count > 0 && buf[buf_count - 1].t_ms == (uint16_t)(t - t0)) lift_buf--;
+        }
+        if (t - lift_since >= LIFT_HOLD_MS) {
+          buf_count = lift_buf;            // trim the dip off the record
+          return finishLiftedSettling();
+        }
+        appendSample(t, rel);
+        break;
+      }
+      lift_since = 0;
       appendSample(t, rel);
       if (landed_now) {
         // The placement scan stops before the sample where it landed. Taken

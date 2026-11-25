@@ -144,8 +144,11 @@ func (s *Store) Ingest(deviceID string, r *record.Record, raw []byte, receivedAt
 		// too: almost every one is a knock or a drip, not a shot that choked
 		// (a second review, the same day, reversed a draft that let them keep
 		// it). The late-weighing path skips the same records by their stored
-		// ingest reason (attributeWeighingToLaterShot).
-		if err == nil && !excluded {
+		// ingest reason (attributeWeighingToLaterShot). EXCEPT a pour whose
+		// yield scale was lost (detector 0a.8): excluded because its yield is
+		// short, but a real shot that used the coffee, like a shot the user
+		// excluded -- so it takes its dose (review 2026-11-23).
+		if err == nil && (!excluded || excludeReasonAtIngest(&r.Header) == reasonScaleLost) {
 			err = attributeDoseToShot(tx, res.ShotID, startedAt)
 		}
 	case record.TypeWeighing:
@@ -676,17 +679,26 @@ const (
 )
 
 // excludeReasonAtIngest is the one place a record's ingest-time exclusion
-// is decided ("" = not excluded). insertShot stores it and reports it, and
-// the arrival path's dose attribution reads that report rather than
-// re-deriving it. First match wins, so a faulted placement is a fault.
+// is decided ("" = not excluded). insertShot stores it and reports whether
+// it excluded; Ingest calls this again for the one reason that still takes
+// a dose (reasonScaleLost) -- the same answer, since the function is pure
+// and insertShot applies no override of its own (keep it that way, or pass
+// the reason out). First match wins, so a faulted placement is a placement
+// (a placement ranked after the faults until 2026-11-23, when the only
+// fault it could meet was the legacy one and both were dose-less).
 func excludeReasonAtIngest(h *record.Header) string {
+	// Placement first: a cup set down is never a shot, so a scale-lost fault
+	// that is also a placement is stored as the placement -- and the
+	// late-weighing path then skips it like one (review of 7bfbbc7).
 	switch {
+	case h.Placement():
+		return reasonPlacement
+	case h.ScaleLost():
+		return reasonScaleLost
 	case h.Fault():
 		return reasonFault
 	case h.Reject():
 		return reasonReject
-	case h.Placement():
-		return reasonPlacement
 	}
 	return ""
 }
@@ -695,7 +707,11 @@ func excludeReasonAtIngest(h *record.Header) string {
 // matches stored rows against them, so CHANGING ONE STRANDS EVERY ROW
 // ALREADY STORED WITH THE OLD TEXT — add a migration if one ever changes.
 const (
-	reasonFault     = "fault: cup removed mid-pour"
+	reasonFault = "fault: cup removed mid-pour"
+	// Detector 0a.8: the yield scale went quiet mid-pour and the shot was
+	// spooled 65 s on at the peak it saw -- the yield and mean flow are only
+	// what came before the gap. Excluded, but it keeps its dose (Ingest).
+	reasonScaleLost = "fault: yield scale lost mid-pour"
 	reasonReject    = "reject: under 5 g"
 	reasonPlacement = "cup placement: the detector judged it a cup set down, not a pour"
 )

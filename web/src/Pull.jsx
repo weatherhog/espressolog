@@ -19,10 +19,32 @@ import { fetchCurve } from "./api.js";
 // Target box: yield range × time range the trace should exit through.
 // Two variables, one glance. Ranges are editable and live in localStorage —
 // they're a per-screen aiming aid, not data (the shot records what happened).
-const DEFAULT_TARGETS = { y0: 34, y1: 38, t0: 22, t1: 32 };
+// The time band is POUR time, the live chart's clock (the scale, from the
+// pour's start), not the machine's: a "25-30 s" recipe counts from pump
+// start, ~10 s earlier with pre-infusion. 22-32 was that recipe's band and
+// left normal shots short of the box. Saved targets (localStorage) win.
+const DEFAULT_TARGETS = { y0: 34, y1: 38, t0: 16, t1: 24 };
 
 function loadTargets() {
-  try { return { ...DEFAULT_TARGETS, ...JSON.parse(localStorage.getItem("pullTargets")) }; }
+  try {
+    const saved = JSON.parse(localStorage.getItem("pullTargets")) || {};
+    // Every edit saved the whole object, so a browser that changed any target
+    // carries the old pump-time band 22-32 too. Once, drop it so the
+    // pour-time default shows; after that a 22-32 someone types is kept.
+    if (!localStorage.getItem("pullTargetsPourTime")) {
+      if (saved.t0 === 22 && saved.t1 === 32) { delete saved.t0; delete saved.t1; }
+      // Writes get their own try: a failed write must not throw away the
+      // saved yield band read above (the outer catch returns the defaults).
+      let wrote = false;
+      try { localStorage.setItem("pullTargets", JSON.stringify(saved)); wrote = true; }
+      catch { /* migrates again next load */ }
+      if (wrote) {
+        try { localStorage.setItem("pullTargetsPourTime", "1"); }
+        catch { /* while the flag write keeps failing, a 22-32 band typed in later is cleared on every load */ }
+      }
+    }
+    return { ...DEFAULT_TARGETS, ...saved };
+  }
   catch { return { ...DEFAULT_TARGETS }; }
 }
 
@@ -164,7 +186,7 @@ export default function Pull({ shots, beans, activeBeanId, onIngested }) {
         }
         if (f.ev === "shot") {
           setLastEvent(f.placement ? "not a shot — cup set down"
-            : f.fault ? "shot faulted (cup removed?)"
+            : f.fault ? "scale lost mid-pour — kept but excluded; un-exclude it if the shot was good"
             : f.valid ? (f.disturbed ? "shot complete — something landed on the scale, check the yield" : "shot complete")
             : "rejected (<5 g)");
           return;
@@ -275,7 +297,7 @@ export default function Pull({ shots, beans, activeBeanId, onIngested }) {
         <Panel style={{ padding: 16 }}>
           <Eyebrow>Target</Eyebrow>
           <div style={{ display: "grid", gridTemplateColumns: "auto 1fr auto 1fr", gap: 8, alignItems: "center", marginTop: 10 }}>
-            {[["y0", "yield"], ["y1", "to"], ["t0", "time"], ["t1", "to"]].map(([key, label]) => (
+            {[["y0", "yield"], ["y1", "to"], ["t0", "pour"], ["t1", "to"]].map(([key, label]) => (
               <div key={key} style={{ display: "contents" }}>
                 <span style={{ fontFamily: MONO, fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: T.inkSoft }}>{label}</span>
                 <input type="number" step={key.startsWith("y") ? 0.5 : 1} value={targets[key]}
@@ -289,7 +311,7 @@ export default function Pull({ shots, beans, activeBeanId, onIngested }) {
             ))}
           </div>
           <div style={{ marginTop: 6, fontFamily: MONO, fontSize: 9.5, color: T.inkSoft, letterSpacing: "0.06em" }}>
-            G × SECONDS — the box the trace should exit through
+            G × SECONDS FROM POUR START — the box the trace should exit through
           </div>
         </Panel>
 

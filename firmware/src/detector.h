@@ -18,7 +18,7 @@ enum class ShotState : uint8_t { IDLE, ARMED, POURING, SETTLING };
 // caller (spool/upload layer) — this struct is measurement only.
 struct ShotResult {
   bool     valid;          // false: rejected (<5 g) or faulted
-  bool     fault;          // cup removed mid-pour
+  bool     fault;          // 0a.8: the yield scale went quiet mid-pour (tick()); up to 0a.3: cup removed mid-pour
   bool     truncated;      // hit the uint16 t_ms ceiling, stop was forced
   // The curve rose more than PLACEMENT_RISE_MG ABOVE ITS EARLIER PEAK
   // within PLACEMENT_RISE_MS somewhere (risesLikeAPlacement() in
@@ -65,8 +65,9 @@ struct ShotResult {
   // creeps on slower than a pour, or in steps of 5 g or less, is not seen,
   // and one landing more than 20 g above its earlier peak within 1 s is
   // still a placement and excluded as one -- as it is after a forced stop,
-  // where the placement scan is not cut. The lift paths are unchanged --
-  // a lift during SETTLING still overwrites stop_ms as described below.
+  // where the placement scan is not cut. The lift paths were unchanged in
+  // 0a.7 -- a lift during SETTLING still overwrote stop_ms; 0a.8 fixed that
+  // (stop_ms, below).
   bool     disturbed;
   uint32_t started_at_ms;  // millis() of t=0 (backdated to the flow crossing)
   // Where the detector judged the pour to have ended. HOW that is derived
@@ -76,11 +77,38 @@ struct ShotResult {
   //     that confirmed it: detector.cpp passes the ring entry at
   //     t − STOP_WINDOW_MS into enterSettling(), "the plateau began at
   //     t_then; that's the stop".
-  //   truncated (MAX_SHOT_MS) — the confirming sample itself, NOT backdated.
-  //   finalizeLifted() — the last retained sample. Not backdated.
   // fact:stop-ms-backdating backdated STOP_WINDOW_MS
+  //   truncated (MAX_SHOT_MS) — the confirming sample itself, NOT backdated.
+  //   finalizeLifted() (a lift DURING THE POUR) — the last retained sample.
+  //     Not backdated.
+  //   tick() on a pour whose scale went quiet (0a.8, 65 s on), a short
+  //     pending drop trimmed off first — a reject or a scale-lost fault:
+  //     as finalizeLifted().
+  //   finishLiftedSettling() (a lift WHILE SETTLING, from 0a.8) — whatever
+  //     enterSettling() stored, from the flat or the truncated path, KEPT;
+  //     yield_at_stop_mg too. The lift only ends settling early, after the
+  //     same LIFT_HOLD_MS hold as during the pour. settle_offset_mg is the
+  //     drips before the lift (0 after a forced stop) -- detector.cpp says
+  //     why it is not a lower bound on a full settle.
   //
-  // finalizeLifted() HAS TWO CALL SITES AND THEY ARE NOT ALIKE. From POURING
+  // NOTHING IN THIS STRUCT FLAGS A LIFT, ON ANY VERSION, AND THE RECORD'S OWN
+  // SAMPLES (nearly) DO: a settle that ran its course appends a sample at or after
+  // the confirming sample + SETTLE_MS, so its last sample sits at least
+  // STOP_WINDOW_MS + SETTLE_MS (7 s) after stop_ms -- SETTLE_MS (5 s) after
+  // a forced stop, whose stop_ms is >= MAX_SHOT_MS -- and every lift, on
+  // either path and every version from 0a.5, ends sooner. Migration 016
+  // (v_shot_end) applies that test, capped below the t_ms = 65535 ceiling
+  // (later samples are dropped), and lists the cases it misses. A lift
+  // during the pour ends the curve at stop_ms (tail 0). From 0a.8 a
+  // shot that tick() ended because the scale went quiet (3 s, settling or a
+  // pour 65 s on) also ends early and reads as cut short -- which it was.
+  //
+  // STILL TRUE ON 0a.8: a lift during the pour goes through finalizeLifted()
+  // as before (stop_ms = last kept sample, yield_at_stop = the peak), and
+  // the sub-5 g flat abort (below) assigns none of these fields.
+  //
+  // UP TO 0a.7 ONLY -- the next two paragraphs, which describe every stored
+  // record from those versions: finalizeLifted() HAD TWO CALL SITES AND THEY ARE NOT ALIKE. From POURING
   // (feed()'s POURING case) the drop must persist LIFT_HOLD_MS and the
   // descending transition is trimmed off buf first. From SETTLING it
   // fires on the FIRST sample below running_max − LIFT_DROP_MG, with no hold
@@ -99,13 +127,19 @@ struct ShotResult {
   // clears res.truncated, so a shot force-stopped at MAX_SHOT_MS and then
   // lifted during settling carries truncated = 1 with lift-derived stop_ms
   // and yield_at_stop_mg. Branching on truncated alone picks the wrong
-  // derivation for both fields.
+  // derivation for both fields. (From 0a.8 that shot keeps the forced
+  // stop's values.)
   //
-  // The lift path is not rare and nothing in this struct flags it:
-  // valid/fault/truncated all read as a normal stop, settle_offset_mg == 0 is
-  // the nearest tell and a flat stop can hit 0 by coincidence.
-  // analysis/overshoot.py records SEVEN lift-terminated shots, found by
-  // requiring a >= 4 s tail rather than trusting the field. THAT SEVEN HAS
+  // END OF THE UP-TO-0a.7 PART. From here on, every version again.
+  //
+  // The lift path is not rare and no field flags it: valid/fault/truncated
+  // all read as a normal stop. Up to 0a.7 settle_offset_mg == 0 was the
+  // nearest field tell (a flat stop can hit 0 by coincidence); from 0a.8 a
+  // lift while settling carries a real-looking offset. Use the tail test
+  // above.
+  // analysis/overshoot.py records SEVEN lift-terminated shots, found by the
+  // curve's tail rather than the field (">= 4 s" until 2026-11-23, now the
+  // tail test above, which separates the same 0a.6 shots). THAT SEVEN HAS
   // NO ARCHIVE-WIDE DENOMINATOR. Its filter admits only excluded = 0,
   // yield >= 15 g, one bean, one dial, one detector version, and drops ids
   // 25, 26 and 37 (net effect 37; 25/26 are already excluded), leaving 45
@@ -146,9 +180,11 @@ struct ShotResult {
   // The yield stop_ms is paired with, so settle_offset_mg = final − at_stop
   // holds on every path that ASSIGNS these fields — which is every path but
   // the sub-5 g abort above, where all three stay 0 while yield_final_mg is
-  // running_max. It is the weight AT stop_ms only on the flat-stop and
-  // truncated paths; finalizeLifted() stores running_max, which may be an
-  // earlier sample than the one stop_ms names.
+  // running_max, and (from 0a.8) a lift while settling after a forced stop,
+  // where settle_offset_mg is 0 because nothing settled. It is the weight AT
+  // stop_ms only on the flat-stop and truncated paths, which a 0a.8 lift
+  // while settling keeps; finalizeLifted() stores running_max, which may be
+  // an earlier sample than the one stop_ms names.
   int32_t  yield_at_stop_mg;
   int32_t  yield_final_mg;
   int32_t  settle_offset_mg;   // final − at_stop. THE PHASE-1 CALIBRATION.
@@ -293,6 +329,16 @@ public:
   // untouched; 0 from a board with no flowmeter tap is indistinguishable
   // from a shot during which nothing flowed, and both are honest.
   bool feed(uint32_t t_ms, int32_t weight_mg, uint32_t inlet_pulses_total = 0);
+  // 0a.8: finish a shot on time when the yield scale goes quiet
+  // (detector.cpp). Call with millis() after draining the sample queue;
+  // true = a completed ShotResult, exactly as from feed().
+  bool tick(uint32_t now_ms);
+  // = ScaleManager::STALE_MS: the silence after which the scale manager
+  // itself gives the link up. Was 1000 for one commit; a routine 1 s BLE
+  // gap at the end of settling then ended a normal shot early (review
+  // 2026-11-23).
+  static constexpr uint32_t SCALE_QUIET_MS = 3000;
+
   ShotState state() const { return st; }
   const ShotResult& result() const { return res; }
   int32_t flowNowMgps() const { return flow_now; }
@@ -341,7 +387,8 @@ private:
   void beginPour(uint32_t crossing_t);
   void enterSettling(uint32_t t, int32_t w_at_stop, uint32_t stop_t, bool truncated);
   bool finishShot();
-  bool finalizeLifted();   // cup removed → finalize at the peak weight
+  bool finalizeLifted();         // a lift DURING THE POUR: finalize at the peak, stop_ms = last kept sample
+  bool finishLiftedSettling();   // 0a.8: a lift WHILE SETTLING keeps the recognised stop
   // 0a.7: did this sample jump onto the scale (ShotResult::disturbed)?
   bool jumpsOntoScale(uint32_t t, int32_t w, int32_t prev_w, int32_t rel) const;
   bool risesLikeAPlacement() const;

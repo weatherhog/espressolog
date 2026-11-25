@@ -501,8 +501,8 @@ int main() {
   {
     // Shot 205 (2026-11-21): stopped at ~28.5 s on ~37.4 g, then +7.8 g and
     // +3.2 g at 33.9 s while settling, then lifted. 0a.6 recorded 49.41 g.
-    // The lift during settling still overwrites stop_ms (a lift path,
-    // unchanged in 0a.7); only the yield is protected.
+    // 0a.8: the lift during settling keeps the recognised stop (~28.5 s);
+    // up to 0a.7 it overwrote stop_ms with the last sample before the lift.
     ShotResult rr = replayThenLift(SHOT_205, sizeof SHOT_205 / sizeof SHOT_205[0]);
     printf("shot 205 replay: valid=%d disturbed=%d stop_ms=%u at_stop=%d final=%d settle=%d\n",
            rr.valid, rr.disturbed, rr.stop_ms, rr.yield_at_stop_mg, rr.yield_final_mg,
@@ -510,7 +510,9 @@ int main() {
     assert(rr.valid && rr.disturbed && !rr.placement);
     // The flat weight before the grip was 37.81 g.
     assert(rr.yield_final_mg >= 37700 && rr.yield_final_mg <= 37950);
-    assert(rr.yield_at_stop_mg == rr.yield_final_mg && rr.settle_offset_mg == 0);
+    assert(rr.stop_ms > 26000 && rr.stop_ms < 30000);
+    assert(rr.settle_offset_mg == rr.yield_final_mg - rr.yield_at_stop_mg);
+    assert(rr.settle_offset_mg >= 0 && rr.settle_offset_mg <= 600);
     printf("a jump during settling is not the yield OK\n");
   }
   {
@@ -561,6 +563,8 @@ int main() {
            rr.disturbed, rr.stop_ms, rr.yield_final_mg, rr.settle_offset_mg);
     assert(rr.valid && !rr.disturbed);
     assert(rr.yield_final_mg > 35500 && rr.yield_final_mg < 36500);
+    // 0a.8: the plateau began at 18 s; the lift at 23 s does not move it.
+    assert(rr.stop_ms >= 17500 && rr.stop_ms <= 18300);
     (void)start;
     printf("a clean lift after the stop is not disturbed OK\n");
   }
@@ -668,9 +672,9 @@ int main() {
     assert(r.valid && r.disturbed && !r.placement);
     assert(r.yield_final_mg > 35500 && r.yield_final_mg < 36800);
     // Never ended early. (With bursts the clock runs a third slower than the
-    // sample count, so the pour itself ends earlier in ms; a lift during
-    // settling overwrites stop_ms, as on 0a.6.)
-    if (!burst && !lift_at) assert(r.stop_ms > 16000 && r.stop_ms < 20500);
+    // sample count, so the pour itself ends earlier in ms.) From 0a.8 a lift
+    // during settling keeps the stop, so it is checked there too.
+    if (!burst) assert(r.stop_ms > 16000 && r.stop_ms < 20500);
     return r;
   };
   settleCase("wobbling 10 g hand", [](double s) {
@@ -790,6 +794,318 @@ int main() {
     assert(rr.truncated && rr.disturbed);
     assert(rr.yield_final_mg > 44000);               // pour kept counting (0a.6 behaviour)
     printf("a truncated shot is flagged, not frozen OK\n");
+  }
+  // The tail test migration 016 (v_shot_end) applies: a settle that ran its
+  // course ends >= STOP_WINDOW_MS + SETTLE_MS after stop_ms (SETTLE_MS after
+  // a forced stop); a lift ends sooner.
+  auto tailMs = [](const ShotResult& rr) -> uint32_t {
+    return rr.sample_count ? rr.samples[rr.sample_count - 1].t_ms - rr.stop_ms : 0;
+  };
+  {
+    // 0a.8: force-stopped at 60 s, then lifted while settling. The forced
+    // stop's stop_ms and yield_at_stop are kept; nothing settled, so the
+    // offset is 0 rather than the pour that kept running.
+    ShotDetector d;
+    uint32_t tt = 8500000;
+    bool fin = false;
+    for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+    for (int i = 0; i < 800 && !fin; i++, tt += 100) {
+      double s = i / 10.0;
+      double w = s < 62.0 ? 0.6 * s : -180.0;          // slow pour, lifted at 62 s
+      fin = d.feed(tt, (int32_t)llround(w * 1000.0));
+    }
+    assert(fin);
+    const ShotResult& rr = d.result();
+    printf("truncated then lifted: trunc=%d stop_ms=%u at_stop=%d final=%d settle=%d tail=%u\n",
+           rr.truncated, rr.stop_ms, rr.yield_at_stop_mg, rr.yield_final_mg,
+           rr.settle_offset_mg, tailMs(rr));
+    assert(rr.valid && rr.truncated);
+    assert(rr.stop_ms >= ShotDetector::MAX_SHOT_MS && rr.stop_ms < ShotDetector::MAX_SHOT_MS + 500);
+    assert(rr.yield_at_stop_mg > 35000 && rr.yield_at_stop_mg < 37000);   // 0.6 g/s x ~60 s
+    assert(rr.yield_final_mg >= rr.yield_at_stop_mg);
+    assert(rr.settle_offset_mg == 0);
+    assert(tailMs(rr) < ShotDetector::SETTLE_MS);
+    printf("a lift after a forced stop keeps the forced stop OK\n");
+  }
+  {
+    // Review 2026-11-23: one 0 g sample (a cup-scale reconnect) while
+    // settling is a dip, not a lift. Up to 0a.7 it ended the shot there.
+    for (bool dip : {false, true}) {
+      ShotDetector d;
+      uint32_t tt = 9500000;
+      bool fin = false;
+      for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+      for (int i = 0; i < 400 && !fin; i++, tt += 100) {
+        double s = i / 10.0;
+        double w = s < 18.0 ? 2.0 * s : 36.0 + (s - 18.0 < 6.0 ? 0.05 * (s - 18.0) : 0.3);
+        if (dip && i == 215) { tt += 1500; w = 0.0; }   // a gap, then the injected 0 g
+        fin = d.feed(tt, (int32_t)llround(w * 1000.0));
+      }
+      assert(fin);
+      const ShotResult& rr = d.result();
+      printf("settling %s: stop_ms=%u final=%d settle=%d tail=%u\n",
+             dip ? "with a 0 g dip" : "undisturbed", rr.stop_ms, rr.yield_final_mg,
+             rr.settle_offset_mg, tailMs(rr));
+      assert(rr.valid && !rr.disturbed && !rr.placement);
+      assert(rr.stop_ms >= 17500 && rr.stop_ms <= 18300);
+      assert(rr.yield_final_mg > 36000 && rr.yield_final_mg < 36500);
+      assert(rr.settle_offset_mg > 0 && rr.settle_offset_mg < 1000);
+      assert(tailMs(rr) >= ShotDetector::STOP_WINDOW_MS + ShotDetector::SETTLE_MS);
+    }
+    printf("a single dropped sample while settling is not a lift OK\n");
+  }
+  {
+    // The lift side of the tail test, and the lift's offset: drips before
+    // the lift only. Lifted 3 s into settling.
+    ShotDetector d;
+    uint32_t tt = 9700000;
+    bool fin = false;
+    for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+    for (int i = 0; i < 400 && !fin; i++, tt += 100) {
+      double s = i / 10.0;
+      double w = s < 18.0 ? 2.0 * s : 36.0 + (s - 18.0 < 6.0 ? 0.05 * (s - 18.0) : 0.3);
+      if (s >= 23.0) w = -180.0;
+      fin = d.feed(tt, (int32_t)llround(w * 1000.0));
+    }
+    assert(fin);
+    const ShotResult& rr = d.result();
+    printf("lifted 3 s into settling: stop_ms=%u settle=%d tail=%u last=%d\n",
+           rr.stop_ms, rr.settle_offset_mg, tailMs(rr),
+           rr.samples[rr.sample_count - 1].weight_mg);
+    assert(rr.stop_ms >= 17500 && rr.stop_ms <= 18300);
+    assert(rr.settle_offset_mg == rr.yield_final_mg - rr.yield_at_stop_mg);
+    assert(rr.settle_offset_mg > 0 && rr.settle_offset_mg < 1000);
+    assert(tailMs(rr) < ShotDetector::STOP_WINDOW_MS + ShotDetector::SETTLE_MS);
+    assert(rr.samples[rr.sample_count - 1].weight_mg > 30000);   // the dip is trimmed off
+    printf("a lift while settling is told apart by its tail OK\n");
+  }
+  // Migration 016's threshold, mirrored: 7 s after a flat stop, 5 s after
+  // a forced one, and never past the last second before t_ms tops out at
+  // 65535 (appendSample() drops later samples).
+  auto needMs = [](uint32_t stop_ms) -> uint32_t {
+    uint32_t base = stop_ms >= ShotDetector::MAX_SHOT_MS ? 5000 : 7000;
+    uint32_t cap = stop_ms < 64535 ? 64535 - stop_ms : 0;
+    return base < cap ? base : cap;
+  };
+  {
+    // Review 2026-11-23 of the fix: a lift under way when the forced stop
+    // was due stored yield_at_stop = -180 g and kept the dip in the curve.
+    // The forced stop now waits for the hold: a lift there is a pour lift.
+    ShotDetector d;
+    uint32_t tt = 10000000;
+    bool fin = false;
+    for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+    for (int i = 0; i < 800 && !fin; i++, tt += 100) {
+      double s = i / 10.0;
+      double w = s < 59.5 ? 0.6 * s : -180.0;
+      fin = d.feed(tt, (int32_t)llround(w * 1000.0));
+    }
+    assert(fin);
+    const ShotResult& rr = d.result();
+    printf("lift across the forced stop: trunc=%d stop_ms=%u at_stop=%d final=%d last=%d tail=%d\n",
+           rr.truncated, rr.stop_ms, rr.yield_at_stop_mg, rr.yield_final_mg,
+           rr.samples[rr.sample_count - 1].weight_mg,
+           (int)(rr.samples[rr.sample_count - 1].t_ms - rr.stop_ms));
+    assert(rr.valid && !rr.truncated);
+    assert(rr.yield_at_stop_mg > 35000 && rr.yield_at_stop_mg == rr.yield_final_mg);
+    assert(rr.samples[rr.sample_count - 1].weight_mg > 35000);   // no dip in the curve
+    assert(rr.samples[rr.sample_count - 1].t_ms == rr.stop_ms);  // tail 0: a lift
+    printf("a lift across the forced stop is a pour lift OK\n");
+  }
+  {
+    // ...and a dip there that recovers within the hold only delays it.
+    ShotDetector d;
+    uint32_t tt = 10500000;
+    bool fin = false;
+    for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+    for (int i = 0; i < 800 && !fin; i++, tt += 100) {
+      double s = i / 10.0;
+      double w = (i >= 590 && i < 605) ? 0.0 : 0.6 * (s < 70 ? s : 70);   // a 1.5 s dip across 60 s
+      fin = d.feed(tt, (int32_t)llround(w * 1000.0));
+    }
+    assert(fin);
+    const ShotResult& rr = d.result();
+    printf("bump at the forced stop: trunc=%d stop_ms=%u at_stop=%d\n",
+           rr.truncated, rr.stop_ms, rr.yield_at_stop_mg);
+    assert(rr.truncated && rr.stop_ms > 60000 && rr.stop_ms <= 61500);
+    assert(rr.yield_at_stop_mg > 35000);
+    printf("a bump at the forced stop only delays it OK\n");
+  }
+  {
+    // Review: a forced stop after a sample gap lands past 60 s, the settle
+    // window runs past t_ms = 65535, and the tail is cut. Not a lift.
+    ShotDetector d;
+    uint32_t tt = 11000000;
+    bool fin = false;
+    for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+    uint32_t start = tt;
+    for (int i = 0; i < 900 && !fin; i++) {
+      double s = (tt - start) / 1000.0;
+      fin = d.feed(tt, (int32_t)llround(0.6 * s * 1000.0));
+      tt += (s > 59.3 && s < 59.5) ? 1200 : 100;   // one 1.2 s gap just before 60 s
+    }
+    assert(fin);
+    const ShotResult& rr = d.result();
+    uint32_t tail = rr.samples[rr.sample_count - 1].t_ms - rr.stop_ms;
+    printf("forced stop after a gap: stop_ms=%u tail=%u need=%u\n", rr.stop_ms, tail, needMs(rr.stop_ms));
+    assert(rr.truncated && rr.stop_ms > 60000);
+    assert(tail >= needMs(rr.stop_ms));
+    printf("a settle cut at the t_ms ceiling is not a lift OK\n");
+  }
+  {
+    // Review: the 2 s hold needs samples. A scale switched off with the cup
+    // left the shot open; tick() ends it on the clock.
+    for (bool lifted : {true, false}) {
+      ShotDetector d;
+      uint32_t tt = 12000000;
+      for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+      bool fin = false;
+      for (int i = 0; i < 400 && !fin; i++, tt += 100) {
+        double s = i / 10.0;
+        if (s >= 23.0) break;                         // the scale goes quiet at 23 s
+        fin = d.feed(tt, (int32_t)llround((s < 18.0 ? 2.0 * s : 36.0) * 1000.0));
+        assert(!d.tick(tt));                          // never early
+      }
+      if (lifted) { d.feed(tt, -180000); assert(!d.tick(tt + 1900)); }
+      assert(d.state() == ShotState::SETTLING);
+      uint32_t now = tt + (lifted ? 2000 : 0);
+      bool done = false;
+      for (int k = 0; k < 100 && !done; k++, now += 100) done = d.tick(now);
+      assert(done);
+      const ShotResult& rr = d.result();
+      uint32_t tail = rr.samples[rr.sample_count - 1].t_ms - rr.stop_ms;
+      printf("scale quiet (%s): stop_ms=%u final=%d tail=%u\n",
+             lifted ? "after a lift" : "no lift", rr.stop_ms, rr.yield_final_mg, tail);
+      assert(rr.valid && rr.stop_ms >= 17500 && rr.stop_ms <= 18300);
+      assert(rr.yield_final_mg > 35500 && rr.yield_final_mg < 36500);
+      assert(tail < needMs(rr.stop_ms));             // reads as cut short, which it was
+      assert(d.state() == ShotState::IDLE);
+    }
+    printf("a quiet scale cannot hold a shot open OK\n");
+  }
+  {
+    // Review of 7d257d0: with a 1 s quiet limit, an ordinary BLE gap across
+    // the end of settling ended a normal shot early. The limit is the scale
+    // manager's 3 s now; a 2.5 s gap is ridden out and the settle completes.
+    ShotDetector d;
+    uint32_t tt = 13000000;
+    for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+    bool fin = false;
+    uint32_t start = tt;
+    while (!fin && tt < start + 40000) {
+      double s = (tt - start) / 1000.0;
+      fin = d.feed(tt, (int32_t)llround((s < 18.0 ? 2.0 * s : 36.0) * 1000.0));
+      if (fin) break;
+      uint32_t next = tt + ((s > 24.4 && s < 24.6) ? 2500 : 100);   // a gap across settle_until
+      for (uint32_t now = tt + 50; now < next; now += 50) assert(!d.tick(now));
+      tt = next;
+    }
+    assert(fin);
+    const ShotResult& rr = d.result();
+    uint32_t tail = rr.samples[rr.sample_count - 1].t_ms - rr.stop_ms;
+    printf("2.5 s BLE gap at the end of settling: tail=%u\n", tail);
+    assert(tail >= needMs(rr.stop_ms));
+    printf("a BLE gap at the end of settling is not a quiet scale OK\n");
+  }
+  {
+    // Review of 7d257d0: a reconnect's injected 0 g, then the real reading
+    // 2.1 s later. The hold has passed by the clock, but the scale was not
+    // quiet for long: tick() waits, and the reading that comes back is a dip.
+    ShotDetector d;
+    uint32_t tt = 14000000;
+    for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+    bool fin = false;
+    for (int i = 0; i < 215; i++, tt += 100)
+      fin = d.feed(tt, (int32_t)llround((i < 180 ? 2.0 * i / 10.0 : 36.0) * 1000.0));
+    assert(!fin && d.state() == ShotState::SETTLING);
+    d.feed(tt, 0);                                    // the injected 0 g
+    for (uint32_t now = tt; now <= tt + 2100; now += 50) assert(!d.tick(now));
+    tt += 2100;
+    fin = d.feed(tt, 36100);                          // back
+    for (int i = 0; i < 100 && !fin; i++) { tt += 100; fin = d.feed(tt, 36100); }
+    assert(fin);
+    const ShotResult& rr = d.result();
+    uint32_t tail = rr.samples[rr.sample_count - 1].t_ms - rr.stop_ms;
+    printf("reconnect 0 g then 2.1 s: final=%d tail=%u\n", rr.yield_final_mg, tail);
+    assert(rr.valid && rr.yield_final_mg == 36100);
+    assert(tail >= needMs(rr.stop_ms));
+    printf("a reconnect is not a lift by the clock OK\n");
+  }
+  {
+    // Review of 7d257d0 (pre-existing): the battery dies mid-pour. tick()
+    // waits until the shot would have force-stopped and settled (65 s), so
+    // a reconnect mid-pour cannot split a shot, then spools it as a FAULT
+    // (review of fc5f05b): its yield is only what the scale saw.
+    ShotDetector d;
+    uint32_t tt = 15000000;
+    for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+    for (int i = 0; i < 250; i++, tt += 100) d.feed(tt, (int32_t)llround(1.5 * i / 10.0 * 1000.0));
+    assert(d.state() == ShotState::POURING);
+    uint32_t t0 = d.result().started_at_ms;
+    uint32_t now = tt;
+    for (; (int32_t)(now - t0) < (int32_t)(ShotDetector::MAX_SHOT_MS + ShotDetector::SETTLE_MS); now += 100)
+      assert(!d.tick(now));
+    bool done = false;
+    for (int k = 0; k < 10 && !done; k++, now += 100) done = d.tick(now);
+    assert(done && d.state() == ShotState::IDLE);
+    const ShotResult& rr = d.result();
+    printf("scale died mid-pour: valid=%d fault=%d stop_ms=%u final=%d n=%u\n",
+           rr.valid, rr.fault, rr.stop_ms, rr.yield_final_mg, rr.sample_count);
+    assert(!rr.valid && rr.fault && rr.yield_final_mg > 35000);
+    assert(rr.samples[rr.sample_count - 1].t_ms == rr.stop_ms);   // tail 0: cut short
+    printf("a scale lost mid-pour cannot hold the shot open OK\n");
+  }
+  {
+    // Review of ba93901: a quiet pour is NOT classified from its last second
+    // -- jitter, drips, a lift and a reconnect's 0 g cannot be told apart
+    // there. Under 5 g it is a reject; anything else is a scale-lost FAULT
+    // (kept, excluded, keeps its dose), and a short pending drop is trimmed.
+    // kind 0: flat 1.2 s, lifted, lost 0.5 s later -> fault, dip trimmed
+    // kind 1: flat 1.5 s, then lost -> fault
+    // kind 2: under 5 g, then lost -> a reject, not a fault
+    // kind 3: rising, a reconnect's 0 g, then lost -> fault, not a lift
+    // kind 4: a choking 0.25 g/s pour, then lost -> fault
+    struct Q { const char* name; int kind; };
+    for (const Q& q : {Q{"flat, lifted, lost", 0}, Q{"flat 1.5 s then lost", 1},
+                       Q{"under 5 g then lost", 2}, Q{"rising, reconnect 0 g, lost", 3},
+                       Q{"choking 0.25 g/s then lost", 4}}) {
+      ShotDetector d;
+      uint32_t tt = 16000000;
+      for (int i = 0; i < 30; i++, tt += 100) d.feed(tt, 0);
+      int n = q.kind == 2 ? 200 : q.kind == 4 ? 300 : 195;
+      for (int i = 0; i < n; i++, tt += 100) {
+        double s = i / 10.0, w;
+        if (q.kind == 0) w = s < 18.0 ? 2.0 * s : (s < 19.2 ? 36.0 : -180.0);
+        else if (q.kind == 1) w = s < 18.0 ? 2.0 * s : 36.0;
+        else if (q.kind == 2) w = s < 1.5 ? 0.5 * s : 0.75 + 0.15 * (s - 1.5);
+        else if (q.kind == 3) w = i == n - 1 ? 0.0 : 1.5 * s;
+        else w = s < 10.0 ? 1.2 * s : 12.0 + 0.25 * (s - 10.0);
+        d.feed(tt, (int32_t)llround(w * 1000.0));
+      }
+      assert(d.state() == ShotState::POURING);
+      uint32_t t0 = d.result().started_at_ms;
+      uint32_t now = tt;
+      bool done = false;
+      for (int k = 0; k < 1000 && !done; k++, now += 100) done = d.tick(now);
+      assert(done && (int32_t)(now - t0) >= (int32_t)(ShotDetector::MAX_SHOT_MS + ShotDetector::SETTLE_MS));
+      const ShotResult& rr = d.result();
+      uint32_t last = rr.samples[rr.sample_count - 1].t_ms;
+      printf("quiet pour, %s: valid=%d fault=%d stop_ms=%u final=%d last=%u lastw=%d\n",
+             q.name, rr.valid, rr.fault, rr.stop_ms, rr.yield_final_mg, last,
+             rr.samples[rr.sample_count - 1].weight_mg);
+      assert(rr.samples[rr.sample_count - 1].weight_mg >= 0);   // a dip never stays in the curve
+      if (q.kind == 2) {
+        assert(!rr.fault && !rr.valid);
+      } else {
+        assert(rr.fault && !rr.valid);
+        if (q.kind <= 1) assert(rr.yield_final_mg == 36000);   // the peak the scale saw
+        // The short pending drop is trimmed: no sample of the -180 g lift
+        // (kind 0) or of the reconnect's 0 g (kind 3) is left in the curve.
+        for (uint16_t k = 0; k < rr.sample_count; k++)
+          if (rr.samples[k].t_ms > 5000) assert(rr.samples[k].weight_mg > 1000);
+      }
+    }
+    printf("a quiet pour is a reject or a scale-lost fault, never a guess OK\n");
   }
 
   printf("all scenarios passed\n");

@@ -184,9 +184,9 @@ CREATE TABLE shot (
                                         --     still that instant)
                                         --   cup lifted - the last retained sample,
                                         --     and yield_at_stop_g is the PEAK, not
-                                        --     that sample's weight. A lift during
-                                        --     SETTLING overwrites an already-
-                                        --     backdated value, so it can sit
+                                        --     that sample's weight. UP TO 0a.7 a
+                                        --     lift during SETTLING overwrites an
+                                        --     already-backdated value, so it can sit
                                         --     STOP_WINDOW_MS + SETTLE_MS (~7 s,
                                         --     not 5 s) after the real stop
                                         -- fact:stop-ms-lift-bound STOP_WINDOW_MS + SETTLE_MS|~7 s
@@ -206,15 +206,27 @@ CREATE TABLE shot (
                                         -- real stop_ms. So read the FIELDS, not
                                         -- the flag. No single column is a proof.
                                         --
-                                        -- THESE CASES ARE NOT EXCLUSIVE: a shot
-                                        -- truncated at 60 s and THEN lifted reads
-                                        -- truncated = 1 with lift-derived values,
-                                        -- so branching on truncated alone is wrong.
+                                        -- FROM DETECTOR 0a.8 a lift during
+                                        -- SETTLING keeps the stop: stop_ms and
+                                        -- yield_at_stop_g are the flat or truncated
+                                        -- path's, and settle_offset_g is the drips
+                                        -- before the lift (0 after a forced stop).
+                                        -- Everything below about the lift is about
+                                        -- 0a.7 and earlier, except where it says so.
+                                        --
+                                        -- UP TO 0a.7 THESE CASES ARE NOT EXCLUSIVE:
+                                        -- a shot truncated at 60 s and THEN lifted
+                                        -- reads truncated = 1 with lift-derived
+                                        -- values, so branching on truncated alone
+                                        -- is wrong.
                                         --
                                         -- SO A QUERY CANNOT ASSUME THE ~2 s, and
-                                        -- nothing here marks the lift path:
-                                        -- settle_offset_g = 0 is the nearest tell
-                                        -- and a flat stop can hit 0 by coincidence.
+                                        -- no column marks the lift path, on any
+                                        -- version: v_shot_end (migration 016)
+                                        -- derives it from the samples. Up to 0a.7
+                                        -- settle_offset_g = 0 was the nearest tell
+                                        -- (a flat stop can hit 0 by coincidence);
+                                        -- on 0a.8 a lift's offset looks real.
                                         -- overshoot.py records seven lift-terminated
                                         -- shots. That is a COUNT over the 45 rows
                                         -- its filter admits (excluded = 0, yield >=
@@ -453,8 +465,10 @@ SELECT
   CASE WHEN s.dose_in_g IS NULL THEN 'estimated' ELSE 'measured' END AS retention_basis,
   -- Both inherit stop_ms's path-dependence: ~2 s backdated on a normal
   -- stop, NOT backdated when truncated = 1, and the lift instant -- up to
-  -- STOP_WINDOW_MS + SETTLE_MS (~7 s) late -- when the cup was lifted.
-  -- Those cases are NOT exclusive: a truncated shot can also be a lift.
+  -- STOP_WINDOW_MS + SETTLE_MS (~7 s) late -- when the cup was lifted
+  -- while settling, UP TO 0a.7 (from 0a.8 such a lift keeps the stop; a
+  -- lift during the pour is still the last kept sample). Up to 0a.7
+  -- those cases are NOT exclusive: a truncated shot can also be a lift.
   -- fact:stop-ms-lift-bound STOP_WINDOW_MS + SETTLE_MS|~7 s
   -- The sub-5 g abort assigns no stop_ms at all, so it lands here as
   -- total_s = 0.0 with pour_s NULL. NEITHER v_shot definition filters

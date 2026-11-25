@@ -43,8 +43,11 @@ SELECT
   CASE WHEN s.dose_in_g IS NULL THEN 'estimated' ELSE 'measured' END AS retention_basis,
   -- All three inherit stop_ms's path-dependence: ~2 s backdated on a normal
   -- stop, NOT backdated when truncated = 1, and the lift instant -- up to
-  -- STOP_WINDOW_MS + SETTLE_MS (~7 s) late -- when the cup was lifted.
-  -- Those cases are NOT exclusive: a truncated shot can also be a lift.
+  -- STOP_WINDOW_MS + SETTLE_MS (~7 s) late -- when the cup was lifted
+  -- while settling, UP TO 0a.7 (from 0a.8 such a lift keeps the stop; a
+  -- lift during the pour is still the last kept sample). Up to 0a.7
+  -- those cases are NOT exclusive: a truncated shot can also be a lift.
+  -- v_shot_end (migration 016) says which shots a lift ended.
   -- fact:stop-ms-lift-bound STOP_WINDOW_MS + SETTLE_MS|~7 s
   -- The sub-5 g abort assigns no stop_ms at all, so it lands here as
   -- total_s = 0.0. NO v_shot definition filters excluded (v_dialin does),

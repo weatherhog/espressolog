@@ -461,6 +461,14 @@ func (h *Header) SetpointPending() bool {
 	return h.FormatVersion >= 5 && h.Flags&FlagSetpointPending != 0
 }
 
+// ScaleLost reports a FAULT record from detector 0a.8 or later, whose only
+// fault is a yield scale that went quiet mid-pour (ShotDetector::tick()):
+// the shot was spooled at the peak the scale saw before it was lost. Older
+// detectors set FAULT for a cup removed mid-pour (none since 0a.4).
+func (h *Header) ScaleLost() bool {
+	return h.Fault() && detectorAtLeast(h.Detector(), 8)
+}
+
 // Disturbed reports the detector's disturbance flag. known is false for a
 // detector older than 0a.7, which never set the bit, so a clear bit there
 // says nothing.

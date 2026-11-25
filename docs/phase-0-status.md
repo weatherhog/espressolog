@@ -23,9 +23,11 @@ README is normative. What changes how the machine is run:
 
 Reviewed five times in fresh contexts, 2026-11-24. Paper test
 passed 2026-11-25: every part fits; the BC547 and 100 nF legs need splaying.
-Firmware 0.15.2 (this branch, not flashed) reads the 1Cup photoMOS 1 `Q` on
-GPIO11. 0.15.1 and earlier, and the 0.16.0/0.16.1 detector builds, read
-GPIO1: go by what `drive status` prints, not by the version number.
+Firmware 0.15.2 (`main` before the detector branch merged, not flashed)
+reads the 1Cup photoMOS 1 `Q` on GPIO11, and so does a 0.16.0 built after
+`main` was merged into the detector branch (e369800). 0.15.1 and earlier,
+the 0.16.0 flashed on 2026-11-23, and the timer fix's 0.16.1 as it stands
+read GPIO1: go by what `drive status` prints, not by the version number.
 
 ## THE PERFBOARD IS ON THE MACHINE — all seven sense inputs live, 2026-11-13
 
@@ -53,7 +55,32 @@ from 2026-11-13, after PR #19; the server was deployed from
 0.10.0** (PR #22: the lever and `first_drip_ms`, spool format v3), with the
 server deployed first and migration 010 applied. 0.11.0, which adds the
 press-to-confirmation pulse train (format v4), is on its branch. The *What runs where*
-table's 0.9.4 row is marked superseded.
+table's 0.9.4 row is marked superseded. **From 2026-11-23 it runs 0.16.0
+(detector 0a.8)**, flashed from `claude/eager-booth-f8f56e` before that
+branch merged, with the server deployed from the same branch first
+(migration 016, `user_version = 16`; backup `backup-pre016-20261123-1319.db`
+on the server). *(0.11.0–0.15.1 came in between and are recorded in the
+sections and commits that introduced them, not here.)*
+
+### 2026-11-24/25 — detector 0a.8 on real shots
+
+The bench checks on 0.16.0, read off the stored records and `v_shot_end`:
+
+| shot | what was done | result |
+|---|---|---|
+| 215 | settled undisturbed | full settle (tail 7.05 s), written within ~1 s of finishing: held and spooled in the same pass |
+| 214 | cup lifted, Bookoo switched off at once | the scale went quiet within 0.2 s of the lift, so no lift was seen; the settle closed on the clock with the 37.7 g peak. `ended_by_lift = 1` — the samples stop early though the window closed on time, which is why 016 and CLAUDE.md now say 1 can mean that |
+| 218 | cup lifted ~0.5 s after the stop confirmed, scale on | the stop kept (18.2 s), the dip trimmed, the grip's press (+0.7 g) kept out of the yield, `ended_by_lift = 1` |
+| 216 | — | a 4 s flat −0.3 g reject (tare or cup going on); excluded, took no dose |
+
+**Not exercised:** a flush started inside the 5 s settle window (the shot
+should stay held until the pump stops). Nothing seen suggests it fails.
+
+**The PWA's headline time changed on the same branch**: it was `total_s`
+(first drip to a flat weight), ~10 s short of the machine display on a
+pre-infused shot, and is now the machine's timer when it can be shown to
+be this shot's, else a labelled fallback marked with the rejected timer
+(`web/src/shotTime.js`, `shotTime()`).
 
 ### SECOND INVARIANT-1 INCIDENT ON J4 — `E01`, cause found and fixed
 
@@ -2639,8 +2666,10 @@ state; closing it is the deliberate act, with the RC chosen first.
    seven shots with no samples after `stop_ms` at all** — a count over the
    45 rows its filter admits, not a rate over the archive — the cup was lifted and the
    detector finalised at the peak, so their `settle_offset_g = 0` is
-   structural, not measured. `overshoot.py` detects them by requiring a
-   ≥4 s tail rather than trusting the field. Shot 37 is also excluded:
+   structural, not measured. `overshoot.py` detects them by the curve's
+   tail rather than trusting the field — ≥4 s until 2026-11-23, now the
+   test migration 016's `v_shot_end` applies (≥ 7 s after a flat stop,
+   ≥ 5 s after a forced one), which separates the same shots. Shot 37 is also excluded:
    a −3.10 g step then +2.00 g inside 180 ms (something knocked the cup)
    followed by a slow lift the 5 g threshold never caught.
 

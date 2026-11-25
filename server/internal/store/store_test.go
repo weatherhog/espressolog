@@ -1628,3 +1628,193 @@ func TestSetpointPendingStopsOnlyTheTemperatureCarry(t *testing.T) {
 		t.Errorf("a value typed on the pending shot did not carry: %v", temp)
 	}
 }
+
+// Migration 016: v_shot_end tells a settle that ran its full window from one
+// a lift ended, from the stored samples alone -- 7 s after a flat stop, 5 s
+// after a forced one (stop_ms >= 60000), capped below the t_ms ceiling --
+// and says NULL where it cannot, including any detector it does not name.
+func TestShotEndView(t *testing.T) {
+	st := openTestStore(t)
+	for _, c := range []struct {
+		name     string
+		detector any
+		stopMs   int
+		lastMs   int // -1: no samples
+		wantTail sql.NullInt64
+		want     sql.NullInt64
+	}{
+		{"full settle", "0a.8", 18000, 25000, sql.NullInt64{Int64: 7000, Valid: true}, sql.NullInt64{Int64: 0, Valid: true}},
+		{"0a.8 lift 3 s into settling", "0a.8", 18000, 23000, sql.NullInt64{Int64: 5000, Valid: true}, sql.NullInt64{Int64: 1, Valid: true}},
+		{"0a.7 lift (stop_ms overwritten)", "0a.7", 25900, 25900, sql.NullInt64{Int64: 0, Valid: true}, sql.NullInt64{Int64: 1, Valid: true}},
+		{"forced stop, full settle", "0a.8", 60000, 65000, sql.NullInt64{Int64: 5000, Valid: true}, sql.NullInt64{Int64: 0, Valid: true}},
+		{"forced stop, lifted", "0a.8", 60000, 61500, sql.NullInt64{Int64: 1500, Valid: true}, sql.NullInt64{Int64: 1, Valid: true}},
+		{"0a.5 full settle", "0a.5", 18000, 25100, sql.NullInt64{Int64: 7100, Valid: true}, sql.NullInt64{Int64: 0, Valid: true}},
+		{"0a.4: no fixed stop window", "0a.4", 18000, 23000, sql.NullInt64{Int64: 5000, Valid: true}, sql.NullInt64{}},
+		{"no detector version", nil, 18000, 23000, sql.NullInt64{Int64: 5000, Valid: true}, sql.NullInt64{}},
+		{"sub-5 g abort, stop_ms 0", "0a.8", 0, 9000, sql.NullInt64{Int64: 9000, Valid: true}, sql.NullInt64{}},
+		{"no samples", "0a.8", 18000, -1, sql.NullInt64{}, sql.NullInt64{}},
+		// Review of 3447d49: a settle past t_ms = 65535 stores a short tail.
+		{"forced stop after a gap, full settle", "0a.8", 60600, 65500, sql.NullInt64{Int64: 4900, Valid: true}, sql.NullInt64{Int64: 0, Valid: true}},
+		{"late flat stop, full settle", "0a.8", 59000, 65500, sql.NullInt64{Int64: 6500, Valid: true}, sql.NullInt64{Int64: 0, Valid: true}},
+		{"forced stop after a gap, lifted", "0a.8", 60600, 63000, sql.NullInt64{Int64: 2400, Valid: true}, sql.NullInt64{Int64: 1, Valid: true}},
+		// Named versions only: anything else cannot be judged.
+		{"0a.8-rc", "0a.8-rc", 18000, 23000, sql.NullInt64{Int64: 5000, Valid: true}, sql.NullInt64{Int64: 1, Valid: true}},
+		{"empty version", "", 18000, 23000, sql.NullInt64{Int64: 5000, Valid: true}, sql.NullInt64{}},
+		{"dev build", "dev", 18000, 23000, sql.NullInt64{Int64: 5000, Valid: true}, sql.NullInt64{}},
+		{"a later detector", "0a.9", 18000, 23000, sql.NullInt64{Int64: 5000, Valid: true}, sql.NullInt64{}},
+		{"0a.50 is not 0a.5", "0a.50", 18000, 23000, sql.NullInt64{Int64: 5000, Valid: true}, sql.NullInt64{}},
+	} {
+		r, err := st.db.Exec(`INSERT INTO shot (started_at, stop_ms, detector_version, created_at)
+			VALUES ('2026-11-23T08:00:00Z', ?, ?, '2026-11-23T08:00:00Z')`, c.stopMs, c.detector)
+		if err != nil {
+			t.Fatal(err)
+		}
+		id, _ := r.LastInsertId()
+		if c.lastMs >= 0 {
+			for _, tms := range []int{0, c.lastMs / 2, c.lastMs} {
+				if _, err := st.db.Exec(`INSERT OR IGNORE INTO shot_sample (shot_id, t_ms, weight_mg) VALUES (?,?,0)`,
+					id, tms); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		var tail, lifted sql.NullInt64
+		if err := st.db.QueryRow(`SELECT settle_tail_ms, ended_by_lift FROM v_shot_end WHERE shot_id = ?`, id).
+			Scan(&tail, &lifted); err != nil {
+			t.Fatal(err)
+		}
+		if tail != c.wantTail || lifted != c.want {
+			t.Errorf("%s: tail %v, ended_by_lift %v; want %v, %v", c.name, tail, lifted, c.wantTail, c.want)
+		}
+	}
+}
+
+// Detector 0a.8 spools a pour whose yield scale went quiet as a FAULT; it is
+// excluded with its own reason, while an older detector's FAULT (a cup
+// removed mid-pour) keeps the old one. Both stay excluded, like any fault.
+func TestIngestScaleLost(t *testing.T) {
+	st := openTestStore(t)
+	for i, c := range []struct {
+		detector string
+		want     string
+	}{
+		{"0a.8", reasonScaleLost},
+		{"0a.8-rc", reasonScaleLost},
+		{"0a.4", reasonFault},
+		{"dev", reasonFault},
+	} {
+		raw, rec := pumpRecordWith(t, uint32(400+i), record.Pump2Cup, 8200, func(h *record.Header) {
+			h.DetectorVersion = [8]byte{}
+			copy(h.DetectorVersion[:], c.detector)
+			h.Flags |= record.FlagFault
+		}, nil)
+		res, err := st.Ingest("aa:bb:cc:dd:ee:04", rec, raw, time.Now())
+		if err != nil {
+			t.Fatalf("%s: %v", c.detector, err)
+		}
+		var excluded int
+		var reason sql.NullString
+		if err := st.db.QueryRow(`SELECT excluded, exclude_reason FROM shot WHERE id = ?`, res.ShotID).
+			Scan(&excluded, &reason); err != nil {
+			t.Fatal(err)
+		}
+		if excluded != 1 || reason.String != c.want {
+			t.Errorf("%s: excluded %d, reason %q; want 1, %q", c.detector, excluded, reason.String, c.want)
+		}
+	}
+}
+
+// A pour whose yield scale was lost (detector 0a.8 FAULT) is excluded, but
+// it used the coffee: it takes its dose, whichever arrives first -- unlike a
+// legacy fault, a reject or a placement (TestExcludedRecordsTakeNoDose).
+func TestScaleLostShotKeepsDose(t *testing.T) {
+	dev := "aa:bb:cc:dd:ee:05"
+	base := time.Now().Add(-time.Hour).Truncate(time.Second)
+	for _, order := range []string{"weighing first", "weighing last"} {
+		st := openTestStore(t)
+		w := weighingRecord(1, 18000, base.Add(-time.Minute))
+		raw, rec := pumpRecordWith(t, 300, record.Pump2Cup, 8200, func(h *record.Header) {
+			h.StartedAtUnixMs = uint64(base.UnixMilli())
+			h.DetectorVersion = [8]byte{}
+			copy(h.DetectorVersion[:], "0a.8")
+			h.Flags |= record.FlagFault
+		}, nil)
+		if order == "weighing first" {
+			if _, err := st.Ingest(dev, w, []byte{2}, base); err != nil {
+				t.Fatal(err)
+			}
+		}
+		res, err := st.Ingest(dev, rec, raw, base)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if order == "weighing last" {
+			if _, err := st.Ingest(dev, w, []byte{2}, base); err != nil {
+				t.Fatal(err)
+			}
+		}
+		var g sql.NullFloat64
+		var excl int
+		if err := st.db.QueryRow(`SELECT dose_ground_g, excluded FROM shot WHERE id = ?`, res.ShotID).
+			Scan(&g, &excl); err != nil {
+			t.Fatal(err)
+		}
+		if excl != 1 || !g.Valid || g.Float64 != 18.0 {
+			t.Errorf("%s: excluded=%d dose=%v, want excluded with dose 18", order, excl, g)
+		}
+	}
+}
+
+// A scale-lost fault that is ALSO a placement (a cup set down slowly on an
+// un-tared scale, then the scale lost) is a placement: excluded as one, and
+// it takes no dose -- the real shot pulled next keeps it (review of 7bfbbc7).
+func TestScaleLostPlacementTakesNoDose(t *testing.T) {
+	dev := "aa:bb:cc:dd:ee:06"
+	base := time.Now().Add(-time.Hour).Truncate(time.Second)
+	for _, order := range []string{"weighing first", "weighing last"} {
+		st := openTestStore(t)
+		w := weighingRecord(1, 18000, base.Add(-time.Minute))
+		xraw, xrec := pumpRecordWith(t, 300, record.Pump2Cup, 8200, func(h *record.Header) {
+			h.StartedAtUnixMs = uint64(base.Add(-30 * time.Second).UnixMilli())
+			h.DetectorVersion = [8]byte{}
+			copy(h.DetectorVersion[:], "0a.8")
+			h.Flags |= record.FlagFault | record.FlagPlacement
+		}, nil)
+		sraw, srec := pumpRecordWith(t, 301, record.Pump2Cup, 8200, func(h *record.Header) {
+			h.StartedAtUnixMs = uint64(base.UnixMilli())
+		}, nil)
+		if order == "weighing first" {
+			if _, err := st.Ingest(dev, w, []byte{2}, base); err != nil {
+				t.Fatal(err)
+			}
+		}
+		xres, err := st.Ingest(dev, xrec, xraw, base)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sres, err := st.Ingest(dev, srec, sraw, base)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if order == "weighing last" {
+			if _, err := st.Ingest(dev, w, []byte{2}, base); err != nil {
+				t.Fatal(err)
+			}
+		}
+		var xg, sg sql.NullFloat64
+		var reason string
+		if err := st.db.QueryRow(`SELECT dose_ground_g, exclude_reason FROM shot WHERE id = ?`, xres.ShotID).
+			Scan(&xg, &reason); err != nil {
+			t.Fatal(err)
+		}
+		if err := st.db.QueryRow(`SELECT dose_ground_g FROM shot WHERE id = ?`, sres.ShotID).Scan(&sg); err != nil {
+			t.Fatal(err)
+		}
+		if reason != reasonPlacement || xg.Valid {
+			t.Errorf("%s: placement+scale-lost reason %q dose %v, want placement and no dose", order, reason, xg)
+		}
+		if !sg.Valid || sg.Float64 != 18.0 {
+			t.Errorf("%s: the real shot's dose = %v, want 18", order, sg)
+		}
+	}
+}

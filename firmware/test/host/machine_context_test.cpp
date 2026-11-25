@@ -793,6 +793,114 @@ int main() {
     printf("millis wrap OK\n");
   }
 
+  // 16-20. A SHOT'S TIMER IS ITS OWN PUMP RUN OR 0, NEVER ANOTHER RUN'S
+  //    (0.16.1). Until then onPourStart() carried the timer unconditionally
+  //    and the header read it at completion, after the 5 s settle, so the
+  //    PWA's shot-time headline could show the previous brew's timer (a
+  //    hot-water draw) or a flush's (pressed while SETTLING). Frames here are
+  //    100 ms apart for TIMER and 41 ms for temperature; a pump run of d
+  //    tenths ends at its last frame.
+  {
+    // 16. A hot-water draw after a shot. The display does not time it, so
+    //     no TIMER frame arrives after its pour starts.
+    MachineContextTracker m;
+    uint32_t t = 1000000;
+    m.onReading(temp(95, t), false);
+    m.onPourStart(t + 41000);
+    for (uint16_t d = 1; d <= 280; d++) m.onReading(timer(d, t + 100000 + d * 100000), false);
+    t += 100000 + 280 * 100000;
+    for (int i = 1; i <= 50; i++) m.onReading(temp(95, t + i * 41000), false);  // pump off
+    m.onPourStop(t + 50 * 41000, 2000);
+    assert(m.context().machine_timer_dl == 280);
+    t += 60000000;                                  // a minute later: lever B up
+    m.onReading(temp(95, t), false);
+    m.onPourStart(t + 41000);
+    for (int i = 2; i <= 200; i++) m.onReading(temp(95, t + i * 41000), false);  // no timer
+    m.onPourStop(t + 200 * 41000, 2000);
+    assert(m.context().machine_timer_dl == 0);      // NOT the shot's 28.0 s
+    printf("a hot-water draw after a shot stores no timer, not the shot's OK\n");
+  }
+  {
+    // 17. A flush pressed while SETTLING: the shot keeps its own timer.
+    MachineContextTracker m;
+    uint32_t t = 1000000;
+    m.onReading(temp(95, t), false);
+    m.onPourStart(t + 41000);
+    for (uint16_t d = 1; d <= 280; d++) m.onReading(timer(d, t + 100000 + d * 100000), false);
+    t += 100000 + 280 * 100000;                     // pump off at t
+    for (int i = 1; i <= 100; i++) m.onReading(temp(95, t + i * 41000), false);
+    // Flat from ~t+1.1 s, confirmed 2 s later.
+    m.onPourStop(t + 100 * 41000, 2000);
+    t += 100 * 41000;
+    for (uint16_t d = 1; d <= 150; d++) m.onReading(timer(d, t + d * 100000), false);  // flush
+    assert(m.context().machine_timer_dl == 280);    // NOT 15.0 s
+    printf("a flush while settling does not replace the shot's timer OK\n");
+  }
+  {
+    // 18. A flush pressed in the 2 s between the (backdated) stop and its
+    //     confirmation: it has already restarted the timer when onPourStop()
+    //     runs, which puts the shot's run back.
+    MachineContextTracker m;
+    uint32_t t = 1000000;
+    m.onReading(temp(95, t), false);
+    m.onPourStart(t + 41000);
+    for (uint16_t d = 1; d <= 280; d++) m.onReading(timer(d, t + 100000 + d * 100000), false);
+    t += 100000 + 280 * 100000;                     // pump off at t
+    for (int i = 1; i <= 25; i++) m.onReading(temp(95, t + i * 41000), false);
+    const uint32_t stop_us = t + 25 * 41000;        // flat from here
+    for (uint16_t d = 1; d <= 15; d++) m.onReading(timer(d, stop_us + 400000 + d * 100000), false);
+    m.onPourStop(stop_us + 2000000, 2000);
+    assert(m.context().machine_timer_dl == 280);
+    for (uint16_t d = 16; d <= 150; d++) m.onReading(timer(d, stop_us + 400000 + d * 100000), false);
+    assert(m.context().machine_timer_dl == 280);
+    printf("a flush between the stop and its confirmation is undone OK\n");
+  }
+  {
+    // 19. The carry that IS kept: the timer running when the pour starts
+    //     (pre-infusion) and ending right at it with no frame after -- and
+    //     a pump that outlasts the flat scale goes on counting past the
+    //     stop, unbroken, then a later, longer flush cannot replace it.
+    MachineContextTracker m;
+    uint32_t t = 1000000;
+    m.onReading(temp(95, t), false);
+    for (uint16_t d = 1; d <= 40; d++) m.onReading(timer(d, t + d * 100000), false);
+    m.onPourStart(t + 40 * 100000 + 41000);
+    assert(m.context().machine_timer_dl == 40);
+    printf("a timer running at pour start is kept OK\n");
+
+    MachineContextTracker k;
+    t = 1000000;
+    k.onReading(temp(95, t), false);
+    k.onPourStart(t + 41000);
+    for (uint16_t d = 1; d <= 250; d++) k.onReading(timer(d, t + 100000 + d * 100000), false);
+    k.onPourStop(t + 100000 + 250 * 100000 + 10000, 2000);   // still timing
+    for (uint16_t d = 251; d <= 300; d++) k.onReading(timer(d, t + 100000 + d * 100000), false);
+    assert(k.context().machine_timer_dl == 300);
+    t += 100000 + 300 * 100000;
+    for (int i = 1; i <= 30; i++) k.onReading(temp(95, t + i * 41000), false);
+    t += 30 * 41000;
+    for (uint16_t d = 1; d <= 400; d++) k.onReading(timer(d, t + d * 100000), false);
+    assert(k.context().machine_timer_dl == 300);   // not the 40 s flush
+    printf("a pump outlasting the stop counts on, a later flush does not OK\n");
+  }
+  {
+    // 20. The display not decoding at pour start: no timer is carried.
+    MachineContextTracker m;
+    uint32_t t = 1000000;
+    for (uint16_t d = 1; d <= 40; d++) m.onReading(timer(d, t + d * 100000), false);
+    m.onPourStart(t + 40 * 100000 + 41000, false);
+    assert(m.context().machine_timer_dl == 0);
+    // And a run that reappears after a frame gap is not the same run.
+    MachineContextTracker k;
+    k.onPourStart(t);
+    for (uint16_t d = 1; d <= 100; d++) k.onReading(timer(d, t + d * 100000), false);
+    k.onPourStop(t + 100 * 100000 + 10000, 2000);           // still timing
+    const uint32_t back = t + 100 * 100000 + 3000000;        // 3 s of no frames
+    for (uint16_t d = 130; d <= 200; d++) k.onReading(timer(d, back + (d - 130) * 100000), false);
+    assert(k.context().machine_timer_dl == 100);
+    printf("no timer carried from a stale display; a gap ends the run OK\n");
+  }
+
   printf("\nall machine context tests passed\n");
   return 0;
 }

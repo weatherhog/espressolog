@@ -24,12 +24,12 @@
 // 0.15.1, so a 0.15.1 built from that commit already reads GPIO11. 0.16.0
 // is the same story: built before main was merged into this branch (what
 // the board was flashed with on 2026-11-23) it reads GPIO1, built after it
-// GPIO11 -- and 0.16.1 (the timer fix), built from a branch that left
-// before that merge, reads GPIO1 until it is rebased onto it. The version
-// number does not say which: `drive status` prints the pin. Not bumped for
-// it: the PWA trusts timers from 0.16.1 up (the timer fix,
-// web/src/shotTime.js), so a number at or above that must carry it.
-const char* FIRMWARE_VERSION = "0.16.0";
+// GPIO11. 0.16.1 (the timer fix) is built on top of that merge and reads
+// GPIO11. The version number does not say which for 0.15.1 or 0.16.0:
+// `drive status` prints the pin. Not bumped for the pin: the PWA trusts
+// timers from 0.16.1 up (the timer fix, web/src/shotTime.js), so a
+// number at or above that must carry the fix.
+const char* FIRMWARE_VERSION = "0.16.1";
 const char* DETECTOR_VERSION = "0a.8";
 
 static ScaleManager scales;
@@ -1763,6 +1763,12 @@ void loop() {
         // otherwise one tweak at the start of a session condemns every
         // shot after it.
         display_bus.clearSetpointTouched();
+      }
+      if (before == ShotState::POURING && detector.state() == ShotState::SETTLING) {
+        // The stop is confirmed: freeze this shot's machine timer at it, so
+        // a flush pressed while SETTLING cannot replace it (0.16.1).
+        const ShotResult& res = detector.result();
+        machine_ctx.onPourStop(micros(), millis() - (res.started_at_ms + res.stop_ms));
       }
       if (raw_stream) {
         Serial.printf("%lu,%ld,%s\n", (unsigned long)smp.t_ms,

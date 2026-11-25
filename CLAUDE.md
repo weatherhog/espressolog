@@ -393,8 +393,10 @@ either way; the grades are not interchangeable.
   attribute tap water to a shot.
 
 **The display does NOT run its shot timer during a hot-water draw**
-(observed 2026-10-04), so `machine_timer_dl` cannot pick up a tap draw and
-`machine_context.h` needs no special case. The flowmeter **does** pulse
+(observed 2026-10-04), so `machine_timer_dl` cannot pick up a tap draw's
+own duration — **and up to firmware 0.16.0 a draw stored the previous
+brew's timer instead** (the display-bus entry below says why and what
+0.16.1 changed). The flowmeter **does** pulse
 during one, so the timer and the flow counter disagree about what counts
 as an event — which is why 0d scopes counting to shot boundaries.
 
@@ -631,9 +633,26 @@ is stored unflagged. A two-frames-in-a-row rule, like the TIMER path's, is
 the obvious guard and is not built.
 
 **The display does NOT run its shot timer during a hot-water draw**, so
-`machine_timer_dl` cannot pick up a tap draw and `machine_context.h` needs no
-special case. The flowmeter **does** pulse during one, which is why 0d scopes
-counting to shot boundaries.
+`machine_timer_dl` cannot pick up a tap draw's own duration. The flowmeter
+**does** pulse during one, which is why 0d scopes counting to shot
+boundaries.
+
+**`machine_timer_dl` IS THIS SHOT'S PUMP RUN OR 0 — FROM FIRMWARE 0.16.1
+(2026-11-25).** Up to 0.16.0 it could be **another run's**: pour start
+carried whatever the timer last reached, so a pour with no timer of its own
+(a hot-water draw, the display tap off or stale) stored the previous brew's
+or flush's; and it was read at completion, after the 5 s settle, so a flush
+pressed while SETTLING replaced it. Now (`machine_context.h`) pour start
+keeps the timer only if a run is live — a confirmed TIMER frame within 1 s
+and nothing else since — and `onPourStop()` freezes it at the detector's
+backdated stop: a restart after the stop is undone, and only the run in
+force at the stop may keep counting, unbroken. A run that ends within ~1 s
+before first drip with no frame after it now reads 0, and a single misread
+frame or a frame gap while the pump outlasts the stop freezes it early —
+short, never another run's. **Records from 0.16.0 and earlier keep the old
+behaviour**, which is why the PWA's `shotTime()` (`web/src/components.jsx`)
+still trusts `machine_timer_s` only inside a window around the
+press-to-stop span.
 
 **`docs/machine-display-bus.md` is normative on everything else** — the JST
 identification by measurement, the `Disp-P4` bidirectional-handshake

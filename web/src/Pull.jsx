@@ -32,11 +32,13 @@ function loadTargets() {
     // carries the old pump-time band 22-32 too. Once, drop it so the
     // pour-time default shows; after that a 22-32 someone types is kept.
     if (!localStorage.getItem("pullTargetsPourTime")) {
-      if (saved.t0 === 22 && saved.t1 === 32) {
-        delete saved.t0; delete saved.t1;
+      if (saved.t0 === 22 && saved.t1 === 32) { delete saved.t0; delete saved.t1; }
+      // Writes get their own try: a failed write must not throw away the
+      // saved yield band read above (the outer catch returns the defaults).
+      try {
         localStorage.setItem("pullTargets", JSON.stringify(saved));
-      }
-      localStorage.setItem("pullTargetsPourTime", "1");
+        localStorage.setItem("pullTargetsPourTime", "1");
+      } catch { /* migrates again next load */ }
     }
     return { ...DEFAULT_TARGETS, ...saved };
   }

@@ -32,10 +32,11 @@ export function Eyebrow({ children, style }) {
 //  - a confirmed hot-water press (pump_line 3), any firmware: rejected --
 //    the display runs no timer for it, so a stored one is another run's;
 //  - with a usable p, any firmware: a lopsided window, at most 3 s over p
-//    and at most this far under it: 3 s from detector 0a.8 (a lift keeps
+//    and at most this far under it: 3 s on detector 0a.8 (a lift keeps
 //    the stop, so p - m is only the drips, ~1 s), 9 s on 0a.7 and earlier
 //    (a lift while settling pushed stop_ms up to ~7 s late; shot 212:
-//    timer 35.9, p 42.3) or an unknown detector. That also catches
+//    timer 35.9, p 42.3) or any other detector, until one is checked and
+//    named here (as migration 016 names the versions it judges). That also catches
 //    0.16.1's late flush, which is always detector 0a.8;
 //  - 0.16.1+ with no usable p: trusted;
 //  - older, no usable p: on a v3+ record (pump_line set) with no press
@@ -58,12 +59,12 @@ export function Eyebrow({ children, style }) {
 // to a flat weight, ~10 s short of the machine on a pre-infused shot).
 const MIN_BREW_S = 15;
 const TIMER_UNDER_P_MAX_S_0A7 = 9; // 0a.7 and earlier, or unknown
-const TIMER_UNDER_P_MAX_S_0A8 = 3; // 0a.8 and later
+const TIMER_UNDER_P_MAX_S_0A8 = 3; // 0a.8 only
 const TIMER_OVER_P_MAX_S = 3;
 
 function timerUnderPMax(detector) {
-  const m = /^0a\.(\d+)/.exec(detector || "");
-  return m && +m[1] >= 8 ? TIMER_UNDER_P_MAX_S_0A8 : TIMER_UNDER_P_MAX_S_0A7;
+  // '0a.8' or '0a.8-rc', as 016's GLOB; not '0a.80'.
+  return /^0a\.8($|[^0-9])/.test(detector || "") ? TIMER_UNDER_P_MAX_S_0A8 : TIMER_UNDER_P_MAX_S_0A7;
 }
 
 function firmwareAtLeast(v, want) {
@@ -99,7 +100,7 @@ export function timeReadout(shot) {
     const sign = t.timer === "disagreed" ? "≠" : "?";
     const m = shot.machine_timer_s.toFixed(1);
     props.mark = sign;
-    props.note = `${sign} timer ${m}`;
+    props.note = `${sign} ${m}s`; // short: a phone cell is ~52 px; the title says "machine timer"
     props.title = t.s == null
       ? `machine timer ${m} s ${t.timer}; no other time available`
       : `machine timer ${m} s ${t.timer}; showing ${t.label.toLowerCase()}`;
@@ -122,7 +123,7 @@ export function shotTime(shot) {
 
 export function Readout({ value, unit, label, color = T.ink, size = 34, mark, note, title }) {
   return (
-    <div title={title} style={note ? { minWidth: 0 } : undefined}>{/* minWidth lets the note ellipsize in a grid cell */}
+    <div title={title}>
       <div style={{
         fontFamily: MONO, fontSize: size, lineHeight: 1, color,
         fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em",
@@ -134,7 +135,10 @@ export function Readout({ value, unit, label, color = T.ink, size = 34, mark, no
       <Eyebrow style={{ marginTop: 5 }}>{label}</Eyebrow>
       {note && <div style={{
         fontFamily: MONO, fontSize: 9.5, color: T.alert, marginTop: 2,
-        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%",
+        // width 0 + minWidth 100%: the note takes the cell's width but never
+        // widens it, so it ellipsizes instead of pushing the grid column.
+        width: 0, minWidth: "100%",
+        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
       }}>{note}</div>}
     </div>
   );

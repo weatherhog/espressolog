@@ -40,7 +40,7 @@ function loadTargets() {
       catch { /* migrates again next load */ }
       if (wrote) {
         try { localStorage.setItem("pullTargetsPourTime", "1"); }
-        catch { /* the next load checks again, so a 22-32 band typed in later is cleared once more */ }
+        catch { /* while the flag write keeps failing, a 22-32 band typed in later is cleared on every load */ }
       }
     }
     return { ...DEFAULT_TARGETS, ...saved };

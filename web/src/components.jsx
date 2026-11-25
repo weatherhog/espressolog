@@ -19,7 +19,8 @@ export function Eyebrow({ children, style }) {
 // hot-water draw (the display runs no timer then) or with the display tap
 // off; a flush pressed inside the 5 s settle (the timer is copied at
 // completion), which leaves the flush's first seconds; and before 0.9.7 a
-// misread " 95" idle frame, 9.5 s. From 0.16.1 (the timer-own-run fix)
+// misread " 95" idle frame, 9.5 s. From 0.16.1 (the timer-own-run fix,
+// branch claude/timer-own-run until it merges)
 // the firmware stores only a run it saw start, with two exceptions its
 // CLAUDE.md lists: a flush pressed after pump-off but before the scale's
 // stop is stored at its own full length, which can read above OR below the
@@ -30,9 +31,12 @@ export function Eyebrow({ children, style }) {
 // The rule, in order:
 //  - a confirmed hot-water press (pump_line 3), any firmware: rejected --
 //    the display runs no timer for it, so a stored one is another run's;
-//  - with a usable p, any firmware: a lopsided window -- up to 9 s under
-//    p (the 0a.7 lift shift plus drips; shot 212: timer 35.9, p 42.3), at
-//    most 3 s over -- which also catches 0.16.1's late flush;
+//  - with a usable p, any firmware: a lopsided window, at most 3 s over p
+//    and at most this far under it: 3 s from detector 0a.8 (a lift keeps
+//    the stop, so p - m is only the drips, ~1 s), 9 s on 0a.7 and earlier
+//    (a lift while settling pushed stop_ms up to ~7 s late; shot 212:
+//    timer 35.9, p 42.3) or an unknown detector. That also catches
+//    0.16.1's late flush, which is always detector 0a.8;
 //  - 0.16.1+ with no usable p: trusted;
 //  - older, no usable p: on a v3+ record (pump_line set) with no press
 //    at all (pump_line 0), unchecked -- a missed hot-water press looks the
@@ -53,8 +57,14 @@ export function Eyebrow({ children, style }) {
 // Fallbacks say what they are: "Press→stop" (p), then "Pour" (first drip
 // to a flat weight, ~10 s short of the machine on a pre-infused shot).
 const MIN_BREW_S = 15;
-const TIMER_UNDER_P_MAX_S = 9;
+const TIMER_UNDER_P_MAX_S_0A7 = 9; // 0a.7 and earlier, or unknown
+const TIMER_UNDER_P_MAX_S_0A8 = 3; // 0a.8 and later
 const TIMER_OVER_P_MAX_S = 3;
+
+function timerUnderPMax(detector) {
+  const m = /^0a\.(\d+)/.exec(detector || "");
+  return m && +m[1] >= 8 ? TIMER_UNDER_P_MAX_S_0A8 : TIMER_UNDER_P_MAX_S_0A7;
+}
 
 function firmwareAtLeast(v, want) {
   const m = /^(\d+)\.(\d+)\.(\d+)/.exec(v || "");
@@ -71,7 +81,8 @@ function timerVerdict(shot, p) {
   if (m == null || !(m > 0)) return null;
   if (shot.pump_line === 3) return "disagreed";
   if (p != null) {
-    return p - m <= TIMER_UNDER_P_MAX_S && m - p <= TIMER_OVER_P_MAX_S ? "ok" : "disagreed";
+    return p - m <= timerUnderPMax(shot.detector_version) && m - p <= TIMER_OVER_P_MAX_S
+      ? "ok" : "disagreed";
   }
   if (firmwareAtLeast(shot.firmware_version, [0, 16, 1])) return "ok";
   if (shot.pump_line === 0) return "unchecked";
@@ -89,7 +100,9 @@ export function timeReadout(shot) {
     const m = shot.machine_timer_s.toFixed(1);
     props.mark = sign;
     props.note = `${sign} timer ${m}`;
-    props.title = `machine timer ${m} s ${t.timer}; showing ${t.label.toLowerCase()}`;
+    props.title = t.s == null
+      ? `machine timer ${m} s ${t.timer}; no other time available`
+      : `machine timer ${m} s ${t.timer}; showing ${t.label.toLowerCase()}`;
   }
   return props;
 }
@@ -109,7 +122,7 @@ export function shotTime(shot) {
 
 export function Readout({ value, unit, label, color = T.ink, size = 34, mark, note, title }) {
   return (
-    <div title={title} style={{ minWidth: 0 }}>{/* lets the note ellipsize in a grid cell */}
+    <div title={title} style={note ? { minWidth: 0 } : undefined}>{/* minWidth lets the note ellipsize in a grid cell */}
       <div style={{
         fontFamily: MONO, fontSize: size, lineHeight: 1, color,
         fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em",

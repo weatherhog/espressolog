@@ -496,7 +496,7 @@ public:
   //   KNOWN LIMITS: a flush pressed after pump-off but before the stop (the
   // cup still dripping, the weight not yet flat) is the latest run AT the
   // stop and is stored as the shot's, followed to its full length, which can
-  // exceed the shot's; N_RUNS (eight) or more new runs
+  // be above or below the shot's own; N_RUNS (eight) or more new runs
   // between the stop and this call push the shot's run out (0); the stop
   // time is the scale's BLE arrival time, ~100-200 ms late.
   void onPourStop(uint32_t now_us, uint32_t ms_since_stop) {

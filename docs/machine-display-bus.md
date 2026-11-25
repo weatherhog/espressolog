@@ -845,7 +845,8 @@ stands:
   run unseen for 30 s is retired on the next frame of another kind.
 
 **Known limits:** a flush pressed after pump-off but before the scale's
-stop is stored as the shot's, at its full length; a pour with no timer of
+stop is stored as the shot's, at its full length -- above or below the
+shot's own; a pour with no timer of
 its own confirmed within 0.5 s of another run's last count carries it;
 eight or more new runs between the stop and its freeze lose the shot's run
 (0); the stop time is the scale's BLE arrival, ~100-200 ms late. With the

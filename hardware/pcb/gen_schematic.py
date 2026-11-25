@@ -484,6 +484,8 @@ def check():
     out = os.path.join(HERE, "build")
     os.makedirs(out, exist_ok=True)
     erc = os.path.join(out, "erc.rpt")
+    if os.path.exists(erc):            # never judge a previous run's report
+        os.remove(erc)
     subprocess.run([KICAD_CLI, "sch", "erc", "--severity-all", "-o", erc, sch],
                    check=False, capture_output=True)
     m = re.search(r"ERC messages: (\d+)\s+Errors (\d+)\s+Warnings (\d+)",

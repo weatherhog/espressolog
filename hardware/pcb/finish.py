@@ -6,6 +6,8 @@
 Repeatable: it starts from route.py's copy in build/, before any of this.
 """
 import os
+import shutil
+import subprocess
 import pcbnew
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -168,14 +170,16 @@ text("tap: all DNP", 60.0, 3.2)
 text("(b) OPEN until bench", 77.0, 93.0)
 text("SELFTEST: never fit", 26.0, 93.0)
 text("U3 + R36 OUT while gate PROPOSED", 57.0, 97.9)
-text("espressolog v2", 85.0, 97.9)
+text("espressolog v2", 85.0, 97.9)     # v1 was the perfboard
 # rotated 90 it reads bottom to top: USB end at the bottom, antenna at pin 1
 text("USB end    ESP32 devkit    ANTENNA end", 2.0, 58.5, angle=90)
 
 # Each IN/OUT pair named on the board, on the LEFT of the pair, once beside
-# the IN header and once beside the OUT header: a smaller XH plug may seat
-# offset in a larger header, and no metering catches a plug moved afterwards
-# (pre-order review S10; fix-pass check NIT 11).
+# the IN header and once beside the OUT header, so that a plug or OUT cable
+# moved later goes back where it belongs (pre-order review S10; fix-pass
+# check NIT 11). The paper test of 2026-11-25 showed the harness plugs do
+# not seat in a larger header; the OUT cables are all-new and unkeyed by size
+# only.
 for name, x in [("DISPLAY", 7.2), ("FLOW", 22.75), ("NTC", 37.7),
                 ("LEVERS", 68.7)]:
     text(name, x, 11.8, 1.2, angle=90)
@@ -205,7 +209,7 @@ text("3V3", 66.0, 95.6)
 text("<=470p", 24.0, 68.25)
 # the AQY212EH goes at the pin-1 end of each uncut DIP-8
 for y in (37.0, 50.0, 63.0, 76.0):
-    text("AQY", 87.3, y + 1.27, 0.0 + 1.0)
+    text("AQY", 87.3, y + 1.27, 1.0)
 
 # Pin names at the top edge, in front of each IN header. The OUT header
 # right behind it carries the same pin in the same column (straight
@@ -396,5 +400,31 @@ pcbnew.ZONE_FILLER(board).Fill(board.Zones())
 board.BuildConnectivity()
 _open = board.GetConnectivity().GetUnconnectedCount(False)
 check(_open == 0, f"{_open} open connection(s): run `route.py --keep` again")
+# 5. Every machine net is in netclass Machine and nothing else is: the
+#    2 mm rules hang on the name patterns in the .kicad_pro, which nobody
+#    regenerates (pre-push review SHOULD 10).
+_ncs = {n.GetNetname().lstrip("/"): n.GetNetClassName()
+        for n in board.GetNetsByNetcode().values() if n.GetNetname()}
+_notm = sorted(n for n in G.MACHINE_NETS if "Machine" not in _ncs.get(n, ""))
+_extra = sorted(n for n, c in _ncs.items()
+                if "Machine" in c and n not in G.MACHINE_NETS)
+check(not _notm and not _extra, "netclass Machine does not match MACHINE_NETS "
+      f"(missing {_notm}, extra {_extra}): fix the patterns in the .kicad_pro")
+# 6. DRC with the project's rules, on a copy, BEFORE the board is saved: an
+#    error-level violation (the clearance rules) stops here.
+_tmp = os.path.join(HERE, "build", "finished.kicad_pcb")
+board.Save(_tmp)
+for _ext in (".kicad_pro", ".kicad_dru"):
+    shutil.copy(PCB.replace(".kicad_pcb", _ext), _tmp.replace(".kicad_pcb", _ext))
+_rpt = os.path.join(HERE, "build", "drc.rpt")
+if os.path.exists(_rpt):
+    os.remove(_rpt)
+_drc = subprocess.run([S.KICAD_CLI, "pcb", "drc", "--severity-error",
+                       "--all-track-errors", "--exit-code-violations",
+                       "-o", _rpt, _tmp], capture_output=True, text=True)
+check(_drc.returncode == 0 and os.path.exists(_rpt),
+      f"DRC errors (or kicad-cli failed): see build/drc.rpt\n{_drc.stdout[-400:]}")
 board.Save(PCB)
+print("checks passed: netlist, pinouts, locked copper, nothing under machine "
+      "tracks, placement, connections, netclass, DRC")
 print(f"refs placed on silk: {moved}; fab only (no room): {', '.join(fab) or 'none'}")

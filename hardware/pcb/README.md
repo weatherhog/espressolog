@@ -3,7 +3,7 @@
 One board to replace the hand-wired perfboard. The devkit sits in sockets,
 both the sense dividers and the drive side are on it, and **the T-pieces are
 on it too** (decided 2026-11-24). The perfboard keeps logging on the machine
-until this board has passed its bench test. Decided 2026-11-24.
+until this board has passed its bench test.
 
 **The source is `gen_schematic.py`, not the drawing.** The schematic is
 label-based: every pin has a short stub and a net label, so the connectivity is
@@ -42,12 +42,11 @@ plug mates any XH header of its size the same way, so the machine sees its
 own harness, conductor for conductor. The taps branch off the OUT pins. IN
 and OUT of one connector are electrically interchangeable.
 
-**A plug in the WRONG connector's header is not ruled out (unverified).**
-The four have different pin counts (2, 3, 4, 5), but XH plugs are not
-width-keyed against a larger housing, so a smaller plug may seat offset in a
-bigger header. Example: the J4 flowmeter plug in J2 IN at pins 1–3 puts the
-flowmeter's `+` on pos 1 and its `T` on raw 2Cup, which is a held press. Try
-each plug in each wrong header at the 1:1 print step (below).
+**A harness plug in the WRONG connector's header: closed for the harness
+plugs, 2026-11-25.** The four have different pin counts (2, 3, 4, 5), and in
+the paper test a smaller harness plug did not seat in a larger header. The
+OUT cables are new parts and were not tried; the pairs are named on the silk
+beside both headers.
 
 **Operating consequence: the machine's switches, display and flowmeter all
 run through this board. Without it, the machine runs only with the original
@@ -73,7 +72,11 @@ display misreads in that state, the cure is to pull the devkit or go back to
 the original plugs.
 
 **Pin map, by JST pin number** (pad 1 is the right-hand pin; the silk at the
-top edge names each column, which is the same pin on IN and OUT):
+top edge names each column, which is the same pin on IN and OUT).
+**For J5 this is NOT `CLAUDE.md`'s numbering:** there, and in the display-bus
+doc, pin 1 is `VSS` (the spoked pad) and pin 4 is `Disp-P4`. On this board
+pad 1 is `Disp-P4` and pad 4 is `VSS`. Never clip a ground to "J5 pin 1" of
+this board; ground is TP1.
 
 | Conn | Pin 1 | Pin 2 | Pin 3 | Pin 4 | Pin 5 | Source |
 |---|---|---|---|---|---|---|
@@ -84,11 +87,14 @@ top edge names each column, which is the same pin on IN and OUT):
 
 - **J4 `+` and J5 `Disp-P4` cross the board as isolated pass-through traces.**
   They have no pad but their own header pins, no test point, no via, no pour
-  nearby, and keep 2 mm from everything. Nothing connects to them (the J4
-  `+` rule in `CLAUDE.md`).
+  nearby, and keep 2 mm from everything of ours. Their own header's
+  neighbouring pins sit at the machine's 2.5 mm pitch (0.8 mm gap, as in the
+  machine's harness), and the machine's own ground pass-through beside them
+  runs at 1.45 mm. Nothing connects to them (the J4 `+` rule in `CLAUDE.md`).
 - **The machine's ground (J5 `VSS`, J4 `T`) is our ground.** It passes
-  straight through IN→OUT, and each ties to the devkit GND (J12 pin 1) by its
-  own track. The J2 dividers' only reference is this ground.
+  straight through IN→OUT. J4 `T` ties to the devkit GND (J12 pin 1) by a
+  hand-laid track, and J5 `VSS` joins that track through a via. The J2
+  dividers' only reference is this ground.
 
 ## What the board carries
 
@@ -331,9 +337,18 @@ board quietly:
   pads and one track each; the locked copper is exactly `gen_pcb.py`'s;
   nothing of ours runs under a machine track or within 1 mm of one through
   the board; the routed copy has the placement `gen_pcb.py` last wrote
-  (`gen_pcb.py` also deletes the routed copy); and no connection is open.
+  (`gen_pcb.py` also deletes the routed copy); no connection is open; the
+  machine nets are exactly the nets in netclass `Machine`; and **DRC with
+  the project's rules reports no error** (run on a copy in `build/`, report
+  in `build/drc.rpt`).
 
-Then run DRC and export with `kicad-cli`. The current board: **DRC 0 errors,
+**Never use the GUI's "Update PCB from Schematic":** it renames every net to
+`/NAME`. The rule file survives that, `route.py` does not. Regenerate with
+`gen_pcb.py`. The tool paths are macOS defaults; override them with
+`KICAD_CLI`, `KICAD10_FOOTPRINT_DIR`, `FREEROUTING_JAR`, `JAVA` and
+`FREEROUTING_ARGS`.
+
+Then export with `kicad-cli`. The current board: **DRC 0 errors,
 0 unconnected** (8 silk warnings). The `fab/` folder holds the Gerber + drill zip (for
 JLCPCB/PCBWay: 2 layers, 1.6 mm FR-4, 100 × 100 mm), the BOM and
 `espressolog-board-1to1-print.pdf` (black and white: pads with their holes,
@@ -379,8 +394,10 @@ short with (a2) fitted got around both series photoMOS. The layout now:
 - **`Machine` nets keep 2 mm from everything of ours** and 1 mm from each
   other. That covers every `*_RAW` net (incl. J4 `+`, J5 `Disp-P4`, the J3
   NTC), pos 1 and the drive chains. The exceptions:
-  - a track leaving an XH header or jumper pin may pass that part's other
-    pins at 1.2 mm (the machine's own pitch);
+  - a machine track may pass an XH header's or (a) jumper's pins at 1.2 mm
+    (the machine's own pitch). The rule is written for tracks leaving that
+    part, but its condition covers ANY machine track beside ANY of those
+    pins, so DRC does not hold a foreign machine track to 2 mm there;
   - the hand-laid (locked) ground tracks may pass their connector's machine
     pins at 1.2 mm (J4/J24 and J5/J25 only). The router's GND gets no
     exception;
@@ -528,11 +545,9 @@ R36–R25 (gate readback – `ARM`) and JP4–R26 (selftest – GND) are now
 ## For the 1:1 print and bring-up (not Gerber changes)
 
 From the final and pre-order reviews:
-- **Wrong-header plugs:** try every harness plug and OUT cable in every
-  wrong header. A smaller XH plug probably seats offset in a larger header.
-  The pairs are named on the silk; if plugs do seat, consider widening the
-  gaps between IN headers in a later revision. The worst pairings give a held
-  lever press (the flow or NTC plug in J2 IN).
+- **Wrong-header plugs:** closed for the harness plugs by the paper test
+  (2026-11-25, below). Still try each OUT cable in each wrong OUT header when
+  the cables arrive; the worst pairing is a smaller plug in J22.
 - **Plug clearance:** mate a plug on each OUT header with its IN header
   fitted (~1.2 mm between bodies), and check adjacent OUT plugs (~2 mm).
 - **The `2CUP_RAW` lane runs 1.2 mm from the right edge, with A2_LEG above
@@ -552,9 +567,10 @@ From the final and pre-order reviews:
 - **Not in the BOM** (it lists only the schematic parts): DIL16 sockets ×3,
   DIL08 sockets ×4, jumper shunts ×3, the four OUT cables, the devkit and its
   1×22 female headers ×2.
-- **Firmware:** this board reads the 1Cup photoMOS 1 `Q` on GPIO11. Flash
-  the branch firmware (`30beb28`) before any `drive` bench run; firmware from
-  `main` reads it on GPIO1, which here is the floating NTC_ADC net.
+- **Firmware:** this board reads the 1Cup photoMOS 1 `Q` on GPIO11.
+  **Firmware 0.15.2 and later read it there; 0.15.1 and earlier read GPIO1**,
+  which on this board is the NTC_ADC net. Check the boot line before any
+  `drive` bench run.
 
 ## Paper test: DONE 2026-11-25
 
@@ -576,7 +592,7 @@ and upright resistors; the 2-pin jumper header.
 
 **Checked with the plugs:**
 - **A smaller harness plug does NOT seat in a larger header**, so the
-  wrong-header worry below is closed for these plugs.
+  wrong-header worry (top of this file) is closed for these plugs.
 - **A plug on a vertical OUT header clears the plug in the side-entry header
   in front of it.**
 
@@ -585,15 +601,11 @@ board (mounting holes 3.5 mm in from each corner, 3.2 mm; 20–25 mm headroom
 above the board for the vertical plugs; nothing conductive along the right
 edge or at H2).
 
-## Before ordering
+## Ordering
 
-1. **A layout review in a fresh context**, against the machine-zone rules in
-   `docs/board-and-perfboard.md` and this file.
-2. **Print `fab/espressolog-board-1to1-print.pdf` at 100 %** (check that
-   the 100 mm outline measures 100 mm). Then press in the real parts:
-   - the devkit (25.4 mm between columns);
-   - a side-entry and a vertical XH header of each size, with the original
-     harness plugs;
-   - a BC547, an AQY212EH, a DIL08PZ and a DIL16 socket;
-   - the 1 µF MKT and the 100 nF discs.
-3. Upload `fab/espressolog-board-gerbers.zip`.
+Done: the layout reviews in fresh contexts (five, 2026-11-24) and the paper
+test (above). What is left:
+1. Upload `fab/espressolog-board-gerbers.zip`: 2 layers, 1.6 mm FR-4,
+   100 × 100 mm, defaults otherwise.
+2. Parts the perfboard build did not need: vertical XH headers (2, 3, 4 and
+   5 pin), a 2-pin side-entry XH header, four XH cables for the OUT side.

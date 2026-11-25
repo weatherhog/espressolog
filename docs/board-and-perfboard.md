@@ -139,11 +139,11 @@ even probe them. GPIO33 and 34 are internal too and simply not broken out,
 so the full unusable set is **33–37**, as CLAUDE.md states.
 
 38–42 are the drive allocation, decided 2026-10-29 — 38 became the
-**gate enable** on 2026-10-30, proposed, footprint reserved — and 1–2 the first two `Q` readbacks,
-decided 2026-10-30; since the drive layout (2026-11-04) the gate trigger is
+**gate enable** on 2026-10-30, proposed, footprint reserved — and 11 and 2 are the first two `Q` readbacks
+*(1–2, decided 2026-10-30, until the PCB moved the first to GPIO11 on 2026-11-24)*; since the drive layout (2026-11-04) the gate trigger is
 GPIO10 and the last three readbacks are GPIO47, 21 and 9 (CLAUDE.md's DRIVE
 table; "Drive-side layout" below). *("chosen at layout" until then.)*
-None is named in `main.cpp` yet.
+`main.cpp` names all of them from 0.13.0 *("None is named in `main.cpp` yet" until then)*.
 
 ◆ **THE ONBOARD RGB LED IS ON GPIO48 — SETTLED 2026-10-15 BY A TWO-POINT
 TEST. So GPIO38 is NOT the LED** *(this said "is FREE" until 2026-10-29 — it
@@ -570,11 +570,14 @@ onto the board: each machine connector gets an IN header (side-entry, top
 edge) that the original harness plug mates, and an OUT header (vertical,
 right behind it) with a ready-made XH cable to the machine board, joined pin
 k to pin k for every line. **J4 `+` and J5 `Disp-P4` then cross the board as
-isolated pass-through traces: no pad, test point, via stub or pour near
-them, 2 mm from everything, and still read-only — nothing connects to
-them.** The J3 NTC becomes a fourth pass-through, its tap footprints-only.
-**Operating consequence: the machine's switches, display, flowmeter and NTC
-all run through the PCB. Without it the machine runs only with the original
+isolated pass-through traces: no pad but their own header pins, no test
+point, via stub or pour near them, 2 mm from everything of ours, and still
+read-only — nothing connects to them.** The J3 NTC gets a fourth
+pass-through, its tap footprints-only, **but the NTC plug stays on the
+machine's own J3 header until the measuring run** (`hardware/pcb/README.md`,
+"The J3 NTC tap"): an open pass-through reads cold and keeps the heater on.
+**Operating consequence: the machine's switches, display and flowmeter all
+run through the PCB. Without it the machine runs only with the original
 plugs back on its own headers.** The pin map, the pre-power metering (a row
 per cable, same-direction vs reverse) and the layout are in
 `hardware/pcb/README.md`; everything below is the perfboard.
@@ -873,7 +876,7 @@ Pinout per `docs/phase-0-plan.md`: 1 1A̅ · 2 1B · 3 1R̅ · 4 1Q̄ · 5 2Q ·
 | Timing, drive | per channel: **330 K** from pin 15 (or 7) to 3V3, **1 µF** between pins 14 and 15 (or 6 and 7) — soldered, never socketed |
 | Timing, gate | **470 K / 1 µF** on U3 pins 14/15 |
 | `Q` → cells | U1 pin 13 → F′16 (cell r 12) · U1 pin 5 → F′21 (r 17) · U2 pin 13 → F′26 (r 22) · U2 pin 5 → F′31 (r 27) |
-| `Q` readbacks, 1 K each | U1 pin 13 → GPIO1 K12 (**GPIO11 on the PCB**, 2026-11-24) · U1 pin 5 → GPIO2 K13 · U2 pin 13 → GPIO47 K25 · U2 pin 5 → GPIO21 K26 · U3 pin 13 → GPIO9 A23 (wire under the devkit) |
+| `Q` readbacks, 1 K each | U1 pin 13 → **GPIO11 A25** *(GPIO1 K12 until firmware 0.15.2, 2026-11-25: the firmware reads this readback on GPIO11 on every board since)* · U1 pin 5 → GPIO2 K13 · U2 pin 13 → GPIO47 K25 · U2 pin 5 → GPIO21 K26 · U3 pin 13 → GPIO9 A23 (wire under the devkit) |
 | Decoupling | 100 nF from each pin 16 to GND, at the chip |
 | Not connected | every pin 4 and 12 (`Q̄`) |
 | Jumper (b) | **C′34** (LED rail) – **C′35** (3V3 bus); open until the bench test |

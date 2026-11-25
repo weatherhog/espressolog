@@ -25,8 +25,11 @@
 # A connector's or jumper's own pin pitch is not a layout choice: the XH
 # headers (IN J2-J5, OUT J22-J25) are 2.5 mm, JP1/JP2 2.54 mm, so a track
 # leaving one pin passes its neighbour at ~1.45 mm. That is the machine's
-# own connector, as in its harness. Only tracks leaving the connector's own
-# pins get this -- anything else near a connector pin still needs 2 mm.
+# own connector, as in its harness. MEANT for tracks leaving the connector's
+# own pins, but the condition is wider: ANY machine track gets 1.2 mm to ANY
+# pin of these parts (KiCad has no "same footprint as this track's pad"
+# test). The machine copper is hand-laid and measured; DRC does not hold a
+# foreign machine track to 2 mm here (pre-push review SHOULD 9).
 (rule "machine fan track beside its connector's other pins"
   (condition "A.Type == 'Track' && A.hasNetclass('Machine') && B.Type == 'Pad' && (B.memberOfFootprint('J2') || B.memberOfFootprint('J3') || B.memberOfFootprint('J4') || B.memberOfFootprint('J5') || B.memberOfFootprint('J22') || B.memberOfFootprint('J23') || B.memberOfFootprint('J24') || B.memberOfFootprint('J25') || B.memberOfFootprint('JP1') || B.memberOfFootprint('JP2'))")
   (constraint clearance (min 1.2mm)))

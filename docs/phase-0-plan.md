@@ -626,7 +626,7 @@ two. Two '221s are on the board and cover the levers — plus a third for the
 proposed arm-window gate, whose spare channel is not a drive channel; the
 buttons would need
 two more chips, four more trigger GPIOs — **eight pins if each channel gets
-a `Q` readback like the levers', against five free after the proposed gate
+a `Q` readback like the levers', against four free after the proposed gate
 and readbacks (12–14 and 18 since the PCB moved a readback to GPIO11, 2026-11-24 —
 11–14 and 18 from the drive layout, 2026-11-04 — none of them ADC1) — so the GPIO budget would then bind** — and the board space
 for both, none of
@@ -1385,7 +1385,7 @@ does not work:
     the whole arm window looks like a normal press until a second fault
     turns it into a real hold. So each `Q` goes through a series resistor
     (1 K proposed) into a GPIO
-    input — GPIO11 (GPIO1 until the PCB, 2026-11-24), GPIO2, GPIO47, GPIO21 and GPIO9 (the gate's), fixed by the
+    input — GPIO11 (GPIO1 until the PCB, 2026-11-24), GPIO2, GPIO47, GPIO21 and GPIO9 (the gate's), the last four fixed by the
     drive layout 2026-11-04 *("three of 9-14, 18, 21, 47, chosen at layout" until then)*.
     **The gate trigger is not GPIO18**: GPIO15–18 emit a ~60 µs low pulse at
     power-up, and a falling `A̅` fires the gate. Harmless while GPIO38's

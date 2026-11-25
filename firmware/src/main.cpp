@@ -19,7 +19,10 @@
 #include <esp_timer.h>
 #include <driver/gpio.h>
 
-const char* FIRMWARE_VERSION = "0.15.1";
+// 0.15.2: the bench `drive` command reads the 1Cup photoMOS 1 Q on GPIO11
+// (GPIO1 up to 0.15.1). 30beb28 moved the pin while still reporting 0.15.1,
+// so a 0.15.1 built from that commit already reads GPIO11.
+const char* FIRMWARE_VERSION = "0.15.2";
 const char* DETECTOR_VERSION = "0a.7";
 
 static ScaleManager scales;
@@ -880,7 +883,8 @@ static void spoolFakeShot(Stream& out) {
 
 // ---- drive side, BENCH ONLY (docs/drive-bench.md) --------------------------
 // The 74HC221 drive block's pins, fixed by the drive layout
-// (docs/board-and-perfboard.md, "Drive-side layout"; CLAUDE.md DRIVE table).
+// (docs/board-and-perfboard.md, "Drive-side layout"; CLAUDE.md DRIVE table;
+// on the PCB hardware/pcb/gen_schematic.py, the devkit maps A and K).
 // Channel n's trigger fires U1/U2 and its Q comes back through 1 K.
 struct DriveChan { const char* name; uint8_t trig; uint8_t q; };
 static constexpr DriveChan DRIVE_CH[4] = {

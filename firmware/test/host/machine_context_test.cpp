@@ -890,15 +890,24 @@ int main() {
     for (uint16_t d = 1; d <= 40; d++) m.onReading(timer(d, t + d * 100000), false);
     m.onPourStart(t + 40 * 100000 + 41000, false);
     assert(m.context().machine_timer_dl == 0);
-    // And a run that reappears after a frame gap is not the same run.
+    // A run is its date: the same run picked up after a 3 s dropout (its
+    // readings still date its start) goes on counting past the stop...
     MachineContextTracker k;
     k.onPourStart(t);
     for (uint16_t d = 1; d <= 100; d++) k.onReading(timer(d, t + d * 100000), false);
     k.onPourStop(t + 100 * 100000 + 10000, 2000);           // still timing
-    const uint32_t back = t + 100 * 100000 + 3000000;        // 3 s of no frames
+    const uint32_t back = t + 130 * 100000;                  // 3 s of no frames
     for (uint16_t d = 130; d <= 200; d++) k.onReading(timer(d, back + (d - 130) * 100000), false);
-    assert(k.context().machine_timer_dl == 100);
-    printf("no timer carried from a stale display; a gap ends the run OK\n");
+    assert(k.context().machine_timer_dl == 200);
+    // ...while a flush seen after a dropout -- a later date -- does not.
+    MachineContextTracker f;
+    f.onPourStart(t);
+    for (uint16_t d = 1; d <= 100; d++) f.onReading(timer(d, t + d * 100000), false);
+    f.onPourStop(t + 100 * 100000 + 10000, 2000);
+    const uint32_t fl = t + 100 * 100000 + 3000000;          // flush started ~2 s after
+    for (uint16_t d = 10; d <= 200; d++) f.onReading(timer(d, fl + (d - 10) * 100000), false);
+    assert(f.context().machine_timer_dl == 100);
+    printf("no timer carried from a stale display; a run is its date across a gap OK\n");
   }
 
   {
@@ -990,9 +999,9 @@ int main() {
     printf("several flushes before a late stop do not replace the shot's run OK\n");
   }
   {
-    // 25. Review of 7b27abe: a misread LOW frame splits the run just before
-    //     the stop is confirmed; the run still dates from its real start, so
-    //     it is the run in force at the stop and goes on counting.
+    // 25. Review of 7b27abe: a misread LOW frame just before the stop is
+    //     confirmed must not make the run look as if it began after the
+    //     stop; it is the run in force at the stop and goes on counting.
     MachineContextTracker k;
     uint32_t t = 1000000;
     k.onReading(temp(95, t), false);
@@ -1061,6 +1070,56 @@ int main() {
     m.onPourStop(u, (u - stop) / 1000);
     assert(m.context().machine_timer_dl == 280);
     printf("four flushes before a late freeze keep the shot's run OK\n");
+  }
+
+  {
+    // 29. Review of 2c58c24: one unchecked frame after a break could set the
+    //     run. A misdecoded non-TIMER frame, then a frame misread LOW (12.2
+    //     for 20.2), then the real run: the run keeps counting to 28.0.
+    MachineContextTracker m;
+    uint32_t t = 1000000;
+    m.onPourStart(t);
+    for (uint16_t d = 1; d <= 200; d++) m.onReading(timer(d, t + d * 100000), false);
+    m.onReading(temp(95, t + 200 * 100000 + 50000), false);   // misdecoded frame
+    m.onReading(timer(201, t + 201 * 100000), false);
+    m.onReading(timer(122, t + 202 * 100000), false);         // misread low
+    for (uint16_t d = 203; d <= 280; d++) m.onReading(timer(d, t + d * 100000), false);
+    m.onPourStop(t + 290 * 100000, 500);
+    assert(m.context().machine_timer_dl == 280);
+    printf("a misread after a break does not take over the run OK\n");
+  }
+  {
+    // 30. Review of 2c58c24: a flush whose first counted-looking frame is
+    //     misread HIGH (8.2 for 0.2) must not date it before the stop.
+    MachineContextTracker m;
+    uint32_t t = 1000000;
+    m.onPourStart(t);
+    for (uint16_t d = 1; d <= 280; d++) m.onReading(timer(d, t + d * 100000), false);
+    t += 280 * 100000;
+    for (int i = 1; i <= 10; i++) m.onReading(temp(95, t + i * 41000), false);
+    const uint32_t stop = t + 10 * 41000;
+    const uint32_t fl = stop + 400000;
+    m.onReading(timer(1, fl + 100000), false);
+    m.onReading(timer(82, fl + 200000), false);               // misread high
+    for (uint16_t d = 3; d <= 15; d++) m.onReading(timer(d, fl + d * 100000), false);
+    m.onPourStop(stop + 2000000, 2000);
+    assert(m.context().machine_timer_dl == 280);
+    printf("a flush's misread first frame does not date it before the stop OK\n");
+  }
+  {
+    // 31. A run split by a misdecoded non-TIMER frame just before the stop
+    //     is still the run in force at the stop: its date, not its frames'
+    //     continuity, says so.
+    MachineContextTracker m;
+    uint32_t t = 1000000;
+    m.onPourStart(t);
+    for (uint16_t d = 1; d <= 240; d++) m.onReading(timer(d, t + d * 100000), false);
+    m.onReading(temp(95, t + 240 * 100000 + 50000), false);   // misdecoded
+    for (uint16_t d = 241; d <= 250; d++) m.onReading(timer(d, t + d * 100000), false);
+    m.onPourStop(t + 250 * 100000 + 10000, 1000);             // stop at ~24.0 s
+    for (uint16_t d = 251; d <= 300; d++) m.onReading(timer(d, t + d * 100000), false);
+    assert(m.context().machine_timer_dl == 300);
+    printf("a run split by a misdecoded frame is still the stop's run OK\n");
   }
 
   printf("\nall machine context tests passed\n");

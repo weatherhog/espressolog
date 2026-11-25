@@ -1726,10 +1726,13 @@ static void shotCompleted() {
   // A shot can finish straight from POURING (a lift during the pour, a scale
   // lost mid-pour), never passing the SETTLING freeze in loop(): freeze the
   // machine timer at its stop here too, before handleShotComplete() copies
-  // it. A no-op when SETTLING already did (review of 3f34199).
+  // it. A no-op when SETTLING already did (review of 3f34199). Not for the
+  // sub-5 g flat abort, which sets no stop_ms (0) -- freezing there would
+  // freeze at first drip; it is a reject, excluded at ingest.
   {
     const ShotResult& res = detector.result();
-    machine_ctx.onPourStop(micros(), millis() - (res.started_at_ms + res.stop_ms));
+    if (res.stop_ms > 0)
+      machine_ctx.onPourStop(micros(), millis() - (res.started_at_ms + res.stop_ms));
   }
   handleShotComplete(detector.result());
   char frame[96];

@@ -644,22 +644,22 @@ pour with no timer of its own (a hot-water draw, the display tap off or
 stale) stored the previous brew's or flush's; and it was read at
 completion, after the 5 s settle, so a flush pressed while SETTLING
 replaced it. Now (`machine_context.h`) the tracker follows the run on the
-glass apart from the stored value; pour start carries it only if it is
-live — a confirmed TIMER frame within 1 s and nothing else since — and
-`onPourStop()` freezes the value at the detector's backdated stop, at the
-SETTLING transition or, for a shot finished straight from POURING, at
-completion: a restart after the stop is undone, and only the run in force
-at the stop may keep counting, unbroken. **The exception: a flush pressed
-after pump-off but BEFORE that stop** — while the cup still drips and the
-weight is not yet flat — is the latest run at the stop and is stored as
-the shot's. Also: a pour whose timer is no longer on the display when
-POURING is confirmed (first drip + ~300 ms + BLE and loop latency) reads 0;
-a misread low frame, or a frame gap over 1 s — a bus dropout or a `loop()`
-stall — while the pump outlasts the stop freezes it early (short, still its
-own run); one frame reading above what the timer can have reached, or
-below the run without a second frame agreeing, is ignored as a misread; and
-seven or more new runs between the stop and its freeze (restarts, or a run
-picked up again after a frame gap) push the shot's run out (0).
+glass apart from the stored value. **A run is its date**: every TIMER frame
+dates the run's start (frame time minus reading), a frame counts only when
+the frame before it was TIMER and gives the same date within 0.3 s — so a
+misread digit, high or low, counts for nothing — and a counted frame with
+another date is another run (a restart, a flush). Pour start carries the
+run only if it is live — a counted TIMER frame within 1 s and no other
+frame since — and `onPourStop()` freezes the value at the detector's
+backdated stop, at the SETTLING transition or, for a shot finished straight
+from POURING, at completion: it takes the newest run of the pour that began
+at or before the stop, and only that run, recognised by its date, may keep
+counting. **The exception: a flush pressed after pump-off but BEFORE that
+stop** — while the cup still drips and the weight is not yet flat — is the
+latest run at the stop and is stored as the shot's. Also: a pour whose timer
+is no longer on the display when POURING is confirmed (first drip + ~300 ms
++ BLE and loop latency) reads 0, and eight or more new runs between the
+stop and its freeze push the shot's run out (0).
 **Records from 0.16.0 and earlier keep the old behaviour**, which is why
 the PWA's `shotTime()` (`web/src/components.jsx`) still trusts
 `machine_timer_s` only inside a window around the press-to-stop span — and

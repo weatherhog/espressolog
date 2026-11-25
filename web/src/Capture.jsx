@@ -210,8 +210,10 @@ export default function Capture({ shots, beans, justSaved, onSaved }) {
               : "—"}
             unit="g" label="Settled" size={30} color={T.flow} />
         </div>
-        {/* The two halves of the machine's time: how long the puck took to
-            drip (pre-infusion and saturation), then the pour the scale saw. */}
+        {/* Press to first drip (pre-infusion and saturation), then the pour
+            the scale saw, first drip to a flat weight. They sum to the
+            press-to-stop span, not to the machine's timer: the pour ends
+            when the drips stop, ~1 s after pump-off. */}
         <div style={{ fontFamily: MONO, fontSize: 12, color: T.inkSoft, marginBottom: 32 }}>
           first drip {pending.first_drip_ms != null ? `${(pending.first_drip_ms / 1000).toFixed(1)} s` : "—"}
           {" · "}pour {pending.total_s != null ? `${pending.total_s.toFixed(1)} s` : "—"}

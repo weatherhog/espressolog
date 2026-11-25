@@ -46,9 +46,10 @@
 -- There is no field to do better with.
 --
 --   settle_tail_ms  last stored sample's t_ms - stop_ms
---   ended_by_lift   1: the curve ends before the settle window could have
---                      closed -- a lift, during the pour or while settling
---                      (or, from 0a.8, a scale that went quiet: above)
+--   ended_by_lift   1: the samples end before the settle window could have
+--                      closed -- a lift, during the pour or while settling,
+--                      or, from 0a.8, a scale that went quiet (above: the
+--                      window itself may then have closed on time)
 --                   0: settled its full window
 --                   NULL: cannot say -- no samples, stop_ms 0 (the sub-5 g
 --                      flat abort assigns none), or a detector this view

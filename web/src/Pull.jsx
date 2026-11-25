@@ -289,7 +289,7 @@ export default function Pull({ shots, beans, activeBeanId, onIngested }) {
             ))}
           </div>
           <div style={{ marginTop: 6, fontFamily: MONO, fontSize: 9.5, color: T.inkSoft, letterSpacing: "0.06em" }}>
-            G × SECONDS FROM FIRST DRIP — the box the trace should exit through
+            G × SECONDS FROM POUR START — the box the trace should exit through
           </div>
         </Panel>
 

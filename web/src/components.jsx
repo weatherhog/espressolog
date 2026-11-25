@@ -12,13 +12,36 @@ export function Eyebrow({ children, style }) {
 // The headline shot time is the machine's own: pump on to pump off, the
 // number on the display and the one recipes mean by "25-30 s" (counted from
 // pump start, pre-infusion included). total_s is the scale's time, first
-// drip to a flat weight, ~10 s shorter with pre-infusion. Shots without a
-// display reading fall back to the press-to-stop span, then to the scale's
-// time, and the label says which, so the three are never shown as one.
+// drip to a flat weight, ~10 s shorter with pre-infusion.
+//
+// machine_timer_s is only trusted when it describes THIS shot's pump run.
+// The firmware keeps the last timer it saw until a new one replaces it, so
+// the stored value can be another run's: the previous brew on a hot-water
+// draw (the display runs no timer then) or with the display tap off; a
+// flush pressed inside the 5 s settle (the timer is copied at completion);
+// and, before firmware 0.9.7, a misread " 95" idle frame stored as 9.5 s.
+// So it needs a lever-A press (switch_direction: 1Cup or 2Cup) and must
+// fit the press-to-stop span p, which is pump-off plus the drips before the
+// weight went flat: ~1 s more than the timer on a clean shot. The window is
+// lopsided on purpose. Every wrong timer above reads far BELOW p (a flush,
+// 9.5 s) or comes without a lever-A press (a hot-water draw); but p itself
+// reads up to ~7 s HIGH on a lift-terminated shot from detector 0a.7 or
+// earlier (stop_ms overwritten, CLAUDE.md "Shot detection"; shot 212:
+// timer 35.9, p 42.3), and there the timer is the right number.
+// Not caught: a stale timer from the previous brew with the display tap
+// off that happens to land inside the window.
+// Otherwise the press-to-stop span itself ("Pump"), then the scale's own
+// time ("Pour"); the label says which, so the three never pass as one.
+const TIMER_UNDER_P_MAX_S = 9; // lift shift (~7 s) plus drips
+const TIMER_OVER_P_MAX_S = 3;
 export function shotTime(shot) {
-  if (shot.machine_timer_s != null) return { s: shot.machine_timer_s, label: "Time" };
-  if (shot.pump_to_stop_s != null) return { s: shot.pump_to_stop_s, label: "Press→stop" };
-  if (shot.total_s != null) return { s: shot.total_s, label: "Pour" };
+  const m = shot.machine_timer_s, p = shot.pump_to_stop_s;
+  if (m != null && p != null && shot.switch_direction != null && m > 0
+      && p - m <= TIMER_UNDER_P_MAX_S && m - p <= TIMER_OVER_P_MAX_S) {
+    return { s: m, label: "Time" };
+  }
+  if (p != null) return { s: p, label: "Pump" };
+  if (shot.total_s) return { s: shot.total_s, label: "Pour" };
   return { s: null, label: "Time" };
 }
 

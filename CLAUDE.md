@@ -1578,8 +1578,9 @@ State machine `IDLE → ARMED → POURING → SETTLING → DONE`:
   DERIVES IT** from the samples: a settle that ran its course ends ≥ 7 s
   after `stop_ms` (≥ 5 s after a forced stop, `stop_ms` ≥ 60000), capped
   below the `t_ms` ceiling of 65535, and a lift sooner. It judges only
-  detectors 0a.5–0a.8 (anything else is NULL) and reads a 0a.8 settle or
-  pour the quiet-scale tick cut short as 1; the migration lists its misses. Use it
+  detectors 0a.5–0a.8 (anything else is NULL) and reads 1 on any 0a.8 curve whose samples stop early because the
+  yield scale went quiet -- including a settle that then closed on time
+  with a full settle's yield (shot 214); the migration lists its misses. Use it
   rather than `settle_offset_g = 0`, which a 0a.8 lift no longer reads.
 
   **The next two paragraphs are about records from 0a.7 and earlier**,

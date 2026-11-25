@@ -1007,6 +1007,62 @@ int main() {
     printf("a run split by a misread low frame keeps its start OK\n");
   }
 
+  {
+    // 26. Review of 520f3ff: ONE low frame is a misread, not a restart --
+    //     as the last frame before the stop, and as the last before pour
+    //     start. A real restart (two agreeing frames) still counts.
+    MachineContextTracker m;
+    uint32_t t = 1000000;
+    m.onReading(temp(95, t), false);
+    m.onPourStart(t + 41000);
+    for (uint16_t d = 1; d <= 280; d++)
+      m.onReading(timer(d == 280 ? 3 : d, t + 100000 + d * 100000), false);
+    t += 100000 + 280 * 100000;
+    for (int i = 1; i <= 100; i++) m.onReading(temp(95, t + i * 41000), false);
+    m.onPourStop(t + 100 * 41000, 2000);
+    assert(m.context().machine_timer_dl == 279);   // not 0.3 s
+    MachineContextTracker k;
+    t = 1000000;
+    for (uint16_t d = 1; d <= 40; d++) k.onReading(timer(d == 40 ? 2 : d, t + d * 100000), false);
+    k.onPourStart(t + 40 * 100000 + 41000);
+    assert(k.context().machine_timer_dl == 39);
+    for (uint16_t d = 1; d <= 30; d++) k.onReading(timer(d, t + 4200000 + d * 100000), false);
+    assert(k.context().machine_timer_dl == 30);    // a real restart takes over
+    printf("a single low TIMER frame is not a restart OK\n");
+  }
+  {
+    // 27. Review of 520f3ff: the misread bound restarts with the run. A
+    //     28.0 s run restarts into 0.1, 0.2, ...; its last frame misread as
+    //     25.0 must not pass on the old run's peak.
+    MachineContextTracker m;
+    uint32_t t = 1000000;
+    m.onPourStart(t);
+    for (uint16_t d = 1; d <= 280; d++) m.onReading(timer(d, t + d * 100000), false);
+    const uint32_t u = t + 280 * 100000;
+    for (uint16_t d = 1; d <= 30; d++)
+      m.onReading(timer(d == 30 ? 250 : d, u + d * 100000), false);
+    assert(m.context().machine_timer_dl == 29);
+    printf("the misread bound restarts with the run OK\n");
+  }
+  {
+    // 28. Four flushes between the stop and a late freeze keep the shot's run.
+    MachineContextTracker m;
+    uint32_t t = 1000000;
+    m.onPourStart(t);
+    for (uint16_t d = 1; d <= 280; d++) m.onReading(timer(d, t + d * 100000), false);
+    const uint32_t stop = t + 280 * 100000 + 500000;
+    uint32_t u = stop;
+    for (int f = 0; f < 4; f++) {
+      for (int i = 1; i <= 10; i++) m.onReading(temp(95, u + i * 41000), false);
+      u += 10 * 41000;
+      for (uint16_t d = 1; d <= 30; d++) m.onReading(timer(d, u + d * 100000), false);
+      u += 30 * 100000;
+    }
+    m.onPourStop(u, (u - stop) / 1000);
+    assert(m.context().machine_timer_dl == 280);
+    printf("four flushes before a late freeze keep the shot's run OK\n");
+  }
+
   printf("\nall machine context tests passed\n");
   return 0;
 }

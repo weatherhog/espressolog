@@ -656,9 +656,10 @@ the shot's. Also: a pour whose timer is no longer on the display when
 POURING is confirmed (first drip + ~300 ms + BLE and loop latency) reads 0;
 a misread low frame, or a frame gap over 1 s — a bus dropout or a `loop()`
 stall — while the pump outlasts the stop freezes it early (short, still its
-own run); a reading the timer cannot have reached is ignored as a misread;
-and more than four restarts between the stop and its freeze lose the run
-(0).
+own run); one frame reading above what the timer can have reached, or
+below the run without a second frame agreeing, is ignored as a misread; and
+seven or more new runs between the stop and its freeze (restarts, or a run
+picked up again after a frame gap) push the shot's run out (0).
 **Records from 0.16.0 and earlier keep the old behaviour**, which is why
 the PWA's `shotTime()` (`web/src/components.jsx`) still trusts
 `machine_timer_s` only inside a window around the press-to-stop span — and

@@ -114,6 +114,8 @@ public:
   // Frames come every ~41 ms; a gap longer than this between two of them,
   // or between the latest TIMER frame and pour start, breaks a timer run.
   static constexpr uint32_t TIMER_GAP_US = 1000000;   // 1 s
+  // Two low frames agree on a restart when they date its start this close.
+  static constexpr uint32_t RESTART_AGREE_US = 300000;  // 0.3 s
 
   // Call on every fresh display reading. `touched_latch` is
   // DisplayBus::setpointTouched(); the caller clears it at pour start.
@@ -171,27 +173,55 @@ public:
     // run_dl (the machine restarted its timer) or at the first confirmed
     // frame after anything else -- another frame, a gap -- so a run is never
     // stitched across a break. Its start is the EARLIEST of at_us − reading
-    // over its frames, so a run split by a misread low frame still dates
-    // from its real start (review of 7b27abe).
+    // over its frames (review of 7b27abe).
     // timer_live: a run is going on right now. onPourStart() takes the carry
     // from here, never from what the last shot stored (review of 3f34199:
     // carrying mc's value let a frozen shot's timer reach the next shot).
-    if (fresh && (r.mode != DisplayBus::Mode::TIMER || gap)) timer_live = false;
+    if (fresh && (r.mode != DisplayBus::Mode::TIMER || gap)) {
+      timer_live = false;
+      restart_pending = false;
+    }
     // A reading the timer cannot have reached is a misread and is ignored:
     // more than 2 tenths above the highest reading so far plus the tenths
     // elapsed since it (review of 7b27abe: after the stop, one frame reading
     // 750 in a 30 s run was followed and then frozen). Judged against the
-    // high-water mark, not run_dl, so the frames that continue a run after a
-    // misread LOW frame are not rejected. A first frame after a break has
-    // nothing to be judged against and is taken.
+    // high-water mark. A first frame after a break has nothing to be judged
+    // against and is taken.
     const bool plausible = !timer_live
         || r.timer_dl <= (uint32_t)hi_dl + (uint32_t)(r.at_us - hi_us) / 100000u + 2u;
-    if (timer_confirmed && plausible) {
-      const bool new_run = !timer_live || r.timer_dl < run_dl;
-      if (!timer_live || r.timer_dl >= hi_dl) { hi_dl = r.timer_dl; hi_us = r.at_us; }
+    // A READING BELOW THE RUN IS A RESTART ONLY WHEN A SECOND, DIFFERENT
+    // frame agrees: also below it, not lower than the first, and dating the
+    // run's start within RESTART_AGREE_US of it. One low frame alone is a
+    // misread and is ignored (review of 520f3ff: a run whose LAST frame
+    // decoded as 0.3 s stored 0.3 s). A real restart costs one frame, which
+    // the running maximum makes up at once.
+    uint32_t est = r.at_us - (uint32_t)r.timer_dl * 100000u;
+    bool take = timer_confirmed && plausible;
+    bool restart = false;
+    if (take && timer_live && r.timer_dl < run_dl) {
+      if (restart_pending && r.at_us != restart_frame_us && r.timer_dl >= restart_dl) {
+        const int32_t d = (int32_t)(est - restart_est_us);
+        if ((d < 0 ? -d : d) <= (int32_t)RESTART_AGREE_US) {
+          restart = true;
+          if (d > 0) est = restart_est_us;          // the earlier of the two
+        }
+      }
+      if (!restart) {                               // the first low frame: wait
+        restart_pending = true;
+        restart_dl = r.timer_dl;
+        restart_est_us = est;
+        restart_frame_us = r.at_us;
+        take = false;
+      }
+    }
+    if (take) {
+      const bool new_run = !timer_live || restart;
+      restart_pending = false;
+      // The misread bound restarts with the run (review of 520f3ff: kept at
+      // the old run's peak, it let a 25.0 s misread into a fresh 2 s run).
+      if (new_run || r.timer_dl >= hi_dl) { hi_dl = r.timer_dl; hi_us = r.at_us; }
       timer_live = true;
       last_timer_us = r.at_us;
-      const uint32_t est = r.at_us - (uint32_t)r.timer_dl * 100000u;
       if (new_run) {
         run_dl = 0;
         run_start_us = est;
@@ -409,8 +439,9 @@ public:
   // cup still dripping, the weight not yet flat) is the latest run AT the
   // stop and is stored as the shot's; a single misdecoded frame, or a frame gap over
   // TIMER_GAP_US, while the pump is still running after the stop freezes
-  // the value early (short, still its own run); more than N_RUNS restarts
-  // between the stop and this call lose the shot's run (0); the stop time is
+  // the value early (short, still its own run); N_RUNS − 1 (seven) or more
+  // new runs between the stop and this call -- restarts, and a run picked
+  // up again after a frame gap -- push the shot's run out (0); the stop time is
   // the scale's BLE arrival time, ~100-200 ms late.
   void onPourStop(uint32_t now_us, uint32_t ms_since_stop) {
     if (stopped) return;
@@ -562,12 +593,16 @@ private:
   uint32_t last_timer_us = 0;       // the latest confirmed TIMER frame
   uint16_t run_dl = 0;              // the run on the glass: its highest reading
   uint32_t run_start_us = 0;        // when it started, estimated from its readings
+  bool     restart_pending = false; // one frame read below the run (onReading)
+  uint16_t restart_dl = 0;
+  uint32_t restart_est_us = 0;
+  uint32_t restart_frame_us = 0;
   uint16_t hi_dl = 0;               // the highest reading since the last break...
   uint32_t hi_us = 0;               // ...and when: the misread bound (onReading)
   // The pour's runs, oldest first (onPourStart carries a live one in; each
   // restart before the stop adds one). onPourStop picks from these.
   struct Run { uint32_t start_us; uint16_t dl; };
-  static constexpr uint8_t N_RUNS = 4;
+  static constexpr uint8_t N_RUNS = 8;
   Run      runs[N_RUNS] = {};
   uint8_t  n_runs = 0;
   void pushRun() {

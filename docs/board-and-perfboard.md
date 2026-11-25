@@ -113,7 +113,7 @@ use nothing else"; see the retraction below.
 | 1 | **3V3** | | **GND** |
 | 2 | 3V3 | | GPIO43 / TX |
 | 3 | RST | | GPIO44 / RX |
-| **4** | **GPIO4** — `ESD4` clock | | **GPIO1** — `Q` readback |
+| **4** | **GPIO4** — `ESD4` clock | | **GPIO1** — J3 NTC, ADC1 (PROPOSED, PCB) *(`Q` readback until 2026-11-24)* |
 | **5** | **GPIO5** — `ESD1` data | | **GPIO2** — `Q` readback |
 | **6** | **GPIO6** — flow `#` | | **GPIO42** — trigger, 1Cup photoMOS 1 |
 | **7** | **GPIO7** — 1Cup | | **GPIO41** — trigger, 1Cup photoMOS 2 |
@@ -126,7 +126,7 @@ use nothing else"; see the retraction below.
 | 14 | GPIO46 † | | GPIO0 † |
 | 15 | **GPIO9** — gate `Q` readback, proposed | | GPIO45 † |
 | 16 | **GPIO10** — gate trigger, proposed | | **GPIO48 — onboard RGB LED** ◆ |
-| 17 | GPIO11 | | **GPIO47** — `Q` readback, 2Cup photoMOS 1 |
+| 17 | **GPIO11** — `Q` readback, 1Cup photoMOS 1 (PCB, 2026-11-24) | | **GPIO47** — `Q` readback, 2Cup photoMOS 1 |
 | 18 | GPIO12 | | **GPIO21** — `Q` readback, 2Cup photoMOS 2 |
 | 19 | GPIO13 | | GPIO20 † |
 | 20 | GPIO14 | | GPIO19 † |
@@ -139,11 +139,11 @@ even probe them. GPIO33 and 34 are internal too and simply not broken out,
 so the full unusable set is **33–37**, as CLAUDE.md states.
 
 38–42 are the drive allocation, decided 2026-10-29 — 38 became the
-**gate enable** on 2026-10-30, proposed, footprint reserved — and 1–2 the first two `Q` readbacks,
-decided 2026-10-30; since the drive layout (2026-11-04) the gate trigger is
+**gate enable** on 2026-10-30, proposed, footprint reserved — and 11 and 2 are the first two `Q` readbacks
+*(1–2, decided 2026-10-30, until the PCB moved the first to GPIO11 on 2026-11-24)*; since the drive layout (2026-11-04) the gate trigger is
 GPIO10 and the last three readbacks are GPIO47, 21 and 9 (CLAUDE.md's DRIVE
 table; "Drive-side layout" below). *("chosen at layout" until then.)*
-None is named in `main.cpp` yet.
+`main.cpp` names all of them from 0.13.0 *("None is named in `main.cpp` yet" until then)*.
 
 ◆ **THE ONBOARD RGB LED IS ON GPIO48 — SETTLED 2026-10-15 BY A TWO-POINT
 TEST. So GPIO38 is NOT the LED** *(this said "is FREE" until 2026-10-29 — it
@@ -565,6 +565,44 @@ A14 GPIO6 (flow `#`), A15 GPIO7 (1Cup), A16 GPIO15 (2Cup), A17 GPIO16
 (Steam), A18 GPIO17 (Water); GPIO8 is A20. **A29 is 5Vin — nothing is
 connected at or beside it.**
 
+**THE PCB DOES THIS DIFFERENTLY — decided 2026-11-24.** The T-pieces move
+onto the board: each machine connector gets an IN header (side-entry, top
+edge) that the original harness plug mates, and an OUT header (vertical,
+right behind it) with a ready-made XH cable to the machine board, joined pin
+k to pin k for every line. **J4 `+` and J5 `Disp-P4` then cross the board as
+isolated pass-through traces: no pad but their own header pins, no test
+point, via stub or pour near them, 2 mm from everything of ours, and still
+read-only — nothing connects to them.** The J3 NTC gets a fourth
+pass-through, its tap footprints-only, **but the NTC plug stays on the
+machine's own J3 header until the measuring run** (`hardware/pcb/README.md`,
+"The J3 NTC tap"): an open pass-through reads cold and keeps the heater on.
+**Operating consequence: the machine's switches, display and flowmeter all
+run through the PCB. Without it the machine runs only with the original
+plugs back on its own headers.** The pin map, the pre-power metering (a row
+per cable, same-direction vs reverse) and the layout are in
+`hardware/pcb/README.md`; everything below is the perfboard.
+
+**The PCB crosses the '221 assignment** (pre-order review, 2026-11-24): U1
+drives photoMOS 1 of each chain (U4, U6) and U2 photoMOS 2 of each (U5, U7),
+where the netlist table below has U1 = 1Cup and U2 = 2Cup. Both photoMOS of
+a chain on one package meant a single package fault, such as an unseated
+ground pin, could close both. GPIOs, net names and firmware are unchanged:
+GPIO41 now lands on U2 pin 1 and GPIO40 on U1 pin 9.
+
+**Plug orientation, read off the machine-side plugs, 2026-11-24 (Lucas).**
+Each was seen from its wire end with the latches up. The latch faces up on
+a side-entry XH header (also confirmed), so left and right mirror against
+a board seen from above with the opening away:
+- **J4: green `+` in the MIDDLE**, yellow `T` on his right, black `#` on his
+  left. On the PCB that is pad 1 `#`, pad 2 `+`, pad 3 `T`.
+  `docs/phase-0-status.md`'s "`T` (middle)" was wrong, and the first PCB
+  T-piece commit tied `+` to ground because of it.
+- **J5: the unbranched conductor (`Disp-P4`) on his left**, so pad 1. With
+  the positional order, that gives pad 2 `ESD4`, pad 3 `ESD1`, pad 4
+  `VSS`.
+- **J2: the +5 V common on his left**, so pad 1. Steam, 2Cup, 1Cup and
+  Water follow on pads 2–5.
+
 **Harness headers, top edge, side-entry XH, plugs entering from the top:**
 
 | Header | Pins | Notes |
@@ -606,6 +644,8 @@ board's own, so with the machine disconnected the only path is through
 the sensor's electronics, which may read finite or OL. Then meter
 from each conductor at the T-piece's crimped plug that mates the machine header (the soldered header end reads the same) to the board hole
 this layout names:
+
+*(Perfboard only. The PCB's metering table is in `hardware/pcb/README.md`.)*
 
 | Conductor | Board hole | Expect |
 |---|---|---|
@@ -836,7 +876,7 @@ Pinout per `docs/phase-0-plan.md`: 1 1A̅ · 2 1B · 3 1R̅ · 4 1Q̄ · 5 2Q ·
 | Timing, drive | per channel: **330 K** from pin 15 (or 7) to 3V3, **1 µF** between pins 14 and 15 (or 6 and 7) — soldered, never socketed |
 | Timing, gate | **470 K / 1 µF** on U3 pins 14/15 |
 | `Q` → cells | U1 pin 13 → F′16 (cell r 12) · U1 pin 5 → F′21 (r 17) · U2 pin 13 → F′26 (r 22) · U2 pin 5 → F′31 (r 27) |
-| `Q` readbacks, 1 K each | U1 pin 13 → GPIO1 K12 · U1 pin 5 → GPIO2 K13 · U2 pin 13 → GPIO47 K25 · U2 pin 5 → GPIO21 K26 · U3 pin 13 → GPIO9 A23 (wire under the devkit) |
+| `Q` readbacks, 1 K each | U1 pin 13 → **GPIO11 A25** (wire under the devkit) *(GPIO1 K12 until 2026-11-25: the firmware that carries the PCB's pin map, 0.15.2 on, reads this readback on GPIO11 on every board — check `drive status` prints `Q(GPIO11)`, the 0.16.0/0.16.1 detector builds still read GPIO1)* · U1 pin 5 → GPIO2 K13 · U2 pin 13 → GPIO47 K25 · U2 pin 5 → GPIO21 K26 · U3 pin 13 → GPIO9 A23 (wire under the devkit) |
 | Decoupling | 100 nF from each pin 16 to GND, at the chip |
 | Not connected | every pin 4 and 12 (`Q̄`) |
 | Jumper (b) | **C′34** (LED rail) – **C′35** (3V3 bus); open until the bench test |

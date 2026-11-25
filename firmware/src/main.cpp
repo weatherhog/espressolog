@@ -19,7 +19,12 @@
 #include <esp_timer.h>
 #include <driver/gpio.h>
 
-const char* FIRMWARE_VERSION = "0.15.1";
+// 0.15.2: the bench `drive` command reads the 1Cup photoMOS 1 Q on GPIO11
+// (GPIO1 up to 0.15.1). 30beb28 moved the pin while still reporting 0.15.1,
+// so a 0.15.1 built from that commit already reads GPIO11 -- and 0.16.0 and
+// 0.16.1, built from branches that left main before it, still read GPIO1.
+// The version number does not say which: `drive status` prints the pin.
+const char* FIRMWARE_VERSION = "0.15.2";
 const char* DETECTOR_VERSION = "0a.7";
 
 static ScaleManager scales;
@@ -880,14 +885,19 @@ static void spoolFakeShot(Stream& out) {
 
 // ---- drive side, BENCH ONLY (docs/drive-bench.md) --------------------------
 // The 74HC221 drive block's pins, fixed by the drive layout
-// (docs/board-and-perfboard.md, "Drive-side layout"; CLAUDE.md DRIVE table).
+// (docs/board-and-perfboard.md, "Drive-side layout"; CLAUDE.md DRIVE table;
+// on the PCB hardware/pcb/gen_schematic.py, the devkit maps A and K).
 // Channel n's trigger fires U1/U2 and its Q comes back through 1 K.
 struct DriveChan { const char* name; uint8_t trig; uint8_t q; };
 static constexpr DriveChan DRIVE_CH[4] = {
-  { "1Cup photoMOS 1", 42, 1  },    // U1 ch1: pin 1 A̅, pin 13 Q
-  { "1Cup photoMOS 2", 41, 2  },    // U1 ch2: pin 9 A̅, pin 5 Q
-  { "2Cup photoMOS 1", 40, 47 },    // U2 ch1
-  { "2Cup photoMOS 2", 39, 21 },    // U2 ch2
+  // Chip and pins as on the PCB, where the '221s are crossed (U1 drives
+  // photoMOS 1 of each chain, U2 photoMOS 2). On the perfboard U1 is both
+  // 1Cup channels and U2 both 2Cup ones; the GPIOs are the same either way.
+  { "1Cup photoMOS 1", 42, 11 },    // U1 ch1: pin 1 A̅, pin 13 Q. GPIO1 until the
+                                     // PCB (2026-11-24): GPIO1 is ADC1, now the J3 NTC
+  { "1Cup photoMOS 2", 41, 2  },    // U2 ch1: pin 1 A̅, pin 13 Q
+  { "2Cup photoMOS 1", 40, 47 },    // U1 ch2: pin 9 A̅, pin 5 Q
+  { "2Cup photoMOS 2", 39, 21 },    // U2 ch2: pin 9 A̅, pin 5 Q
 };
 static constexpr uint8_t GATE_EN_PIN   = 38;   // U3 R̅, 10 K pull-down
 static constexpr uint8_t GATE_TRIG_PIN = 10;   // U3 A̅, 10 K pull-up

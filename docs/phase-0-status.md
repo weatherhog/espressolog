@@ -146,11 +146,10 @@ machine's display.)
   the decoder. **Superseded by 0.16.1 (2026-11-25, not flashed yet)**: the
   tracker no longer treats a lower reading as a restart. Each TIMER frame
   dates its run's start (frame time minus reading); a frame counts only when
-  the one before it gives the same date, a new run cannot be dated before
-  the previous run's latest frame, and `onPourStop()` freezes the value at
-  the shot's stop (CLAUDE.md, display-bus entry). A glitch pair within
-  ~9.5 s after a shot's timer is now rejected; one later than that and
-  before the scale's stop would still pass.
+  the one before it gives the same date, a new run must count up before it
+  replaces the old one, and `onPourStop()` freezes the value at the shot's
+  stop (CLAUDE.md, display-bus entry). A glitch frame, or the same glitch
+  twice, never counts up, so it can no longer reach the record.
 - **`SETPOINT-TOUCHED` latched during a short steam start/stop**, with no
   button touched. **The decoder explained it**: up to 0.9.8 `display.cpp`
   latched `adjust`/`touched` when two blank FRAMES arrived within

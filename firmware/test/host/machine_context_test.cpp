@@ -1172,6 +1172,57 @@ int main() {
     printf("two idle 9.5 glitch frames near the stop are not a run OK\n");
   }
 
+  {
+    // 35. Review of 059ef1e: THE DISPLAY HOLDS THE FINAL VALUE ~5 s after
+    //     pump-off (2026-10-03 captures). A hot-water draw pressed 1.5 s into
+    //     a flush's hold has no timer of its own and stores 0, not the
+    //     flush's 10.5 s. And a shot whose pour starts while its own timer
+    //     still counts keeps it.
+    MachineContextTracker m;
+    uint32_t t = 1000000;
+    for (uint16_t d = 1; d <= 105; d++) m.onReading(timer(d, t + d * 100000), false);  // flush
+    t += 105 * 100000;                               // pump off; 105 held 5 s
+    for (int i = 1; i <= 36; i++) m.onReading(timer(105, t + i * 41000), false);
+    m.onPourStart(t + 36 * 41000 + 10000);           // the draw, 1.5 s into the hold
+    for (int i = 37; i <= 122; i++) m.onReading(timer(105, t + i * 41000), false);
+    for (int i = 1; i <= 200; i++) m.onReading(temp(95, t + 5000000 + i * 41000), false);
+    m.onPourStop(t + 5000000 + 200 * 41000, 2000);
+    assert(m.context().machine_timer_dl == 0);       // not 105
+    printf("a draw inside a flush's held final value stores no timer OK\n");
+  }
+  {
+    // 36. Review of 059ef1e: after a 3 s dropout the same misread twice
+    //     (2.1, dated after the run's last frame) must not lock the real run
+    //     out: it goes on to 28.0.
+    MachineContextTracker m;
+    const uint32_t t = 1000000;
+    m.onPourStart(t);
+    for (uint16_t d = 1; d <= 230; d++) m.onReading(timer(d, t + d * 100000), false);
+    m.onReading(timer(21, t + 260 * 100000), false);           // dropout, then misread
+    m.onReading(timer(21, t + 260 * 100000 + 41000), false);
+    for (uint16_t d = 261; d <= 280; d++) m.onReading(timer(d, t + d * 100000), false);
+    m.onPourStop(t + 290 * 100000, 500);
+    assert(m.context().machine_timer_dl == 280);
+    printf("a repeated misread after a dropout does not lock the run out OK\n");
+  }
+  {
+    // 37. A flush pressed while the shot's final value is still held, after
+    //     the stop: it counts, so it is another run, and the shot keeps its
+    //     own 28.0.
+    MachineContextTracker m;
+    uint32_t t = 1000000;
+    m.onPourStart(t);
+    for (uint16_t d = 1; d <= 280; d++) m.onReading(timer(d, t + d * 100000), false);
+    t += 280 * 100000;
+    for (int i = 1; i <= 60; i++) m.onReading(timer(280, t + i * 41000), false);   // held
+    m.onPourStop(t + 60 * 41000, 1000);
+    for (int i = 61; i <= 80; i++) m.onReading(timer(280, t + i * 41000), false);
+    const uint32_t fl = t + 80 * 41000;
+    for (uint16_t d = 0; d <= 150; d++) m.onReading(timer(d, fl + 50000 + d * 100000), false);
+    assert(m.context().machine_timer_dl == 280);
+    printf("a flush during the held value after the stop is another run OK\n");
+  }
+
   printf("\nall machine context tests passed\n");
   return 0;
 }

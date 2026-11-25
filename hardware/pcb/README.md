@@ -572,12 +572,11 @@ From the final and pre-order reviews:
 - **Firmware:** this board reads the 1Cup photoMOS 1 `Q` on GPIO11. **Go by
   the pin, not the version number: before any `drive` bench run,
   `drive status` must print `Q(GPIO11)` for channel 1.** `main`'s 0.15.2
-  does, and so does a 0.16.0 built after `main` was merged into the detector
-  branch (e369800). 0.15.1 and earlier print `Q(GPIO1)`, and so do the 0.16.0
-  flashed on 2026-11-23 and the timer fix's 0.16.1 as it stands, both built
-  before the pin moved; GPIO1 is the NTC_ADC net on this board, so those
-  report NO PULSE on a healthy channel. Whatever version merges both lines
-  must keep GPIO11.
+  does, and so do a 0.16.0 built after `main` was merged into the detector
+  branch (e369800) and the timer fix's 0.16.1, built on that merge. 0.15.1
+  and earlier print `Q(GPIO1)`, and so does the 0.16.0 flashed on
+  2026-11-23, built before the pin moved; GPIO1 is the NTC_ADC net on this
+  board, so those report NO PULSE on a healthy channel.
 
 ## Paper test: DONE 2026-11-25
 

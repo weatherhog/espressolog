@@ -1758,8 +1758,14 @@ void loop() {
       ShotState before = detector.state();
       bool complete = detector.feed(smp.t_ms, smp.weight_mg, flow.total());
       if (before != ShotState::POURING && detector.state() == ShotState::POURING) {
-        machine_ctx.onPourStart(micros(),
-                                display_on && !display_bus.stale(micros(), DISPLAY_FRESH_US));
+        {
+          // First drip in micros(): t=0 is backdated, in millis().
+          const uint32_t now_us = micros();
+          const uint32_t t0_us = now_us - (millis() - detector.result().started_at_ms) * 1000u;
+          machine_ctx.onPourStart(now_us,
+                                  display_on && !display_bus.stale(now_us, DISPLAY_FRESH_US),
+                                  t0_us);
+        }
         // Which press started the pump: decided now, while t=0 is fresh and
         // before the stop press or a later flush can crowd it out.
         machine_ctx.resolvePump(detector.result().started_at_ms);

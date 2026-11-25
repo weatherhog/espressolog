@@ -1429,6 +1429,44 @@ int main() {
     printf("a run promoted across a stall still counts up OK\n");
   }
 
+  {
+    // 48. Review of 273368a (real captures): a brew whose POURING is
+    //     confirmed late, inside a stall that spans pump-off (first drip at
+    //     3.5 s, confirmed 0.3 s after pump-off), keeps its run.
+    MachineContextTracker m;
+    const uint32_t t = 1000000;
+    for (uint16_t d = 1; d <= 30; d++) feed(m, d, d, t + d * 100000);   // then the stall
+    m.onPourStart(t + 105 * 100000 + 300000, true, t + 35 * 100000);
+    const uint32_t h = t + 105 * 100000 + 1000000;
+    for (int i = 0; i < 60; i++) m.onReading(timer(105, h + i * 41000), false);
+    m.onPourStop(h + 60 * 41000, 1500);
+    assert(m.context().machine_timer_dl == 105);
+    printf("a brew confirmed inside a stall at pump-off keeps its run OK\n");
+  }
+  {
+    // 49. The hold tolerance (five tenths): a +3 misread pair ~0.5 s into
+    //     the hold, just before it is confirmed, then one dated like the run
+    //     (125) 2 s on, must not reach a draw pressed 1.3 s in. At two
+    //     tenths the hold went unrecognised after the first raise.
+    MachineContextTracker m;
+    const uint32_t t = 1000000;
+    for (uint16_t d = 1; d <= 105; d++) feed(m, d, d, t + d * 100000);
+    const uint32_t h = t + 105 * 100000 + 82000;
+    for (int i = 0; i < 10; i++) m.onReading(timer(105, h + i * 41000), false);
+    m.onReading(timer(108, h + 10 * 41000), false);
+    m.onReading(timer(108, h + 11 * 41000), false);
+    for (int i = 12; i < 30; i++) m.onReading(timer(105, h + i * 41000), false);
+    m.onPourStart(h + 30 * 41000);                              // the draw
+    const uint32_t mis = t + 125 * 100000;
+    for (int i = 30; mis > h + i * 41000; i++) m.onReading(timer(105, h + i * 41000), false);
+    m.onReading(timer(125, mis), false);
+    m.onReading(timer(125, mis + 41000), false);
+    for (int i = 1; i <= 60; i++) m.onReading(timer(105, mis + 41000 + i * 41000), false);
+    m.onPourStop(mis + 61 * 41000, 1000);
+    assert(m.context().machine_timer_dl == 0);
+    printf("a +3 early-hold misread leaves the hold recognised OK\n");
+  }
+
   printf("\nall machine context tests passed\n");
   return 0;
 }

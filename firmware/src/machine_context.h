@@ -239,7 +239,7 @@ public:
     // (the pair's lag, a skipped frame) plus one per 100 ms since a frame
     // last showed a value at or below run_dl (run_at_us). While the display
     // is in view and counting, or once a hold is confirmed, that is 2-3 (in
-    // the ~0.5 s before a hold is confirmed it grows to ~7), so a misread pair
+    // the ~0.5 s before a hold is confirmed a few more: +5 measured), so a misread pair
     // dated to match the run (+N s about N s into the hold) cannot raise it
     // by seconds (review of 650f712, real captures: 115 for 105). After a
     // dropout or a loop() stall it grows with the gap, and run_at_us moves
@@ -298,12 +298,21 @@ public:
       run_dl = sure_dl;
       run_seen_us = run_at_us = r.at_us;
       if (!stopped) {
-        // Only into the pour this run belongs to. A pour confirmed during the
-        // blind spot, after the pump stopped (a hot-water draw), has none of
-        // its own and must not be handed this one (review of 940efed: a draw
-        // 0.8 s after pump-off stored the brew's 10.5 s).
+        // Only into the pour this run belongs to: the one already holding it,
+        // or one with no run yet whose FIRST DRIP came while this run was
+        // still going (run_start + its final value). A hot-water draw
+        // confirmed during the blind spot drips after pump-off and gets
+        // nothing (review of 940efed: a draw 0.8 s after pump-off stored the
+        // brew's 10.5 s); a brew whose POURING was confirmed late, inside a
+        // stall or dropout, drips mid-run and gets its run (review of
+        // 273368a: 0 stored for 10.5 s).
+        const uint32_t run_end_us = run_start_us + (uint32_t)run_dl * 100000u;
         if (n_runs > 0 && runs[n_runs - 1].start_us == run_start_us) {
           runs[n_runs - 1].dl = run_dl;
+          mc.machine_timer_dl = run_dl;
+        } else if (n_runs == 0 && (int32_t)(pour_t0_us - run_end_us) < 0
+                   && (int32_t)(pour_t0_us - run_start_us) >= 0) {
+          pushRun();
           mc.machine_timer_dl = run_dl;
         }
       } else if (timer_follow) {
@@ -491,7 +500,11 @@ public:
   // display_live: the display bus is on and decoding now. Without it the
   // remembered setpoint is not stamped — an edit could be going unseen —
   // and no timer is carried.
-  void onPourStart(uint32_t now_us, bool display_live = true) {
+  // t0_us: the detector's backdated first drip, in micros() (main.cpp
+  // derives it from started_at_ms); 0 = now. It decides whether a run whose
+  // held value is first seen after a blind spot is this pour's (onTimerFrame).
+  void onPourStart(uint32_t now_us, bool display_live = true, uint32_t t0_us = 0) {
+    pour_t0_us = t0_us ? t0_us : now_us;
     // Unsigned differences; a run unseen for RUN_RECENT_US is retired in
     // onTimerFrame, so a rise one micros() wrap ago cannot look recent.
     const bool run_live = display_live && have_glass_run
@@ -712,6 +725,7 @@ private:
   uint32_t run_seen_us = 0;         // its latest counted frame, held ones too
   bool     run_held = false;        // its final value has been held: it has stopped
   uint32_t run_at_us = 0;           // latest frame showing run_dl or less
+  uint32_t pour_t0_us = 0;          // this pour's first drip (onPourStart)
   bool     run_broken = false;      // a non-TIMER frame since its last rise
   uint32_t prev_at = 0;             // the previous frame's time
   uint8_t  cand_rises = 0;          // rises seen in the candidate (2 promote it)

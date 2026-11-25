@@ -650,7 +650,9 @@ stop is stored as the shot's, at its full length, which can be above or
 below the shot's own (a 1Cup flush after a 2Cup shot reads shorter); and a pour with no timer of its own confirmed within 0.5 s of
 another run's last count carries that run (physically unlikely). The
 shot's own value can be up to ~0.5 s high (a misread repeated on two
-frames) or short (rarely, a misread on a slow loop freezes it early; a blind spot at pump-off that outlasts the ~5 s hold
+frames; ~0.9 s after a blind spot at pump-off, and seconds if a second
+misread follows there, which can also reach a draw in the hold -- rare,
+two misreads) or short (rarely, a misread on a slow loop freezes it early; a blind spot at pump-off that outlasts the ~5 s hold
 loses everything after the last frame seen, and a steady loop period of
 ~300 ms or more always misses the final value). **Records from 0.16.0 and
 earlier keep the old behaviour**, so the PWA's trust rule

@@ -817,7 +817,7 @@ without checking that 106 > 100.
 frames into a shot's `machine_timer_dl`. Up to 0.16.0 it carried the
 running maximum into every pour and read it at completion, so a hot-water
 draw stored the previous brew's timer and a flush pressed while SETTLING
-replaced the shot's. 0.16.1 replaced that over twelve review rounds; what
+replaced the shot's. 0.16.1 replaced that over thirteen review rounds; what
 stands:
 
 - **The display holds the final value ~5 s after pump-off** (2026-10-03
@@ -834,11 +834,14 @@ stands:
   reading), so one misread frame never raises it, **and a run advances no
   faster than time passes unseen**: two ticks plus one per 100 ms since a
   frame last showed its value or less. In view and counting, or once a
-  hold is confirmed, that is 2-3 (it reaches ~7 in the ~0.5 s before a
-  hold is confirmed), so a misread dated to match the run cannot raise it
+  hold is confirmed, that is 2-3 (a few more in the ~0.5 s before a hold
+  is confirmed: +5 at most, measured), so a misread dated to match the run cannot raise it
   by seconds; after a dropout or a `loop()` stall it grows with the gap.
   The held value after a blind spot goes only into the pour that run
-  belongs to, never into one confirmed during the blind spot.
+  belongs to: one already holding it, or one whose first drip (the
+  detector's backdated t=0) came while the run was still going -- a brew
+  confirmed late inside a stall -- never a hot-water draw that dripped
+  after pump-off.
 - **After a blind spot at pump-off the held final value is the run's**,
   when it is within that allowance and only TIMER frames came between, so
   the hold is recognised from there.
@@ -871,10 +874,16 @@ is lost (seconds for a multi-second stall); a steady `loop()` period of
 ~300 ms or more never pairs two frames within 0.3 s and misses the final
 value; and the same misread on two frames in a row in the run's last rises
 or before the hold is confirmed (~0.5 s after the last rise) raises it by
-up to ~0.5 s (and a draw confirmed within 0.5 s of that carries it); and
+up to ~0.5 s in clean view, up to ~0.9 s on the first frames after a
+blind spot at pump-off (a draw confirmed within 0.5 s of that carries it);
+after such a blind spot a raise of more than five tenths leaves the hold
+unrecognised, so a second, date-matched misread can raise the shot by
+seconds and reach a draw in the hold (replayed with injected misreads:
+26.0 s for 21.0 s; two misreads, rare); and
 with a slow `loop()` (~150 ms, one frame per tick) a misread pair late in
 the run that repeats the value already reached can mark it held while the
-pump still runs, freezing it short (replayed: 15.6 s for 16.9 s, rare). Review 8 tried a rise cap for both; it
+pump still runs, freezing it short (replayed with an injected misread on
+the 2026-09-28 capture at a 150 ms loop: 15.6 s for 16.9 s; rare). Review 8 tried a rise cap for both; it
 locked runs out after multi-second stalls and let idle glitches in, and was
 reverted (review 9, 2026-11-25). With the
 machine off the bus is silent and nothing retires a run, so an off period
@@ -888,6 +897,6 @@ scale going flat while the pump runs, pours inside and after the hold, and
 the steam, button, setup-menu and boot captures as negative controls (no
 run, 0 stored) all came out as the glass shows; about 6,300 single-frame
 misread injections never raised a stored value; spliced back-to-back runs
-only reproduced the pre-stop-flush exception. Host tests: cases 16-47 in
+only reproduced the pre-stop-flush exception. Host tests: cases 16-49 in
 `firmware/test/host/machine_context_test.cpp`.
 

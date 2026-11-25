@@ -556,6 +556,35 @@ From the final and pre-order reviews:
   the branch firmware (`30beb28`) before any `drive` bench run; firmware from
   `main` reads it on GPIO1, which here is the floating NTC_ADC net.
 
+## Paper test: DONE 2026-11-25
+
+Lucas pressed the real parts into the 1:1 print.
+
+**Fits as drawn:** the side-entry and vertical XH headers with the harness
+plugs; the devkit in its two 22-pin sockets; DIL16 and DIL08 sockets, the
+'221 and the AQY212EH; the 1 µF MKT (C10) and the 470 pF disc (C1); flat
+and upright resistors; the 2-pin jumper header.
+
+**Fits with the legs bent, footprint kept on purpose:**
+- **BC547:** the parts in hand have straight legs (1.27 mm apart); the
+  holes are 2.54 mm apart. Splay the two outer legs. The wide footprint
+  stays: at 1.27 mm the pads nearly touch, and a bridge on a BC547 can light
+  a photoMOS.
+- **100 nF disc (C15–C17, later C21/C22):** the parts in hand have about
+  2 mm between the legs (operator's reading; 2.5 mm is the usual nominal),
+  the holes are 5.0 mm apart. Splay the legs. Not worth a re-route.
+
+**Checked with the plugs:**
+- **A smaller harness plug does NOT seat in a larger header**, so the
+  wrong-header worry below is closed for these plugs.
+- **A plug on a vertical OUT header clears the plug in the side-entry header
+  in front of it.**
+
+**Not checked: the box.** There is none yet; it gets designed around the
+board (mounting holes 3.5 mm in from each corner, 3.2 mm; 20–25 mm headroom
+above the board for the vertical plugs; nothing conductive along the right
+edge or at H2).
+
 ## Before ordering
 
 1. **A layout review in a fresh context**, against the machine-zone rules in

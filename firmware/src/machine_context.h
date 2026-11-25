@@ -124,11 +124,16 @@ public:
   // A run's latest counted frame must be this recent for a frame to continue
   // it or to be judged against it. Dropouts last seconds; the display clock
   // is ~0.5 % off real time (docs/machine-display-bus.md), so a run's date
-  // drifts ~0.17 s over this (measured on the 2026-10-03 captures), inside
-  // RUN_AGREE_US. And micros() wraps every
+  // would drift ~0.25 s over this (112-175 ms measured over 10-21 s runs on
+  // the 2026-10-03 captures), just inside RUN_AGREE_US; a dropout that long
+  // is not known to happen. And micros() wraps every
   // ~71.6 min: a date compared across that could match a new brew to an old
   // run (review of d24b655).
   static constexpr uint32_t RUN_RECENT_US = 30000000;  // 30 s
+  // A run's final value shown this long, date walking, is a hold: the pump
+  // is off. Longer than any misread burst (2-3 frames, ~120 ms); shorter
+  // than the ~5 s the display holds it.
+  static constexpr uint32_t HOLD_US = 500000;          // 0.5 s
 
   // Call on every fresh display reading. `touched_latch` is
   // DisplayBus::setpointTouched(); the caller clears it at pour start.
@@ -228,13 +233,14 @@ public:
                      && (uint32_t)(r.at_us - run_seen_us) <= RUN_RECENT_US;
     bool new_run = false;
     if (recent && near(est, run_last_est)) {
-      // A HELD run has stopped: once the display has shown its final value
-      // for longer than RUN_AGREE_US (run_held, below) the pump is off, and a
+      // A HELD run has stopped: once the display has shown its final value,
+      // date walking, for HOLD_US (run_held, below) the pump is off, and a
       // run never resumes -- a restart is a new date. So nothing raises it
       // after that: a misread pair of +N s about N s into the hold matches
       // its date and was taken as a rise, into the shot or a draw (review of
       // 6aa4443, real captures).
       if (sure_dl > run_dl && !run_held) {          // counting: the run goes on
+        hold_since_valid = false;
         run_dl = sure_dl;
         run_last_est = est;
         last_rise_us = r.at_us;
@@ -248,17 +254,32 @@ public:
         return;
       }
     } else if (recent && r.timer_dl == run_dl) {
-      run_seen_us = r.at_us;                        // the final value, held
-      run_held = true;
+      // The final value, held. Only a hold that LASTS is one: a 2-3 frame
+      // misread landing on run_dl mid-run crosses the date window too, and
+      // set run_held after one frame froze the run seconds short (review of
+      // 84ad239, real captures: 77 stored for 169).
+      run_seen_us = r.at_us;
+      if (!hold_since_valid) { hold_since_valid = true; hold_since_us = r.at_us; }
+      else if ((uint32_t)(r.at_us - hold_since_us) >= HOLD_US) run_held = true;
       return;
     } else if (have_cand && near(est, cand_last_est)
                && (uint32_t)(r.at_us - cand_seen_us) <= RUN_RECENT_US) {
-      if (sure_dl <= cand_dl) { cand_seen_us = r.at_us; return; }
-      // The candidate counted up: it is the run now.
+      cand_seen_us = r.at_us;
+      if (sure_dl <= cand_dl) return;
+      // It counted up. TWICE makes it a run: a real restart, flush or brew
+      // ticks every 100 ms, so it does so within ~0.3 s; a misread pair on
+      // a held value (one the tracker did not recognise as the hold -- a
+      // blind spot at pump-off, watching from mid-hold, a slow loop) rises
+      // once and falls back, and promoted on that one rise it reached a
+      // hot-water draw (review of 84ad239, real captures).
+      cand_dl = sure_dl;
+      cand_last_est = est;
+      if (++cand_rises < 2) return;
       new_run = true;
       have_glass_run = true;
       run_dl = sure_dl;
       run_held = false;
+      hold_since_valid = false;
       run_start_us = (int32_t)(cand_start_us - est) < 0 ? cand_start_us : est;
       run_last_est = est;
       last_rise_us = r.at_us;
@@ -266,6 +287,7 @@ public:
     } else {
       have_cand = true;
       cand_dl = r.timer_dl;
+      cand_rises = 0;
       cand_start_us = cand_last_est = est;
       cand_seen_us = r.at_us;
       return;
@@ -639,6 +661,9 @@ private:
   uint32_t run_last_est = 0;        // the date of its latest rising frame
   uint32_t run_seen_us = 0;         // its latest counted frame, held ones too
   bool     run_held = false;        // its final value has been held: it has stopped
+  bool     hold_since_valid = false;
+  uint32_t hold_since_us = 0;       // first frame of the current hold
+  uint8_t  cand_rises = 0;          // rises seen in the candidate (2 promote it)
   uint32_t last_rise_us = 0;        // when it last counted up
   bool     have_cand = false;       // a counted pair of another date, not yet rising
   uint16_t cand_dl = 0;

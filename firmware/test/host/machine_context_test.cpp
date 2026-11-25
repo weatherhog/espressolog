@@ -60,8 +60,8 @@ int main() {
 
   // 2. THE LEAK. A long shot, then a short one. Without telling the runs apart
   //    and a reset after writing, the short shot inherits the long one's
-  //    timer — because the tracker keeps a running maximum and a new
-  //    brew's early values never exceed a stale one.
+  //    timer — because the first tracker kept a running maximum and a new
+  //    brew's early values never exceeded a stale one.
   {
     MachineContextTracker m;
     uint32_t t = 1000000;
@@ -1296,6 +1296,42 @@ int main() {
     m.onPourStop(h + 120 * 41000, 1000);
     assert(m.context().machine_timer_dl == 0);
     printf("a misread in a flush's hold does not reach a draw OK\n");
+  }
+
+  {
+    // 41. Review of 84ad239 (real captures): a misread of two frames that
+    //     lands on the run's value with its date walked (76 read at 8.0 s)
+    //     must not mark the run held mid-run and freeze it: it goes on to
+    //     15.0.
+    MachineContextTracker m;
+    const uint32_t t = 1000000;
+    m.onPourStart(t);
+    for (uint16_t d = 1; d <= 76; d++) feed(m, d, d, t + d * 100000);
+    m.onReading(timer(76, t + 80 * 100000), false);             // misread x2
+    m.onReading(timer(76, t + 80 * 100000 + 41000), false);
+    for (uint16_t d = 81; d <= 150; d++) feed(m, d, d, t + d * 100000);
+    m.onPourStop(t + 151 * 100000, 500);
+    assert(m.context().machine_timer_dl == 150);
+    printf("a misread on the run's value does not freeze a running timer OK\n");
+  }
+  {
+    // 42. Review of 84ad239 (real captures): a hold the tracker did not
+    //     recognise -- a 0.4 s blind spot at pump-off, so it saw 10.3 and
+    //     then the held 10.5 -- plus a misread pair (10.6) 2 s into it must
+    //     not become a run and reach a hot-water draw pressed 1 s in.
+    MachineContextTracker m;
+    const uint32_t t = 1000000;
+    for (uint16_t d = 1; d <= 103; d++) feed(m, d, d, t + d * 100000);
+    const uint32_t h = t + 105 * 100000 + 400000;               // blind until here
+    for (int i = 0; i < 24; i++) m.onReading(timer(105, h + i * 41000), false);
+    m.onPourStart(h + 24 * 41000);                              // the draw, ~1 s in
+    for (int i = 24; i < 48; i++) m.onReading(timer(105, h + i * 41000), false);
+    m.onReading(timer(106, h + 48 * 41000), false);             // misread x2
+    m.onReading(timer(106, h + 49 * 41000), false);
+    for (int i = 50; i <= 110; i++) m.onReading(timer(105, h + i * 41000), false);
+    m.onPourStop(h + 110 * 41000, 1000);
+    assert(m.context().machine_timer_dl == 0);
+    printf("a misread in an unrecognised hold does not reach a draw OK\n");
   }
 
   printf("\nall machine context tests passed\n");

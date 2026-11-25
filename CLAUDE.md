@@ -647,8 +647,10 @@ replaced it. Now (`machine_context.h`) the tracker follows the run on the
 glass apart from the stored value. **A run is its date, taken while it
 counts up**: every TIMER frame dates the run's start (frame time minus
 reading), and a frame counts only when the frame before it was TIMER and
-gives the same date within 0.3 s, so a lone misread digit counts for
-nothing. **The display holds the final value ~5 s after pump-off** (the
+gives the same date within 0.3 s, so a misread seconds digit counts for
+nothing; a tenths digit off by one or two passes that, so a rise also needs
+both frames of the pair to show the new value (each value shows on 2–3
+frames). **The display holds the final value ~5 s after pump-off** (the
 2026-10-03 captures: `105` for 5.2 s, `210` for 5.1 s), so a frame showing
 the run's own maximum keeps the run without moving its date. A pair with
 another date is only a candidate until a later frame of that date reads
@@ -661,7 +663,10 @@ completion: it takes the newest run of the pour that began at or before the
 stop, and only that run may keep counting. **The exception: a flush pressed
 after pump-off but BEFORE that stop** — while the cup still drips and the
 weight is not yet flat — is the latest run at the stop and is stored as the
-shot's, at its full length, which can exceed the shot's own. Also: a pour
+shot's, at its full length, which can exceed the shot's own — and, by the
+same 0.5 s rule, a pour with no timer of its own (a hot-water draw)
+confirmed within 0.5 s of another run's last count carries that run
+(replayed on the 2026-10-03 captures; physically unlikely). Also: a pour
 whose timer has stopped counting when POURING is confirmed (first drip +
 ~300 ms + BLE and loop latency) reads 0, and eight or more new runs between
 the stop and its freeze push the shot's run out (0).

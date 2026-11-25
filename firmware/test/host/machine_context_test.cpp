@@ -33,6 +33,14 @@ static DisplayBus::Reading setpoint(int16_t c, uint32_t at_us) {
   return r;
 }
 
+// A timer value as the display shows it: on more than one frame -- frames
+// come every ~41 ms, the timer ticks every 100 ms. v != d is a deliberate
+// misread, shown on its one frame only.
+static void feed(MachineContextTracker& m, uint16_t v, uint16_t d, uint32_t at_us) {
+  m.onReading(timer(v, at_us), false);
+  if (v == d) m.onReading(timer(v, at_us + 41000), false);
+}
+
 int main() {
   // 1. The ordinary path: temperature before the pour, timer during it.
   {
@@ -40,9 +48,9 @@ int main() {
     uint32_t t = 1000000;
     m.onReading(temp(95, t), false);
     t += 4000000;                                  // pump starts; 4 s of first-drip lag
-    for (uint16_t d = 1; d <= 210; d++) m.onReading(timer(d, t + d * 100000), false);
+    for (uint16_t d = 1; d <= 210; d++) feed(m, d, d, t + d * 100000);
     m.onPourStart(t);                              // detector reaches POURING
-    for (uint16_t d = 1; d <= 210; d++) m.onReading(timer(d, t + d * 100000), false);
+    for (uint16_t d = 1; d <= 210; d++) feed(m, d, d, t + d * 100000);
 
     assert(m.context().boiler_temp_start_dc == 950);
     assert(m.context().machine_timer_dl == 210);
@@ -59,7 +67,7 @@ int main() {
     uint32_t t = 1000000;
     m.onReading(temp(95, t), false);
     m.onPourStart(t);
-    for (uint16_t d = 1; d <= 280; d++) m.onReading(timer(d, t + d * 100000), false);
+    for (uint16_t d = 1; d <= 280; d++) feed(m, d, d, t + d * 100000);
     assert(m.context().machine_timer_dl == 280);
     // Record written. Nothing is reset here deliberately — the next pour
     // clears it, and the timer's restart detection handles the gap.
@@ -67,7 +75,7 @@ int main() {
     t += 60000000;
     m.onReading(temp(93, t), false);
     m.onPourStart(t);
-    for (uint16_t d = 1; d <= 220; d++) m.onReading(timer(d, t + d * 100000), false);
+    for (uint16_t d = 1; d <= 220; d++) feed(m, d, d, t + d * 100000);
 
     assert(m.context().machine_timer_dl == 220);   // 22.0 s, NOT 28.0
     assert(m.context().boiler_temp_start_dc == 930);
@@ -80,11 +88,11 @@ int main() {
   {
     MachineContextTracker m;
     uint32_t t = 1000000;
-    for (uint16_t d = 1; d <= 150; d++) m.onReading(timer(d, t + d * 100000), false);  // 15 s flush
+    for (uint16_t d = 1; d <= 150; d++) feed(m, d, d, t + d * 100000);  // 15 s flush
     t += 30000000;
     m.onReading(temp(94, t), false);
     m.onPourStart(t);
-    for (uint16_t d = 1; d <= 90; d++) m.onReading(timer(d, t + d * 100000), false);   // 9 s shot
+    for (uint16_t d = 1; d <= 90; d++) feed(m, d, d, t + d * 100000);   // 9 s shot
 
     assert(m.context().machine_timer_dl == 90);
     printf("flush before a shot does not inflate its timer OK\n");
@@ -145,7 +153,7 @@ int main() {
     uint32_t t = 1000000;
     m.onReading(temp(95, t), false);
     m.onPourStart(t);
-    for (uint16_t d = 1; d <= 280; d++) m.onReading(timer(d, t + d * 100000), false);
+    for (uint16_t d = 1; d <= 280; d++) feed(m, d, d, t + d * 100000);
     t += 280 * 100000;
     m.onReading(temp(95, t + 41000), false);       // pump stopped, back to temp
     for (int i = 0; i < 5; i++) m.onReading(timer(95, t + 82000), false);  // glitch, re-fed
@@ -807,7 +815,7 @@ int main() {
     uint32_t t = 1000000;
     m.onReading(temp(95, t), false);
     m.onPourStart(t + 41000);
-    for (uint16_t d = 1; d <= 280; d++) m.onReading(timer(d, t + 100000 + d * 100000), false);
+    for (uint16_t d = 1; d <= 280; d++) feed(m, d, d, t + 100000 + d * 100000);
     t += 100000 + 280 * 100000;
     for (int i = 1; i <= 50; i++) m.onReading(temp(95, t + i * 41000), false);  // pump off
     m.onPourStop(t + 50 * 41000, 2000);
@@ -826,13 +834,13 @@ int main() {
     uint32_t t = 1000000;
     m.onReading(temp(95, t), false);
     m.onPourStart(t + 41000);
-    for (uint16_t d = 1; d <= 280; d++) m.onReading(timer(d, t + 100000 + d * 100000), false);
+    for (uint16_t d = 1; d <= 280; d++) feed(m, d, d, t + 100000 + d * 100000);
     t += 100000 + 280 * 100000;                     // pump off at t
     for (int i = 1; i <= 100; i++) m.onReading(temp(95, t + i * 41000), false);
     // Flat from ~t+2.1 s, confirmed 2 s later at ~t+4.1 s.
     m.onPourStop(t + 100 * 41000, 2000);
     t += 100 * 41000;
-    for (uint16_t d = 1; d <= 150; d++) m.onReading(timer(d, t + d * 100000), false);  // flush
+    for (uint16_t d = 1; d <= 150; d++) feed(m, d, d, t + d * 100000);  // flush
     assert(m.context().machine_timer_dl == 280);    // NOT 15.0 s
     printf("a flush while settling does not replace the shot's timer OK\n");
   }
@@ -844,14 +852,14 @@ int main() {
     uint32_t t = 1000000;
     m.onReading(temp(95, t), false);
     m.onPourStart(t + 41000);
-    for (uint16_t d = 1; d <= 280; d++) m.onReading(timer(d, t + 100000 + d * 100000), false);
+    for (uint16_t d = 1; d <= 280; d++) feed(m, d, d, t + 100000 + d * 100000);
     t += 100000 + 280 * 100000;                     // pump off at t
     for (int i = 1; i <= 25; i++) m.onReading(temp(95, t + i * 41000), false);
     const uint32_t stop_us = t + 25 * 41000;        // flat from here
-    for (uint16_t d = 1; d <= 15; d++) m.onReading(timer(d, stop_us + 400000 + d * 100000), false);
+    for (uint16_t d = 1; d <= 15; d++) feed(m, d, d, stop_us + 400000 + d * 100000);
     m.onPourStop(stop_us + 2000000, 2000);
     assert(m.context().machine_timer_dl == 280);
-    for (uint16_t d = 16; d <= 150; d++) m.onReading(timer(d, stop_us + 400000 + d * 100000), false);
+    for (uint16_t d = 16; d <= 150; d++) feed(m, d, d, stop_us + 400000 + d * 100000);
     assert(m.context().machine_timer_dl == 280);
     printf("a flush between the stop and its confirmation is undone OK\n");
   }
@@ -863,7 +871,7 @@ int main() {
     MachineContextTracker m;
     uint32_t t = 1000000;
     m.onReading(temp(95, t), false);
-    for (uint16_t d = 1; d <= 40; d++) m.onReading(timer(d, t + d * 100000), false);
+    for (uint16_t d = 1; d <= 40; d++) feed(m, d, d, t + d * 100000);
     m.onPourStart(t + 40 * 100000 + 41000);
     assert(m.context().machine_timer_dl == 40);
     printf("a timer running at pour start is kept OK\n");
@@ -872,14 +880,14 @@ int main() {
     t = 1000000;
     k.onReading(temp(95, t), false);
     k.onPourStart(t + 41000);
-    for (uint16_t d = 1; d <= 250; d++) k.onReading(timer(d, t + 100000 + d * 100000), false);
+    for (uint16_t d = 1; d <= 250; d++) feed(k, d, d, t + 100000 + d * 100000);
     k.onPourStop(t + 100000 + 250 * 100000 + 10000, 2000);   // still timing
-    for (uint16_t d = 251; d <= 300; d++) k.onReading(timer(d, t + 100000 + d * 100000), false);
+    for (uint16_t d = 251; d <= 300; d++) feed(k, d, d, t + 100000 + d * 100000);
     assert(k.context().machine_timer_dl == 300);
     t += 100000 + 300 * 100000;
     for (int i = 1; i <= 30; i++) k.onReading(temp(95, t + i * 41000), false);
     t += 30 * 41000;
-    for (uint16_t d = 1; d <= 400; d++) k.onReading(timer(d, t + d * 100000), false);
+    for (uint16_t d = 1; d <= 400; d++) feed(k, d, d, t + d * 100000);
     assert(k.context().machine_timer_dl == 300);   // not the 40 s flush
     printf("a pump outlasting the stop counts on, a later flush does not OK\n");
   }
@@ -887,25 +895,25 @@ int main() {
     // 20. The display not decoding at pour start: no timer is carried.
     MachineContextTracker m;
     uint32_t t = 1000000;
-    for (uint16_t d = 1; d <= 40; d++) m.onReading(timer(d, t + d * 100000), false);
+    for (uint16_t d = 1; d <= 40; d++) feed(m, d, d, t + d * 100000);
     m.onPourStart(t + 40 * 100000 + 41000, false);
     assert(m.context().machine_timer_dl == 0);
     // A run is its date: the same run picked up after a 3 s dropout (its
     // readings still date its start) goes on counting past the stop...
     MachineContextTracker k;
     k.onPourStart(t);
-    for (uint16_t d = 1; d <= 100; d++) k.onReading(timer(d, t + d * 100000), false);
+    for (uint16_t d = 1; d <= 100; d++) feed(k, d, d, t + d * 100000);
     k.onPourStop(t + 100 * 100000 + 10000, 2000);           // still timing
     const uint32_t back = t + 130 * 100000;                  // 3 s of no frames
-    for (uint16_t d = 130; d <= 200; d++) k.onReading(timer(d, back + (d - 130) * 100000), false);
+    for (uint16_t d = 130; d <= 200; d++) feed(k, d, d, back + (d - 130) * 100000);
     assert(k.context().machine_timer_dl == 200);
     // ...while a flush seen after a dropout -- a later date -- does not.
     MachineContextTracker f;
     f.onPourStart(t);
-    for (uint16_t d = 1; d <= 100; d++) f.onReading(timer(d, t + d * 100000), false);
+    for (uint16_t d = 1; d <= 100; d++) feed(f, d, d, t + d * 100000);
     f.onPourStop(t + 100 * 100000 + 10000, 2000);
     const uint32_t fl = t + 100 * 100000 + 3000000;          // flush started ~2 s after
-    for (uint16_t d = 10; d <= 200; d++) f.onReading(timer(d, fl + (d - 10) * 100000), false);
+    for (uint16_t d = 10; d <= 200; d++) feed(f, d, d, fl + (d - 10) * 100000);
     assert(f.context().machine_timer_dl == 100);
     printf("no timer carried from a stale display; a run is its date across a gap OK\n");
   }
@@ -918,14 +926,14 @@ int main() {
     uint32_t t = 1000000;
     m.onReading(temp(95, t), false);
     m.onPourStart(t + 41000);
-    for (uint16_t d = 1; d <= 280; d++) m.onReading(timer(d, t + 100000 + d * 100000), false);
+    for (uint16_t d = 1; d <= 280; d++) feed(m, d, d, t + 100000 + d * 100000);
     t += 100000 + 280 * 100000;
     for (int i = 1; i <= 100; i++) m.onReading(temp(95, t + i * 41000), false);
     m.onPourStop(t + 100 * 41000, 2000);
     assert(m.context().machine_timer_dl == 280);
     t += 60000000;
     m.onReading(temp(95, t), false);
-    for (uint16_t d = 1; d <= 40; d++) m.onReading(timer(d, t + d * 100000), false);
+    for (uint16_t d = 1; d <= 40; d++) feed(m, d, d, t + d * 100000);
     m.onPourStart(t + 40 * 100000 + 41000);
     assert(m.context().machine_timer_dl == 40);     // NOT shot 1's 280
     for (int i = 2; i <= 100; i++) m.onReading(temp(95, t + 40 * 100000 + i * 41000), false);
@@ -941,11 +949,11 @@ int main() {
     uint32_t t = 1000000;
     m.onReading(temp(95, t), false);
     m.onPourStart(t + 41000);
-    for (uint16_t d = 1; d <= 280; d++) m.onReading(timer(d, t + 100000 + d * 100000), false);
+    for (uint16_t d = 1; d <= 280; d++) feed(m, d, d, t + 100000 + d * 100000);
     t += 100000 + 280 * 100000;                     // pump off; stop = last kept sample
     for (int i = 1; i <= 10; i++) m.onReading(temp(95, t + i * 41000), false);
     const uint32_t stop_us = t + 10 * 41000;
-    for (uint16_t d = 1; d <= 15; d++) m.onReading(timer(d, stop_us + 300000 + d * 100000), false);
+    for (uint16_t d = 1; d <= 15; d++) feed(m, d, d, stop_us + 300000 + d * 100000);
     assert(m.context().machine_timer_dl == 15);     // the flush, until the stop is known
     m.onPourStop(stop_us + 2000000, 2000);          // lift hold over: completed
     assert(m.context().machine_timer_dl == 280);
@@ -962,16 +970,16 @@ int main() {
     uint32_t t = 1000000;
     k.onReading(temp(95, t), false);
     k.onPourStart(t + 41000);
-    for (uint16_t d = 1; d <= 250; d++) k.onReading(timer(d, t + 100000 + d * 100000), false);
+    for (uint16_t d = 1; d <= 250; d++) feed(k, d, d, t + 100000 + d * 100000);
     k.onPourStop(t + 100000 + 250 * 100000 + 10000, 2000);   // forced stop, pump on
     k.onReading(timer(750, t + 100000 + 251 * 100000), false);
-    for (uint16_t d = 252; d <= 300; d++) k.onReading(timer(d, t + 100000 + d * 100000), false);
+    for (uint16_t d = 252; d <= 300; d++) feed(k, d, d, t + 100000 + d * 100000);
     assert(k.context().machine_timer_dl == 300);   // not 75.0 s
     MachineContextTracker m;
     m.onReading(temp(95, t), false);
     m.onPourStart(t + 41000);
     for (uint16_t d = 1; d <= 250; d++)
-      m.onReading(timer(d == 200 ? 750 : d, t + 100000 + d * 100000), false);
+      feed(m, d == 200 ? 750 : d, d, t + 100000 + d * 100000);
     assert(m.context().machine_timer_dl == 250);
     printf("a misread high TIMER frame is ignored OK\n");
   }
@@ -983,16 +991,16 @@ int main() {
     uint32_t t = 1000000;
     m.onReading(temp(95, t), false);
     m.onPourStart(t + 41000);
-    for (uint16_t d = 1; d <= 280; d++) m.onReading(timer(d, t + 100000 + d * 100000), false);
+    for (uint16_t d = 1; d <= 280; d++) feed(m, d, d, t + 100000 + d * 100000);
     t += 100000 + 280 * 100000;
     for (int i = 1; i <= 10; i++) m.onReading(temp(95, t + i * 41000), false);
     const uint32_t stop = t + 10 * 41000;
     uint32_t u = stop + 200000;
-    for (uint16_t d = 1; d <= 30; d++) m.onReading(timer(d, u + d * 100000), false);
+    for (uint16_t d = 1; d <= 30; d++) feed(m, d, d, u + d * 100000);
     u += 30 * 100000;
     for (int i = 1; i <= 10; i++) m.onReading(temp(95, u + i * 41000), false);
     u += 10 * 41000;
-    for (uint16_t d = 1; d <= 30; d++) m.onReading(timer(d, u + d * 100000), false);
+    for (uint16_t d = 1; d <= 30; d++) feed(m, d, d, u + d * 100000);
     u += 30 * 100000;
     m.onPourStop(u, (u - stop) / 1000);
     assert(m.context().machine_timer_dl == 280);   // not a flush's 3.0 s
@@ -1007,11 +1015,11 @@ int main() {
     k.onReading(temp(95, t), false);
     k.onPourStart(t + 41000);
     for (uint16_t d = 1; d <= 250; d++)
-      k.onReading(timer(d == 245 ? 1 : d, t + 100000 + d * 100000), false);
+      feed(k, d == 245 ? 1 : d, d, t + 100000 + d * 100000);
     const uint32_t stop = t + 100000 + 240 * 100000;
     const uint32_t now = t + 100000 + 250 * 100000 + 10000;
     k.onPourStop(now, (now - stop) / 1000);
-    for (uint16_t d = 251; d <= 300; d++) k.onReading(timer(d, t + 100000 + d * 100000), false);
+    for (uint16_t d = 251; d <= 300; d++) feed(k, d, d, t + 100000 + d * 100000);
     assert(k.context().machine_timer_dl == 300);
     printf("a run split by a misread low frame keeps its start OK\n");
   }
@@ -1025,17 +1033,17 @@ int main() {
     m.onReading(temp(95, t), false);
     m.onPourStart(t + 41000);
     for (uint16_t d = 1; d <= 280; d++)
-      m.onReading(timer(d == 280 ? 3 : d, t + 100000 + d * 100000), false);
+      feed(m, d == 280 ? 3 : d, d, t + 100000 + d * 100000);
     t += 100000 + 280 * 100000;
     for (int i = 1; i <= 100; i++) m.onReading(temp(95, t + i * 41000), false);
     m.onPourStop(t + 100 * 41000, 2000);
     assert(m.context().machine_timer_dl == 279);   // not 0.3 s
     MachineContextTracker k;
     t = 1000000;
-    for (uint16_t d = 1; d <= 40; d++) k.onReading(timer(d == 40 ? 2 : d, t + d * 100000), false);
+    for (uint16_t d = 1; d <= 40; d++) feed(k, d == 40 ? 2 : d, d, t + d * 100000);
     k.onPourStart(t + 40 * 100000 + 41000);
     assert(k.context().machine_timer_dl == 39);
-    for (uint16_t d = 1; d <= 30; d++) k.onReading(timer(d, t + 4200000 + d * 100000), false);
+    for (uint16_t d = 1; d <= 30; d++) feed(k, d, d, t + 4200000 + d * 100000);
     assert(k.context().machine_timer_dl == 30);    // a real restart takes over
     printf("a single low TIMER frame is not a restart OK\n");
   }
@@ -1046,10 +1054,10 @@ int main() {
     MachineContextTracker m;
     uint32_t t = 1000000;
     m.onPourStart(t);
-    for (uint16_t d = 1; d <= 280; d++) m.onReading(timer(d, t + d * 100000), false);
+    for (uint16_t d = 1; d <= 280; d++) feed(m, d, d, t + d * 100000);
     const uint32_t u = t + 280 * 100000;
     for (uint16_t d = 1; d <= 30; d++)
-      m.onReading(timer(d == 30 ? 250 : d, u + d * 100000), false);
+      feed(m, d == 30 ? 250 : d, d, u + d * 100000);
     assert(m.context().machine_timer_dl == 29);
     printf("the misread bound restarts with the run OK\n");
   }
@@ -1058,13 +1066,13 @@ int main() {
     MachineContextTracker m;
     uint32_t t = 1000000;
     m.onPourStart(t);
-    for (uint16_t d = 1; d <= 280; d++) m.onReading(timer(d, t + d * 100000), false);
+    for (uint16_t d = 1; d <= 280; d++) feed(m, d, d, t + d * 100000);
     const uint32_t stop = t + 280 * 100000 + 500000;
     uint32_t u = stop;
     for (int f = 0; f < 4; f++) {
       for (int i = 1; i <= 10; i++) m.onReading(temp(95, u + i * 41000), false);
       u += 10 * 41000;
-      for (uint16_t d = 1; d <= 30; d++) m.onReading(timer(d, u + d * 100000), false);
+      for (uint16_t d = 1; d <= 30; d++) feed(m, d, d, u + d * 100000);
       u += 30 * 100000;
     }
     m.onPourStop(u, (u - stop) / 1000);
@@ -1079,11 +1087,11 @@ int main() {
     MachineContextTracker m;
     uint32_t t = 1000000;
     m.onPourStart(t);
-    for (uint16_t d = 1; d <= 200; d++) m.onReading(timer(d, t + d * 100000), false);
+    for (uint16_t d = 1; d <= 200; d++) feed(m, d, d, t + d * 100000);
     m.onReading(temp(95, t + 200 * 100000 + 50000), false);   // misdecoded frame
     m.onReading(timer(201, t + 201 * 100000), false);
     m.onReading(timer(122, t + 202 * 100000), false);         // misread low
-    for (uint16_t d = 203; d <= 280; d++) m.onReading(timer(d, t + d * 100000), false);
+    for (uint16_t d = 203; d <= 280; d++) feed(m, d, d, t + d * 100000);
     m.onPourStop(t + 290 * 100000, 500);
     assert(m.context().machine_timer_dl == 280);
     printf("a misread after a break does not take over the run OK\n");
@@ -1094,14 +1102,14 @@ int main() {
     MachineContextTracker m;
     uint32_t t = 1000000;
     m.onPourStart(t);
-    for (uint16_t d = 1; d <= 280; d++) m.onReading(timer(d, t + d * 100000), false);
+    for (uint16_t d = 1; d <= 280; d++) feed(m, d, d, t + d * 100000);
     t += 280 * 100000;
     for (int i = 1; i <= 10; i++) m.onReading(temp(95, t + i * 41000), false);
     const uint32_t stop = t + 10 * 41000;
     const uint32_t fl = stop + 400000;
     m.onReading(timer(1, fl + 100000), false);
     m.onReading(timer(82, fl + 200000), false);               // misread high
-    for (uint16_t d = 3; d <= 15; d++) m.onReading(timer(d, fl + d * 100000), false);
+    for (uint16_t d = 3; d <= 15; d++) feed(m, d, d, fl + d * 100000);
     m.onPourStop(stop + 2000000, 2000);
     assert(m.context().machine_timer_dl == 280);
     printf("a flush's misread first frame does not date it before the stop OK\n");
@@ -1113,11 +1121,11 @@ int main() {
     MachineContextTracker m;
     uint32_t t = 1000000;
     m.onPourStart(t);
-    for (uint16_t d = 1; d <= 240; d++) m.onReading(timer(d, t + d * 100000), false);
+    for (uint16_t d = 1; d <= 240; d++) feed(m, d, d, t + d * 100000);
     m.onReading(temp(95, t + 240 * 100000 + 50000), false);   // misdecoded
-    for (uint16_t d = 241; d <= 250; d++) m.onReading(timer(d, t + d * 100000), false);
+    for (uint16_t d = 241; d <= 250; d++) feed(m, d, d, t + d * 100000);
     m.onPourStop(t + 250 * 100000 + 10000, 1000);             // stop at ~24.0 s
-    for (uint16_t d = 251; d <= 300; d++) m.onReading(timer(d, t + d * 100000), false);
+    for (uint16_t d = 251; d <= 300; d++) feed(m, d, d, t + d * 100000);
     assert(m.context().machine_timer_dl == 300);
     printf("a run split by a misdecoded frame is still the stop's run OK\n");
   }
@@ -1129,13 +1137,13 @@ int main() {
     MachineContextTracker m;
     const uint32_t t = 1000000;
     m.onPourStart(t);
-    for (uint16_t d = 1; d <= 280; d++) m.onReading(timer(d, t + d * 100000), false);
+    for (uint16_t d = 1; d <= 280; d++) feed(m, d, d, t + d * 100000);
     m.onPourStop(t + 290 * 100000, 500);
     // an hour of idle temperature frames, every ~10 s here
     for (uint32_t i = 1; i <= 426; i++) m.onReading(temp(95, t + 290 * 100000 + i * 10000000u), false);
-    for (uint16_t d = 1; d <= 3; d++) m.onReading(timer(d, t + d * 100000), false);   // t + 2^32
+    for (uint16_t d = 1; d <= 3; d++) feed(m, d, d, t + d * 100000);   // t + 2^32
     m.onPourStart(t + 3 * 100000 + 41000);
-    for (uint16_t d = 4; d <= 200; d++) m.onReading(timer(d, t + d * 100000), false);
+    for (uint16_t d = 4; d <= 200; d++) feed(m, d, d, t + d * 100000);
     m.onPourStop(t + 210 * 100000, 500);
     assert(m.context().machine_timer_dl == 200);
     printf("a brew one micros() wrap later is a new run OK\n");
@@ -1146,11 +1154,11 @@ int main() {
     MachineContextTracker m;
     const uint32_t t = 1000000;
     m.onPourStart(t);
-    for (uint16_t d = 1; d <= 250; d++) m.onReading(timer(d, t + d * 100000), false);
+    for (uint16_t d = 1; d <= 250; d++) feed(m, d, d, t + d * 100000);
     m.onPourStop(t + 250 * 100000 + 10000, 0);              // forced stop, pump on
     m.onReading(timer(122, t + 251 * 100000), false);
     m.onReading(timer(122, t + 251 * 100000 + 41000), false);
-    for (uint16_t d = 253; d <= 300; d++) m.onReading(timer(d, t + d * 100000), false);
+    for (uint16_t d = 253; d <= 300; d++) feed(m, d, d, t + d * 100000);
     assert(m.context().machine_timer_dl == 300);
     printf("a repeated misread after the stop does not end the run OK\n");
   }
@@ -1160,7 +1168,7 @@ int main() {
     MachineContextTracker m;
     uint32_t t = 1000000;
     m.onPourStart(t);
-    for (uint16_t d = 1; d <= 280; d++) m.onReading(timer(d, t + d * 100000), false);
+    for (uint16_t d = 1; d <= 280; d++) feed(m, d, d, t + d * 100000);
     t += 280 * 100000;
     for (int i = 1; i <= 12; i++) m.onReading(temp(95, t + i * 41000), false);
     const uint32_t stop = t + 12 * 41000;
@@ -1180,7 +1188,7 @@ int main() {
     //     still counts keeps it.
     MachineContextTracker m;
     uint32_t t = 1000000;
-    for (uint16_t d = 1; d <= 105; d++) m.onReading(timer(d, t + d * 100000), false);  // flush
+    for (uint16_t d = 1; d <= 105; d++) feed(m, d, d, t + d * 100000);  // flush
     t += 105 * 100000;                               // pump off; 105 held 5 s
     for (int i = 1; i <= 36; i++) m.onReading(timer(105, t + i * 41000), false);
     m.onPourStart(t + 36 * 41000 + 10000);           // the draw, 1.5 s into the hold
@@ -1197,10 +1205,10 @@ int main() {
     MachineContextTracker m;
     const uint32_t t = 1000000;
     m.onPourStart(t);
-    for (uint16_t d = 1; d <= 230; d++) m.onReading(timer(d, t + d * 100000), false);
+    for (uint16_t d = 1; d <= 230; d++) feed(m, d, d, t + d * 100000);
     m.onReading(timer(21, t + 260 * 100000), false);           // dropout, then misread
     m.onReading(timer(21, t + 260 * 100000 + 41000), false);
-    for (uint16_t d = 261; d <= 280; d++) m.onReading(timer(d, t + d * 100000), false);
+    for (uint16_t d = 261; d <= 280; d++) feed(m, d, d, t + d * 100000);
     m.onPourStop(t + 290 * 100000, 500);
     assert(m.context().machine_timer_dl == 280);
     printf("a repeated misread after a dropout does not lock the run out OK\n");
@@ -1212,15 +1220,63 @@ int main() {
     MachineContextTracker m;
     uint32_t t = 1000000;
     m.onPourStart(t);
-    for (uint16_t d = 1; d <= 280; d++) m.onReading(timer(d, t + d * 100000), false);
+    for (uint16_t d = 1; d <= 280; d++) feed(m, d, d, t + d * 100000);
     t += 280 * 100000;
     for (int i = 1; i <= 60; i++) m.onReading(timer(280, t + i * 41000), false);   // held
     m.onPourStop(t + 60 * 41000, 1000);
     for (int i = 61; i <= 80; i++) m.onReading(timer(280, t + i * 41000), false);
     const uint32_t fl = t + 80 * 41000;
-    for (uint16_t d = 0; d <= 150; d++) m.onReading(timer(d, fl + 50000 + d * 100000), false);
+    for (uint16_t d = 0; d <= 150; d++) feed(m, d, d, fl + 50000 + d * 100000);
     assert(m.context().machine_timer_dl == 280);
     printf("a flush during the held value after the stop is another run OK\n");
+  }
+
+  {
+    // 38. Review of 9734611 (injected into the 2026-10-03 captures): a tenths
+    //     digit misread by one or two passes the pair rule. One held frame
+    //     reading 107 for 105 must not raise the shot's timer, nor make a
+    //     draw confirmed 0.6 s after the last real count carry the run; and
+    //     the last rising frame misread +2 must not either.
+    MachineContextTracker m;
+    uint32_t t = 1000000;
+    m.onPourStart(t);
+    for (uint16_t d = 1; d <= 105; d++) feed(m, d, d, t + d * 100000);
+    uint32_t h = t + 105 * 100000 + 82000;                     // the hold
+    m.onReading(timer(107, h), false);                         // one-segment misread
+    for (int i = 1; i <= 20; i++) m.onReading(timer(105, h + i * 41000), false);
+    m.onPourStop(h + 20 * 41000, 1000);
+    assert(m.context().machine_timer_dl == 105);               // not 107
+    for (int i = 21; i <= 100; i++) m.onReading(timer(105, h + i * 41000), false);
+
+    MachineContextTracker k;                                   // the draw
+    t = 1000000;
+    for (uint16_t d = 1; d <= 105; d++) feed(k, d, d, t + d * 100000);
+    h = t + 105 * 100000 + 82000;
+    k.onReading(timer(106, h), false);                         // misread, at the hold's start
+    for (int i = 1; i <= 12; i++) k.onReading(timer(105, h + i * 41000), false);
+    k.onPourStart(h + 450000);                                 // 0.53 s after the last count
+    assert(k.context().machine_timer_dl == 0);
+
+    MachineContextTracker e;                                   // the last rise misread
+    t = 1000000;
+    e.onPourStart(t);
+    for (uint16_t d = 1; d <= 104; d++) feed(e, d, d, t + d * 100000);
+    e.onReading(timer(107, t + 105 * 100000), false);          // 105 shown as 107
+    for (int i = 1; i <= 20; i++) e.onReading(timer(105, t + 105 * 100000 + i * 41000), false);
+    e.onPourStop(t + 105 * 100000 + 20 * 41000, 500);
+    assert(e.context().machine_timer_dl == 105);
+    printf("a tenths digit misread by one or two does not raise the timer OK\n");
+  }
+  {
+    // 39. Review of 9734611: a pour exactly one micros() wrap after the last
+    //     count-up must not carry that run.
+    MachineContextTracker m;
+    const uint32_t t = 1000000;
+    for (uint16_t d = 1; d <= 105; d++) feed(m, d, d, t + d * 100000);
+    for (uint32_t i = 1; i <= 426; i++) m.onReading(temp(95, t + 110 * 100000 + i * 10000000u), false);
+    m.onPourStart(t + 105 * 100000 + 41000 + 100000);         // + 2^32 us, a draw
+    assert(m.context().machine_timer_dl == 0);
+    printf("a pour one micros() wrap after a run does not carry it OK\n");
   }
 
   printf("\nall machine context tests passed\n");

@@ -124,7 +124,8 @@ public:
   // A run's latest counted frame must be this recent for a frame to continue
   // it or to be judged against it. Dropouts last seconds; the display clock
   // is ~0.5 % off real time (docs/machine-display-bus.md), so a run's date
-  // drifts ~0.15 s over this, inside RUN_AGREE_US. And micros() wraps every
+  // drifts ~0.17 s over this (measured on the 2026-10-03 captures), inside
+  // RUN_AGREE_US. And micros() wraps every
   // ~71.6 min: a date compared across that could match a new brew to an old
   // run (review of d24b655).
   static constexpr uint32_t RUN_RECENT_US = 30000000;  // 30 s
@@ -172,8 +173,10 @@ public:
   //   EVERY TIMER FRAME DATES ITS RUN'S START: est = at_us − reading. A
   // frame COUNTS only when the frame just before it was TIMER too and the
   // two dates agree within RUN_AGREE_US. A real run gives the same date
-  // frame after frame; a misdecoded digit moves it by a second or more, so
-  // a lone misread counts for nothing, and neither does the frame after it.
+  // frame after frame; a misdecoded seconds digit moves it by a second or
+  // more, so such a misread counts for nothing, and neither does the frame
+  // after it. A tenths digit off by one or two passes the pair rule; the
+  // rise rule below keeps it out of the run's value.
   // (2026-11-13: one idle frame decoded as TIMER " 95" between two
   // temperature frames and, taken alone, overwrote a 28 s shot with 9.5 s.)
   //   A RUN IS ITS DATE, TAKEN WHILE IT COUNTS UP: a counted frame whose date
@@ -197,19 +200,35 @@ public:
   void onTimerFrame(const DisplayBus::Reading& r) {
     if (r.mode != DisplayBus::Mode::TIMER) {
       have_prev_est = false;
+      // Retire a run unseen for RUN_RECENT_US. Idle frames come every ~41 ms,
+      // so this happens long before micros() wraps (~71.6 min) and an old
+      // run's times could look recent again (review of 9734611). With the
+      // bus silent, main.cpp's staleness test keeps onPourStart from
+      // carrying anything.
+      if (have_glass_run && (uint32_t)(r.at_us - run_seen_us) > RUN_RECENT_US)
+        have_glass_run = false;
       return;
     }
     const uint32_t est = r.at_us - (uint32_t)r.timer_dl * 100000u;
     const bool counts = have_prev_est && near(est, prev_est);
+    // A RISE NEEDS BOTH FRAMES OF THE PAIR: the value the run has surely
+    // reached is the lower of the two. A digit misread by a tenth or two
+    // moves a frame's date by only 0.1-0.2 s -- inside RUN_AGREE_US -- so
+    // the pair rule alone let one frame read 106 for 105 raise the stored
+    // timer and refresh liveness (review of 9734611, injected into the
+    // 2026-10-03 captures). Each value shows on 2-3 frames, so this costs
+    // one frame per tick.
+    const uint16_t sure_dl = r.timer_dl < prev_dl ? r.timer_dl : prev_dl;
     prev_est = est;
+    prev_dl = r.timer_dl;
     have_prev_est = true;
     if (!counts) return;
     const bool recent = have_glass_run
                      && (uint32_t)(r.at_us - run_seen_us) <= RUN_RECENT_US;
     bool new_run = false;
     if (recent && near(est, run_last_est)) {
-      if (r.timer_dl > run_dl) {                    // counting: the run goes on
-        run_dl = r.timer_dl;
+      if (sure_dl > run_dl) {                       // counting: the run goes on
+        run_dl = sure_dl;
         run_last_est = est;
         last_rise_us = r.at_us;
         if ((int32_t)(est - run_start_us) < 0) run_start_us = est;
@@ -219,11 +238,11 @@ public:
       return;
     } else if (have_cand && near(est, cand_last_est)
                && (uint32_t)(r.at_us - cand_seen_us) <= RUN_RECENT_US) {
-      if (r.timer_dl <= cand_dl) { cand_seen_us = r.at_us; return; }
+      if (sure_dl <= cand_dl) { cand_seen_us = r.at_us; return; }
       // The candidate counted up: it is the run now.
       new_run = true;
       have_glass_run = true;
-      run_dl = r.timer_dl;
+      run_dl = sure_dl;
       run_start_us = (int32_t)(cand_start_us - est) < 0 ? cand_start_us : est;
       run_last_est = est;
       last_rise_us = r.at_us;
@@ -385,7 +404,10 @@ public:
   // remembered setpoint is not stamped — an edit could be going unseen —
   // and no timer is carried.
   void onPourStart(uint32_t now_us, bool display_live = true) {
+    // Unsigned differences; a run unseen for RUN_RECENT_US is retired in
+    // onTimerFrame, so a rise one micros() wrap ago cannot look recent.
     const bool run_live = display_live && have_glass_run
+                       && (uint32_t)(now_us - run_seen_us) <= RUN_RECENT_US
                        && (uint32_t)(now_us - last_rise_us) <= TIMER_LIVE_US;
     uint16_t timer_carry = run_live ? run_dl : 0;
     n_runs = 0;
@@ -594,6 +616,7 @@ private:
   // Timer-run state (onTimerFrame, onPourStart, onPourStop).
   bool     have_prev_est = false;   // the frame before was TIMER, dating prev_est
   uint32_t prev_est = 0;
+  uint16_t prev_dl = 0;             // and read prev_dl
   bool     have_glass_run = false;  // a run has counted up since boot
   uint16_t run_dl = 0;              // the run on the glass: its highest reading
   uint32_t run_start_us = 0;        // its earliest date

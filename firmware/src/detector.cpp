@@ -215,9 +215,10 @@ void ShotDetector::enterSettling(uint32_t t, int32_t w_at_stop, uint32_t stop_t,
 // tick() is never gated: it decides at once, and main defers only the
 // spool write while the pump runs (invariant 2). Gating tick() kept the
 // shot open, so a flush or the next shot fed into it (review of c85dcf8).
-// Each of these ends the curve before a settle window could close, so
-// v_shot_end reads the shot as cut short ("ended_by_lift" means exactly
-// that) -- which it was, by the scale rather than a hand.
+// Each of these ends the samples before a settle window could close, so
+// v_shot_end reads ended_by_lift = 1 -- the samples stopped early, by the
+// scale rather than a hand. A settle that runs out on the clock here may
+// still have closed on time with a full settle's yield (shot 214; 016).
 bool ShotDetector::tick(uint32_t now) {
   if (st != ShotState::SETTLING && st != ShotState::POURING) return false;
   if ((int32_t)(now - last_t) < (int32_t)SCALE_QUIET_MS) return false;

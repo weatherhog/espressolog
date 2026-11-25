@@ -14,34 +14,50 @@ export function Eyebrow({ children, style }) {
 // pump start, pre-infusion included). total_s is the scale's time, first
 // drip to a flat weight, ~10 s shorter with pre-infusion.
 //
-// machine_timer_s is only trusted when it describes THIS shot's pump run.
-// The firmware keeps the last timer it saw until a new one replaces it, so
-// the stored value can be another run's: the previous brew on a hot-water
-// draw (the display runs no timer then) or with the display tap off; a
-// flush pressed inside the 5 s settle (the timer is copied at completion);
-// and, before firmware 0.9.7, a misread " 95" idle frame stored as 9.5 s.
-// So it needs a lever-A press (switch_direction: 1Cup or 2Cup) and must
-// fit the press-to-stop span p, which is pump-off plus the drips before the
-// weight went flat: ~1 s more than the timer on a clean shot. The window is
-// lopsided on purpose. Every wrong timer above reads far BELOW p (a flush,
-// 9.5 s) or comes without a lever-A press (a hot-water draw); but p itself
-// reads up to ~7 s HIGH on a lift-terminated shot from detector 0a.7 or
-// earlier (stop_ms overwritten, CLAUDE.md "Shot detection"; shot 212:
-// timer 35.9, p 42.3), and there the timer is the right number.
-// Not caught: a stale timer from the previous brew with the display tap
-// off that happens to land inside the window.
-// Otherwise the press-to-stop span itself ("Pump"), then the scale's own
-// time ("Pour"); the label says which, so the three never pass as one.
-const TIMER_UNDER_P_MAX_S = 9; // lift shift (~7 s) plus drips
-const TIMER_OVER_P_MAX_S = 3;
+// machine_timer_s is the firmware's last timer reading, which is not always
+// THIS shot's run: the previous brew on a hot-water draw (the display runs
+// no timer then) or with the display tap off; a flush pressed inside the
+// 5 s settle (the timer is copied at completion), which leaves the flush's
+// first seconds; and before firmware 0.9.7 a misread " 95" idle frame,
+// 9.5 s. The press-to-stop span p cannot referee it alone either: p is the
+// lead alone on a sub-5 g abort (stop_ms 0), ~7 s high on a forced stop
+// (stop_ms >= 60000 is not backdated) or an 0a.7 lift while settling, low
+// on a lift mid-pour or a scale-lost fault, and whole flushes high when a
+// missed start press borrows an earlier one.
+//
+// So: a hot-water draw (a press, but not lever A) never takes the timer.
+// Otherwise the timer stands on its own when it is a brew's length
+// (MIN_BREW_S) on firmware 0.9.7 or later -- every wrong value above but
+// the stale-tap one is a few seconds -- or, when shorter, if a usable p
+// agrees with it. The stale previous-brew timer with the tap off is not
+// caught; the timer-own-run firmware fix stores none there.
+// Fallbacks say what they are: "Press→stop" (p), then "Pour" (first drip
+// to a flat weight, ~10 s short of the machine on a pre-infused shot).
+const MIN_BREW_S = 15;
+const TIMER_AGREE_S = 3;
+
+function firmwareAtLeast(v, want) {
+  const m = /^(\d+)\.(\d+)\.(\d+)/.exec(v || "");
+  if (!m) return false;
+  const a = [+m[1], +m[2], +m[3]];
+  for (let i = 0; i < 3; i++) if (a[i] !== want[i]) return a[i] > want[i];
+  return true;
+}
+
 export function shotTime(shot) {
-  const m = shot.machine_timer_s, p = shot.pump_to_stop_s;
-  if (m != null && p != null && shot.switch_direction != null && m > 0
-      && p - m <= TIMER_UNDER_P_MAX_S && m - p <= TIMER_OVER_P_MAX_S) {
-    return { s: m, label: "Time" };
+  const m = shot.machine_timer_s;
+  const pressed = shot.pump_to_stop_s != null;
+  const p = pressed && shot.total_s > 0 && shot.stop_ms < 60000
+    ? shot.pump_to_stop_s : null;
+  const hotWater = pressed && shot.switch_direction == null;
+  if (m != null && m > 0 && !hotWater) {
+    if (m >= MIN_BREW_S && firmwareAtLeast(shot.firmware_version, [0, 9, 7])) {
+      return { s: m, label: "Time" };
+    }
+    if (p != null && Math.abs(p - m) <= TIMER_AGREE_S) return { s: m, label: "Time" };
   }
-  if (p != null) return { s: p, label: "Pump" };
-  if (shot.total_s) return { s: shot.total_s, label: "Pour" };
+  if (p != null) return { s: p, label: "Press→stop" };
+  if (shot.total_s > 0) return { s: shot.total_s, label: "Pour" };
   return { s: null, label: "Time" };
 }
 

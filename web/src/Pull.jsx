@@ -19,7 +19,11 @@ import { fetchCurve } from "./api.js";
 // Target box: yield range × time range the trace should exit through.
 // Two variables, one glance. Ranges are editable and live in localStorage —
 // they're a per-screen aiming aid, not data (the shot records what happened).
-const DEFAULT_TARGETS = { y0: 34, y1: 38, t0: 22, t1: 32 };
+// The time band is POUR time, the live chart's clock (the scale, from the
+// pour's start), not the machine's: a "25-30 s" recipe counts from pump
+// start, ~10 s earlier with pre-infusion. 22-32 was that recipe's band and
+// left normal shots short of the box. Saved targets (localStorage) win.
+const DEFAULT_TARGETS = { y0: 34, y1: 38, t0: 16, t1: 24 };
 
 function loadTargets() {
   try { return { ...DEFAULT_TARGETS, ...JSON.parse(localStorage.getItem("pullTargets")) }; }

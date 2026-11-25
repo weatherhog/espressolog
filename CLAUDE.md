@@ -652,8 +652,9 @@ another run's last count carries that run (physically unlikely). The
 shot's own value can be a tenth or two off: a misread repeated on two
 frames raises it, and a ~0.3 s blind spot at pump-off loses its last
 tenths. **Records from 0.16.0 and
-earlier keep the old behaviour**, so the PWA's `shotTime()` window stays —
-for 0.16.1 records too, because of the first exception.
+earlier keep the old behaviour**, so the PWA's trust rule
+(`web/src/shotTime.js`) keeps a window for them — and for 0.16.1 records
+too, because of the first exception.
 **`docs/machine-display-bus.md`, "What the firmware stores as the shot
 timer", is normative on the mechanism**, its limits and the capture replays
 that tested it.

@@ -638,7 +638,7 @@ the obvious guard and is not built.
 boundaries.
 
 **`machine_timer_dl` IS THIS SHOT'S PUMP RUN OR 0 — FROM FIRMWARE 0.16.1
-(2026-11-25), WITH ONE EXCEPTION BELOW.** Up to 0.16.0 it could be
+(2026-11-25), WITH THE EXCEPTIONS BELOW.** Up to 0.16.0 it could be
 **another run's**: pour start carried whatever the timer last reached, so a
 pour with no timer of its own (a hot-water draw, the display tap off or
 stale) stored the previous brew's or flush's; and it was read at
@@ -647,16 +647,20 @@ replaced it. Now (`machine_context.h`) the tracker follows the run on the
 glass apart from the stored value. **A run is its date**: every TIMER frame
 dates the run's start (frame time minus reading), a frame counts only when
 the frame before it was TIMER and gives the same date within 0.3 s — so a
-misread digit, high or low, counts for nothing — and a counted frame with
-another date is another run (a restart, a flush). Pour start carries the
-run only if it is live — a counted TIMER frame within 1 s and no other
-frame since — and `onPourStop()` freezes the value at the detector's
+lone misread digit, high or low, counts for nothing — and a counted frame with
+another date is another run (a restart, a flush) — unless it is dated
+before the previous run's latest frame, which no pump run can be, and is a
+misread that repeated. Pour start carries the run only if it is live — a
+counted TIMER frame within 1 s and no non-TIMER frame since — and `onPourStop()` freezes the value at the detector's
 backdated stop, at the SETTLING transition or, for a shot finished straight
 from POURING, at completion: it takes the newest run of the pour that began
 at or before the stop, and only that run, recognised by its date, may keep
 counting. **The exception: a flush pressed after pump-off but BEFORE that
 stop** — while the cup still drips and the weight is not yet flat — is the
-latest run at the stop and is stored as the shot's. Also: a pour whose timer
+latest run at the stop and is stored as the shot's, at its full length,
+which can exceed the shot's own — and two idle frames misread alike as
+TIMER, dated after the pour's last timer frame and before the stop, would be
+a run the same way. Also: a pour whose timer
 is no longer on the display when POURING is confirmed (first drip + ~300 ms
 + BLE and loop latency) reads 0, and eight or more new runs between the
 stop and its freeze push the shot's run out (0).

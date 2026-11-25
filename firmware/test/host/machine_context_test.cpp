@@ -1122,6 +1122,56 @@ int main() {
     printf("a run split by a misdecoded frame is still the stop's run OK\n");
   }
 
+  {
+    // 32. Review of d24b655: micros() wraps every ~71.6 min, so a brew that
+    //     starts exactly 2^32 us after the last counted run has the same
+    //     date. It must be a new run (20.0 s), not the old one (28.0 s).
+    MachineContextTracker m;
+    const uint32_t t = 1000000;
+    m.onPourStart(t);
+    for (uint16_t d = 1; d <= 280; d++) m.onReading(timer(d, t + d * 100000), false);
+    m.onPourStop(t + 290 * 100000, 500);
+    // an hour of idle temperature frames, every ~10 s here
+    for (uint32_t i = 1; i <= 426; i++) m.onReading(temp(95, t + 290 * 100000 + i * 10000000u), false);
+    for (uint16_t d = 1; d <= 3; d++) m.onReading(timer(d, t + d * 100000), false);   // t + 2^32
+    m.onPourStart(t + 3 * 100000 + 41000);
+    for (uint16_t d = 4; d <= 200; d++) m.onReading(timer(d, t + d * 100000), false);
+    m.onPourStop(t + 210 * 100000, 500);
+    assert(m.context().machine_timer_dl == 200);
+    printf("a brew one micros() wrap later is a new run OK\n");
+  }
+  {
+    // 33. Review of d24b655: the same misread twice in a row (12.2 for
+    //     25.1, 25.2) after a forced stop must not end the following.
+    MachineContextTracker m;
+    const uint32_t t = 1000000;
+    m.onPourStart(t);
+    for (uint16_t d = 1; d <= 250; d++) m.onReading(timer(d, t + d * 100000), false);
+    m.onPourStop(t + 250 * 100000 + 10000, 0);              // forced stop, pump on
+    m.onReading(timer(122, t + 251 * 100000), false);
+    m.onReading(timer(122, t + 251 * 100000 + 41000), false);
+    for (uint16_t d = 253; d <= 300; d++) m.onReading(timer(d, t + d * 100000), false);
+    assert(m.context().machine_timer_dl == 300);
+    printf("a repeated misread after the stop does not end the run OK\n");
+  }
+  {
+    // 34. Review of d24b655: two idle frames decoded as TIMER " 95" just
+    //     after the stop (the 2026-11-13 glitch, twice) are not a run.
+    MachineContextTracker m;
+    uint32_t t = 1000000;
+    m.onPourStart(t);
+    for (uint16_t d = 1; d <= 280; d++) m.onReading(timer(d, t + d * 100000), false);
+    t += 280 * 100000;
+    for (int i = 1; i <= 12; i++) m.onReading(temp(95, t + i * 41000), false);
+    const uint32_t stop = t + 12 * 41000;
+    m.onReading(timer(95, stop + 500000), false);
+    m.onReading(timer(95, stop + 541000), false);
+    for (int i = 1; i <= 30; i++) m.onReading(temp(95, stop + 541000 + i * 41000), false);
+    m.onPourStop(stop + 2000000, 2000);
+    assert(m.context().machine_timer_dl == 280);
+    printf("two idle 9.5 glitch frames near the stop are not a run OK\n");
+  }
+
   printf("\nall machine context tests passed\n");
   return 0;
 }

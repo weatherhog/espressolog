@@ -119,6 +119,13 @@ public:
   // display's 100 ms tick plus the 41 ms frame period; a misread digit
   // moves it by a second or more.
   static constexpr uint32_t RUN_AGREE_US = 300000;     // 0.3 s
+  // A run's latest counted frame must be this recent for a frame to continue
+  // it or to be judged against it. Dropouts last seconds; the display clock
+  // is ~0.5 % off real time (docs/machine-display-bus.md), so a run's date
+  // drifts ~0.15 s over this, inside RUN_AGREE_US. And micros() wraps every
+  // ~71.6 min: a date compared across that could match a new brew to an old
+  // run (review of d24b655).
+  static constexpr uint32_t RUN_RECENT_US = 30000000;  // 30 s
 
   // Call on every fresh display reading. `touched_latch` is
   // DisplayBus::setpointTouched(); the caller clears it at pour start.
@@ -178,8 +185,8 @@ public:
   // stall, since a frame of a different run cannot carry the same date --
   // and any other starts a new run (a restart, a flush, a new brew). A run's
   // start is the earliest date among its frames.
-  //   timer_live: a run is on the glass right now -- the latest frame was
-  // TIMER. onPourStart() carries the run only then, never what the last shot
+  //   timer_live: a run is on the glass right now -- set by a counted TIMER
+  // frame, cleared by any non-TIMER frame. onPourStart() carries the run only then, never what the last shot
   // stored (review of 3f34199: carrying mc's value let a frozen shot's timer
   // reach the next shot).
   void onTimerFrame(const DisplayBus::Reading& r) {
@@ -193,7 +200,16 @@ public:
     prev_est = est;
     have_prev_est = true;
     if (!counts) return;
-    const bool same_run = have_glass_run && near(est, run_last_est);
+    const bool recent = have_glass_run
+                     && (uint32_t)(r.at_us - last_timer_us) <= RUN_RECENT_US;
+    const bool same_run = recent && near(est, run_last_est);
+    // PUMP RUNS DO NOT OVERLAP: a new run cannot have started before the
+    // latest counted frame of the one before it. A pair dated earlier is a
+    // misread that happened to repeat -- two idle " 95" frames shortly after
+    // a shot, or the same wrong digit twice -- and is ignored (review of
+    // d24b655: either kind, near the stop, was stored as the shot's timer or
+    // ended its following).
+    if (recent && !same_run && (int32_t)(est - last_timer_us) < -(int32_t)RUN_AGREE_US) return;
     if (!same_run) {
       run_dl = 0;
       run_start_us = est;
@@ -334,7 +350,7 @@ public:
   // before the pump started, which is the only time it is readable, and
   // keeps whatever the timer has reached for this brew.
   //   THE TIMER IS KEPT ONLY IF A RUN IS LIVE NOW -- a counted TIMER frame
-  // within TIMER_LIVE_US and no other frame since -- because then it is this
+  // within TIMER_LIVE_US and no non-TIMER frame since -- because then it is this
   // pour's pump (POURING is confirmed while the pump runs). Until 0.16.1 it was
   // kept unconditionally, so a pour with no timer of its own (a hot-water
   // draw, which the display does not time; the display tap off or stale)
@@ -409,7 +425,10 @@ public:
   // before the next onPourStart() do nothing.
   //   KNOWN LIMITS: a flush pressed after pump-off but before the stop (the
   // cup still dripping, the weight not yet flat) is the latest run AT the
-  // stop and is stored as the shot's; N_RUNS (eight) or more new runs
+  // stop and is stored as the shot's, followed to its full length, which can
+  // exceed the shot's; two idle frames misread alike as TIMER, dated more
+  // than ~0.3 s after the pour's last timer frame and before the stop, are
+  // a run too; N_RUNS (eight) or more new runs
   // between the stop and this call push the shot's run out (0); the stop
   // time is the scale's BLE arrival time, ~100-200 ms late.
   void onPourStop(uint32_t now_us, uint32_t ms_since_stop) {

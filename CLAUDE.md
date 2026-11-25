@@ -648,8 +648,10 @@ the final value ~5 s after pump-off**, which any timer logic must allow
 for. **Exceptions:** a flush pressed after pump-off but BEFORE the scale's
 stop is stored as the shot's, at its full length, which can be above or
 below the shot's own (a 1Cup flush after a 2Cup shot reads shorter); and a pour with no timer of its own confirmed within 0.5 s of
-another run's last count carries that run (physically unlikely). A misread
-repeated on two frames can move it by a tenth. **Records from 0.16.0 and
+another run's last count carries that run (physically unlikely). The
+shot's own value can be a tenth or two off: a misread repeated on two
+frames raises it, and a ~0.3 s blind spot at pump-off loses its last
+tenths. **Records from 0.16.0 and
 earlier keep the old behaviour**, so the PWA's `shotTime()` window stays —
 for 0.16.1 records too, because of the first exception.
 **`docs/machine-display-bus.md`, "What the firmware stores as the shot

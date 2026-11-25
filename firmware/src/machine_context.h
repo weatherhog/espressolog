@@ -227,45 +227,29 @@ public:
     const bool recent = have_glass_run
                      && (uint32_t)(r.at_us - run_seen_us) <= RUN_RECENT_US;
     bool new_run = false;
-    // A RUN CANNOT RISE FASTER THAN TIME PASSES UNSEEN: at most one tick per
-    // 100 ms since this board last saw a frame SHOWING ITS VALUE (run_at_us:
-    // a rise, or a frame equal to it). While frames keep
-    // coming (every ~41 ms) that is one tick, so a misread repeated on two
-    // frames moves the value by a tenth at most -- not a second, which a
-    // held value's walking date could otherwise match (review of 9486c25).
-    // After a blind spot -- a loop() stall or a dropout at pump-off -- the
-    // allowance grows with it, so the final value is still taken.
-    const uint32_t unseen_us = (uint32_t)(r.at_us - run_at_us);
-    const uint32_t allow = recent ? (unseen_us + 99999u) / 100000u : 0;
-    const bool may_rise = recent && sure_dl > run_dl && sure_dl <= (uint32_t)run_dl + allow;
     if (recent && near(est, run_last_est)) {
-      if (may_rise) {                               // counting: the run goes on
+      // A HELD run has stopped: once the display has shown its final value
+      // for longer than RUN_AGREE_US (run_held, below) the pump is off, and a
+      // run never resumes -- a restart is a new date. So nothing raises it
+      // after that: a misread pair of +N s about N s into the hold matches
+      // its date and was taken as a rise, into the shot or a draw (review of
+      // 6aa4443, real captures).
+      if (sure_dl > run_dl && !run_held) {          // counting: the run goes on
         run_dl = sure_dl;
-        run_at_us = r.at_us;
         run_last_est = est;
         last_rise_us = r.at_us;
         if ((int32_t)(est - run_start_us) < 0) run_start_us = est;
-      } else if (r.timer_dl == run_dl) {
-        run_at_us = r.at_us;                        // still showing its value
+      } else {
+        // Its date, but no rise: nothing to store. Falling through let a
+        // misread pair whose date matched (+N s, ~N s into the hold) push
+        // the old run into a hot-water draw's empty pour (review of
+        // 6aa4443, real captures).
+        run_seen_us = r.at_us;
+        return;
       }
     } else if (recent && r.timer_dl == run_dl) {
-      run_seen_us = run_at_us = r.at_us;            // the final value, held
-      return;
-    } else if (may_rise && sure_dl == r.timer_dl) {
-      // THE FINAL VALUE AFTER A BLIND SPOT: the display already holds it
-      // (its date has walked on), higher than the last rise seen. Taken as
-      // the run's value, without refreshing liveness -- the run has stopped
-      // counting (review of 9486c25: a 0.3 s stall at pump-off lost the last
-      // tenths, 103 stored for 105).
-      run_dl = sure_dl;
-      run_seen_us = run_at_us = r.at_us;
-      if (!stopped) {
-        if (n_runs == 0) pushRun();
-        runs[n_runs - 1] = { run_start_us, run_dl };
-        mc.machine_timer_dl = run_dl;
-      } else if (timer_follow) {
-        mc.machine_timer_dl = run_dl;
-      }
+      run_seen_us = r.at_us;                        // the final value, held
+      run_held = true;
       return;
     } else if (have_cand && near(est, cand_last_est)
                && (uint32_t)(r.at_us - cand_seen_us) <= RUN_RECENT_US) {
@@ -274,7 +258,7 @@ public:
       new_run = true;
       have_glass_run = true;
       run_dl = sure_dl;
-      run_at_us = r.at_us;
+      run_held = false;
       run_start_us = (int32_t)(cand_start_us - est) < 0 ? cand_start_us : est;
       run_last_est = est;
       last_rise_us = r.at_us;
@@ -654,7 +638,7 @@ private:
   uint32_t run_start_us = 0;        // its earliest date
   uint32_t run_last_est = 0;        // the date of its latest rising frame
   uint32_t run_seen_us = 0;         // its latest counted frame, held ones too
-  uint32_t run_at_us = 0;           // its latest frame showing run_dl (or a rise)
+  bool     run_held = false;        // its final value has been held: it has stopped
   uint32_t last_rise_us = 0;        // when it last counted up
   bool     have_cand = false;       // a counted pair of another date, not yet rising
   uint16_t cand_dl = 0;

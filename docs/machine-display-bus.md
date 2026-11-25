@@ -831,14 +831,13 @@ stands:
   clock is ~0.5 % off), absorbed because the run's date follows each
   rising frame.
 - **A rise needs both frames of the pair** (the run reaches the lower
-  reading) **and at most one tick per 100 ms since a frame last showed the
-  run's value**: a misread repeated on two frames moves it a tenth at most,
-  and after a blind spot (a `loop()` stall or dropout at pump-off) the final
-  value is still taken.
+  reading), so one misread frame never raises it.
 - **A frame showing the run's maximum keeps the run** (the hold) without
-  moving its date; **another date is a candidate until it counts up**, so
-  a misread that repeats, including two idle `" 95"` frames, never becomes
-  a run.
+  moving its date, and once the hold has outlasted the 0.3 s date window
+  **the run has stopped and nothing raises it again**: a run never
+  resumes, a restart has a new date. **Another date is a candidate until
+  it counts up**, so a misread that repeats, including two idle `" 95"`
+  frames, never becomes a run.
 - **Pour start carries the run only if it counted up within 0.5 s**;
   `onPourStop()` takes the newest run of the pour that began at or before
   the detector's backdated stop, and only that run may keep counting. A
@@ -849,7 +848,15 @@ stop is stored as the shot's, at its full length -- above or below the
 shot's own; a pour with no timer of
 its own confirmed within 0.5 s of another run's last count carries it;
 eight or more new runs between the stop and its freeze lose the shot's run
-(0); the stop time is the scale's BLE arrival, ~100-200 ms late. With the
+(0); the stop time is the scale's BLE arrival, ~100-200 ms late. **Own-run
+precision:** a blind spot of ~0.3 s or more spanning pump-off (a `loop()`
+stall, a bus dropout) loses the final tenths -- the held frames after it
+match neither the run's date nor its last value; and the same misread on
+two frames in a row during the run's last rising frames or the first
+~0.3 s of the hold raises it by a tenth or two (and a draw confirmed
+within 0.5 s of that carries it). Review 8 tried a rise cap for both; it
+locked runs out after multi-second stalls and let idle glitches in, and was
+reverted (review 9, 2026-11-25). With the
 machine off the bus is silent and nothing retires a run, so an off period
 ending within 30 s of a multiple of 71.6 min (the `micros()` wrap) could
 make an old run look recent; carrying it would also need a pour within
@@ -861,6 +868,6 @@ scale going flat while the pump runs, pours inside and after the hold, and
 the steam, button, setup-menu and boot captures as negative controls (no
 run, 0 stored) all came out as the glass shows; about 6,300 single-frame
 misread injections never raised a stored value; spliced back-to-back runs
-only reproduced the pre-stop-flush exception. Host tests: cases 16-41 in
+only reproduced the pre-stop-flush exception. Host tests: cases 16-40 in
 `firmware/test/host/machine_context_test.cpp`.
 

@@ -151,7 +151,7 @@ machine's display.)
   stop (`docs/machine-display-bus.md`, "What the firmware stores as the
   shot timer"). An idle glitch, single or repeated, never counts up, so it
   can no longer become a run; a misread repeated on two frames of a real
-  run can still move its value by a tenth.
+  run can still move its value by a tenth or two.
 - **`SETPOINT-TOUCHED` latched during a short steam start/stop**, with no
   button touched. **The decoder explained it**: up to 0.9.8 `display.cpp`
   latched `adjust`/`touched` when two blank FRAMES arrived within

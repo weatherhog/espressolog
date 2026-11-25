@@ -1280,48 +1280,22 @@ int main() {
   }
 
   {
-    // 40. Review of 9486c25 (real captures): a 0.3 s blind spot at pump-off
-    //     -- a loop() stall or a dropout, here ~0.5 s -- must not lose the final tenths.
-    //     The run is seen counting to 102, then the display already holds
-    //     105.
+    // 40. Review of 6aa4443 (real captures): during a flush's held final
+    //     value, a misread pair whose date matches the run (105 read as 125,
+    //     ~2 s into the hold) must not push that run into a hot-water draw
+    //     that started 0.4 s earlier.
     MachineContextTracker m;
     const uint32_t t = 1000000;
-    m.onPourStart(t);
-    for (uint16_t d = 1; d <= 102; d++) feed(m, d, d, t + d * 100000);
-    const uint32_t h = t + 105 * 100000 + 450000;              // blind until here
-    for (int i = 0; i <= 40; i++) m.onReading(timer(105, h + i * 41000), false);
-    m.onPourStop(h + 40 * 41000, 1000);
-    assert(m.context().machine_timer_dl == 105);
-    printf("the final value after a blind spot at pump-off is kept OK\n");
-  }
-  {
-    // 41. Review of 9486c25 (injected into real captures): the SAME misread
-    //     on two frames in a row -- +1 s on held frames ~1 s into the hold,
-    //     or +0.2 s just after the last rise -- does not raise the timer
-    //     by more than a tenth.
-    MachineContextTracker m;
-    uint32_t t = 1000000;
-    m.onPourStart(t);
     for (uint16_t d = 1; d <= 105; d++) feed(m, d, d, t + d * 100000);
-    uint32_t h = t + 105 * 100000 + 82000;
-    for (int i = 0; i < 24; i++) m.onReading(timer(105, h + i * 41000), false);
-    m.onReading(timer(115, h + 24 * 41000), false);            // ~1 s into the hold
-    m.onReading(timer(115, h + 25 * 41000), false);
-    for (int i = 26; i <= 60; i++) m.onReading(timer(105, h + i * 41000), false);
-    m.onPourStop(h + 60 * 41000, 1000);
-    assert(m.context().machine_timer_dl == 105);               // not 115
-
-    MachineContextTracker k;
-    t = 1000000;
-    k.onPourStart(t);
-    for (uint16_t d = 1; d <= 105; d++) feed(k, d, d, t + d * 100000);
-    h = t + 105 * 100000 + 82000;
-    k.onReading(timer(107, h), false);                         // +0.2 s, twice
-    k.onReading(timer(107, h + 41000), false);
-    for (int i = 2; i <= 40; i++) k.onReading(timer(105, h + i * 41000), false);
-    k.onPourStop(h + 40 * 41000, 1000);
-    assert(k.context().machine_timer_dl <= 106);               // a tenth at most
-    printf("a misread repeated on two frames moves the timer a tenth at most OK\n");
+    const uint32_t h = t + 105 * 100000 + 82000;
+    for (int i = 0; i < 46; i++) m.onReading(timer(105, h + i * 41000), false);
+    m.onPourStart(h + 46 * 41000 - 400000);                    // the draw
+    m.onReading(timer(125, h + 46 * 41000), false);
+    m.onReading(timer(125, h + 47 * 41000), false);
+    for (int i = 48; i <= 120; i++) m.onReading(timer(105, h + i * 41000), false);
+    m.onPourStop(h + 120 * 41000, 1000);
+    assert(m.context().machine_timer_dl == 0);
+    printf("a misread in a flush's hold does not reach a draw OK\n");
   }
 
   printf("\nall machine context tests passed\n");

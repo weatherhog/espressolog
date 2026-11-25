@@ -14,32 +14,27 @@ export function Eyebrow({ children, style }) {
 // pump start, pre-infusion included). total_s is the scale's time, first
 // drip to a flat weight, ~10 s shorter with pre-infusion.
 //
-// machine_timer_s is the firmware's last timer reading, which is not always
-// THIS shot's run: the previous brew on a hot-water draw (the display runs
-// no timer then) or with the display tap off; a flush pressed inside the
-// 5 s settle (the timer is copied at completion), which leaves the flush's
-// first seconds; and before firmware 0.9.7 a misread " 95" idle frame,
-// 9.5 s. The press-to-stop span p cannot referee it alone either: p is the
-// lead alone on a sub-5 g abort (stop_ms 0), ~7 s high on a forced stop
-// (stop_ms >= 60000 is not backdated) or an 0a.7 lift while settling, low
-// on a lift mid-pour or a scale-lost fault, and whole flushes high when a
-// missed start press borrows an earlier one.
+// machine_timer_s on firmware before 0.16.1 is the firmware's last timer
+// reading, which is not always THIS shot's run: the previous brew on a
+// hot-water draw (the display runs no timer then) or with the display tap
+// off; a flush pressed inside the 5 s settle (the timer is copied at
+// completion), which leaves the flush's first seconds; and before 0.9.7 a
+// misread " 95" idle frame, 9.5 s. From 0.16.1 (the timer-own-run fix) the
+// firmware stores only this run's timer, so it is shown as stored.
 //
-// So: when a usable p exists it referees, through a lopsided window -- the
-// timer may sit up to 9 s under p (the 0a.7 lift shift plus drips; shot
-// 212: timer 35.9, p 42.3) but at most 3 s over it -- and only for a
-// lever-A press (a hot-water draw's timer is never its own). A shot with
-// a short p (a lift mid-pour) therefore shows Press→stop, not its timer.
-// Without a usable p (no switch data, an abort, a forced stop) the timer
-// stands alone if it is a brew's length on firmware 0.9.7+ (the flush and
-// " 95" values are seconds long) -- except on a record from the
-// switch-sensing era (pump_line set, format v3+) with no lever-A press:
-// that is a hot-water draw or a missed press, and its timer may be the
-// previous brew's, a full brew long. That also drops the timer on a v3+
-// record taken with the switch tap off; the tap is never off in service.
-// Not caught: a stale previous-brew timer on a record WITHOUT switch data
-// (the display tap off, or pre-0.10.0 with no timer of its own). The
-// timer-own-run firmware fix, not merged, would stop storing it.
+// For older records the press-to-stop span p referees when it is usable,
+// through a lopsided window: the timer may sit up to 9 s under p (the 0a.7
+// lift shift plus drips; shot 212: timer 35.9, p 42.3), at most 3 s over.
+// Without a usable p (no switch data, a missed press, an abort, a forced
+// stop) the timer stands alone if it is a brew's length on 0.9.7+. A
+// confirmed hot-water press (pump_line 3) never takes the timer.
+// When the timer is rejected the fallback is marked disputed: p is not
+// authoritative either (it reads high on a borrowed press, low on a lift
+// mid-pour), so the row says the two disagreed rather than pick silently.
+// Not caught on older records: a stale timer within the window (the tap
+// off, or a stale value 0-9 s under p); a stale timer >= 15 s with no
+// usable p (a missed hot-water press, the tap off with switches off); and
+// a correct timer rejected because p is wrong, which shows marked.
 // Fallbacks say what they are: "Press→stop" (p), then "Pour" (first drip
 // to a flat weight, ~10 s short of the machine on a pre-infused shot).
 const MIN_BREW_S = 15;
@@ -54,35 +49,55 @@ function firmwareAtLeast(v, want) {
   return true;
 }
 
-function timerIsThisRun(shot, p) {
+// true: the timer is this shot's; false: there is none; "disputed": there
+// is one and it was rejected.
+function timerVerdict(shot, p) {
   const m = shot.machine_timer_s;
   if (m == null || !(m > 0)) return false;
-  const leverA = shot.switch_direction != null;
+  if (firmwareAtLeast(shot.firmware_version, [0, 16, 1])) return true;
+  if (shot.pump_line === 3) return "disputed";
   if (p != null) {
-    return leverA && p - m <= TIMER_UNDER_P_MAX_S && m - p <= TIMER_OVER_P_MAX_S;
+    return p - m <= TIMER_UNDER_P_MAX_S && m - p <= TIMER_OVER_P_MAX_S || "disputed";
   }
-  if (shot.pump_line != null && !leverA) return false;
-  return m >= MIN_BREW_S && firmwareAtLeast(shot.firmware_version, [0, 9, 7]);
+  return m >= MIN_BREW_S && firmwareAtLeast(shot.firmware_version, [0, 9, 7]) || "disputed";
 }
 
+// Props for the time Readout: the value, its label, and when disputed a
+// "?" mark with a tooltip giving the rejected timer.
+export function timeReadout(shot) {
+  const t = shotTime(shot);
+  return {
+    value: t.s?.toFixed(1) ?? "—", unit: "s", label: t.label,
+    mark: t.disputed ? "?" : undefined,
+    title: t.disputed
+      ? `machine timer ${shot.machine_timer_s.toFixed(1)} s disagreed; showing ${t.label.toLowerCase()}`
+      : undefined,
+  };
+}
+
+// { s, label, disputed }: disputed means a machine timer was stored and
+// rejected, so the value shown is a fallback the timer disagreed with.
 export function shotTime(shot) {
   const p = shot.pump_to_stop_s != null && shot.total_s > 0 && shot.stop_ms < 60000
     ? shot.pump_to_stop_s : null;
-  if (timerIsThisRun(shot, p)) return { s: shot.machine_timer_s, label: "Time" };
-  if (p != null) return { s: p, label: "Press→stop" };
-  if (shot.total_s > 0) return { s: shot.total_s, label: "Pour" };
-  return { s: null, label: "Time" };
+  const v = timerVerdict(shot, p);
+  if (v === true) return { s: shot.machine_timer_s, label: "Time", disputed: false };
+  const disputed = v === "disputed";
+  if (p != null) return { s: p, label: "Press→stop", disputed };
+  if (shot.total_s > 0) return { s: shot.total_s, label: "Pour", disputed };
+  return { s: null, label: "Time", disputed: false };
 }
 
-export function Readout({ value, unit, label, color = T.ink, size = 34 }) {
+export function Readout({ value, unit, label, color = T.ink, size = 34, mark, title }) {
   return (
-    <div>
+    <div title={title}>
       <div style={{
         fontFamily: MONO, fontSize: size, lineHeight: 1, color,
         fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em",
       }}>
         {value}
         {unit && <span style={{ fontSize: size * 0.4, color: T.inkSoft, marginLeft: 3 }}>{unit}</span>}
+        {mark && <span style={{ fontSize: size * 0.5, color: T.alert, marginLeft: 2 }}>{mark}</span>}
       </div>
       <Eyebrow style={{ marginTop: 5 }}>{label}</Eyebrow>
     </div>

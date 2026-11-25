@@ -29,9 +29,15 @@ function loadTargets() {
   try {
     const saved = JSON.parse(localStorage.getItem("pullTargets")) || {};
     // Every edit saved the whole object, so a browser that changed any target
-    // carries the old pump-time band 22-32 too; drop it so the pour-time
-    // default shows. A band someone actually chose is kept.
-    if (saved.t0 === 22 && saved.t1 === 32) { delete saved.t0; delete saved.t1; }
+    // carries the old pump-time band 22-32 too. Once, drop it so the
+    // pour-time default shows; after that a 22-32 someone types is kept.
+    if (!localStorage.getItem("pullTargetsPourTime")) {
+      if (saved.t0 === 22 && saved.t1 === 32) {
+        delete saved.t0; delete saved.t1;
+        localStorage.setItem("pullTargets", JSON.stringify(saved));
+      }
+      localStorage.setItem("pullTargetsPourTime", "1");
+    }
     return { ...DEFAULT_TARGETS, ...saved };
   }
   catch { return { ...DEFAULT_TARGETS }; }

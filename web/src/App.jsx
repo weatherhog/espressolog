@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { T, MONO, SANS, paperBg, SERIES } from "./tokens.js";
-import { Eyebrow, Readout, Panel, Tag, shotTime } from "./components.jsx";
+import { Eyebrow, Readout, Panel, Tag, timeReadout } from "./components.jsx";
 import { Spark, Overlay } from "./Chart.jsx";
 import { fetchShots, fetchCurve, fetchBeans, deleteShot, health, loadBean } from "./api.js";
 import Capture from "./Capture.jsx";
@@ -36,7 +36,7 @@ function ShotRow({ shot, curve, selected, tone, onClick, onDelete }) {
         gridTemplateColumns: "repeat(auto-fit, minmax(52px, 1fr))",
       }}>
         <Readout value={shot.yield_final_g?.toFixed(1) ?? "—"} unit="g" label="Yield" size={17} />
-        <Readout value={shotTime(shot).s?.toFixed(1) ?? "—"} unit="s" label={shotTime(shot).label} size={17} />
+        <Readout {...timeReadout(shot)} size={17} />
         <Readout value={shot.mean_flow_gps?.toFixed(2) ?? "—"} label="g/s" size={17} color={T.flow} />
         <Readout value={shot.ratio ? `1:${shot.ratio.toFixed(1)}` : "—"} label="Ratio" size={17} />
       </div>

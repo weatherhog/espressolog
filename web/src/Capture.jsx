@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { T, MONO, SANS } from "./tokens.js";
-import { Eyebrow, Readout, Panel, Chip, Stepper, shotTime } from "./components.jsx";
+import { Eyebrow, Readout, Panel, Chip, Stepper, timeReadout } from "./components.jsx";
 import { patchShot, postTasting } from "./api.js";
 
 // The capture screen: everything pre-filled, nothing required. Machine
@@ -202,7 +202,7 @@ export default function Capture({ shots, beans, justSaved, onSaved }) {
       <Panel style={{ padding: 24, flex: "1 1 380px", minWidth: 0 }}>
         <Eyebrow>Measured — shot #{pending.id} · {new Date(pending.started_at).toLocaleString()}</Eyebrow>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, margin: "16px 0 12px" }}>
-          <Readout value={shotTime(pending).s?.toFixed(1) ?? "—"} unit="s" label={shotTime(pending).label} size={30} />
+          <Readout {...timeReadout(pending)} size={30} />
           <Readout value={pending.yield_final_g?.toFixed(1) ?? "—"} unit="g" label="Yield" size={30} />
           <Readout
             value={pending.settle_offset_g != null

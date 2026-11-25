@@ -810,3 +810,93 @@ frame period, so there is nothing to explain — but **do not quote this as
 wrong: "6 ms" compared against the final displayed value instead of the
 interval, and "within the display's own 100 ms quantisation" was asserted
 without checking that 106 > 100.
+
+## What the firmware stores as the shot timer (0.16.1, 2026-11-25)
+
+`MachineContextTracker` (`firmware/src/machine_context.h`) turns the TIMER
+frames into a shot's `machine_timer_dl`. Up to 0.16.0 it carried the
+running maximum into every pour and read it at completion, so a hot-water
+draw stored the previous brew's timer and a flush pressed while SETTLING
+replaced the shot's. 0.16.1 replaced that over thirteen review rounds; what
+stands:
+
+- **The display holds the final value ~5 s after pump-off** (2026-10-03
+  captures: `105` from 12.07 s to 17.22 s, `210` from 24.33 s to 29.45 s,
+  then TEMPERATURE ` 95` 41-75 ms later). Each value shows on 2-3 frames
+  (41 ms frames, 100 ms ticks).
+- **A run is its date**: frame time minus reading. A frame counts only when
+  the frame before it was TIMER with the same date within 0.3 s, so a
+  misread seconds digit never counts. Within one run the date jitters
+  ≤ 66 ms frame to frame and drifts 112-175 ms over 10-21 s (the display
+  clock is ~0.5 % off), absorbed because the run's date follows each
+  rising frame.
+- **A rise needs both frames of the pair** (the run reaches the lower
+  reading), so one misread frame never raises it, **and a run advances no
+  faster than time passes unseen**: two ticks plus one per 100 ms since a
+  frame last showed its value or less. In view and counting, or once a
+  hold is confirmed, that is 2-3 (a few more in the ~0.5 s before a hold
+  is confirmed: +5 at most, measured), so a misread dated to match the run cannot raise it
+  by seconds; after a dropout or a `loop()` stall it grows with the gap.
+  The held value after a blind spot goes only into the pour that run
+  belongs to: one already holding it, or one whose first drip (the
+  detector's backdated t=0) came while the run was still going -- a brew
+  confirmed late inside a stall -- never a hot-water draw that dripped
+  after pump-off.
+- **After a blind spot at pump-off the held final value is the run's**,
+  when it is within that allowance and only TIMER frames came between, so
+  the hold is recognised from there.
+- **A frame showing the run's maximum (or up to five tenths below it, if a
+  misread raised it early in the hold) keeps the run** without moving its
+  date, and once 0.5 s has passed since the run last rose -- longer than a
+  2-3 frame misread, which can also land on the run's value with its date
+  walked -- **the run has stopped and nothing raises it again**: a run
+  never resumes, a restart has a new date. **Another date is a candidate
+  until it counts up TWICE**: a real restart, flush or brew does within
+  ~0.3 s; a misread pair rises once and falls back, so a misread that
+  repeats -- two idle `" 95"` frames, or a tenths misread on a held value
+  the tracker did not recognise as the hold -- never becomes a run.
+- **Pour start carries the run only if it counted up within 0.5 s**;
+  `onPourStop()` takes the newest run of the pour that began at or before
+  the detector's backdated stop, and only that run may keep counting. A
+  run unseen for 30 s is retired on the next frame of another kind.
+
+**Known limits:** a flush pressed after pump-off but before the scale's
+stop is stored as the shot's, at its full length -- above or below the
+shot's own; a pour with no timer of
+its own confirmed within 0.5 s of another run's last count carries it;
+eight or more new runs between the stop and its freeze lose the shot's run
+(0); the stop time is the scale's BLE arrival, ~100-200 ms late. **Own-run
+precision, short or a few tenths high, never another run's:** a blind
+spot spanning pump-off is made up from the held value when the tracker sees
+the hold afterwards, but not when the blind spot outlasts the ~5 s hold or
+a non-TIMER frame comes between -- then everything after the last rise seen
+is lost (seconds for a multi-second stall); a steady `loop()` period of
+~300 ms or more never pairs two frames within 0.3 s and misses the final
+value; and the same misread on two frames in a row in the run's last rises
+or before the hold is confirmed (~0.5 s after the last rise) raises it by
+up to ~0.5 s in clean view, up to ~0.9 s on the first frames after a
+blind spot at pump-off (a draw confirmed within 0.5 s of that carries it);
+after such a blind spot a raise of more than five tenths leaves the hold
+unrecognised, so a second, date-matched misread can raise the shot by
+seconds and reach a draw in the hold (replayed with injected misreads:
+26.0 s for 21.0 s; two misreads, rare); and
+with a slow `loop()` (~150 ms, one frame per tick) a misread pair late in
+the run that repeats the value already reached can mark it held while the
+pump still runs, freezing it short (replayed with an injected misread on
+the 2026-09-28 capture at a 150 ms loop: 15.6 s for 16.9 s; rare). Review 8 tried a rise cap for both; it
+locked runs out after multi-second stalls and let idle glitches in, and was
+reverted (review 9, 2026-11-25). With the
+machine off the bus is silent and nothing retires a run, so an off period
+ending within 30 s of a multiple of 71.6 min (the `micros()` wrap) could
+make an old run look recent; carrying it would also need a pour within
+0.5 s of that wrap -- negligible.
+
+**Tested against the real captures** (review harness, all 12 display-bus
+captures, 2026-11-25): normal shots, stops at and before pump-off, the
+scale going flat while the pump runs, pours inside and after the hold, and
+the steam, button, setup-menu and boot captures as negative controls (no
+run, 0 stored) all came out as the glass shows; about 6,300 single-frame
+misread injections never raised a stored value; spliced back-to-back runs
+only reproduced the pre-stop-flush exception. Host tests: cases 16-49 in
+`firmware/test/host/machine_context_test.cpp`.
+

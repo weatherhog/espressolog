@@ -393,8 +393,10 @@ either way; the grades are not interchangeable.
   attribute tap water to a shot.
 
 **The display does NOT run its shot timer during a hot-water draw**
-(observed 2026-10-04), so `machine_timer_dl` cannot pick up a tap draw and
-`machine_context.h` needs no special case. The flowmeter **does** pulse
+(observed 2026-10-04), so `machine_timer_dl` cannot pick up a tap draw's
+own duration — **and up to firmware 0.16.0 a draw stored the previous
+brew's timer instead** (the display-bus entry below says why and what
+0.16.1 changed). The flowmeter **does** pulse
 during one, so the timer and the flow counter disagree about what counts
 as an event — which is why 0d scopes counting to shot boundaries.
 
@@ -631,9 +633,34 @@ is stored unflagged. A two-frames-in-a-row rule, like the TIMER path's, is
 the obvious guard and is not built.
 
 **The display does NOT run its shot timer during a hot-water draw**, so
-`machine_timer_dl` cannot pick up a tap draw and `machine_context.h` needs no
-special case. The flowmeter **does** pulse during one, which is why 0d scopes
-counting to shot boundaries.
+`machine_timer_dl` cannot pick up a tap draw's own duration. The flowmeter
+**does** pulse during one, which is why 0d scopes counting to shot
+boundaries.
+
+**`machine_timer_dl` IS THIS SHOT'S PUMP RUN OR 0 — FROM FIRMWARE 0.16.1
+(2026-11-25), WITH TWO RARE EXCEPTIONS.** Up to 0.16.0 it could be
+**another run's**: the previous brew's on a hot-water draw or with the
+display tap off, and a flush's when pressed while SETTLING. From 0.16.1
+(`machine_context.h`) a run is identified by its start date and taken only
+while it counts up, pour start carries it only if it counted up within
+0.5 s, and `onPourStop()` freezes it at the shot's stop. **The display holds
+the final value ~5 s after pump-off**, which any timer logic must allow
+for. **Exceptions:** a flush pressed after pump-off but BEFORE the scale's
+stop is stored as the shot's, at its full length, which can be above or
+below the shot's own (a 1Cup flush after a 2Cup shot reads shorter); and a pour with no timer of its own confirmed within 0.5 s of
+another run's last count carries that run (physically unlikely). The
+shot's own value can be up to ~0.5 s high (a misread repeated on two
+frames; ~0.9 s after a blind spot at pump-off, and seconds if a second
+misread follows there, which can also reach a draw in the hold -- rare,
+two misreads) or short (rarely, a misread on a slow loop freezes it early; a blind spot at pump-off that outlasts the ~5 s hold
+loses everything after the last frame seen, and a steady loop period of
+~300 ms or more always misses the final value). **Records from 0.16.0 and
+earlier keep the old behaviour**, so the PWA's trust rule
+(`web/src/shotTime.js`) keeps a window for them — and for 0.16.1 records
+too, because of the first exception.
+**`docs/machine-display-bus.md`, "What the firmware stores as the shot
+timer", is normative on the mechanism**, its limits and the capture replays
+that tested it.
 
 **`docs/machine-display-bus.md` is normative on everything else** — the JST
 identification by measurement, the `Disp-P4` bidirectional-handshake

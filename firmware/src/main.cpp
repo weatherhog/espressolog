@@ -24,12 +24,12 @@
 // 0.15.1, so a 0.15.1 built from that commit already reads GPIO11. 0.16.0
 // is the same story: built before main was merged into this branch (what
 // the board was flashed with on 2026-11-23) it reads GPIO1, built after it
-// GPIO11 -- and 0.16.1 (the timer fix), built from a branch that left
-// before that merge, reads GPIO1 until it is rebased onto it. The version
-// number does not say which: `drive status` prints the pin. Not bumped for
-// it: the PWA trusts timers from 0.16.1 up (the timer fix,
-// web/src/shotTime.js), so a number at or above that must carry it.
-const char* FIRMWARE_VERSION = "0.16.0";
+// GPIO11. 0.16.1 (the timer fix) is built on top of that merge and reads
+// GPIO11. The version number does not say which for 0.15.1 or 0.16.0:
+// `drive status` prints the pin. Not bumped for the pin: the PWA trusts
+// timers from 0.16.1 up (the timer fix, web/src/shotTime.js), so a
+// number at or above that must carry the fix.
+const char* FIRMWARE_VERSION = "0.16.1";
 const char* DETECTOR_VERSION = "0a.8";
 
 static ScaleManager scales;
@@ -1723,6 +1723,17 @@ static void queueWeighing(uint8_t role, const WeighingDetector::Event& ev) {
 // A shot the detector finished, from feed() or tick(): spool it and tell
 // the live stream.
 static void shotCompleted() {
+  // A shot can finish straight from POURING (a lift during the pour, a scale
+  // lost mid-pour), never passing the SETTLING freeze in loop(): freeze the
+  // machine timer at its stop here too, before handleShotComplete() copies
+  // it. A no-op when SETTLING already did (review of 3f34199). Not for the
+  // sub-5 g flat abort, which sets no stop_ms (0) -- freezing there would
+  // freeze at first drip; it is a reject, excluded at ingest.
+  {
+    const ShotResult& res = detector.result();
+    if (res.stop_ms > 0)
+      machine_ctx.onPourStop(micros(), millis() - (res.started_at_ms + res.stop_ms));
+  }
   handleShotComplete(detector.result());
   char frame[96];
   snprintf(frame, sizeof(frame),
@@ -1747,8 +1758,14 @@ void loop() {
       ShotState before = detector.state();
       bool complete = detector.feed(smp.t_ms, smp.weight_mg, flow.total());
       if (before != ShotState::POURING && detector.state() == ShotState::POURING) {
-        machine_ctx.onPourStart(micros(),
-                                display_on && !display_bus.stale(micros(), DISPLAY_FRESH_US));
+        {
+          // First drip in micros(): t=0 is backdated, in millis().
+          const uint32_t now_us = micros();
+          const uint32_t t0_us = now_us - (millis() - detector.result().started_at_ms) * 1000u;
+          machine_ctx.onPourStart(now_us,
+                                  display_on && !display_bus.stale(now_us, DISPLAY_FRESH_US),
+                                  t0_us);
+        }
         // Which press started the pump: decided now, while t=0 is fresh and
         // before the stop press or a later flush can crowd it out.
         machine_ctx.resolvePump(detector.result().started_at_ms);
@@ -1763,6 +1780,12 @@ void loop() {
         // otherwise one tweak at the start of a session condemns every
         // shot after it.
         display_bus.clearSetpointTouched();
+      }
+      if (before == ShotState::POURING && detector.state() == ShotState::SETTLING) {
+        // The stop is confirmed: freeze this shot's machine timer at it, so
+        // a flush pressed while SETTLING cannot replace it (0.16.1).
+        const ShotResult& res = detector.result();
+        machine_ctx.onPourStop(micros(), millis() - (res.started_at_ms + res.stop_ms));
       }
       if (raw_stream) {
         Serial.printf("%lu,%ld,%s\n", (unsigned long)smp.t_ms,

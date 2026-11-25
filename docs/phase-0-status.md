@@ -24,10 +24,11 @@ README is normative. What changes how the machine is run:
 Reviewed five times in fresh contexts, 2026-11-24. Paper test
 passed 2026-11-25: every part fits; the BC547 and 100 nF legs need splaying.
 Firmware 0.15.2 (`main` before the detector branch merged, not flashed)
-reads the 1Cup photoMOS 1 `Q` on GPIO11, and so does a 0.16.0 built after
-`main` was merged into the detector branch (e369800). 0.15.1 and earlier,
-the 0.16.0 flashed on 2026-11-23, and the timer fix's 0.16.1 as it stands
-read GPIO1: go by what `drive status` prints, not by the version number.
+reads the 1Cup photoMOS 1 `Q` on GPIO11, and so do a 0.16.0 built after
+`main` was merged into the detector branch (e369800) and the timer fix's
+0.16.1 (built on that merge). 0.15.1 and earlier and the 0.16.0 flashed on
+2026-11-23 read GPIO1: go by what `drive status` prints, not by the version
+number.
 
 ## THE PERFBOARD IS ON THE MACHINE — all seven sense inputs live, 2026-11-13
 
@@ -143,7 +144,15 @@ machine's display.)
   (PR #19, flashed and merged 2026-11-13)**: a TIMER
   reading counts only when the previous frame the loop observed was TIMER
   too. **Two glitch frames in a row would still pass**; the real fix is in
-  the decoder.
+  the decoder. **Superseded by 0.16.1 (2026-11-25, not flashed yet)**: the
+  tracker no longer treats a lower reading as a restart. Each TIMER frame
+  dates its run's start (frame time minus reading); a frame counts only when
+  the one before it gives the same date, a new run must count up before it
+  replaces the old one, and `onPourStop()` freezes the value at the shot's
+  stop (`docs/machine-display-bus.md`, "What the firmware stores as the
+  shot timer"). An idle glitch, single or repeated, never counts up, so it
+  can no longer become a run; a misread repeated on two frames of a real
+  run can still move its value by a tenth or two.
 - **`SETPOINT-TOUCHED` latched during a short steam start/stop**, with no
   button touched. **The decoder explained it**: up to 0.9.8 `display.cpp`
   latched `adjust`/`touched` when two blank FRAMES arrived within

@@ -12,10 +12,9 @@
 // off; a flush pressed inside the 5 s settle (the timer is copied at
 // completion), which leaves the flush's first seconds; and before 0.9.7 a
 // misread " 95" idle frame, 9.5 s. From 0.16.1 (the timer-own-run fix,
-// branch claude/timer-own-run until it merges)
-// the firmware stores only a run it saw start, with two exceptions its
-// CLAUDE.md lists: a flush pressed after pump-off but before the scale's
-// stop is stored at its own full length, which can read above OR below the
+// branch claude/timer-own-run until it merges) the firmware stores only a
+// run it saw start, with two exceptions that branch's CLAUDE.md lists: a
+// flush pressed after pump-off but before the scale's stop is stored at its own full length, which can read above OR below the
 // press-to-stop span p (a 1Cup flush after a 2Cup shot: 10.5 against 32);
 // and a pour confirmed within 0.5 s of another run's last count carries
 // that run.

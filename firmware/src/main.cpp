@@ -28,7 +28,7 @@
 // before that merge, reads GPIO1 until it is rebased onto it. The version
 // number does not say which: `drive status` prints the pin. Not bumped for
 // it: the PWA trusts timers from 0.16.1 up (the timer fix,
-// web/src/components.jsx), so a number at or above that must carry it.
+// web/src/shotTime.js), so a number at or above that must carry it.
 const char* FIRMWARE_VERSION = "0.16.0";
 const char* DETECTOR_VERSION = "0a.8";
 

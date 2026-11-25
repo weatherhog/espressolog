@@ -80,7 +80,7 @@ should stay held until the pump stops). Nothing seen suggests it fails.
 (first drip to a flat weight), ~10 s short of the machine display on a
 pre-infused shot, and is now the machine's timer when it can be shown to
 be this shot's, else a labelled fallback marked with the rejected timer
-(`web/src/components.jsx`, `shotTime()`).
+(`web/src/shotTime.js`, `shotTime()`).
 
 ### SECOND INVARIANT-1 INCIDENT ON J4 — `E01`, cause found and fixed
 

@@ -638,21 +638,27 @@ the obvious guard and is not built.
 boundaries.
 
 **`machine_timer_dl` IS THIS SHOT'S PUMP RUN OR 0 — FROM FIRMWARE 0.16.1
-(2026-11-25).** Up to 0.16.0 it could be **another run's**: pour start
-carried whatever the timer last reached, so a pour with no timer of its own
-(a hot-water draw, the display tap off or stale) stored the previous brew's
-or flush's; and it was read at completion, after the 5 s settle, so a flush
-pressed while SETTLING replaced it. Now (`machine_context.h`) pour start
-keeps the timer only if a run is live — a confirmed TIMER frame within 1 s
-and nothing else since — and `onPourStop()` freezes it at the detector's
-backdated stop: a restart after the stop is undone, and only the run in
-force at the stop may keep counting, unbroken. A run that ends within ~1 s
-before first drip with no frame after it now reads 0, and a single misread
-frame or a frame gap while the pump outlasts the stop freezes it early —
-short, never another run's. **Records from 0.16.0 and earlier keep the old
-behaviour**, which is why the PWA's `shotTime()` (`web/src/components.jsx`)
-still trusts `machine_timer_s` only inside a window around the
-press-to-stop span.
+(2026-11-25), WITH ONE EXCEPTION BELOW.** Up to 0.16.0 it could be
+**another run's**: pour start carried whatever the timer last reached, so a
+pour with no timer of its own (a hot-water draw, the display tap off or
+stale) stored the previous brew's or flush's; and it was read at
+completion, after the 5 s settle, so a flush pressed while SETTLING
+replaced it. Now (`machine_context.h`) the tracker follows the run on the
+glass apart from the stored value; pour start carries it only if it is
+live — a confirmed TIMER frame within 1 s and nothing else since — and
+`onPourStop()` freezes the value at the detector's backdated stop, at the
+SETTLING transition or, for a shot finished straight from POURING, at
+completion: a restart after the stop is undone, and only the run in force
+at the stop may keep counting, unbroken. **The exception: a flush pressed
+after pump-off but BEFORE that stop** — while the cup still drips and the
+weight is not yet flat — is the latest run at the stop and is stored as
+the shot's. Also: a run that ends within ~1 s before first drip with no
+frame after it reads 0, and a single misread frame or a frame gap while the
+pump outlasts the stop freezes it early (short, still its own run).
+**Records from 0.16.0 and earlier keep the old behaviour**, which is why
+the PWA's `shotTime()` (`web/src/components.jsx`) still trusts
+`machine_timer_s` only inside a window around the press-to-stop span — and
+the exception is why that window should stay even for 0.16.1 records.
 
 **`docs/machine-display-bus.md` is normative on everything else** — the JST
 identification by measurement, the `Disp-P4` bidirectional-handshake

@@ -1723,6 +1723,14 @@ static void queueWeighing(uint8_t role, const WeighingDetector::Event& ev) {
 // A shot the detector finished, from feed() or tick(): spool it and tell
 // the live stream.
 static void shotCompleted() {
+  // A shot can finish straight from POURING (a lift during the pour, a scale
+  // lost mid-pour), never passing the SETTLING freeze in loop(): freeze the
+  // machine timer at its stop here too, before handleShotComplete() copies
+  // it. A no-op when SETTLING already did (review of 3f34199).
+  {
+    const ShotResult& res = detector.result();
+    machine_ctx.onPourStop(micros(), millis() - (res.started_at_ms + res.stop_ms));
+  }
   handleShotComplete(detector.result());
   char frame[96];
   snprintf(frame, sizeof(frame),

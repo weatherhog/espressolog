@@ -829,7 +829,7 @@ int main() {
     for (uint16_t d = 1; d <= 280; d++) m.onReading(timer(d, t + 100000 + d * 100000), false);
     t += 100000 + 280 * 100000;                     // pump off at t
     for (int i = 1; i <= 100; i++) m.onReading(temp(95, t + i * 41000), false);
-    // Flat from ~t+1.1 s, confirmed 2 s later.
+    // Flat from ~t+2.1 s, confirmed 2 s later at ~t+4.1 s.
     m.onPourStop(t + 100 * 41000, 2000);
     t += 100 * 41000;
     for (uint16_t d = 1; d <= 150; d++) m.onReading(timer(d, t + d * 100000), false);  // flush
@@ -899,6 +899,50 @@ int main() {
     for (uint16_t d = 130; d <= 200; d++) k.onReading(timer(d, back + (d - 130) * 100000), false);
     assert(k.context().machine_timer_dl == 100);
     printf("no timer carried from a stale display; a gap ends the run OK\n");
+  }
+
+  {
+    // 21. Review of 3f34199: a shot frozen by onPourStop() must not hand its
+    //     value to the next shot. Shot 1 runs 28.0 s; shot 2's pump runs
+    //     4.0 s and ends right at its pour start, with no frame after it.
+    MachineContextTracker m;
+    uint32_t t = 1000000;
+    m.onReading(temp(95, t), false);
+    m.onPourStart(t + 41000);
+    for (uint16_t d = 1; d <= 280; d++) m.onReading(timer(d, t + 100000 + d * 100000), false);
+    t += 100000 + 280 * 100000;
+    for (int i = 1; i <= 100; i++) m.onReading(temp(95, t + i * 41000), false);
+    m.onPourStop(t + 100 * 41000, 2000);
+    assert(m.context().machine_timer_dl == 280);
+    t += 60000000;
+    m.onReading(temp(95, t), false);
+    for (uint16_t d = 1; d <= 40; d++) m.onReading(timer(d, t + d * 100000), false);
+    m.onPourStart(t + 40 * 100000 + 41000);
+    assert(m.context().machine_timer_dl == 40);     // NOT shot 1's 280
+    for (int i = 2; i <= 100; i++) m.onReading(temp(95, t + 40 * 100000 + i * 41000), false);
+    m.onPourStop(t + 40 * 100000 + 100 * 41000, 2000);
+    assert(m.context().machine_timer_dl == 40);
+    printf("a frozen shot's timer does not reach the next shot OK\n");
+  }
+  {
+    // 22. A shot that finishes straight from POURING (a lift during the
+    //     pour): the completion-time onPourStop() undoes a flush pressed
+    //     after the stop, and a second call is a no-op.
+    MachineContextTracker m;
+    uint32_t t = 1000000;
+    m.onReading(temp(95, t), false);
+    m.onPourStart(t + 41000);
+    for (uint16_t d = 1; d <= 280; d++) m.onReading(timer(d, t + 100000 + d * 100000), false);
+    t += 100000 + 280 * 100000;                     // pump off; stop = last kept sample
+    for (int i = 1; i <= 10; i++) m.onReading(temp(95, t + i * 41000), false);
+    const uint32_t stop_us = t + 10 * 41000;
+    for (uint16_t d = 1; d <= 15; d++) m.onReading(timer(d, stop_us + 300000 + d * 100000), false);
+    assert(m.context().machine_timer_dl == 15);     // the flush, until the stop is known
+    m.onPourStop(stop_us + 2000000, 2000);          // lift hold over: completed
+    assert(m.context().machine_timer_dl == 280);
+    m.onPourStop(stop_us + 2100000, 2100);
+    assert(m.context().machine_timer_dl == 280);
+    printf("a shot completed from POURING drops a flush after its stop OK\n");
   }
 
   printf("\nall machine context tests passed\n");

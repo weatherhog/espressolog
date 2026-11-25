@@ -162,40 +162,48 @@ public:
     // real duration in the spool header. A real timer spans hundreds of
     // frames (one per ~41 ms, a digit per 100 ms), so requiring two in a row
     // costs at most the first frame of a brew.
-    // Is a timer run going on right now? Set by a confirmed TIMER frame,
-    // ended by any other fresh frame or a gap. onPourStart() and
-    // onPourStop() ask it.
+    // THE RUN ON THE GLASS, tracked continuously and apart from the shot's
+    // stored value: run_dl is the timer run going on (or last seen),
+    // run_start_us when it began. A new run starts at a reading lower than
+    // run_dl (the machine restarted its timer) or at the first confirmed
+    // frame after anything else -- another frame, a gap -- so a run is never
+    // stitched across a break. Its start is estimated from its own reading,
+    // so a run split by one misread frame keeps its real start.
+    // timer_live: a run is going on right now. onPourStart() takes the carry
+    // from here, never from what the last shot stored (review of 3f34199:
+    // carrying mc's value let a frozen shot's timer reach the next shot).
     if (fresh && (r.mode != DisplayBus::Mode::TIMER || gap)) timer_live = false;
     if (timer_confirmed) {
+      const bool new_run = !timer_live || r.timer_dl < run_dl;
       timer_live = true;
       last_timer_us = r.at_us;
-    }
-    if (timer_confirmed && stopped) {
-      // AFTER THE STOP (onPourStop): only the run in force at the stop may
-      // go on counting -- the pump can outlast a flat scale -- and only
-      // while it does so unbroken. Anything else -- a reading that went
-      // down (a flush pressed while SETTLING restarts the timer), a run
-      // that reappears after another frame or a gap -- is another pump run,
-      // and the shot's value is frozen.
-      if (timer_follow && r.timer_dl >= mc.machine_timer_dl) mc.machine_timer_dl = r.timer_dl;
-      else timer_follow = false;
-    } else if (timer_confirmed) {
-      // A reading LOWER than the running maximum means the machine's timer
-      // restarted, i.e. a new brew or flush began. Without this the maximum
-      // is sticky and a short shot inherits a long one's duration — which
-      // is exactly what the first version of this did. The run it replaces
-      // is kept, in case onPourStop() finds the restart came after the stop.
-      if (r.timer_dl < mc.machine_timer_dl) {
-        prev_run_dl = mc.machine_timer_dl;
-        mc.machine_timer_dl = 0;
-        have_run = false;
-      }
-      if (!have_run && r.timer_dl > 0) {
-        // The run started about timer_dl tenths before this frame.
+      if (new_run) {
+        run_dl = 0;
         run_start_us = r.at_us - (uint32_t)r.timer_dl * 100000u;
-        have_run = true;
       }
-      if (r.timer_dl > mc.machine_timer_dl) mc.machine_timer_dl = r.timer_dl;
+      if (r.timer_dl > run_dl) run_dl = r.timer_dl;
+      if (!stopped) {
+        // DURING THE POUR the shot takes the latest run: a restart means a
+        // new brew (a manual stop-and-restart takes the restart). Without
+        // this the maximum is sticky and a short shot inherits a long one's
+        // duration — which is exactly what the first version of this did.
+        // The run it replaces is kept, in case onPourStop() finds the
+        // restart came after the stop.
+        if (new_run) {
+          if (mc.machine_timer_dl > 0) prev_run_dl = mc.machine_timer_dl;
+          run_in_shot = true;
+        }
+        mc.machine_timer_dl = run_dl;
+      } else if (timer_follow && !new_run && r.timer_dl >= mc.machine_timer_dl) {
+        // AFTER THE STOP (onPourStop): only the run in force at the stop may
+        // go on counting -- the pump can outlast a flat scale -- and only
+        // unbroken. Anything else -- a restart (a flush pressed while
+        // SETTLING), a run that reappears after another frame or a gap -- is
+        // another pump run, and the shot's value is frozen.
+        mc.machine_timer_dl = r.timer_dl;
+      } else {
+        timer_follow = false;
+      }
     }
     if (stopped && fresh && !timer_live) timer_follow = false;
     if (fresh) noteSetpoint(r);
@@ -325,8 +333,8 @@ public:
   void onPourStart(uint32_t now_us, bool display_live = true) {
     const bool run_live = display_live && timer_live
                        && (uint32_t)(now_us - last_timer_us) <= TIMER_GAP_US;
-    uint16_t timer_carry = run_live ? mc.machine_timer_dl : 0;
-    if (!run_live) have_run = false;
+    uint16_t timer_carry = run_live ? run_dl : 0;
+    run_in_shot = timer_carry > 0;
     prev_run_dl = 0;
     stopped = false;
     timer_follow = false;
@@ -364,7 +372,8 @@ public:
   }
 
   // Call when the detector leaves POURING for SETTLING -- the stop is
-  // confirmed. FREEZES THE TIMER AT THE STOP. Until 0.16.1 it was read at
+  // confirmed -- and again at completion, for a shot that finished straight
+  // from POURING (a lift during the pour, a scale lost mid-pour). FREEZES THE TIMER AT THE STOP. Until 0.16.1 it was read at
   // completion, after the 5 s settle, so a flush pressed while SETTLING
   // restarted the timer and the shot stored the flush's run (review,
   // 2026-11-25). ms_since_stop: how long ago the detector's (backdated)
@@ -373,7 +382,9 @@ public:
   // already replaced the value and is undone here. After this, only the run
   // in force at the stop may keep counting, unbroken (onReading). Repeat
   // calls before the next onPourStart() do nothing.
-  //   KNOWN LIMITS: a single misdecoded frame, or a frame gap over
+  //   KNOWN LIMITS: a flush pressed after pump-off but before the stop (the
+  // cup still dripping, the weight not yet flat) is the latest run AT the
+  // stop and is stored as the shot's; a single misdecoded frame, or a frame gap over
   // TIMER_GAP_US, while the pump is still running after the stop freezes
   // the value early (short, never another run's); the stop time is the
   // scale's BLE arrival time, ~100-200 ms late.
@@ -381,7 +392,10 @@ public:
     if (stopped) return;
     stopped = true;
     const uint32_t stop_us = now_us - ms_since_stop * 1000u;
-    if (have_run && (int32_t)(run_start_us - stop_us) > 0) {
+    // run_in_shot: the current run was live at pour start or began during
+    // the pour, so its start is minutes old at most and the signed compare
+    // cannot wrap.
+    if (run_in_shot && (int32_t)(run_start_us - stop_us) > 0) {
       // The current run began after the stop: not this shot's. Back to the
       // one it replaced (0 if there was none in this shot).
       mc.machine_timer_dl = prev_run_dl;
@@ -521,8 +535,9 @@ private:
   // Timer-run state (onReading, onPourStart, onPourStop).
   bool     timer_live = false;      // a confirmed TIMER run is going on now
   uint32_t last_timer_us = 0;       // the latest confirmed TIMER frame
-  bool     have_run = false;        // run_start_us is this shot's current run
+  uint16_t run_dl = 0;              // the run on the glass: its highest reading
   uint32_t run_start_us = 0;        // when it started, estimated from its reading
+  bool     run_in_shot = false;     // that run was live at pour start or began in the pour
   uint16_t prev_run_dl = 0;         // the run a restart in this shot replaced
   bool     stopped = false;         // onPourStop() seen for this shot
   bool     timer_follow = false;    // after the stop: the stop's run may keep counting

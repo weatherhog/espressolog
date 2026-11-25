@@ -571,12 +571,13 @@ From the final and pre-order reviews:
   1×22 female headers ×2.
 - **Firmware:** this board reads the 1Cup photoMOS 1 `Q` on GPIO11. **Go by
   the pin, not the version number: before any `drive` bench run,
-  `drive status` must print `Q(GPIO11)` for channel 1.** 0.15.2 from this
-  branch does. 0.15.1 and earlier print `Q(GPIO1)`, and so do the 0.16.0 and
-  0.16.1 builds from the detector branches, which split from `main` before
-  the pin moved; GPIO1 is the NTC_ADC net on this board, so those report NO
-  PULSE on a healthy channel. Whatever version merges both lines must keep
-  GPIO11.
+  `drive status` must print `Q(GPIO11)` for channel 1.** `main`'s 0.15.2
+  does, and so does a 0.16.0 built after `main` was merged into the detector
+  branch (e369800). 0.15.1 and earlier print `Q(GPIO1)`, and so do the 0.16.0
+  flashed on 2026-11-23 and the timer fix's 0.16.1 as it stands, both built
+  before the pin moved; GPIO1 is the NTC_ADC net on this board, so those
+  report NO PULSE on a healthy channel. Whatever version merges both lines
+  must keep GPIO11.
 
 ## Paper test: DONE 2026-11-25
 

@@ -24,9 +24,11 @@
 // 0.15.1, so a 0.15.1 built from that commit already reads GPIO11. 0.16.0
 // is the same story: built before main was merged into this branch (what
 // the board was flashed with on 2026-11-23) it reads GPIO1, built after it
-// GPIO11. The version number does not say which: `drive status` prints the
-// pin. Not bumped for it: the PWA trusts timers from 0.16.1 up (the timer
-// fix, web/src/components.jsx), so a number at or above that must carry it.
+// GPIO11 -- and 0.16.1 (the timer fix), built from a branch that left
+// before that merge, reads GPIO1 until it is rebased onto it. The version
+// number does not say which: `drive status` prints the pin. Not bumped for
+// it: the PWA trusts timers from 0.16.1 up (the timer fix,
+// web/src/components.jsx), so a number at or above that must carry it.
 const char* FIRMWARE_VERSION = "0.16.0";
 const char* DETECTOR_VERSION = "0a.8";
 

@@ -1400,6 +1400,35 @@ int main() {
     printf("an early-hold misread does not switch the hold off OK\n");
   }
 
+  {
+    // 46. Review of 940efed (real captures): a hot-water draw confirmed
+    //     during a 1 s blind spot at pump-off has no run of its own; the held
+    //     value seen after the blind spot must not be handed to it.
+    MachineContextTracker m;
+    const uint32_t t = 1000000;
+    for (uint16_t d = 1; d <= 103; d++) feed(m, d, d, t + d * 100000);
+    m.onPourStart(t + 105 * 100000 + 800000);                   // the draw
+    const uint32_t h = t + 105 * 100000 + 1000000;              // blind until here
+    for (int i = 0; i < 80; i++) m.onReading(timer(105, h + i * 41000), false);
+    m.onPourStop(h + 80 * 41000, 1000);
+    assert(m.context().machine_timer_dl == 0);
+    printf("a draw inside a blind spot at pump-off stores no timer OK\n");
+  }
+  {
+    // 47. Review of 940efed (real captures): a run promoted by a pair that
+    //     spans a 3 s stall early in it must still count on to its 10.5 s.
+    MachineContextTracker m;
+    const uint32_t t = 1000000;
+    m.onPourStart(t);
+    for (uint16_t d = 1; d <= 2; d++) feed(m, d, d, t + d * 100000);
+    m.onReading(timer(3, t + 3 * 100000), false);               // then the stall
+    for (uint16_t d = 33; d <= 105; d++) feed(m, d, d, t + d * 100000);
+    for (int i = 1; i <= 30; i++) m.onReading(timer(105, t + 105 * 100000 + 82000 + i * 41000), false);
+    m.onPourStop(t + 105 * 100000 + 82000 + 30 * 41000, 1000);
+    assert(m.context().machine_timer_dl == 105);
+    printf("a run promoted across a stall still counts up OK\n");
+  }
+
   printf("\nall machine context tests passed\n");
   return 0;
 }

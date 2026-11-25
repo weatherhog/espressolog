@@ -238,7 +238,8 @@ public:
     // A RUN ADVANCES NO FASTER THAN TIME PASSES UNSEEN: two ticks of slack
     // (the pair's lag, a skipped frame) plus one per 100 ms since a frame
     // last showed a value at or below run_dl (run_at_us). While the display
-    // is in view -- counting or holding -- that is 2-3, so a misread pair
+    // is in view and counting, or once a hold is confirmed, that is 2-3 (in
+    // the ~0.5 s before a hold is confirmed it grows to ~7), so a misread pair
     // dated to match the run (+N s about N s into the hold) cannot raise it
     // by seconds (review of 650f712, real captures: 115 for 105). After a
     // dropout or a loop() stall it grows with the gap, and run_at_us moves
@@ -270,9 +271,10 @@ public:
         if (r.timer_dl <= run_dl) run_at_us = r.at_us;
         return;
       }
-    } else if (recent && r.timer_dl <= run_dl && r.timer_dl + 2u >= run_dl) {
-      // The final value, held -- or up to two tenths below it, if a misread
-      // raised the run early in the hold (review of 650f712: the true held
+    } else if (recent && r.timer_dl <= run_dl && r.timer_dl + 5u >= run_dl) {
+      // The final value, held -- or up to five tenths below it, as far as a
+      // misread can raise the run before the hold is confirmed (review of
+      // 940efed: at two, a +3 raise left the hold unrecognised) (review of 650f712: the true held
       // frames then matched nothing and the hold was never recognised). A
       // new run starts at 000 and is never this close. Held once HOLD_US has
       // passed since the run last rose: a 2-3 frame misread landing on
@@ -296,9 +298,14 @@ public:
       run_dl = sure_dl;
       run_seen_us = run_at_us = r.at_us;
       if (!stopped) {
-        if (n_runs == 0) pushRun();
-        runs[n_runs - 1] = { run_start_us, run_dl };
-        mc.machine_timer_dl = run_dl;
+        // Only into the pour this run belongs to. A pour confirmed during the
+        // blind spot, after the pump stopped (a hot-water draw), has none of
+        // its own and must not be handed this one (review of 940efed: a draw
+        // 0.8 s after pump-off stored the brew's 10.5 s).
+        if (n_runs > 0 && runs[n_runs - 1].start_us == run_start_us) {
+          runs[n_runs - 1].dl = run_dl;
+          mc.machine_timer_dl = run_dl;
+        }
       } else if (timer_follow) {
         mc.machine_timer_dl = run_dl;
       }
@@ -321,7 +328,8 @@ public:
       run_dl = sure_dl;
       run_held = false;
       run_broken = false;
-      run_at_us = r.at_us;
+      run_at_us = sure_at;   // the frame that showed it: r.at_us after a stall
+                             // spent the whole gap's allowance (review of 940efed: 0 stored)
       run_start_us = (int32_t)(cand_start_us - est) < 0 ? cand_start_us : est;
       run_last_est = est;
       last_rise_us = r.at_us;

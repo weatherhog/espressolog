@@ -26,7 +26,14 @@ import { fetchCurve } from "./api.js";
 const DEFAULT_TARGETS = { y0: 34, y1: 38, t0: 16, t1: 24 };
 
 function loadTargets() {
-  try { return { ...DEFAULT_TARGETS, ...JSON.parse(localStorage.getItem("pullTargets")) }; }
+  try {
+    const saved = JSON.parse(localStorage.getItem("pullTargets")) || {};
+    // Every edit saved the whole object, so a browser that changed any target
+    // carries the old pump-time band 22-32 too; drop it so the pour-time
+    // default shows. A band someone actually chose is kept.
+    if (saved.t0 === 22 && saved.t1 === 32) { delete saved.t0; delete saved.t1; }
+    return { ...DEFAULT_TARGETS, ...saved };
+  }
   catch { return { ...DEFAULT_TARGETS }; }
 }
 

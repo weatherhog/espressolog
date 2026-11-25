@@ -25,16 +25,26 @@ export function Eyebrow({ children, style }) {
 // on a lift mid-pour or a scale-lost fault, and whole flushes high when a
 // missed start press borrows an earlier one.
 //
-// So: a hot-water draw (a press, but not lever A) never takes the timer.
-// Otherwise the timer stands on its own when it is a brew's length
-// (MIN_BREW_S) on firmware 0.9.7 or later -- every wrong value above but
-// the stale-tap one is a few seconds -- or, when shorter, if a usable p
-// agrees with it. The stale previous-brew timer with the tap off is not
-// caught; the timer-own-run firmware fix stores none there.
+// So: when a usable p exists it referees, through a lopsided window -- the
+// timer may sit up to 9 s under p (the 0a.7 lift shift plus drips; shot
+// 212: timer 35.9, p 42.3) but at most 3 s over it -- and only for a
+// lever-A press (a hot-water draw's timer is never its own). A shot with
+// a short p (a lift mid-pour) therefore shows Press→stop, not its timer.
+// Without a usable p (no switch data, an abort, a forced stop) the timer
+// stands alone if it is a brew's length on firmware 0.9.7+ (the flush and
+// " 95" values are seconds long) -- except on a record from the
+// switch-sensing era (pump_line set, format v3+) with no lever-A press:
+// that is a hot-water draw or a missed press, and its timer may be the
+// previous brew's, a full brew long. That also drops the timer on a v3+
+// record taken with the switch tap off; the tap is never off in service.
+// Not caught: a stale previous-brew timer on a record WITHOUT switch data
+// (the display tap off, or pre-0.10.0 with no timer of its own). The
+// timer-own-run firmware fix, not merged, would stop storing it.
 // Fallbacks say what they are: "Press→stop" (p), then "Pour" (first drip
 // to a flat weight, ~10 s short of the machine on a pre-infused shot).
 const MIN_BREW_S = 15;
-const TIMER_AGREE_S = 3;
+const TIMER_UNDER_P_MAX_S = 9;
+const TIMER_OVER_P_MAX_S = 3;
 
 function firmwareAtLeast(v, want) {
   const m = /^(\d+)\.(\d+)\.(\d+)/.exec(v || "");
@@ -44,18 +54,21 @@ function firmwareAtLeast(v, want) {
   return true;
 }
 
-export function shotTime(shot) {
+function timerIsThisRun(shot, p) {
   const m = shot.machine_timer_s;
-  const pressed = shot.pump_to_stop_s != null;
-  const p = pressed && shot.total_s > 0 && shot.stop_ms < 60000
-    ? shot.pump_to_stop_s : null;
-  const hotWater = pressed && shot.switch_direction == null;
-  if (m != null && m > 0 && !hotWater) {
-    if (m >= MIN_BREW_S && firmwareAtLeast(shot.firmware_version, [0, 9, 7])) {
-      return { s: m, label: "Time" };
-    }
-    if (p != null && Math.abs(p - m) <= TIMER_AGREE_S) return { s: m, label: "Time" };
+  if (m == null || !(m > 0)) return false;
+  const leverA = shot.switch_direction != null;
+  if (p != null) {
+    return leverA && p - m <= TIMER_UNDER_P_MAX_S && m - p <= TIMER_OVER_P_MAX_S;
   }
+  if (shot.pump_line != null && !leverA) return false;
+  return m >= MIN_BREW_S && firmwareAtLeast(shot.firmware_version, [0, 9, 7]);
+}
+
+export function shotTime(shot) {
+  const p = shot.pump_to_stop_s != null && shot.total_s > 0 && shot.stop_ms < 60000
+    ? shot.pump_to_stop_s : null;
+  if (timerIsThisRun(shot, p)) return { s: shot.machine_timer_s, label: "Time" };
   if (p != null) return { s: p, label: "Press→stop" };
   if (shot.total_s > 0) return { s: shot.total_s, label: "Pour" };
   return { s: null, label: "Time" };

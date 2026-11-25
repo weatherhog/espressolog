@@ -1385,7 +1385,7 @@ does not work:
     the whole arm window looks like a normal press until a second fault
     turns it into a real hold. So each `Q` goes through a series resistor
     (1 K proposed) into a GPIO
-    input — GPIO11 (GPIO1 until the PCB, 2026-11-24), GPIO2, GPIO47, GPIO21 and GPIO9 (the gate's), the last four fixed by the
+    input — GPIO11 (GPIO1 until the PCB, 2026-11-24), GPIO2, GPIO47, GPIO21 and GPIO9 (the gate's), the last three fixed by the
     drive layout 2026-11-04 *("three of 9-14, 18, 21, 47, chosen at layout" until then)*.
     **The gate trigger is not GPIO18**: GPIO15–18 emit a ~60 µs low pulse at
     power-up, and a falling `A̅` fires the gate. Harmless while GPIO38's

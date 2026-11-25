@@ -29,6 +29,10 @@ ROUTED = os.path.join(HERE, "build", "routed.kicad_pcb")
 if not os.path.exists(ROUTED):
     sys.exit("no build/routed.kicad_pcb: route.py did not finish (it removes "
              "a stale one at its start). Run route.py again.")
+# The routed copy is judged with the project's CURRENT netclasses and rules,
+# not the copies route.py made beside it.
+for _ext in (".kicad_pro", ".kicad_dru"):
+    shutil.copy(PCB.replace(".kicad_pcb", _ext), ROUTED.replace(".kicad_pcb", _ext))
 board = pcbnew.LoadBoard(ROUTED)
 
 

@@ -23,8 +23,9 @@ README is normative. What changes how the machine is run:
 
 Reviewed five times in fresh contexts, 2026-11-24. Paper test
 passed 2026-11-25: every part fits; the BC547 and 100 nF legs need splaying.
-Firmware 0.15.2 reads the 1Cup photoMOS 1 `Q` on GPIO11 (GPIO1 before); it
-is not flashed.
+Firmware 0.15.2 (this branch, not flashed) reads the 1Cup photoMOS 1 `Q` on
+GPIO11. 0.15.1 and earlier, and the 0.16.0/0.16.1 detector builds, read
+GPIO1: go by what `drive status` prints, not by the version number.
 
 ## THE PERFBOARD IS ON THE MACHINE — all seven sense inputs live, 2026-11-13
 

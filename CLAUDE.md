@@ -487,8 +487,8 @@ measurement that separates XH from EH is **depth** (plug 5.7 vs 3.8 mm).
 NOT hold here. The square pad is pin 4**, the line that must never be driven.
 Wire colours say nothing: the harness is red/black/red/black and ground lands
 on a red one. **On the PCB (`hardware/pcb`) the J5 and J25 pads are numbered
-the other way round, JST-style: pad 1 is `Disp-P4` (this table's pin 4) and
-pad 4 is `VSS`.** "J5 pin 1" is ground on the machine and in this table, and
+the other way round, JST-style: pad 1 is `Disp-P4` (this table's pin 4),
+pad 2 the clock, pad 3 the data and pad 4 `VSS`.** "J5 pin 1" is ground on the machine and in this table, and
 `Disp-P4` on the PCB's silk and metering steps; never clip a ground there.
 
 **`Disp-P4` MUST NOT BE LOADED — fit nothing on it, ever.** It is
@@ -814,12 +814,12 @@ docs/              overview · phase-0-status · phase-0-plan · shopping-list
                    machine-display-bus · machine-switches-j2 · flowmeter-j4
                    taps-and-dividers · board-and-perfboard · hydraulics
                    drive-bench
+                   (six of these are the 2026-10-19 split out of CLAUDE.md;
+                    the Reference section at the foot says what each is for)
 hardware/pcb/      the PCB that replaces the perfboard: generator scripts
                    (gen_schematic · gen_pcb · route · finish), design rules,
                    README (pin map, metering, NTC tap), fab/ (Gerbers, BOM,
                    1:1 print)
-                   (six of these are the 2026-10-19 split out of CLAUDE.md;
-                    the Reference section at the foot says what each is for)
 ```
 
 ---
@@ -1297,7 +1297,8 @@ window in the 2S T-piece lead, nothing attached:
 **Position on the connector (plug read 2026-11-24, Lucas): `+` (green) is
 the MIDDLE conductor; `#` (black) and `T` (yellow) are the outer ones.**
 `docs/phase-0-status.md` said "`T` (middle)" until that day, and the first
-PCB commit built from it tied the machine's `+` to ground. Positions come
+T-piece commit of the PCB (`ee2795e`) built from it and tied the machine's
+`+` to ground. Positions come
 from the physical plug.
 
 The *roles* are measured. The conductor→**marking** mapping is corroborated

@@ -876,7 +876,7 @@ Pinout per `docs/phase-0-plan.md`: 1 1A̅ · 2 1B · 3 1R̅ · 4 1Q̄ · 5 2Q ·
 | Timing, drive | per channel: **330 K** from pin 15 (or 7) to 3V3, **1 µF** between pins 14 and 15 (or 6 and 7) — soldered, never socketed |
 | Timing, gate | **470 K / 1 µF** on U3 pins 14/15 |
 | `Q` → cells | U1 pin 13 → F′16 (cell r 12) · U1 pin 5 → F′21 (r 17) · U2 pin 13 → F′26 (r 22) · U2 pin 5 → F′31 (r 27) |
-| `Q` readbacks, 1 K each | U1 pin 13 → **GPIO11 A25** *(GPIO1 K12 until firmware 0.15.2, 2026-11-25: the firmware reads this readback on GPIO11 on every board since)* · U1 pin 5 → GPIO2 K13 · U2 pin 13 → GPIO47 K25 · U2 pin 5 → GPIO21 K26 · U3 pin 13 → GPIO9 A23 (wire under the devkit) |
+| `Q` readbacks, 1 K each | U1 pin 13 → **GPIO11 A25** (wire under the devkit) *(GPIO1 K12 until 2026-11-25: the firmware that carries the PCB's pin map, 0.15.2 on, reads this readback on GPIO11 on every board — check `drive status` prints `Q(GPIO11)`, the 0.16.0/0.16.1 detector builds still read GPIO1)* · U1 pin 5 → GPIO2 K13 · U2 pin 13 → GPIO47 K25 · U2 pin 5 → GPIO21 K26 · U3 pin 13 → GPIO9 A23 (wire under the devkit) |
 | Decoupling | 100 nF from each pin 16 to GND, at the chip |
 | Not connected | every pin 4 and 12 (`Q̄`) |
 | Jumper (b) | **C′34** (LED rail) – **C′35** (3V3 bus); open until the bench test |

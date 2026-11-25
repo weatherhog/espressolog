@@ -21,7 +21,9 @@
 
 // 0.15.2: the bench `drive` command reads the 1Cup photoMOS 1 Q on GPIO11
 // (GPIO1 up to 0.15.1). 30beb28 moved the pin while still reporting 0.15.1,
-// so a 0.15.1 built from that commit already reads GPIO11.
+// so a 0.15.1 built from that commit already reads GPIO11 -- and 0.16.0 and
+// 0.16.1, built from branches that left main before it, still read GPIO1.
+// The version number does not say which: `drive status` prints the pin.
 const char* FIRMWARE_VERSION = "0.15.2";
 const char* DETECTOR_VERSION = "0a.7";
 

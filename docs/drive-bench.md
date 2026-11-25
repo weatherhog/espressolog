@@ -58,7 +58,9 @@ built.
 
 ## Procedure
 
-**0. Flash and look.** Flash the bench firmware. `drive status` must read:
+**0. Flash and look.** Flash the bench firmware. On the PCB, `drive status`
+must print `Q(GPIO11)` for channel 1 (a build that prints `Q(GPIO1)` has the
+perfboard-era pin map: wrong firmware for that board). `drive status` must read:
 GPIO38 = 0, every `A̅` = 1, every `Q` = 0. Anything else is a wiring fault:
 stop and meter.
 

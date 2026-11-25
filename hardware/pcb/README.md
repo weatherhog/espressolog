@@ -89,8 +89,9 @@ this board; ground is TP1.
   They have no pad but their own header pins, no test point, no via, no pour
   nearby, and keep 2 mm from everything of ours. Their own header's
   neighbouring pins sit at the machine's 2.5 mm pitch (0.8 mm gap, as in the
-  machine's harness), and the machine's own ground pass-through beside them
-  runs at 1.45 mm. Nothing connects to them (the J4 `+` rule in `CLAUDE.md`).
+  machine's harness), and the pass-through tracks of those neighbours run
+  1.45 mm from their pads (for `+` that includes J4's own ground, `T`).
+  Nothing connects to them (the J4 `+` rule in `CLAUDE.md`).
 - **The machine's ground (J5 `VSS`, J4 `T`) is our ground.** It passes
   straight through IN→OUT. J4 `T` ties to the devkit GND (J12 pin 1) by a
   hand-laid track, and J5 `VSS` joins that track through a via. The J2
@@ -136,8 +137,9 @@ photoMOS 1) is on **GPIO11** (signal column position 17), and **GPIO1**
   - J2: the +5 V common on pad 1.
 
   The pre-power check below still confirms all three on the built board.
-- **Capacitor lead pitch, not measured.** The footprints assume 5.0 mm for the
-  1 µF MKT and the 100 nF / 470 pF / 10 nF discs. Measure the parts you have.
+- **Capacitor lead pitch: checked in the paper test (2026-11-25).** The
+  footprints are 5.0 mm. The 1 µF MKT and the 470 pF fit; the 100 nF discs
+  in hand are narrower and get their legs splayed. The 10 nF was not tried.
 - **BC547 footprint:** `TO-92_Inline_Wide`, with legs 2.54 mm apart like the
   perfboard's (the standard 1.27 mm one puts the collector–base pair close
   together). Pad 1 is C, and the review checked this against KiCad's stock
@@ -567,10 +569,14 @@ From the final and pre-order reviews:
 - **Not in the BOM** (it lists only the schematic parts): DIL16 sockets ×3,
   DIL08 sockets ×4, jumper shunts ×3, the four OUT cables, the devkit and its
   1×22 female headers ×2.
-- **Firmware:** this board reads the 1Cup photoMOS 1 `Q` on GPIO11.
-  **Firmware 0.15.2 and later read it there; 0.15.1 and earlier read GPIO1**,
-  which on this board is the NTC_ADC net. Check the boot line before any
-  `drive` bench run.
+- **Firmware:** this board reads the 1Cup photoMOS 1 `Q` on GPIO11. **Go by
+  the pin, not the version number: before any `drive` bench run,
+  `drive status` must print `Q(GPIO11)` for channel 1.** 0.15.2 from this
+  branch does. 0.15.1 and earlier print `Q(GPIO1)`, and so do the 0.16.0 and
+  0.16.1 builds from the detector branches, which split from `main` before
+  the pin moved; GPIO1 is the NTC_ADC net on this board, so those report NO
+  PULSE on a healthy channel. Whatever version merges both lines must keep
+  GPIO11.
 
 ## Paper test: DONE 2026-11-25
 
@@ -607,5 +613,5 @@ Done: the layout reviews in fresh contexts (five, 2026-11-24) and the paper
 test (above). What is left:
 1. Upload `fab/espressolog-board-gerbers.zip`: 2 layers, 1.6 mm FR-4,
    100 × 100 mm, defaults otherwise.
-2. Parts the perfboard build did not need: vertical XH headers (2, 3, 4 and
+2. Parts to check against the drawer: vertical XH headers (2, 3, 4 and
    5 pin), a 2-pin side-entry XH header, four XH cables for the OUT side.

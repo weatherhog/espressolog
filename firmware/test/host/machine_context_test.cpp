@@ -1334,6 +1334,72 @@ int main() {
     printf("a misread in an unrecognised hold does not reach a draw OK\n");
   }
 
+  {
+    // 43. Review of 650f712 (real captures): a seconds-digit misread on two
+    //     frames, dated to match the run (115 for 105, ~0.9 s into the
+    //     hold), must not raise the shot by 1.0 s, nor reach a draw.
+    MachineContextTracker m;
+    uint32_t t = 1000000;
+    m.onPourStart(t);
+    for (uint16_t d = 1; d <= 105; d++) feed(m, d, d, t + d * 100000);
+    uint32_t h = t + 105 * 100000 + 82000;
+    for (int i = 0; i < 20; i++) m.onReading(timer(105, h + i * 41000), false);
+    const uint32_t mis = t + 115 * 100000 - 100000;            // dated like the run
+    m.onReading(timer(115, mis), false);
+    m.onReading(timer(115, mis + 41000), false);
+    for (int i = 1; i <= 60; i++) m.onReading(timer(105, mis + 41000 + i * 41000), false);
+    m.onPourStop(mis + 61 * 41000, 2000);
+    assert(m.context().machine_timer_dl == 105);
+    printf("a seconds misread dated like the run does not raise it OK\n");
+  }
+  {
+    // 44. Review of 650f712 (real captures): after a 0.4 s blind spot at
+    //     pump-off the held 10.5 is taken as the run's value, and a misread
+    //     pair dated like the run 2 s on (125) neither raises the shot nor
+    //     reaches a draw pressed 1 s into the hold.
+    MachineContextTracker m;
+    const uint32_t t = 1000000;
+    m.onPourStart(t);
+    for (uint16_t d = 1; d <= 103; d++) feed(m, d, d, t + d * 100000);
+    const uint32_t h = t + 105 * 100000 + 400000;
+    for (int i = 0; i < 40; i++) m.onReading(timer(105, h + i * 41000), false);
+    m.onPourStop(h + 40 * 41000, 1500);
+    assert(m.context().machine_timer_dl == 105);               // the final value kept
+    MachineContextTracker k;
+    for (uint16_t d = 1; d <= 103; d++) feed(k, d, d, t + d * 100000);
+    for (int i = 0; i < 24; i++) k.onReading(timer(105, h + i * 41000), false);
+    k.onPourStart(h + 24 * 41000);                             // the draw
+    const uint32_t mis = t + 125 * 100000;                     // dated like the run
+    for (int i = 24; mis > h + i * 41000; i++) k.onReading(timer(105, h + i * 41000), false);
+    k.onReading(timer(125, mis), false);
+    k.onReading(timer(125, mis + 41000), false);
+    for (int i = 1; i <= 60; i++) k.onReading(timer(105, mis + 41000 + i * 41000), false);
+    k.onPourStop(mis + 61 * 41000, 1000);
+    assert(k.context().machine_timer_dl == 0);
+    printf("after a blind spot the hold is the run's, and a misread stays out OK\n");
+  }
+  {
+    // 45. Review of 650f712 (real captures): one early-hold misread raise
+    //     (107 on two frames) must not switch the hold off, so a later
+    //     misread pair dated like the run (125) does not reach a draw.
+    MachineContextTracker m;
+    const uint32_t t = 1000000;
+    for (uint16_t d = 1; d <= 105; d++) feed(m, d, d, t + d * 100000);
+    const uint32_t h = t + 105 * 100000 + 82000;
+    m.onReading(timer(107, h), false);
+    m.onReading(timer(107, h + 41000), false);
+    for (int i = 2; i < 30; i++) m.onReading(timer(105, h + i * 41000), false);
+    m.onPourStart(h + 30 * 41000);                             // the draw, ~1.3 s in
+    const uint32_t mis = t + 125 * 100000;
+    for (int i = 30; mis > h + i * 41000; i++) m.onReading(timer(105, h + i * 41000), false);
+    m.onReading(timer(125, mis), false);
+    m.onReading(timer(125, mis + 41000), false);
+    for (int i = 1; i <= 60; i++) m.onReading(timer(105, mis + 41000 + i * 41000), false);
+    m.onPourStop(mis + 61 * 41000, 1000);
+    assert(m.context().machine_timer_dl == 0);
+    printf("an early-hold misread does not switch the hold off OK\n");
+  }
+
   printf("\nall machine context tests passed\n");
   return 0;
 }
